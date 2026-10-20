@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read the engine's shader cache and key list files: what is cached, and what is new.
+"""How many shaders does a cache or key list hold, and how many are new?
 
 Usage: shader_cache.py count FILE
        shader_cache.py diff OLD NEW
@@ -23,12 +23,15 @@ Shader cache, saves/shaders.bin (magic "WRSC" 0x43535257, render_gl.cpp:424):
 
 Key list (magic "GCSK" 0x4B534347, shadergen.h:72):
   header, 8 bytes: magic, format word, then the keys back to back, each once. Leftover
-  bytes short of a whole key are ignored, as in tools/shader_keys.cpp.
+  bytes short of a whole key are ignored, as in gcn-recomp/tools/shader_keys.cpp.
 
 Keys are compared as raw bytes, with no canonicalization of the tool's own. A key is made
 canonical when it is built (shadergen.cpp:58), so every file in the current format holds
-canonical keys. The loader canonicalizes again (render_gl.cpp:684) only to fix older caches,
-which the format check refuses anyway.
+canonical keys. The loader canonicalizes again (render_gl.cpp:684) only to fix older caches.
+The engine refuses older caches at load (render_gl.cpp:660); this tool still reads them.
+
+Exits 0 once it has read the files, 2 on a bad argument or a file it can't read or doesn't
+understand.
 """
 from __future__ import annotations
 
@@ -36,20 +39,17 @@ import argparse
 import struct
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 CACHE_MAGIC = 0x43535257  # "WRSC"
 LIST_MAGIC = 0x4B534347  # "GCSK"
-CACHE_HEADER = 16
-LIST_HEADER = 8
-RECORD_TAIL = 16  # u64 src_hash, u32 binary format, u32 length
-
-
-class FormatError(Exception):
-    pass
+# Per format: header size, then the bytes after each key (u64 src_hash, u32 binary format,
+# u32 length) before the binary. A key list has none.
+LAYOUT = {CACHE_MAGIC: (16, 16), LIST_MAGIC: (8, 0)}
 
 
 @dataclass
-class Keys:
+class KeyFile:
     magic: int
     format_word: int
     keys: list[bytes]
@@ -64,77 +64,70 @@ class Keys:
         return self.format_word & 0xFFFF
 
 
-def load(path: str) -> Keys:
-    with open(path, "rb") as f:
-        data = f.read()
-    if len(data) < 8:
-        raise FormatError(f"{path}: {len(data)} bytes, too short for a header")
-    magic, word = struct.unpack_from("<II", data)
-    if magic not in (CACHE_MAGIC, LIST_MAGIC):
-        raise FormatError(f"{path}: unknown magic {magic:08x}, expected {CACHE_MAGIC:08x} (cache) "
-                          f"or {LIST_MAGIC:08x} (key list)")
+def load(path: Path) -> KeyFile:
+    data = path.read_bytes()
+    magic = int.from_bytes(data[:4], "little")
+    if magic not in LAYOUT:
+        raise ValueError(f"{path}: unknown magic {magic:08x}, expected {CACHE_MAGIC:08x} (cache) "
+                         f"or {LIST_MAGIC:08x} (key list)")
+    header, tail = LAYOUT[magic]
+    if len(data) < header:
+        raise ValueError(f"{path}: {len(data)} bytes, too short for a header")
+    word = int.from_bytes(data[4:8], "little")
     size = word & 0xFFFF
     if size == 0:
-        raise FormatError(f"{path}: format word {word:08x} has key size 0")
+        raise ValueError(f"{path}: format word {word:08x} has key size 0")
     keys: list[bytes] = []
-    if magic == LIST_MAGIC:
-        o = LIST_HEADER
-        while o + size <= len(data):
-            keys.append(data[o:o + size])
-            o += size
-        return Keys(magic, word, keys, len(data) - o)
-    if len(data) < CACHE_HEADER:
-        raise FormatError(f"{path}: {len(data)} bytes, too short for a cache header")
-    o = CACHE_HEADER
-    while o + size + RECORD_TAIL <= len(data):
-        (length,) = struct.unpack_from("<I", data, o + size + 12)
-        nxt = o + size + RECORD_TAIL + length
+    o = header
+    while o + size + tail <= len(data):
+        nxt = o + size + tail
+        if tail:
+            nxt += struct.unpack_from("<I", data, o + size + 12)[0]
         if nxt > len(data):
             break
         keys.append(data[o:o + size])
         o = nxt
-    return Keys(magic, word, keys, len(data) - o)
+    return KeyFile(magic, word, keys, len(data) - o)
 
 
-def read_keys(path: str) -> list[bytes]:
-    """Each record's key as raw bytes, in file order (repeats kept)."""
-    return load(path).keys
-
-
-def count(path: str) -> int:
+def count(path: Path) -> None:
     k = load(path)
     kind = "shader cache" if k.magic == CACHE_MAGIC else "key list"
     print(f"{path}: {kind}  version {k.version}  key size {k.key_size}  records {len(k.keys)}"
           f"  distinct {len(set(k.keys))}  ignored {k.ignored} trailing bytes")
-    return 0
 
 
-def diff(old_path: str, new_path: str) -> int:
+def diff(old_path: Path, new_path: Path) -> None:
     old, new = load(old_path), load(new_path)
     if old.format_word != new.format_word:
-        raise FormatError(f"format words differ: {old_path} is {old.format_word:08x}, "
-                          f"{new_path} is {new.format_word:08x}")
-    have = set(old.keys)
-    distinct = set(new.keys)
-    added = distinct - have
-    share = 100 * len(added) / len(distinct) if distinct else 0.0
-    print(f"{len(added)} of {len(distinct)} keys in NEW are not in OLD ({share:.1f}%)")
-    return 0
+        raise ValueError(f"format words differ: {old_path} is {old.format_word:08x}, "
+                         f"{new_path} is {new.format_word:08x}")
+    old_keys = set(old.keys)
+    new_keys = set(new.keys)
+    added = new_keys - old_keys
+    share = 100 * len(added) / len(new_keys) if new_keys else 0.0
+    print(f"{len(added)} of {len(new_keys)} keys in NEW are not in OLD ({share:.1f}%)")
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Read shader cache and key list files.")
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("count").add_argument("file")
-    d = sub.add_parser("diff")
-    d.add_argument("old")
-    d.add_argument("new")
+    c = sub.add_parser("count", help="records and distinct keys in one file")
+    c.add_argument("file", type=Path)
+    d = sub.add_parser("diff", help="keys in NEW that OLD lacks")
+    d.add_argument("old", type=Path)
+    d.add_argument("new", type=Path)
     args = ap.parse_args(argv)
     try:
-        return count(args.file) if args.cmd == "count" else diff(args.old, args.new)
-    except FormatError as e:
+        if args.cmd == "count":
+            count(args.file)
+        else:
+            diff(args.old, args.new)
+    except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
-        return 1
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
