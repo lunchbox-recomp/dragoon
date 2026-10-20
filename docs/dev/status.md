@@ -136,6 +136,58 @@ The benchmark has no renderer, so its figure is the guest alone. The whole 120 s
 city loaded, between frames 2,706 and 2,750. It showed 44 frames in that second and made 9
 catch-up jumps of the clock there, 109 ms in all. It made no more in the city.
 
+## Renderer cost
+
+What the GL renderer costs at 1280x960 (`--scale=2`, twice the default 640x480 in each direction),
+at gcn-recomp `642187a`, on a 16-core Mac with other work running (load average 2 to 3). These are
+the baseline for the Metal renderer's two triggers. `[rt]` is the time the renderer spends
+issuing a frame to GL, not the GPU's own time, so the guest's interval between frames is the
+check that nothing dropped. The percentiles are nearest rank.
+
+| Four players, frames 3,400 to 7,647 (4,248 frames) | Mean | 95th | 99th | Worst |
+|---|---|---|---|---|
+| Guest interval | 16.68 ms | 17.29 ms | 17.49 ms | 17.68 ms |
+| `[rt]` render time | 1.34 ms | 1.72 ms | 1.96 ms | 5.98 ms |
+
+The command is `tools/probe.sh ct4p-scale2 130 tests/routes/city-trial-4p.txt 600 --pads=4 --real-time --scale=2 GCN_FRAMETIME=1`,
+and the table is a second run of it with a frame dump every 100,000 frames instead of every 600. The first
+run, with the dumps, read 1.45 ms mean, 2.42 ms at the 95th percentile, 3.64 ms at the 99th and 41.15 ms
+at worst for the renderer, and 16.68 ms mean, 17.28 ms at the 95th, 17.49 ms at the 99th and 17.90 ms at
+worst for the guest. Its 7 worst frames are the dumps, each a readback of the whole frame (frames 3,600 to
+7,200, every 600th). The rest of the gap between the two runs is other work on the machine. No frame ran
+over 20 ms in either. The same route at 640x480 averaged 1.40 ms (the table under Four players), so
+doubling each side cost the renderer's issue time nothing it could measure.
+
+Hitches are the frames after frame 300 whose `[rt]` time is over 16.7 ms, from one run of each route
+with `--real-time --scale=2 GCN_FRAMETIME=1` (`tools/probe.sh NAME SECONDS tests/routes/ROUTE.txt 100000
+--real-time --scale=2 GCN_FRAMETIME=1`, plus `--pads=4` for the four-player route). macOS GL has no
+program binaries, so each run started with a cold shader cache. The `[shaders] compiled program N`
+lines that `GCN_FRAMETIME=1` already prints say when a program is built, in the frame that needs it.
+Every run played past its route's last checkpoint.
+
+| Route | Frames over 16.7 ms | New programs in that frame | Frames over 33 ms |
+|---|---|---|---|
+| Title | 902: 37.0 ms. 1414: 53.3 ms. 1535: 32.5 ms | 15, 24, 6 | 2 |
+| Menu | 902: 38.1 ms | 15 | 1 |
+| Air Ride race | 902: 40.3 ms. 3122: 66.0 ms | 15, 30 | 2 |
+| City Trial | 902: 27.4 ms. 2733: 63.2 ms. 2834: 17.0 ms | 15, 38, 4 | 1 |
+| City Trial, four players | 902: 38.2 ms. 2733: 57.9 ms | 15, 34 | 2 |
+
+Every one of those frames built new programs, and no other frame after 300 went over 16.7 ms. A program
+takes 1.2 to 5 ms to compile, so a frame with 30 new ones takes about 55 ms of compiling. The big bursts
+are 15 programs at frame 902 (the first 3D scene, in all five runs), 24 at the title's logo scene (1414),
+38 and 34 at the start of the city (2733) and 30 at the start of a race (3122). The other new programs
+come in ones to six, and only the 6 at frame 1535 and the 4 at 2834 pushed a frame over 16.7 ms. The guest
+also stalls for 117 to 401 ms at a handful of frames (303, 1002, 1413, 1801, 2103, 2732 and others) with
+little or nothing drawn. Those are the game loading, and the renderer's time in them is under 3 ms.
+
+| Trigger | Threshold | Measured on GL | Verdict |
+|---|---|---|---|
+| Four-player cost | `[rt]` 99th percentile over 8 ms | 1.96 ms (3.64 ms with dumps) | Doesn't fire |
+| Shader-compile hitches | Any frame after 300 over 33 ms | 8 frames across the five routes, from 37 ms to 66 ms, each on first sight of 15 to 38 programs | Fires |
+
+The hitches are cold-start costs. They come at the same scene changes on every launch.
+
 ## Fixes on the way
 
 Two things stopped the game. Both were generic, so both are in gcn-recomp.
