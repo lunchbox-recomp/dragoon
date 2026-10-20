@@ -1,0 +1,4 @@
+[submodule "gcn-recomp"]
+	path = gcn-recomp
+	url = https://github.com/lunchbox-recomp/gcn-recomp.git
+	branch = dragoon
