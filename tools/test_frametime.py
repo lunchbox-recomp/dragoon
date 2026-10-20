@@ -29,6 +29,11 @@ class ParseTest(unittest.TestCase):
         frames = ft.parse([ft_line(39), rt_line(39), "[rt] f40", "[ft] f40 guest  16.6"])
         self.assertEqual(sorted(frames), [39])
 
+    def test_lines_cut_off_mid_number_are_skipped(self):
+        cut_ft = "[ft] f5 guest  16.67ms  fe   1.20ms (tex  0.10)  draws  462/ 167  verts  12419  idx  339"
+        self.assertEqual(ft.parse([cut_ft]), {})
+        self.assertEqual(ft.parse(["[rt] f40 render  1"]), {})
+
     def test_shape_normalizes_spaces(self):
         frames = ft.parse([ft_line(1)])
         self.assertEqual(frames[1].shape, "draws 462/167 verts 12419 idx 33993")

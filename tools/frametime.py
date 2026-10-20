@@ -18,7 +18,7 @@ import re
 import sys
 from dataclasses import asdict, dataclass, field
 
-FT = re.compile(r"^\[ft\] f(\d+) guest\s+([\d.]+)ms.*?(draws\s+\d+/\s*\d+\s+verts\s+\d+\s+idx\s+\d+)")
+FT = re.compile(r"^\[ft\] f(\d+) guest\s+([\d.]+)ms.*?(draws\s+\d+/\s*\d+\s+verts\s+\d+\s+idx\s+\d+)\s")
 RT = re.compile(r"^\[rt\] f(\d+) render\s+([\d.]+)ms")
 SHADER = re.compile(r"^\[shaders\] compiled program \d+ in ([\d.]+) ms")
 
