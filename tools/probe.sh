@@ -31,6 +31,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 out=$root/build/probe/$1
 seconds=$2
 input=${3:-}
+# tools/warm_shaders.py's script_text flattens a route file the same way; keep the two alike.
 if [ -f "$input" ]; then input=$(grep -v '^#' "$input" | tr -d ' \n'); fi
 every=${4:-60}
 shift $(($# < 4 ? $# : 4))

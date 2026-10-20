@@ -19,6 +19,9 @@ with open("saves/shaders.bin", "ab") as f:
     f.write((line + "\\n").encode())
 with open("saves/memcard_a.raw", "wb") as f:
     f.write(b"scratch card")
+if os.environ.get("FAKE_SLEEP_ON") and os.environ["FAKE_SLEEP_ON"] in line:
+    import time
+    time.sleep(30)
 if os.environ.get("FAKE_FAIL_ON") and os.environ["FAKE_FAIL_ON"] in line:
     sys.exit(1)
 """
@@ -204,6 +207,51 @@ class WarmTest(WarmTestCase):
         self.assertEqual(len(self.cache_lines()), 1)
         self.assertIn("--exit-after=50", self.cache_lines()[0].split())
         self.assertFalse((self.saves / ".shader-warmup").exists())
+
+    def test_deleted_cache_warms_again_despite_a_current_stamp(self):
+        self.assertEqual(self.warm()[0], 0)
+        (self.saves / "shaders.bin").unlink()
+        code, out, _ = self.warm()
+        self.assertEqual(code, 0)
+        self.assertNotIn("current", out)
+        self.assertEqual(len(self.cache_lines()), 3)
+
+    def test_hung_game_is_killed_and_fails_the_pass(self):
+        self.saves.mkdir()
+        write_file(self.saves, "shaders.bin", b"old\n")
+        before = self.snapshot()
+        with mock.patch.dict(os.environ, {"FAKE_SLEEP_ON": "--exit-after=1560"}), \
+                mock.patch.object(warm_shaders, "pass_timeout", lambda n: 1):
+            code, _, err = self.warm()
+        self.assertNotEqual(code, 0)
+        self.assertIn("title", err)
+        self.assertIn("within 1 s", err)
+        self.assertIn("-DDRAGOON_WARMUP=OFF", err)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_pass_timeout_is_twice_real_time_plus_30_s(self):
+        self.assertEqual(warm_shaders.pass_timeout(6000), 230)
+
+    def test_no_gcn_recomp_checkout_falls_back_to_the_game_binary_hash(self):
+        def no_git() -> str:
+            raise ValueError("can't read the gcn-recomp commit")
+        with mock.patch.object(warm_shaders, "engine_rev", no_git):
+            code, _, err = self.warm()
+            self.assertEqual(code, 0)
+            self.assertIn("SHA-1", err)
+            self.assertEqual(len(self.cache_lines()), 3)
+            self.assertEqual(self.warm()[0], 0)  # the same binary is current
+            self.assertEqual(len(self.cache_lines()), 3)
+            self.game.write_text(FAKE_GAME + "# relinked\n")
+            self.assertEqual(self.warm()[0], 0)
+            self.assertEqual(len(self.cache_lines()), 6)
+
+    def test_missing_route_file_exits_2_and_leaves_saves_alone(self):
+        (self.routes / "city-trial-4p.txt").unlink()
+        code, _, err = self.warm()
+        self.assertEqual(code, 2)
+        self.assertIn("city-trial-4p.txt", err)
+        self.assertFalse(self.saves.exists())
 
     def test_game_that_writes_no_cache_fails(self):
         write_file(self.dir, "fake_game", f"#!{sys.executable}\n")

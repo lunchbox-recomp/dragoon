@@ -11,8 +11,9 @@ sounds. The scratch saves/shaders.bin starts as a copy of <saves>/shaders.bin an
 pass by pass; the player's cache is only replaced once every pass has succeeded, by a copy
 to a temp file in <saves> and an os.replace, so a reader never sees half a file. Nothing
 else in <saves> is read or written except the stamp, <saves>/.shader-warmup, which holds
-the gcn-recomp commit and a SHA-1 of the manifest. If both match the stamp, the run is
-skipped. --force runs anyway. --no-routes runs only the attract pass and neither reads nor
+the gcn-recomp commit (the game binary's SHA-1 if there is no checkout, with a warning) and
+a SHA-1 of the manifest. If both match the stamp and shaders.bin exists, the run is skipped.
+A pass that outlasts twice its real-time length plus 30 s is killed and fails. --force runs anyway. --no-routes runs only the attract pass and neither reads nor
 writes the stamp (for measuring what the attract demos alone build). --game and --saves
 default to build/dragoon and saves under the repository, wherever the tool is run from.
 
@@ -85,6 +86,20 @@ def engine_rev() -> str:
     return done.stdout.strip()
 
 
+def revision(game: Path) -> str:
+    """The engine's commit, or without a gcn-recomp checkout the SHA-1 of the game binary."""
+    try:
+        return engine_rev()
+    except ValueError as e:
+        print(f"{e}; using the SHA-1 of {game} instead, so a relink warms again", file=sys.stderr)
+        return hashlib.sha1(game.read_bytes()).hexdigest()
+
+
+def pass_timeout(exit_after: int) -> float:
+    """Twice the pass's length at 60 fps, plus 30 s; --fast should finish well inside it."""
+    return 2 * exit_after / 60 + 30
+
+
 def install(cache_from: Path, saves_dir: Path) -> None:
     """Replace <saves_dir>/shaders.bin with cache_from, whole or not at all."""
     saves_dir.mkdir(parents=True, exist_ok=True)
@@ -92,6 +107,8 @@ def install(cache_from: Path, saves_dir: Path) -> None:
     try:
         with os.fdopen(fd, "wb") as out, cache_from.open("rb") as src:
             shutil.copyfileobj(src, out)
+            out.flush()
+            os.fsync(out.fileno())
         shutil.copymode(cache_from, tmp)
         os.replace(tmp, saves_dir / CACHE)
     except BaseException:
@@ -107,8 +124,13 @@ def run_pass(game: Path, p: Pass, scratch: Path) -> None:
     cmd = [str(game), "--hidden", "--fast", "--no-input-log", f"--pads={p.pads}",
            f"--exit-after={p.exit_after}"]
     log = scratch / "stdout.txt"
+    limit = pass_timeout(p.exit_after)
     with log.open("wb") as f:
-        code = subprocess.run(cmd, cwd=scratch, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+        try:
+            code = subprocess.run(cmd, cwd=scratch, env=env, stdout=f, stderr=subprocess.STDOUT,
+                                  timeout=limit).returncode
+        except subprocess.TimeoutExpired:
+            raise PassFailed(f"{p.name}: the game didn't exit within {limit:.0f} s") from None
     if code != 0:
         tail = "\n".join(log.read_text(errors="replace").splitlines()[-TAIL_LINES:])
         raise PassFailed(f"{p.name}: the game exited {code}\n{tail}")
@@ -147,10 +169,10 @@ def main(argv: list[str]) -> int:
         if not args.game.is_file():
             raise ValueError(f"{args.game}: no such game, build it first")
         manifest_text = MANIFEST.read_text()
-        want = stamp(engine_rev(), manifest_text)
+        want = stamp(revision(args.game), manifest_text)
         stamp_path = args.saves / STAMP
         if not (args.force or args.no_routes) and stamp_path.exists() \
-                and stamp_path.read_text().strip() == want:
+                and (args.saves / CACHE).exists() and stamp_path.read_text().strip() == want:
             print("shader cache is current, nothing to do (--force to rerun)")
             return 0
         routes = [] if args.no_routes else parse_manifest(manifest_text)
@@ -158,7 +180,8 @@ def main(argv: list[str]) -> int:
         try:
             warm(args.game.resolve(), args.saves, passes(routes, args.attract_frames))
         except PassFailed as e:
-            print(f"shader warm-up failed, {args.saves} left as it was: {e}", file=sys.stderr)
+            print(f"shader warm-up failed, {args.saves} left as it was: {e}\n"
+                  "(configure with -DDRAGOON_WARMUP=OFF to skip the warm-up)", file=sys.stderr)
             return 1
         if not args.no_routes:
             stamp_path.write_text(want + "\n")
