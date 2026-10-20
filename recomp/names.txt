@@ -1,1 +1,4 @@
 # addr name  -- functions named by hand, overriding analysis/symbols.txt
+# The C library's setjmp and longjmp. analysis/symbols.txt has other names for both.
+803AE238 setjmp
+803AE33C longjmp

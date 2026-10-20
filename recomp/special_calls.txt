@@ -1,2 +1,6 @@
 # call sites to these get setjmp treatment (context resume points)
 803D45D8 OSSaveContext
+# The C library's pair: a longjmp resumes at the call site of its setjmp (the effects code
+# uses it to stop an animation walk early).
+803AE238 setjmp
+803AE33C longjmp
