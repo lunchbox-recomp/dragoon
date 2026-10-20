@@ -24,5 +24,10 @@ runs inside that directory, so a new name starts from a blank memory card. Run a
 a name that's been used before and the card already holds a save, which skips the card
 prompts and puts every later press in the wrong place.
 
-The same route gives byte-identical frames from run to run on the same build. Frames 4200
-and 6000 of `air-ride-race.txt` matched across two runs.
+The race route gives byte-identical frames from run to run on the same build. Frames 4200
+and 6000 of `air-ride-race.txt` matched across two runs made minutes apart.
+
+City Trial doesn't. Two runs of `city-trial.txt` both reach the city, but frame 3300 shows
+4:54:10 on the clock in one and 4:54:11 in the other, from a different spot. The RTC starts
+at the host's time on every run that isn't a replay (`rtc_now` in gcn-recomp's
+`runtime/hw/exi.cpp`), and City Trial's start is random, which fits.
