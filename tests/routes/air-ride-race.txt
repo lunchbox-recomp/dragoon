@@ -1,0 +1,8 @@
+# Blank memory card to an Air Ride race on Fantasy Meadows, one player and three CPUs.
+# menu.txt, then 1300 A: Air Ride. 1600 A: Start Game. 1900 A: skip the mode's movie.
+# 2200 A: the first course. 2500 A: player 1 joins on the Warpstar. 2800 A: player 1 OK.
+# 3100 START: race. The countdown is over by frame 3600. With nobody steering, the
+# Warpstar still finishes the three laps.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:A:5,1600:A:5,1900:A:5,2200:A:5,2500:A:5,2800:A:5,3100:START:5

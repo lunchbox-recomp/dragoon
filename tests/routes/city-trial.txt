@@ -1,0 +1,7 @@
+# Blank memory card to City Trial, one player and three CPUs, five minutes.
+# menu.txt, then 1300 DOWN, 1400 DOWN: City Trial. 1500 A: into it. 1800 A: Start Game.
+# 2100 A: player 1 joins. 2400 A: player 1 OK. 2700 START: the city. Under way by frame
+# 3300, with the clock running down from 5:00.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:DOWN:5,1400:DOWN:5,1500:A:5,1800:A:5,2100:A:5,2400:A:5,2700:START:5

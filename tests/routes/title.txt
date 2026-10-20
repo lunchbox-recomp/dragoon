@@ -1,0 +1,4 @@
+# Blank memory card to the title screen (shown by frame 960).
+# 120 A: make a new save file. 300 A: past "data file has been created". 900 A: skip the
+# opening movie.
+120:A:5,300:A:5,900:A:5

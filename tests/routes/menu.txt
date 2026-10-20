@@ -1,0 +1,4 @@
+# Blank memory card to the mode select menu (shown by frame 1200).
+# title.txt, then 1000 START at the title.
+120:A:5,300:A:5,900:A:5,
+1000:START:5
