@@ -40,7 +40,9 @@ def read_png(path: Path) -> tuple[int, int, int, bytes]:
     ch = 3 if ctype == 2 else 4
     raw = zlib.decompress(b"".join(idat))
     stride = w * ch
-    out = bytearray(h * stride)
+    if len(raw) != h * (stride + 1):
+        raise ValueError(f"{path}: truncated image data")
+    out =bytearray(h * stride)
     prev = bytearray(stride)
     for y in range(h):
         start = y * (stride + 1)
@@ -98,9 +100,16 @@ def main(argv: list[str]) -> int:
     if not common:
         print("no frames in common", file=sys.stderr)
         return 2
+    only_a, only_b = len(fa.keys() - fb.keys()), len(fb.keys() - fa.keys())
+    if only_a or only_b:
+        print(f"only in A: {only_a}, only in B: {only_b}", file=sys.stderr)
     failed = 0
     for f in common:
-        pixels, over, worst = diff(read_png(fa[f]), read_png(fb[f]), args.tolerance)
+        try:
+            pixels, over, worst = diff(read_png(fa[f]), read_png(fb[f]), args.tolerance)
+        except ValueError as e:
+            print(f"frame {f}: {e}", file=sys.stderr)
+            return 2
         share = over / pixels
         bad = share > args.budget
         failed += bad
