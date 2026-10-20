@@ -49,13 +49,13 @@ done
 mkdir -p "$out"
 cd "$out"
 if [ -n "$bench" ]; then
-  env GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$root/build/dragoon_bench" --seconds="$seconds" \
+  env SDL_AUDIO_DRIVER=dummy GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$root/build/dragoon_bench" --seconds="$seconds" \
     --pads="$pads" >"$out/stdout.txt" 2>&1
   grep -A2 '^whole run' "$out/stdout.txt"
   exit 0
 fi
 # --scale=1 renders at 640x480; the dumps are uncompressed, 1.2 MB each at that size.
-env GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$root/build/dragoon" --hidden $fast --no-input-log \
+env SDL_AUDIO_DRIVER=dummy GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$root/build/dragoon" --hidden $fast --no-input-log \
   --pads="$pads" $scale $renderer --dump-dir="$out" --dump-every="$every" >"$out/stdout.txt" 2>&1 &
 pid=$!
 sleep "$seconds"
