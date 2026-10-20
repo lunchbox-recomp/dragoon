@@ -9,6 +9,9 @@ saves/
 *.rvz
 *.gcz
 *.dol
+*.bin
+frame_*.png
+stdout.txt
 panic.txt
 .DS_Store
 
