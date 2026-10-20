@@ -18,3 +18,17 @@ gcn_add_game(
   SYMBOLS ${CMAKE_SOURCE_DIR}/analysis/symbols.txt
   TABLES ${CMAKE_SOURCE_DIR}/recomp
   FPS 60)
+
+# Play the game once, hidden and silent, so a player's first session doesn't stall on shader
+# compiles. It runs again only when the engine pin or the route list changes. It needs the
+# game, so a configure with no disc has no such target.
+option(DRAGOON_WARMUP "Warm the shader cache after the build" ON)
+if(DRAGOON_WARMUP AND TARGET dragoon)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_custom_target(dragoon_warmup ALL
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/warm_shaders.py
+            --game $<TARGET_FILE:dragoon> --saves ${CMAKE_SOURCE_DIR}/saves
+    DEPENDS dragoon
+    COMMENT "Warming up shaders, about a minute the first time"
+    USES_TERMINAL VERBATIM)
+endif()

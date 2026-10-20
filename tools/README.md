@@ -68,6 +68,17 @@ The manifest has one route per line. A line gives the name, the seconds to run, 
 tools/frame_hashes.py check title
 ```
 
+## warm_shaders.py
+
+Will a player's first session stall on shader compiles? It plays the game once so the cache is already warm. The build runs it as the `dragoon_warmup` target, unless it's configured with `-DDRAGOON_WARMUP=OFF` or has no disc. It runs the game hidden and fast, with SDL's dummy audio driver, in a scratch directory with its own blank memory card. One pass sits at the title with nobody at the controls, then one pass plays each route in `tests/hashes/manifest.txt`. The scratch `shaders.bin` starts as a copy of the player's own and grows pass by pass.
+
+Only when every pass has succeeded is it copied over `saves/shaders.bin`, through a temp file and an `os.replace`. The cache only gains keys, and no other file in `saves/` is touched, so the player's memory card is never read or written. A failed pass exits 1 and leaves `saves/` as it was. `saves/.shader-warmup` holds the gcn-recomp commit and a SHA-1 of the manifest. If both match, the next run does nothing, so a relink doesn't replay the game. `--force` plays it anyway, and `--no-routes` plays only the attract pass and leaves the stamp alone, to see how far the attract demos get by themselves. `--attract-frames` sets the length of the attract pass.
+
+```
+tools/warm_shaders.py --force
+tools/shader_cache.py count saves/shaders.bin
+```
+
 ## check_no_game_data.py
 
 Is anything from a disc tracked by git? It flags tracked paths that look like game data:
