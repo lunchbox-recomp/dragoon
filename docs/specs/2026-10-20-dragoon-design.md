@@ -23,8 +23,8 @@ recompiler, distribution, community norms and risks. The repo is public from the
 
 Dolphin already plays Kirby Air Ride well. Dragoon has to offer what an emulator can't.
 
-- High frame rates. gcn-recomp can scale per-frame constants (`steps.txt`), so the game can
-  run above 60 fps.
+- High frame rates. The game logic keeps its own 60 updates a second and the renderer
+  interpolates the frames in between, so the simulation never changes.
 - True widescreen, including the split-screen views.
 - One app, with no emulator setup or per-game configuration, and native controller support.
 - A base for online City Trial and mod support, which are hard to do inside an emulator.
@@ -71,7 +71,6 @@ Dragoon follows the per-game shape of the gcn-recomp author's own game repos.
   - `special_calls.txt`: `803D45D8 OSSaveContext`
   - `idle.txt`: the idle branch inside `SelectThread` (803D9E78), found from the disc's DOL
   - `names.txt`, `patches.txt`: empty until needed
-  - `steps.txt`: per-frame constants, for high frame rates
 - `src/`: Kirby Air Ride hooks for settings and controller setup, plus the game side of
   widescreen and split-screen.
 - The build takes `-DGAME_ISO=<path>`, the player's image (`.iso`/`.gcm` or `.ciso`). The
@@ -87,6 +86,7 @@ Several things Dragoon needs are engine features, not game code.
 - four connected controllers (the runtime connects only the first)
 - an output-aspect setting for the desktop renderer, for widescreen
 - a replay runner that stops at a frame and hashes state
+- frame interpolation at presentation, for high frame rates
 - texture replacement, later
 
 We write these generically and offer them upstream. Until they merge, each one is a commit

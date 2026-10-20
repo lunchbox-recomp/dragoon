@@ -6,6 +6,9 @@ Kirby Air Ride (USA, `GKYE01`) static recompilation on gcn-recomp. Design:
 ## Commits
 
 - One first-person line, no type prefix, no AI trailers.
+- Commits on the gcn-recomp fork follow upstream's style instead. A title line, then a short
+  body saying what changed and why, and how it was checked. Still no AI trailers.
+- A submodule bump reads `gcn-recomp <sha>: <reason>`.
 - AI use is disclosed with specifics in the README, CONTRIBUTING and release notes, not in
   commits.
 
