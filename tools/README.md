@@ -68,7 +68,7 @@ Two tools in `gcn-recomp/tools/` matter when debugging here.
 
 ```
 cmake --build build --target shader_keys
-build/shader_keys keys.bin build/probe/demo/saves/shaders.bin
+build/shader_keys build/keys.bin build/probe/demo/saves/shaders.bin
 ```
 
 `check_generic.py` fails if a file names a particular game, since nothing game-specific belongs in the engine. Run it before a fork commit. With no arguments it checks every tracked file. `--staged` checks only what's staged, and file names check just those files.
