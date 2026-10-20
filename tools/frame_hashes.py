@@ -80,6 +80,12 @@ def compare(golden: dict[int, str], got: dict[int, str]) -> list[str]:
     return problems
 
 
+def reached(got: dict[int, str], needed: int) -> str:
+    if not got:
+        return f"reached no frames (needs {needed})"
+    return f"reached frame {max(got)} (needs {needed})"
+
+
 def run_route(route: Route, backend: str) -> Path:
     name = f"hashes-{backend}-{route.name}"
     args = [str(PROBE), name, str(route.seconds),
@@ -121,10 +127,12 @@ def main(argv: list[str]) -> int:
                 continue
             golden_path.parent.mkdir(parents=True, exist_ok=True)
             golden_path.write_text(format_golden(got, max(route.required)))
-            print(f"{route.name}: recorded {len(read_golden(golden_path.read_text()))} frames")
+            print(f"{route.name}: recorded {len(read_golden(golden_path.read_text()))} frames, "
+                  f"{reached(got, max(route.required))}")
             continue
         problems = compare(read_golden(golden_path.read_text()), got)
-        print(f"{route.name}: {'OK' if not problems else f'{len(problems)} problem(s)'}")
+        status = 'OK' if not problems else f'{len(problems)} problem(s)'
+        print(f"{route.name}: {status}, {reached(got, max(route.required))}")
         for p in problems:
             print(f"  {p}")
         failed += bool(problems)

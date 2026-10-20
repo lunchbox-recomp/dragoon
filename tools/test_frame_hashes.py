@@ -35,5 +35,11 @@ class GoldenTest(unittest.TestCase):
                          ["frame 60: cccccccc != golden aaaaaaaa", "frame 120: not reached"])
 
 
+class ReachedTest(unittest.TestCase):
+    def test_reports_largest_frame_and_what_the_route_needs(self):
+        self.assertEqual(fh.reached({60: "a", 5400: "b", 120: "c"}, 3300), "reached frame 5400 (needs 3300)")
+        self.assertEqual(fh.reached({}, 60), "reached no frames (needs 60)")
+
+
 if __name__ == "__main__":
     unittest.main()
