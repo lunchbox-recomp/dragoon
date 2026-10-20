@@ -160,45 +160,80 @@ worst for the guest. Its 7 worst frames are the dumps, each a readback of the wh
 over 20 ms in either run. The same route at 640x480 averaged 1.40 ms (the table under Four players), so
 doubling each side cost the renderer's issue time nothing it could measure.
 
-Hitches are the frames after frame 300 whose `[rt]` time is over 16.7 ms, from one run of each route
-with `--real-time --scale=2 GCN_FRAMETIME=1` (`tools/probe.sh NAME SECONDS tests/routes/ROUTE.txt 100000
---real-time --scale=2 GCN_FRAMETIME=1`, plus `--pads=4` for the four-player route). macOS GL has no
-program binaries, so each run started with a cold shader cache. The `[shaders] compiled program N`
-lines that `GCN_FRAMETIME=1` already prints say when a program is built, in the frame that needs it.
-Every run played past its route's last checkpoint.
+Hitches are the frames after frame 300 whose `[rt]` time is over 16.7 ms. These are first launches
+with an empty shader cache, one run of each route at `--real-time --scale=2` with nothing warmed.
+macOS GL has no program binaries, so the cache started empty. The warmed numbers are in the Player
+targets table below. Each run was `tools/probe.sh w3-cold-ROUTE SECONDS tests/routes/ROUTE.txt 60
+GCN_FRAMETIME=1 --real-time --scale=2` (plus `--pads=4` for the four-player route), and the rows
+come from `tools/frametime.py LOG --slow 16.7`. The `[shaders] compiled program N` lines that
+`GCN_FRAMETIME=1` prints say when a program is built, in the frame that needs it. Every run played
+past its route's last checkpoint. These runs kept the default frame dump every 60 frames, and a
+dump reads the whole frame back, which puts that frame over 33 ms by itself. The rows leave out
+dump frames. Frame numbers and batch shapes are `frametime.py`'s, and `draws` is its `draws A/B`.
 
-| Route | Frame | `[rt]` | New programs |
-|---|---|---|---|
-| Title | 902 | 37.0 ms | 15 |
-| Title | 1414 | 53.3 ms | 24 |
-| Title | 1535 | 32.5 ms | 6 |
-| Menu | 902 | 38.1 ms | 15 |
-| Air Ride race | 902 | 40.3 ms | 15 |
-| Air Ride race | 3122 | 66.0 ms | 30 |
-| City Trial | 902 | 27.4 ms | 15 |
-| City Trial | 2733 | 63.2 ms | 38 |
-| City Trial | 2834 | 17.0 ms | 4 |
-| City Trial, four players | 902 | 38.2 ms | 15 |
-| City Trial, four players | 2733 | 57.9 ms | 34 |
+| Route | Frame | `[rt]` | Batch | New programs |
+|---|---|---|---|---|
+| Title | 902 | 29.8 ms | draws 462/167, verts 12,419, idx 33,993 | 15 |
+| Title | 1414 | 56.4 ms | draws 1437/162, verts 32,750, idx 84,096 | 24 |
+| Title | 1535 | 22.6 ms | draws 1531/192, verts 31,527, idx 79,005 | 6 |
+| Menu | 902 | 31.8 ms | draws 462/167, verts 12,419, idx 33,993 | 15 |
+| Air Ride race | 902 | 30.3 ms | draws 462/167, verts 12,419, idx 33,993 | 15 |
+| Air Ride race | 3122 | 60.6 ms | draws 2285/168, verts 37,730, idx 91,242 | 30 |
+| Air Ride race | 4788 | 17.6 ms | draws 2417/271, verts 40,561, idx 98,709 | 5 |
+| City Trial | 902 | 30.5 ms | draws 462/167, verts 12,419, idx 33,993 | 15 |
+| City Trial | 2733 | 64.5 ms | draws 1937/386, verts 36,131, idx 77,673 | 38 |
+| City Trial, four players | 902 | 31.5 ms | draws 462/167, verts 12,419, idx 33,993 | 15 |
+| City Trial, four players | 2733 | 59.1 ms | draws 4399/635, verts 84,681, idx 185,319 | 34 |
 
-Batch shapes aren't listed. The `[ft]` line with a frame's number describes the next batch, not the one
-that frame drew (`[ft] fN` is drawn as `[rt] f(N+1)`), and the logs these rows came from weren't kept.
-8 of the 11 frames went over 33 ms. The other three are title 1535, City Trial 902 and City Trial 2834.
+4 of the 11 frames went over 33 ms (title 1414, City Trial 2733, four-player 2733 and race 3122).
+The other seven are over 16.7 ms and under 33. The 15-program burst at frame 902 sits at 30 to 32 ms
+here, where an earlier set of runs saw 27 to 40 ms.
 
-Every one of those frames built new programs, and no other frame after 300 went over 16.7 ms. A program
-takes 1.2 to 5 ms to compile, so a frame with 30 new ones takes about 55 ms of compiling. The big bursts
-are 15 programs at frame 902 (the first 3D scene, in all five runs), 24 at the title's logo scene (1414),
-38 and 34 at the start of the city (2733) and 30 at the start of a race (3122). The other new programs
-come in ones to six, and only the 6 at frame 1535 and the 4 at 2834 pushed a frame over 16.7 ms. The guest
-also stalls for 117 to 401 ms at a handful of frames (303, 1002, 1413, 1801, 2103, 2732 and others). What it was doing
-then wasn't checked.
+Every one of those frames built new programs, and no other non-dump frame after 300 went over
+16.7 ms. A program takes 1.2 to 5 ms to compile, so a frame with 30 new ones takes about 55 ms of
+compiling. The big bursts are 15 programs at frame 902 (the first 3D scene, in all five runs), 24 at
+the title's logo scene (1414), 38 and 34 at the start of the city (2733) and 30 at the start of a
+race (3122). The other new programs come in ones to six, and only the 6 at frame 1535 and the 5 at
+4788 pushed a frame over 16.7 ms. The guest also stalls for 117 to 401 ms at a handful of frames
+(303, 1002, 1413, 1801, 2103, 2732 and others). What it was doing then wasn't checked.
 
 | Trigger | Threshold | Measured on GL | Verdict |
 |---|---|---|---|
 | Four-player cost | `[rt]` 99th percentile over 8 ms | 1.96 ms (3.64 ms with dumps) | Doesn't fire |
-| Shader-compile hitches | Any frame after 300 over 33 ms | 8 frames across the five routes, from 37 ms to 66 ms, each on first sight of 15 to 38 programs | Fires |
+| Shader-compile hitches | Any frame after 300 over 33 ms | 4 frames across the five cold runs, from 56 ms to 65 ms, each on first sight of 24 to 38 programs | Fires |
 
-The hitches are cold-start costs. Frame 902 showed up in all five runs. The bigger bursts (1414, 2733, 3122) each showed up in the runs of the routes that reach that scene, from one run of each route.
+The hitches are cold-start costs. Frame 902 showed up in all five runs. The bigger bursts (1414,
+2733, 3122) each showed up in the runs of the routes that reach that scene, from one run of each
+route.
+
+## Player targets
+
+What a player's first session looks like after the warm-up, against the bars set for it.
+
+| Target | Bar | Measured | Result |
+|---|---|---|---|
+| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five, worst frame 28.2 ms | Pass |
+| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | Title 3, menu 0, City Trial 35, four players 33, race 9 | Fail |
+| How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The attract pass builds 3 keys. Title 3 of 66 (4.5%), menu 3 of 27 (11.1%), City Trial 3 of 107 (2.8%), four players 3 of 110 (2.7%), race 3 of 141 (2.1%) | Reported |
+| Time added to the first build | 90 s or less | 42.8 s (attract 7.1 s, routes 35.7 s), 136 keys | Pass |
+| Time added to every boot on macOS GL | 1,000 ms or less | 198 to 221 ms for 136 programs | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK | Pass |
+
+With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
+`DUMP_EVERY` to 100,000.
+
+The compiles that remain after the warm-up are the keys the warm-up's `--fast` passes didn't build.
+The 136-key cache lacks 3 of the title's 66 keys, none of the menu's 27, 35 of City Trial's 107, 33
+of the four-player route's 110 and 9 of the race's 141. The worst frames are City Trial
+2733 (28.2 ms, 10 programs, draws 1937/386, verts 36,131, idx 77,673) and four-player 2734
+(24.0 ms, 9 programs, draws 4399/635, verts 84,681, idx 185,319).
+
+Measured on a Mac with an M4 Max at `--real-time --scale=2`, with the build's `tools/warm_shaders.py`
+(`--saves` a fresh directory for each route) and the Dragoon commit `d3c9c15`. Apple's own shader
+cache was warm from earlier runs, and the warm-up fills it on a player's Mac too. The 42.8 s is the
+first warm-up, timed with `/usr/bin/time -p`. The other four warm-ups ran for real as well, because
+each used a fresh saves directory with no stamp, and took 44.2 to 45.7 s. The runs with dumps off
+used a copy of a sixth, separate warm-up's cache.
 
 ## Fixes on the way
 
