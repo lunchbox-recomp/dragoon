@@ -14,7 +14,7 @@ numbers are from `fda6926`.
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. Stadium not reached yet |
 | Top Ride | Not tried | |
 | Audio | Partial | Details in `audio.md` |
-| Controllers | Four ports, scripted | `--pads=N` plugs in ports 1 to N. A route can press on any of them, as in `2/2100:A:5`. Live input reaches port 1 only, since gamepads 2 to 4 aren't mapped to ports yet |
+| Controllers | Four ports, live | Each gamepad takes the next free port as it connects and gets the same one next launch, kept by GUID and serial in `saves/gamepads.txt`. The keyboard stays on port 1. A gamepad pulled out mid-game leaves its port plugged in until it's back. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`--test-ports`), not yet with four real controllers |
 | Picture | 4:3 | gcn-recomp letterboxes the desktop window to 4:3 |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
 | Build from the disc | Works | 23 s from an empty build directory: 3.5 s to configure, 19.5 s for Ninja |
@@ -22,7 +22,7 @@ numbers are from `fda6926`.
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
 | Disc path with spaces | Works | Configures, and its `dragoon_bench` builds and runs |
 | Running from another directory | Works | The configured disc path is compiled in |
-| Network during the build | None | No downloads or FetchContent on macOS. SDL2 comes from Homebrew through pkg-config |
+| Network during the build | SDL only | The first configure in a build directory downloads SDL 3.4.18's source release (15.7 MB) and checks its SHA-256. `-DGCN_SYSTEM_SDL=ON` uses an installed SDL3 instead, with no download |
 | Idle loop | Works | `recomp/idle.txt` 803D9FCC is the `IDLE_CHECK` branch in the generated C |
 
 ## The build

@@ -17,7 +17,7 @@ jobs:
       - name: Tool tests
         run: python3 -m unittest discover -s tools -p 'test_*.py'
       - name: Dependencies
-        run: brew install ninja sdl2
+        run: brew install ninja
       - name: Configure without a disc
         run: cmake -S . -B build-nodisc -G Ninja
       - name: Compile the runtime
