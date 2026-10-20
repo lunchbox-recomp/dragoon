@@ -12,3 +12,11 @@ tools/frametime.py build/probe/pace/stdout.txt --from 300 --slow 16.7
 ```
 
 Add `--json` for machine output.
+
+## framediff.py
+
+Do two runs draw the same pixels? It compares every `frame_NNNNN.png` that two directories of frame dumps have in common, prints the share of pixels whose largest RGB difference is over a tolerance and the worst difference seen, and exits 1 if any frame is over the budget. Alpha isn't compared.
+
+```
+tools/framediff.py build/probe/gl-run build/probe/metal-run --tolerance 3 --budget 0.001
+```
