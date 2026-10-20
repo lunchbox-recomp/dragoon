@@ -1,0 +1,12 @@
+# Blank memory card to City Trial with four players, one on each port. Run with --pads=4.
+# menu.txt, then 1300 DOWN, 1400 DOWN: City Trial. 1500 A: into it. 1800 A: Start Game.
+# 2100 A on ports 1 to 4: all four join. 2400 A on ports 1 to 4: all four OK. 2700 START:
+# the city, in four views, under way by frame 3300 with the clock running down from 5:00.
+# 3400: ports 1 and 3 steer left and ports 2 and 4 steer right for two seconds.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:DOWN:5,1400:DOWN:5,1500:A:5,1800:A:5,
+2100:A:5,2/2100:A:5,3/2100:A:5,4/2100:A:5,
+2400:A:5,2/2400:A:5,3/2400:A:5,4/2400:A:5,
+2700:START:5,
+3400:SL:120,2/3400:SR:120,3/3400:SL:120,4/3400:SR:120
