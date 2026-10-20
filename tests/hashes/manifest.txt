@@ -1,0 +1,7 @@
+# route seconds dump_every required_frames [probe settings]
+# Required frames are the checkpoints in docs/dev/status.md. Seconds are wall-clock with --fast.
+title          20 60 60,960
+menu           20 60 1200
+air-ride-race  30 60 4200,6000
+city-trial     25 60 3300
+city-trial-4p  30 60 2700,3480 --pads=4
