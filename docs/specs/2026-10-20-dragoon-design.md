@@ -83,7 +83,7 @@ Dragoon follows the per-game shape of the gcn-recomp author's own game repos.
 
 Several things Dragoon needs are engine features, not game code.
 
-- the 2004 AX audio ucode (Kirby Air Ride's; the runtime handles the 2001 one)
+- the newer AX audio ucode (Kirby Air Ride runs a 2003 build; the runtime decodes every build as the 2001 one, which misroutes effect sends)
 - four connected controllers (the runtime connects only the first)
 - an output-aspect setting for the desktop renderer, for widescreen
 - a replay runner that stops at a frame and hashes state
