@@ -141,8 +141,10 @@ catch-up jumps of the clock there, 109 ms in all. It made no more in the city.
 What the GL renderer costs at 1280x960 (`--scale=2`, twice the default 640x480 in each direction),
 at gcn-recomp `642187a`, on a 16-core Mac with other work running (load average 2 to 3). These are
 the baseline for the Metal renderer's two triggers. `[rt]` is the time the renderer spends
-issuing a frame to GL, not the GPU's own time, so the guest's interval between frames is the
-check that nothing dropped. The percentiles are nearest rank.
+issuing a frame to GL, not the GPU's own time. The percentiles are nearest rank. The window was
+hidden and never waited on the display's refresh. The timer behind `--real-time` paced the guest, and
+the cost of presenting a frame and of vsync isn't in these numbers. So the 16.68 ms guest interval
+shows that timer and not a 60 Hz display. `[rt]` is part of a frame's cost, not all of it.
 
 | Four players, frames 3,400 to 7,647 (4,248 frames) | Mean | 95th | 99th | Worst |
 |---|---|---|---|---|
@@ -154,7 +156,7 @@ and the table is a second run of it with a frame dump every 100,000 frames inste
 run, with the dumps, read 1.45 ms mean, 2.42 ms at the 95th percentile, 3.64 ms at the 99th and 41.15 ms
 at worst for the renderer, and 16.68 ms mean, 17.28 ms at the 95th, 17.49 ms at the 99th and 17.90 ms at
 worst for the guest. Its 7 worst frames are the dumps, each a readback of the whole frame (frames 3,600 to
-7,200, every 600th). The rest of the gap between the two runs is other work on the machine. No frame ran
+7,200, every 600th). The rest of the gap between the two runs is probably other work on the machine, though no control run was made. No frame ran
 over 20 ms in either. The same route at 640x480 averaged 1.40 ms (the table under Four players), so
 doubling each side cost the renderer's issue time nothing it could measure.
 
@@ -165,13 +167,22 @@ program binaries, so each run started with a cold shader cache. The `[shaders] c
 lines that `GCN_FRAMETIME=1` already prints say when a program is built, in the frame that needs it.
 Every run played past its route's last checkpoint.
 
-| Route | Frames over 16.7 ms | New programs in that frame | Frames over 33 ms |
-|---|---|---|---|
-| Title | 902: 37.0 ms. 1414: 53.3 ms. 1535: 32.5 ms | 15, 24, 6 | 2 |
-| Menu | 902: 38.1 ms | 15 | 1 |
-| Air Ride race | 902: 40.3 ms. 3122: 66.0 ms | 15, 30 | 2 |
-| City Trial | 902: 27.4 ms. 2733: 63.2 ms. 2834: 17.0 ms | 15, 38, 4 | 1 |
-| City Trial, four players | 902: 38.2 ms. 2733: 57.9 ms | 15, 34 | 2 |
+| Route | Frame | `[rt]` | New programs | Batch (`draws`/commands, vertices, indices) |
+|---|---|---|---|---|
+| Title | 902 | 37.0 ms | 15 | 462/167, 12,419, 33,993 |
+| Title | 1414 | 53.3 ms | 24 | 1,497/170, 33,350, 85,464 |
+| Title | 1535 | 32.5 ms | 6 | 1,535/193, 31,543, 79,029 |
+| Menu | 902 | 38.1 ms | 15 | 462/167, 12,419, 33,993 |
+| Air Ride race | 902 | 40.3 ms | 15 | 462/167, 12,419, 33,993 |
+| Air Ride race | 3122 | 66.0 ms | 30 | 2,325/176, 38,178, 92,346 |
+| City Trial | 902 | 27.4 ms | 15 | 462/167, 12,419, 33,993 |
+| City Trial | 2733 | 63.2 ms | 38 | 1,957/389, 36,477, 78,591 |
+| City Trial | 2834 | 17.0 ms | 4 | 2,084/433, 42,041, 94,587 |
+| City Trial, four players | 902 | 38.2 ms | 15 | 462/167, 12,419, 33,993 |
+| City Trial, four players | 2733 | 57.9 ms | 34 | 4,415/643, 85,001, 186,183 |
+
+The batch comes from the `[ft]` line of the same frame. 8 of the 11 frames went over 33 ms. The other
+three are title 1535, City Trial 902 and City Trial 2834.
 
 Every one of those frames built new programs, and no other frame after 300 went over 16.7 ms. A program
 takes 1.2 to 5 ms to compile, so a frame with 30 new ones takes about 55 ms of compiling. The big bursts
@@ -186,7 +197,7 @@ little or nothing drawn. Those are the game loading, and the renderer's time in 
 | Four-player cost | `[rt]` 99th percentile over 8 ms | 1.96 ms (3.64 ms with dumps) | Doesn't fire |
 | Shader-compile hitches | Any frame after 300 over 33 ms | 8 frames across the five routes, from 37 ms to 66 ms, each on first sight of 15 to 38 programs | Fires |
 
-The hitches are cold-start costs. They come at the same scene changes on every launch.
+The hitches are cold-start costs. Frame 902 showed up in all five runs. The bigger bursts (1414, 2733, 3122) each showed up in the runs of the routes that reach that scene, from one run of each route.
 
 ## Fixes on the way
 
