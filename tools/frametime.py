@@ -8,6 +8,10 @@ lines. Prints the guest's interval between presents and the renderer's issue tim
 frame N on (mean, p95, p99, worst), then each frame whose render time is over MS
 (default 16.7) with its batch shape and the shaders compiled in it. A [shaders] line
 belongs to the next [rt] line, since both come from the render thread.
+
+Frame numbers are the [rt] lines'; a frame's batch is the [ft] line one lower. A game that
+copies a frame to the display in strips prints more than one [ft] line a batch, which this
+pairing doesn't follow.
 """
 from __future__ import annotations
 
@@ -32,11 +36,14 @@ class Frame:
 
 
 def parse(lines) -> dict[int, Frame]:
+    """Frames keyed by their [rt] number. [ft] fN is printed before the engine counts the
+    frame (xf.cpp:1928-1935) and [rt] after (render_gl.cpp:3981), so the batch [ft] fN
+    describes is drawn as [rt] f(N+1)."""
     frames: dict[int, Frame] = {}
     pending: list[float] = []
     for line in lines:
         if m := FT.match(line):
-            f = frames.setdefault(int(m[1]), Frame())
+            f = frames.setdefault(int(m[1]) + 1, Frame())
             f.guest_ms, f.shape = float(m[2]), " ".join(re.sub(r"/\s+", "/", m[3]).split())
         elif m := SHADER.match(line):
             pending.append(float(m[1]))
