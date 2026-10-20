@@ -60,7 +60,8 @@ Commits don't carry AI co-author lines. Almost every commit would need one and t
 ## Credits
 
 - [gcn-recomp](https://github.com/ethannicholas/gcn-recomp) by Ethan Nicholas, the recompiler and runtime Dragoon is built on (MIT)
-- [wowjinxy/KAR](https://github.com/wowjinxy/KAR), the Kirby Air Ride decompilation, for the function names in `analysis/symbols.txt` (CC0)
+- [wowjinxy/KAR](https://github.com/wowjinxy/KAR), a Kirby Air Ride decompilation, for the function names in `analysis/symbols.txt` (CC0)
+- [doldecomp/kar](https://github.com/doldecomp/kar), the earlier Kirby Air Ride decompilation, where some of those names were first worked out
 
 ## Legal
 
