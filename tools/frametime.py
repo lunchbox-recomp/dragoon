@@ -6,12 +6,16 @@ Usage: frametime.py LOG [--from N] [--slow MS] [--json]
 LOG is a run's stdout.txt from tools/probe.sh, or any log with [ft], [rt] and [shaders]
 lines. Prints the guest's interval between presents and the renderer's issue time from
 frame N on (mean, p95, p99, worst), then each frame whose render time is over MS
-(default 16.7) with its batch shape and the shaders compiled in it. A [shaders] line
-belongs to the next [rt] line, since both come from the render thread.
+(default 16.7) with its batch shape and the shaders compiled in it. --from N (default 300)
+starts the summary at frame N. A [shaders] line belongs to the next [rt] line, since both
+come from the render thread. --json prints the same result as JSON.
 
 Frame numbers are the [rt] lines'; a frame's batch is the [ft] line one lower. A game that
 copies a frame to the display in strips prints more than one [ft] line a batch, which this
 pairing doesn't follow.
+
+Exits 0 once it has read the log, 2 on a bad argument or a log it can't read or that has no
+frame from N on.
 """
 from __future__ import annotations
 
@@ -21,8 +25,11 @@ import math
 import re
 import sys
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
-FT = re.compile(r"^\[ft\] f(\d+) guest\s+([\d.]+)ms.*?(draws\s+\d+/\s*\d+\s+verts\s+\d+\s+idx\s+\d+)\s")
+# The trailing \s: a line cut off mid-number must not parse.
+FT = re.compile(r"^\[ft\] f(\d+) guest\s+([\d.]+)ms.*?"
+                r"(draws\s+\d+/\s*\d+\s+verts\s+\d+\s+idx\s+\d+)\s")
 RT = re.compile(r"^\[rt\] f(\d+) render\s+([\d.]+)ms")
 SHADER = re.compile(r"^\[shaders\] compiled program \d+ in ([\d.]+) ms")
 
@@ -43,13 +50,16 @@ def parse(lines) -> dict[int, Frame]:
     pending: list[float] = []
     for line in lines:
         if m := FT.match(line):
-            f = frames.setdefault(int(m[1]) + 1, Frame())
-            f.guest_ms, f.shape = float(m[2]), " ".join(re.sub(r"/\s+", "/", m[3]).split())
+            frame = frames.setdefault(int(m[1]) + 1, Frame())
+            frame.guest_ms = float(m[2])
+            frame.shape = " ".join(re.sub(r"/\s+", "/", m[3]).split())
         elif m := SHADER.match(line):
             pending.append(float(m[1]))
         elif m := RT.match(line):
-            f = frames.setdefault(int(m[1]), Frame())
-            f.render_ms, f.compiles, pending = float(m[2]), pending, []
+            frame = frames.setdefault(int(m[1]), Frame())
+            frame.render_ms = float(m[2])
+            frame.compiles = pending
+            pending = []
     return frames
 
 
@@ -76,28 +86,43 @@ def slow(frames: dict[int, Frame], start: int, ms: float) -> list[tuple[int, Fra
             if n >= start and f.render_ms is not None and f.render_ms > ms]
 
 
+def read_frames(log: Path, start: int) -> dict[int, Frame]:
+    with log.open(errors="replace") as lines:
+        frames = parse(lines)
+    if not frames:
+        raise ValueError(f"{log}: no [ft] or [rt] lines; was GCN_FRAMETIME=1 set?")
+    if max(frames) < start:
+        raise ValueError(f"{log}: no frames from {start} on; the log ends at frame {max(frames)}")
+    return frames
+
+
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Summarize a GCN_FRAMETIME=1 log.")
-    ap.add_argument("log")
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("log", type=Path)
     ap.add_argument("--from", dest="start", type=int, default=300)
     ap.add_argument("--slow", type=float, default=16.7)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    with open(args.log, errors="replace") as f:
-        frames = parse(f)
+    try:
+        frames = read_frames(args.log, args.start)
+    except (OSError, ValueError) as e:
+        print(e, file=sys.stderr)
+        return 2
     result = {"summary": summary(frames, args.start),
               "slow": [{"frame": n, **asdict(f)} for n, f in slow(frames, args.start, args.slow)]}
     if args.json:
         print(json.dumps(result, indent=1))
         return 0
-    for name, s in result["summary"].items():
-        if s["n"]:
-            print(f"{name:6} from {args.start}: n {s['n']}  mean {s['mean']:.2f}  p95 {s['p95']:.2f}"
-                  f"  p99 {s['p99']:.2f}  worst {s['worst']:.2f} ms")
+    for name, stats in result["summary"].items():
+        if stats["n"]:
+            print(f"{name:6} from {args.start}: n {stats['n']}  mean {stats['mean']:.2f}"
+                  f"  p95 {stats['p95']:.2f}  p99 {stats['p99']:.2f}  worst {stats['worst']:.2f} ms")
     print(f"frames over {args.slow} ms: {len(result['slow'])}")
-    for s in result["slow"]:
-        shaders = f"  {len(s['compiles'])} shaders, {sum(s['compiles']):.0f} ms" if s["compiles"] else ""
-        print(f"  f{s['frame']}  render {s['render_ms']:.2f} ms  {s['shape']}{shaders}")
+    for row in result["slow"]:
+        shaders = (f"  {len(row['compiles'])} shaders, {sum(row['compiles']):.0f} ms"
+                   if row["compiles"] else "")
+        print(f"  f{row['frame']}  render {row['render_ms']:.2f} ms  {row['shape']}{shaders}")
     return 0
 
 
