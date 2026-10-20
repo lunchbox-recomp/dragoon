@@ -64,7 +64,7 @@ fi
 env SDL_AUDIO_DRIVER=dummy GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$root/build/dragoon" --hidden $fast --no-input-log \
   --pads="$pads" --scale="$scale" --dump-dir="$out" --dump-every="$every" >"$out/stdout.txt" 2>&1 &
 pid=$!
-trap 'kill "$pid" 2>/dev/null' EXIT
+trap 'kill "$pid" 2>/dev/null || true' EXIT
 trap 'exit 130' INT TERM
 sleep "$seconds"
 kill "$pid" 2>/dev/null || true
