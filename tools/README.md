@@ -2,11 +2,23 @@
 
 Each tool answers one question. Start with probe.sh, which makes the runs the others read. Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`.
 
+## Conventions
+
+Every tool takes `--help`, which prints its usage and what it reads. Results go to stdout, including the failures a tool checks for. Errors go to stderr as one line naming the file and what's wrong, and so do warnings that leave the exit code alone. A traceback means a bug in the tool.
+
+| Exit | Means |
+|---|---|
+| 0 | The tool ran and nothing failed |
+| 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
+| 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
+
+frametime.py and shader_cache.py only report, so they never exit 1.
+
 ## probe.sh
 
-How does the game behave when nobody is playing it? It runs the game in a hidden window for a number of seconds, feeds it a route of button presses and dumps every Nth frame as a PNG. Everything a run leaves goes to `build/probe/NAME/`, and the log is `build/probe/NAME/stdout.txt`. Audio goes through SDL's dummy driver, so a run is silent. A new NAME starts from a blank memory card, and a NAME that's run again keeps the card its last run left behind.
+How does the game behave when nobody is playing it? It runs the game in a hidden window for a number of seconds, feeds it a route of button presses and dumps every Nth frame as a PNG. A run leaves its frames (`frame_NNNNN.png`), its log (`stdout.txt`), its memory card (`saves/memcard_a.raw`), its shader cache (`saves/shaders.bin`) and, after a crash, `panic.txt` in `build/probe/NAME/`. Audio goes through SDL's dummy driver, so a run is silent. Audio never paces the guest, so the dummy driver doesn't change timing. A new NAME starts from a blank memory card, and a NAME that's run again keeps the card its last run left behind.
 
-After the NAME and seconds come an input script or a route file from `tests/routes/`, the dump interval and any settings. A setting is `GCN_*=value` (the list is in `gcn-recomp/docs/diagnostics.md`), `--pads=N`, `--real-time`, `--renderer=NAME`, `--scale=N` or `--bench`. The header of `tools/probe.sh` has the details.
+After the NAME and seconds come an input script or a route file from `tests/routes/`, the dump interval and any settings. A setting is `GCN_*=value` (the list is in `gcn-recomp/docs/diagnostics.md`), `--pads=N`, `--real-time`, `--renderer=gl`, `--scale=N` or `--bench`. GL is the engine's only renderer. `tools/probe.sh --help` prints the settings. Route files are described in `tests/routes/README.md`.
 
 ```
 tools/probe.sh demo 20 tests/routes/title.txt 60 GCN_FRAMETIME=1
@@ -23,11 +35,15 @@ tools/probe.sh pace 130 tests/routes/city-trial-4p.txt 100000 --pads=4 --real-ti
 tools/frametime.py build/probe/pace/stdout.txt --from 300 --slow 16.7
 ```
 
-Add `--json` for machine output.
+Add `--json` for machine output. Frame numbers are the `[rt]` lines'. A frame's batch is the `[ft]` line one lower.
+
+A dumped frame is read back, which adds to its `[rt]` time, so time a run with a dump interval past its end (the 100000 above). Under `--fast` the guest interval is how fast the game goes, not its pacing. Use `--real-time` for pacing. Shader compiles show either way.
 
 ## framediff.py
 
-Do two runs draw the same pixels? It compares every `frame_NNNNN.png` that two directories of frame dumps have in common, prints the share of pixels whose largest RGB difference is over a tolerance and the worst difference seen, and exits 1 if any frame is over the budget. Alpha isn't compared.
+Do two runs draw the same pixels? It compares every `frame_NNNNN.png` that two directories of frame dumps have in common, prints the share of pixels whose largest RGB difference is over a tolerance and the worst difference seen, and ends with a line counting the frames compared and the ones over budget. It exits 1 if any frame is over the budget. Alpha isn't compared.
+
+framediff takes a tolerance and works across renderers. frame_hashes is an exact check against committed goldens. Two runs of a change need two builds and two NAMEs. Frames only one directory has are listed on stderr and don't fail the diff, which is normal when runs end at different frames.
 
 ```
 tools/framediff.py build/probe/gl-run build/probe/metal-run --tolerance 3 --budget 0.001
@@ -35,18 +51,18 @@ tools/framediff.py build/probe/gl-run build/probe/metal-run --tolerance 3 --budg
 
 ## shader_cache.py
 
-What shaders does a cache or key list hold, and which are new? It reads `saves/shaders.bin` (magic `WRSC`) and key lists (magic `GCSK`). The key size comes from the format word, and a magic or key size it doesn't know is refused. `count` prints the format, the record count and the distinct key count, and says how many trailing bytes it ignored (a record a kill cut off). `diff` prints how many distinct keys in NEW aren't in OLD and their share of NEW, and refuses two files in different formats.
+How many shaders does a cache or key list hold, and how many are new? It reads `saves/shaders.bin` (magic `WRSC`) and key lists (magic `GCSK`). The key size comes from the format word, and a magic or key size it doesn't know is refused. `count` prints the format, the record count and the distinct key count, and says how many trailing bytes it ignored (a record a kill cut off). `diff` prints how many distinct keys in NEW aren't in OLD and their share of NEW, and refuses two files in different formats. It counts and never lists keys.
 
 ```
 tools/shader_cache.py count build/probe/gl-run/saves/shaders.bin
-tools/shader_cache.py diff old-keys.bin build/probe/gl-run/saves/shaders.bin
+tools/shader_cache.py diff build/old-keys.bin build/probe/gl-run/saves/shaders.bin
 ```
 
 ## frame_hashes.py
 
 Did a change alter what the renderer draws? It runs each route in `tests/hashes/manifest.txt` through probe.sh and compares the SHA-1 of every dumped frame with the golden in `tests/hashes/<backend>/<route>.txt`. `check` reports each frame that changed or wasn't reached. `record` rewrites the goldens, so use it only when a change to the output is on purpose. The frames are moved to the Trash once hashed and are never committed.
 
-The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. A `check` takes a few minutes. Pass route names to run only those, and `--backend gl|metal` to pick the goldens.
+The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. `--backend` picks the goldens' directory, and probe.sh accepts only gl. A `check` of all five routes takes about two minutes.
 
 ```
 tools/frame_hashes.py check title
@@ -54,7 +70,13 @@ tools/frame_hashes.py check title
 
 ## check_no_game_data.py
 
-Is anything from a disc tracked by git? It flags tracked paths that look like game data. Disc images and executables are flagged by suffix. Anything under `build*/` or `saves/` is flagged too, and so is anything under `rom/` except its README. It prints one line per path and exits 1 if it found any, so it can run in CI. It prints nothing when the tree is clean.
+Is anything from a disc tracked by git? It flags tracked paths that look like game data:
+
+- Disc images and executables by suffix, `.raw` memory cards and `.bin` shader caches and key lists.
+- Anything under a top-level `build*/` or `rom/` (except the `rom/` README), and anything under a `saves/` at any depth.
+- Frame dumps (`frame_NNNNN.png`), `stdout.txt` and `panic.txt`, wherever they sit. Other PNG files are fine.
+
+It prints one line per path and exits 1 if it found any, so it can run in CI. It prints nothing when the tree is clean.
 
 ```
 tools/check_no_game_data.py
