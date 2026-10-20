@@ -11,3 +11,7 @@ saves/
 *.dol
 panic.txt
 .DS_Store
+
+# Local Claude settings and notes
+.claude/settings.local.json
+CLAUDE.local.md

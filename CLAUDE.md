@@ -14,6 +14,12 @@ Kirby Air Ride (USA, `GKYE01`) static recompilation on gcn-recomp. Design:
 The README, CONTRIBUTING, PR descriptions, issues, announcements and replies to people are
 written by the user. Claude writes technical docs and drafts facts and outlines for the rest.
 
+## Voice
+
+Lead with the fact and use numbers instead of adjectives. Say what's broken as plainly as
+what works. State what's true now, with no promises about releases or dates. Short
+paragraphs, tables for anything comparable, no emoji or exclamation marks.
+
 ## Never commit or publish
 
 The disc image, its DOL, C generated from it, extracted assets, saves, or replays that embed
