@@ -24,7 +24,7 @@ After the NAME and seconds come an input script or a route file from `tests/rout
 tools/probe.sh demo 20 tests/routes/title.txt 60 GCN_FRAMETIME=1
 ```
 
-That prints `build/probe/demo: 140 frames`. Run it again with a different NAME to get a second run to compare.
+That prints the run's directory as an absolute path, then `140 frames`. Run it again with a different NAME to get a second run to compare.
 
 ## frametime.py
 
@@ -43,7 +43,7 @@ A dumped frame is read back, which adds to its `[rt]` time, so time a run with a
 
 Do two runs draw the same pixels? It compares every `frame_NNNNN.png` that two directories of frame dumps have in common, prints the share of pixels whose largest RGB difference is over a tolerance and the worst difference seen, and ends with a line counting the frames compared and the ones over budget. It exits 1 if any frame is over the budget. Alpha isn't compared.
 
-framediff takes a tolerance and works across renderers. frame_hashes is an exact check against committed goldens. Two runs of a change need two builds and two NAMEs. Frames only one directory has are listed on stderr and don't fail the diff, which is normal when runs end at different frames.
+framediff takes a tolerance and works across renderers. frame_hashes is an exact check against committed goldens. Two runs of a change need two builds and two NAMEs. Frames only one directory has are counted on stderr and don't fail the diff, which is normal when runs end at different frames.
 
 ```
 tools/framediff.py build/probe/gl-run build/probe/metal-run --tolerance 3 --budget 0.001

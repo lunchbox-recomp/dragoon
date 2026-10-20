@@ -109,20 +109,20 @@ def main(argv: list[str]) -> int:
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
         return 2
-    result = {"summary": summary(frames, args.start),
-              "slow": [{"frame": n, **asdict(f)} for n, f in slow(frames, args.start, args.slow)]}
+    stats = summary(frames, args.start)
+    over = slow(frames, args.start, args.slow)
     if args.json:
-        print(json.dumps(result, indent=1))
+        print(json.dumps({"summary": stats, "slow": [{"frame": n, **asdict(f)} for n, f in over]},
+                         indent=1))
         return 0
-    for name, stats in result["summary"].items():
-        if stats["n"]:
-            print(f"{name:6} from {args.start}: n {stats['n']}  mean {stats['mean']:.2f}"
-                  f"  p95 {stats['p95']:.2f}  p99 {stats['p99']:.2f}  worst {stats['worst']:.2f} ms")
-    print(f"frames over {args.slow} ms: {len(result['slow'])}")
-    for row in result["slow"]:
-        shaders = (f"  {len(row['compiles'])} shaders, {sum(row['compiles']):.0f} ms"
-                   if row["compiles"] else "")
-        print(f"  f{row['frame']}  render {row['render_ms']:.2f} ms  {row['shape']}{shaders}")
+    for name, s in stats.items():
+        if s["n"]:
+            print(f"{name:6} from {args.start}: n {s['n']}  mean {s['mean']:.2f}"
+                  f"  p95 {s['p95']:.2f}  p99 {s['p99']:.2f}  worst {s['worst']:.2f} ms")
+    print(f"frames over {args.slow} ms: {len(over)}")
+    for n, f in over:
+        shaders = f"  {len(f.compiles)} shaders, {sum(f.compiles):.0f} ms" if f.compiles else ""
+        print(f"  f{n}  render {f.render_ms:.2f} ms  {f.shape}{shaders}")
     return 0
 
 

@@ -5,7 +5,7 @@ Usage: framediff.py DIR_A DIR_B [--tolerance 3] [--budget 0.001]
 
 For every frame_NNNNN.png in both, prints the share of pixels whose largest RGB difference
 is over the tolerance (default 3) and the largest difference seen, then one summary line.
-Frames only one directory has are listed on stderr and don't fail the diff. Alpha isn't
+Frames only one directory has are counted on stderr and don't fail the diff. Alpha isn't
 compared. A frame fails when its share is over the budget (default 0.001).
 
 Exits 0 when every frame is within the budget, 1 when one is over it, 2 on a bad argument or
@@ -85,9 +85,9 @@ def read_png(path: Path) -> Image:
     return Image(w, h, ch, bytes(out))
 
 
-def diff(a: Image, b: Image, tolerance: int) -> tuple[int, int, int]:
+def diff(a: Image, b: Image, tolerance: int, where: str = "images") -> tuple[int, int, int]:
     if (a.width, a.height) != (b.width, b.height):
-        raise ValueError(f"sizes differ: {a.width}x{a.height} and {b.width}x{b.height}")
+        raise ValueError(f"{where}: sizes differ: {a.width}x{a.height} and {b.width}x{b.height}")
     over = worst = 0
     for i in range(a.width * a.height):
         d = max(abs(a.pixels[i * a.channels + k] - b.pixels[i * b.channels + k]) for k in range(3))
@@ -117,7 +117,8 @@ def main(argv: list[str]) -> int:
         failed = worst = 0
         for n in common:
             try:
-                pixels, over, frame_worst = diff(read_png(fa[n]), read_png(fb[n]), args.tolerance)
+                pixels, over, frame_worst = diff(read_png(fa[n]), read_png(fb[n]), args.tolerance,
+                                                  f"{fa[n]} and {fb[n]}")
             except ValueError as e:
                 raise ValueError(f"frame {n}: {e}") from None
             share = over / pixels

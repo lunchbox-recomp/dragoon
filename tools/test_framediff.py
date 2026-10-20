@@ -132,8 +132,9 @@ class DiffTest(unittest.TestCase):
         self.assertEqual(framediff.diff(a, b, 0), (1, 0, 0))
 
     def test_different_sizes_are_refused(self):
-        with self.assertRaisesRegex(ValueError, "sizes differ"):
-            framediff.diff(framediff.Image(1, 1, 3, bytes(3)), framediff.Image(2, 1, 3, bytes(6)), 0)
+        with self.assertRaisesRegex(ValueError, "a.png and b.png: sizes differ"):
+            framediff.diff(framediff.Image(1, 1, 3, bytes(3)), framediff.Image(2, 1, 3, bytes(6)), 0,
+                           "a.png and b.png")
 
 
 class MainTest(TempDirTest):
