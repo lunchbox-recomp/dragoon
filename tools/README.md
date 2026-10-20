@@ -20,3 +20,12 @@ Do two runs draw the same pixels? It compares every `frame_NNNNN.png` that two d
 ```
 tools/framediff.py build/probe/gl-run build/probe/metal-run --tolerance 3 --budget 0.001
 ```
+
+## shader_cache.py
+
+What shaders does a cache or key list hold, and which are new? It reads `saves/shaders.bin` (magic `WRSC`) and key lists (magic `GCSK`). The key size comes from the format word, and a magic or key size it doesn't know is refused. `count` prints the format, the record count and the distinct key count, and says how many trailing bytes it ignored (a record a kill cut off). `diff` prints how many distinct keys in NEW aren't in OLD and their share of NEW, and refuses two files in different formats.
+
+```
+tools/shader_cache.py count build/probe/gl-run/saves/shaders.bin
+tools/shader_cache.py diff old-keys.bin build/probe/gl-run/saves/shaders.bin
+```
