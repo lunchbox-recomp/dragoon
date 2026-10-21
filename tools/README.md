@@ -18,13 +18,13 @@ frametime.py and shader_cache.py only report, so they never exit 1.
 
 How does the game behave when nobody is playing it? It runs the game in a hidden window for a number of seconds, feeds it a route of button presses and dumps every Nth frame as a PNG. A run leaves its frames (`frame_NNNNN.png`), its log (`stdout.txt`), its memory card (`saves/memcard_a.raw`), its shader cache (`saves/shaders.bin`) and, after a crash, `panic.txt` in `build/probe/NAME/`. Audio goes through SDL's dummy driver, so a run is silent. Audio never paces the guest, so the dummy driver doesn't change timing. A new NAME starts from a blank memory card, and a NAME that's run again keeps the card its last run left behind.
 
-After the NAME and seconds come an input script or a route file from `tests/routes/`, the dump interval and any settings. A setting is `GCN_*=value` (the list is in `gcn-recomp/docs/diagnostics.md`), `--pads=N`, `--real-time`, `--renderer=gl`, `--scale=N` or `--bench`. GL is the engine's only renderer. `tools/probe.sh --help` prints the settings. Route files are described in `tests/routes/README.md`.
+After the NAME and seconds come an input script or a route file from `tests/routes/`, the dump interval and any settings. A setting is `GCN_*=value` (the list is in `gcn-recomp/docs/diagnostics.md`), `--pads=N`, `--real-time`, `--scale=N` or `--bench`. `tools/probe.sh --help` prints the settings. Route files are described in `tests/routes/README.md`.
 
 ```
 tools/probe.sh demo 20 tests/routes/title.txt 60 GCN_FRAMETIME=1
 ```
 
-That prints the run's directory as an absolute path, then `140 frames`. Run it again with a different NAME to get a second run to compare.
+That prints the run's directory as an absolute path, then a frame count (140 on an M4 Max). It exits 2 when the game isn't built. Run it again with a different NAME to get a second run to compare.
 
 ## frametime.py
 
@@ -43,10 +43,10 @@ A dumped frame is read back, which adds to its `[rt]` time, so time a run with a
 
 Do two runs draw the same pixels? It compares every `frame_NNNNN.png` that two directories of frame dumps have in common, prints the share of pixels whose largest RGB difference is over a tolerance and the worst difference seen, and ends with a line counting the frames compared and the ones over budget. It exits 1 if any frame is over the budget. Alpha isn't compared.
 
-framediff takes a tolerance and works across renderers. frame_hashes is an exact check against committed goldens. Two runs of a change need two builds and two NAMEs. Frames only one directory has are counted on stderr and don't fail the diff, which is normal when runs end at different frames.
+framediff takes a tolerance. frame_hashes is an exact check against committed goldens. Two runs of a change need two builds and two NAMEs. Frames only one directory has are counted on stderr and don't fail the diff, which is normal when runs end at different frames.
 
 ```
-tools/framediff.py build/probe/gl-run build/probe/metal-run --tolerance 3 --budget 0.001
+tools/framediff.py build/probe/before build/probe/after --tolerance 3 --budget 0.001
 ```
 
 ## shader_cache.py
@@ -60,9 +60,9 @@ tools/shader_cache.py diff build/old-keys.bin build/probe/gl-run/saves/shaders.b
 
 ## frame_hashes.py
 
-Did a change alter what the renderer draws? It runs each route in `tests/hashes/manifest.txt` through probe.sh and compares the SHA-1 of every dumped frame with the golden in `tests/hashes/<backend>/<route>.txt`. `check` reports each frame that changed or wasn't reached. `record` rewrites the goldens, so use it only when a change to the output is on purpose. The frames are moved to the Trash once hashed and are never committed.
+Did a change alter what the renderer draws? It runs each route in `tests/hashes/manifest.txt` through probe.sh and compares the SHA-1 of every dumped frame with the golden in `tests/hashes/gl/<route>.txt`. `check` reports each frame that changed or wasn't reached. `record` rewrites the goldens, so use it only when a change to the output is on purpose. The frames are moved to the Trash once hashed and are never committed.
 
-The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. `--backend` picks the goldens' directory, and probe.sh accepts only gl. A `check` of all five routes takes about two minutes.
+The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. A `check` of all five routes takes about two minutes.
 
 ```
 tools/frame_hashes.py check title
@@ -70,14 +70,18 @@ tools/frame_hashes.py check title
 
 ## warm_shaders.py
 
-Will a player's first session stall on shader compiles? It plays the game once so the cache is already warm. The build runs it as the `dragoon_warmup` target, unless it's configured with `-DDRAGOON_WARMUP=OFF` or has no disc. It runs the game hidden and fast, with SDL's dummy audio driver, in a scratch directory with its own blank memory card. One pass sits at the title with nobody at the controls, then one pass plays each route in `tests/hashes/manifest.txt`. The scratch `shaders.bin` starts as a copy of the player's own and grows pass by pass.
+Will a player's first session stall on shader compiles? It plays the game once so the cache is already warm. The build runs it as the `dragoon_warmup` target, unless it's configured with `-DDRAGOON_WARMUP=OFF`, has no disc or is a cross build. It runs the game hidden and fast, with SDL's dummy audio driver, in a scratch directory, with one pass per route in `tests/hashes/manifest.txt`. Each pass starts from a blank memory card, as a fresh install does, because a route that finds an earlier pass's card takes other menus and builds other keys. The scratch `shaders.bin` starts as a copy of the player's own and grows pass by pass.
 
-Only when every pass has succeeded is it copied over `saves/shaders.bin`, through a temp file and an `os.replace`. The cache only gains keys, and no other file in `saves/` is touched, so the player's memory card is never read or written. A failed pass exits 1 and leaves `saves/` as it was. `saves/.shader-warmup` holds the gcn-recomp commit and a SHA-1 of the manifest. If both match, the next run does nothing, so a relink doesn't replay the game. `--force` plays it anyway, and `--no-routes` plays only the attract pass and leaves the stamp alone, to see how far the attract demos get by themselves. `--attract-frames` sets the length of the attract pass, and the stamp doesn't cover it, so after changing it by hand use `--force`. A pass that outlasts twice its length at 60 fps plus 30 s is killed and counts as failed.
+The cache is copied over `saves/shaders.bin` only once every pass has succeeded, and it only gains keys. No other file in `saves/` is touched, so the player's memory card stays as it is. A failed pass exits 1 and leaves `saves/` as it was. `saves/.shader-warmup` holds the gcn-recomp commit and a SHA-1 each of the manifest (with the route files' text) and of warm_shaders.py. If all three match, the next run does nothing. A relink doesn't replay the game, but an edited route or tool does. A copy with no gcn-recomp checkout exits 2. `--force` plays it anyway. A pass that outlasts twice its length at 60 fps plus 30 s is killed and counts as failed.
 
 ```
 tools/warm_shaders.py --force
 tools/shader_cache.py count saves/shaders.bin
 ```
+
+## routes.py
+
+Which routes does the repository play? `tests/hashes/manifest.txt` lists them, and `tests/routes/` holds their files. routes.py reads the manifest into `Route` records and gives each route file's path, for frame_hashes.py and warm_shaders.py. It has no command line.
 
 ## check_no_game_data.py
 
