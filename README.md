@@ -12,7 +12,7 @@ Tested on one Mac, an M4 Max on macOS 26.
 |---|---|
 | Title and menus | Work. The panel on the right of the mode select stays plain gray |
 | Air Ride | A full race runs on Fantasy Meadows. Other courses haven't been checked |
-| City Trial | Runs with one player, or four in split screen at full speed. A new effect can stutter the first time it shows up |
+| City Trial | Runs with one player, or four in split screen at full speed. An effect the tested routes don't reach can stutter the first time it shows up |
 | Stadium | Not reached yet |
 | Top Ride | Not tried |
 | Audio | Partial. Effects like reverb are misrouted ([details](docs/dev/audio.md)) |
@@ -40,6 +40,8 @@ cmake -S . -B build -G Ninja
 ninja -C build
 build/dragoon
 ```
+
+The first build also runs the game hidden and silent, for about 45 seconds on an M4 Max, so the shaders it draws are compiled before you play. If that run fails, the build stops and says how to skip it. To skip it from the start, add `-DDRAGOON_WARMUP=OFF` to the `cmake` line.
 
 The wrong disc stops the configure step and prints the disc ID it found.
 
