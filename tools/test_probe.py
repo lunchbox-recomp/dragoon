@@ -39,6 +39,11 @@ class ProbeArgumentsTest(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertIn("--scale=10", r.stderr)
 
+    def test_empty_log_list_exits_2(self):
+        r = probe(NAME, "1", "", "60", "--log=")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("--log=", r.stderr)
+
 
 class ProbeTreeTest(unittest.TestCase):
     """probe.sh copied into a temp tree, so the game it runs is whatever the test puts in build/."""
@@ -69,6 +74,13 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertIn("build/dragoon_bench", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
+    def test_log_with_bench_exits_2_before_making_a_run_directory(self):
+        self.add_game("dragoon_bench", "echo 'whole run'\n")
+        r = probe(NAME, "1", "", "60", "--log=dsp", "--bench", script=self.script)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("--log", r.stderr)
+        self.assertFalse((self.root / "build" / "probe").exists())
+
     def test_crashed_bench_with_no_report_exits_1(self):
         self.add_game("dragoon_bench", "exit 3\n")
         r = probe(NAME, "1", "", "60", "--bench", script=self.script)
@@ -83,6 +95,19 @@ class ProbeTreeTest(unittest.TestCase):
         got = (self.root / "build" / "probe" / NAME / "input.txt").read_text()
         self.assertEqual(got, warm_shaders.script_text(route))
         self.assertEqual(got, "120:A:5,300:A:5,900:A:5")
+
+    def game_args(self, *settings: str) -> list[str]:
+        self.add_game("dragoon", "printf '%s\\n' \"$@\" > args.txt\n")
+        r = probe(NAME, "1", "", "60", *settings, script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return (self.root / "build" / "probe" / NAME / "args.txt").read_text().splitlines()
+
+    def test_log_list_reaches_the_windowed_game(self):
+        self.assertIn("--log=dsp,ai", self.game_args("--log=dsp,ai"))
+
+    def test_no_log_setting_passes_no_log_argument(self):
+        args = self.game_args()
+        self.assertEqual([a for a in args if a == "" or a.startswith("--log")], [])
 
 
 if __name__ == "__main__":
