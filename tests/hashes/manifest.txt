@@ -1,5 +1,6 @@
 # route seconds dump_every required_frames [probe settings]
-# Required frames are the checkpoints in docs/dev/status.md. Seconds are wall-clock with --fast.
+# Required frames are the frames a route must reach, and docs/dev/status.md lists the checkpoints it plays
+# to. Seconds are wall-clock with --fast.
 title          20 60 60,960
 menu           20 60 1200
 air-ride-race  30 60 4200,6000
