@@ -20,10 +20,11 @@ gcn_add_game(
   FPS 60)
 
 # Play the game once, hidden and silent, so a player's first session doesn't stall on shader
-# compiles. It runs again only when the engine pin or the route list changes. It needs the
-# game, so a configure with no disc has no such target.
+# compiles. It runs again only when the engine pin, the route list or a route changes. It
+# needs the game, so a configure with no disc has no such target, and it runs the game on
+# the build host, so a cross build has none either.
 option(DRAGOON_WARMUP "Warm the shader cache after the build" ON)
-if(DRAGOON_WARMUP AND TARGET dragoon)
+if(DRAGOON_WARMUP AND TARGET dragoon AND NOT CMAKE_CROSSCOMPILING)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   add_custom_target(dragoon_warmup ALL
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/warm_shaders.py
