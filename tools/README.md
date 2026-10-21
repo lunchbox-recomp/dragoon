@@ -54,8 +54,8 @@ tools/framediff.py build/probe/before build/probe/after --tolerance 3 --budget 0
 How many shaders does a cache or key list hold, and how many are new? It reads `saves/shaders.bin` (magic `WRSC`) and key lists (magic `GCSK`). The key size comes from the format word, and a magic or key size it doesn't know is refused. `count` prints the format, the record count and the distinct key count, and says how many trailing bytes it ignored (a record a kill cut off). `diff` prints how many distinct keys in NEW aren't in OLD and their share of NEW, and refuses two files in different formats. It counts and never lists keys.
 
 ```
-tools/shader_cache.py count build/probe/gl-run/saves/shaders.bin
-tools/shader_cache.py diff build/old-keys.bin build/probe/gl-run/saves/shaders.bin
+tools/shader_cache.py count build/probe/demo/saves/shaders.bin
+tools/shader_cache.py diff build/old-keys.bin build/probe/demo/saves/shaders.bin
 ```
 
 ## frame_hashes.py

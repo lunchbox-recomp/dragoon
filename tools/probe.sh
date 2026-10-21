@@ -57,7 +57,7 @@ mkdir -p "$out"
 cd "$out"
 if [ -n "$bench" ]; then
   env GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$game" --seconds="$seconds" \
-    --pads="$pads" >"$out/stdout.txt" 2>&1
+    --pads="$pads" >"$out/stdout.txt" 2>&1 || true
   grep -A2 '^whole run' "$out/stdout.txt"
   exit 0
 fi

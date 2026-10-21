@@ -69,6 +69,11 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertIn("build/dragoon_bench", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
+    def test_crashed_bench_with_no_report_exits_1(self):
+        self.add_game("dragoon_bench", "exit 3\n")
+        r = probe(NAME, "1", "", "60", "--bench", script=self.script)
+        self.assertEqual(r.returncode, 1)
+
     def test_route_file_is_flattened_as_warm_shaders_does(self):
         route = write_file(self.root, "route.txt",
                            b"# a comment\r\n120:A:5, 300:A:5,\r\n\r\n# more\r\n  900 : A : 5\r\n\n")

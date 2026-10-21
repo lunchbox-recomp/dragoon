@@ -159,8 +159,8 @@ class WarmTest(WarmTestCase):
         self.assertEqual(self.warm("--force")[0], 0)
         self.assertEqual(len(self.cache_lines()), 4)
 
-    def assert_runs_again(self) -> None:
-        """After a warm-up, run again: the stamp no longer matches, so both passes play."""
+    def warm_until_current(self) -> None:
+        """Warm once, then check a second run is skipped as current."""
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.cache_lines()), 2)
         code, out, _ = self.warm()
@@ -168,34 +168,34 @@ class WarmTest(WarmTestCase):
         self.assertIn("current", out)
 
     def test_new_engine_revision_runs_again(self):
-        self.assert_runs_again()
+        self.warm_until_current()
         self.rev = "rev2"
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.cache_lines()), 4)
 
     def test_new_manifest_runs_again(self):
-        self.assert_runs_again()
+        self.warm_until_current()
         write_file(self.dir, "manifest.txt", MANIFEST + "menu 20 60 1200\n")
         write_file(self.routes, "menu.txt", "1:A:1\n")
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.cache_lines()), 2 + 3)
 
     def test_edited_route_file_runs_again(self):
-        self.assert_runs_again()
+        self.warm_until_current()
         write_file(self.routes, "title.txt", "# comment\n120:A:5, 300:A:5, 500:B:5\n")
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.cache_lines()), 4)
         self.assertIn("INPUT=120:A:5,300:A:5,500:B:5", self.cache_lines()[2].split())
 
     def test_comment_only_edit_to_a_route_file_stays_current(self):
-        self.assert_runs_again()
+        self.warm_until_current()
         write_file(self.routes, "title.txt", "# another comment\n120:A:5,\n300:A:5\n")
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
         self.assertIn("current", out)
 
     def test_new_tool_runs_again(self):
-        self.assert_runs_again()
+        self.warm_until_current()
         self.tool = "tool2"
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.cache_lines()), 4)
