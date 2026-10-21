@@ -30,5 +30,14 @@ def parse_manifest(text: str) -> list[Route]:
     return routes
 
 
+def select_routes(names: list[str], manifest: Path = MANIFEST) -> list[Route]:
+    """The manifest's routes called NAMES, or all of them when NAMES is empty."""
+    routes = parse_manifest(manifest.read_text())
+    unknown = set(names) - {r.name for r in routes}
+    if unknown:
+        raise ValueError(f"not in the manifest: {sorted(unknown)}")
+    return [r for r in routes if r.name in names] if names else routes
+
+
 def route_file(name: str) -> Path:
     return ROUTES / f"{name}.txt"

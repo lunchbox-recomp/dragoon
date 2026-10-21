@@ -19,14 +19,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
-import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 from frame_dumps import frame_files
-from routes import MANIFEST, Route, parse_manifest, route_file
+from probe_dirs import trash
+from routes import MANIFEST, Route, route_file, select_routes
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "tools" / "probe.sh"
@@ -77,11 +76,6 @@ def probe_args(route: Route, name: str) -> list[str]:
             str(route.dump_every), *route.extra]
 
 
-def trash(directory: Path) -> None:
-    dest = Path.home() / ".Trash" / f"{directory.name}-{time.strftime('%Y%m%d-%H%M%S')}"
-    shutil.move(str(directory), str(dest))
-
-
 def hash_route(route: Route) -> dict[int, str]:
     out = ROOT / "build" / "probe" / f"hashes-{route.name}"
     if out.exists():
@@ -123,14 +117,6 @@ def check_route(route: Route, got: dict[int, str], golden: dict[int, str]) -> bo
     return not problems
 
 
-def select_routes(names: list[str]) -> list[Route]:
-    routes = parse_manifest(MANIFEST.read_text())
-    unknown = set(names) - {r.name for r in routes}
-    if unknown:
-        raise ValueError(f"not in the manifest: {sorted(unknown)}")
-    return [r for r in routes if r.name in names] if names else routes
-
-
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -138,7 +124,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("routes", nargs="*")
     args = ap.parse_args(argv)
     try:
-        routes = select_routes(args.routes)
+        routes = select_routes(args.routes, MANIFEST)
         paths = {r.name: HASHES / "gl" / f"{r.name}.txt" for r in routes}
         goldens = {r.name: read_golden(paths[r.name]) for r in routes} if args.mode == "check" else {}
         failed = 0
