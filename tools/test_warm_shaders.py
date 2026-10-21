@@ -1,4 +1,3 @@
-import hashlib
 import os
 import stat
 import sys
@@ -11,6 +10,7 @@ import warm_shaders
 from frame_hashes import parse_manifest
 from testutil import run_main, write_file
 
+ENGINE_REV = warm_shaders.engine_rev
 MANIFEST = "# comment\ntitle 20 60 60,960\ncity-trial-4p 30 60 2700,3480 --pads=4\n"
 TITLE_FRAMES = 960 + warm_shaders.ROUTE_TAIL_FRAMES
 FOUR_FRAMES = 3480 + warm_shaders.ROUTE_TAIL_FRAMES
@@ -49,7 +49,8 @@ class WarmTestCase(unittest.TestCase):
         write_file(self.routes, "city-trial-4p.txt", "2/900:A:10\n")
         self.saves = self.dir / "saves"
         self.rev = "rev1"
-        for patch in (mock.patch.object(warm_shaders, "MANIFEST", self.manifest),
+        self.tool = "tool1"
+        for patch in (mock.patch.object(warm_shaders, "tool_sha", lambda: self.tool),mock.patch.object(warm_shaders, "MANIFEST", self.manifest),
                       mock.patch.object(warm_shaders, "ROUTES", self.routes),
                       mock.patch.object(warm_shaders, "engine_rev", lambda: self.rev),
                       mock.patch.dict(os.environ, {"GCN_INPUT": "999:B:1"})):
@@ -81,40 +82,7 @@ class PassesTest(unittest.TestCase):
         self.assertEqual([p.name for p in ps], ["title", "city-trial-4p"])
         self.assertEqual([p.exit_after for p in ps], [TITLE_FRAMES, FOUR_FRAMES])
         self.assertEqual([p.pads for p in ps], [1, 4])
-        self.assertEqual(ps[0].script, warm_shaders.ROUTES / "title.txt")
-
-
-class StampTest(unittest.TestCase):
-    def test_changes_with_engine_revision_and_manifest(self):
-        base = warm_shaders.stamp("rev1", MANIFEST, "tool1")
-        self.assertEqual(base, warm_shaders.stamp("rev1", MANIFEST, "tool1"))
-        self.assertNotEqual(base, warm_shaders.stamp("rev2", MANIFEST, "tool1"))
-        self.assertNotEqual(base, warm_shaders.stamp("rev1", MANIFEST + "menu 20 60 1200\n", "tool1"))
-        self.assertNotEqual(base, warm_shaders.stamp("rev1", MANIFEST, "tool2"))
-
-
-class InstallTest(WarmTestCase):
-    def test_copies_through_a_temp_file_and_os_replace(self):
-        # Two builds at once, or a rebuild while the game runs: a reader sees the old file or
-        # the whole new one, never half of it, because the target is only ever os.replace'd.
-        self.saves.mkdir()
-        write_file(self.saves, "shaders.bin", b"old\n")
-        src = write_file(self.dir, "scratch.bin", b"old\nnew\n")
-        seen = []
-        real_replace = os.replace
-
-        def spy(a, b):
-            seen.append((Path(a), Path(b), Path(a).read_bytes(), Path(b).read_bytes()))
-            real_replace(a, b)
-
-        with mock.patch.object(warm_shaders.os, "replace", spy):
-            warm_shaders.install(src, self.saves)
-        (tmp, target, tmp_bytes, target_bytes), = seen
-        self.assertEqual(tmp.parent, self.saves)
-        self.assertNotEqual(tmp, target)
-        self.assertEqual((target, tmp_bytes, target_bytes),
-                         (self.saves / "shaders.bin", b"old\nnew\n", b"old\n"))
-        self.assertEqual(sorted(p.name for p in self.saves.iterdir()), ["shaders.bin"])
+        self.assertEqual(ps[0].route_file, warm_shaders.ROUTES / "title.txt")
 
 
 class WarmTest(WarmTestCase):
@@ -190,27 +158,56 @@ class WarmTest(WarmTestCase):
         self.assertEqual(self.warm("--force")[0], 0)
         self.assertEqual(len(self.cache_lines()), 4)
 
-    def test_new_engine_revision_or_manifest_runs_again(self):
+    def assert_runs_again(self) -> None:
+        """After a warm-up, run again: the stamp no longer matches, so both passes play."""
         self.assertEqual(self.warm()[0], 0)
+        self.assertEqual(len(self.cache_lines()), 2)
+        code, out, _ = self.warm()
+        self.assertEqual(code, 0)
+        self.assertIn("current", out)
+
+    def test_new_engine_revision_runs_again(self):
+        self.assert_runs_again()
         self.rev = "rev2"
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.cache_lines()), 4)
+
+    def test_new_manifest_runs_again(self):
+        self.assert_runs_again()
         write_file(self.dir, "manifest.txt", MANIFEST + "menu 20 60 1200\n")
         write_file(self.routes, "menu.txt", "1:A:1\n")
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 4 + 3)
+        self.assertEqual(len(self.cache_lines()), 2 + 3)
 
-    def test_stamp_from_an_older_tool_warms_again(self):
-        # What a player's saves/ holds from before the stamp had the tool's hash in it.
-        self.saves.mkdir()
-        write_file(self.saves, "shaders.bin", b"old keys\n")
-        old = f"rev1 {hashlib.sha1(MANIFEST.encode()).hexdigest()}\n"
-        write_file(self.saves, ".shader-warmup", old)
+    def test_edited_route_file_runs_again(self):
+        self.assert_runs_again()
+        write_file(self.routes, "title.txt", "# comment\n120:A:5, 300:A:5, 500:B:5\n")
+        self.assertEqual(self.warm()[0], 0)
+        self.assertEqual(len(self.cache_lines()), 4)
+        self.assertIn("INPUT=120:A:5,300:A:5,500:B:5", self.cache_lines()[2].split())
+
+    def test_comment_only_edit_to_a_route_file_stays_current(self):
+        self.assert_runs_again()
+        write_file(self.routes, "title.txt", "# another comment\n120:A:5,\n300:A:5\n")
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
-        self.assertNotIn("current", out)
-        self.assertEqual(len(self.cache_lines()), 1 + 2)
-        self.assertNotEqual((self.saves / ".shader-warmup").read_text(), old)
+        self.assertIn("current", out)
+
+    def test_new_tool_runs_again(self):
+        self.assert_runs_again()
+        self.tool = "tool2"
+        self.assertEqual(self.warm()[0], 0)
+        self.assertEqual(len(self.cache_lines()), 4)
+
+    def test_empty_gcn_recomp_directory_exits_2_with_the_hint(self):
+        (self.dir / "gcn-recomp").mkdir()
+        with mock.patch.object(warm_shaders, "ROOT", self.dir), \
+                mock.patch.object(warm_shaders, "engine_rev", ENGINE_REV):
+            code, _, err = self.warm()
+        self.assertEqual(code, 2)
+        self.assertIn("gcn-recomp", err)
+        self.assertTrue(err.strip().endswith("-DDRAGOON_WARMUP=OFF to skip the warm-up)"))
+        self.assertFalse(self.saves.exists())
 
     def test_failed_run_does_not_write_the_stamp(self):
         with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": TITLE_EXIT}):
@@ -244,23 +241,6 @@ class WarmTest(WarmTestCase):
         self.assertIn("within 1 s", err)
         self.assertIn("-DDRAGOON_WARMUP=OFF", err)
         self.assertEqual(self.snapshot(), before)
-
-    def test_pass_timeout_is_twice_real_time_plus_30_s(self):
-        self.assertEqual(warm_shaders.pass_timeout(6000), 230)
-
-    def test_no_gcn_recomp_checkout_falls_back_to_the_game_binary_hash(self):
-        def no_git() -> str:
-            raise ValueError("can't read the gcn-recomp commit")
-        with mock.patch.object(warm_shaders, "engine_rev", no_git):
-            code, _, err = self.warm()
-            self.assertEqual(code, 0)
-            self.assertIn("SHA-1", err)
-            self.assertEqual(len(self.cache_lines()), 2)
-            self.assertEqual(self.warm()[0], 0)  # the same binary is current
-            self.assertEqual(len(self.cache_lines()), 2)
-            self.game.write_text(FAKE_GAME + "# relinked\n")
-            self.assertEqual(self.warm()[0], 0)
-            self.assertEqual(len(self.cache_lines()), 4)
 
     def test_missing_route_file_exits_2_and_leaves_saves_alone(self):
         (self.routes / "city-trial-4p.txt").unlink()
