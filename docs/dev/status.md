@@ -139,8 +139,9 @@ catch-up jumps of the clock there, 109 ms in all. It made no more in the city.
 ## Renderer cost
 
 What the GL renderer costs at 1280x960 (`--scale=2`, twice the default 640x480 in each direction),
-at gcn-recomp `642187a`, on a 16-core Mac with other work running (load average 2 to 3). These are
-the baseline for the Metal renderer's two triggers. `[rt]` is the time the renderer spends
+at gcn-recomp `642187a`, on a 16-core Mac with other work running (load average 2 to 3). The
+limits they are held against are in the table at the end of this section. `[rt]` is the time the
+renderer spends
 issuing a frame to GL, not the GPU's own time. The percentiles are nearest rank. The window was
 hidden and never waited on the display's refresh. The timer behind `--real-time` paced the guest, and
 the cost of presenting a frame and of vsync isn't in these numbers. So the 16.68 ms guest interval
@@ -156,14 +157,15 @@ and the table is a second run of it with a frame dump every 100,000 frames inste
 run, with the dumps, read 1.45 ms mean, 2.42 ms at the 95th percentile, 3.64 ms at the 99th and 41.15 ms
 at worst for the renderer, and 16.68 ms mean, 17.28 ms at the 95th, 17.49 ms at the 99th and 17.90 ms at
 worst for the guest. Its 7 worst frames are the dumps, each a readback of the whole frame (frames 3,600 to
-7,200, every 600th). The rest of the gap between the two runs is probably other work on the machine, though no control run was made. No guest interval ran
+7,200, every 600th). The rest of the gap between the two runs wasn't explained. No control run was made. No guest interval ran
 over 20 ms in either run. The same route at 640x480 averaged 1.40 ms (the table under Four players), so
 doubling each side cost the renderer's issue time nothing it could measure.
 
 Hitches are the frames after frame 300 whose `[rt]` time is over 16.7 ms. These are first launches
-with an empty shader cache, one run of each route at `--real-time --scale=2` with nothing warmed.
-macOS GL has no program binaries, so the cache started empty. The warmed numbers are in the Player
-targets table below. Each run was `tools/probe.sh w3-cold-ROUTE SECONDS tests/routes/ROUTE.txt 60
+with an empty shader cache, one run of each route at `--real-time --scale=2` with nothing warmed,
+at Dragoon `d3c9c15` and gcn-recomp `caf12a2`. These runs started with no `saves/shaders.bin`.
+macOS GL keeps no program binaries, so the cache holds keys only. The warmed numbers are in the
+Player targets table below. Each run was `tools/probe.sh cold-ROUTE SECONDS tests/routes/ROUTE.txt 60
 GCN_FRAMETIME=1 --real-time --scale=2` (plus `--pads=4` for the four-player route), and the rows
 come from `tools/frametime.py LOG --slow 16.7`. The `[shaders] compiled program N` lines that
 `GCN_FRAMETIME=1` prints say when a program is built, in the frame that needs it. Every run played
@@ -190,17 +192,16 @@ The other seven are over 16.7 ms and under 33. The 15-program burst at frame 902
 here, where an earlier set of runs saw 27 to 40 ms.
 
 Every one of those frames built new programs, and no other non-dump frame after 300 went over
-16.7 ms. A program takes 1.2 to 5 ms to compile, so a frame with 30 new ones takes about 55 ms of
-compiling. The big bursts are 15 programs at frame 902 (the first 3D scene, in all five runs), 24 at
+16.7 ms. A program takes 1.2 to 5 ms to compile. The big bursts are 15 programs at frame 902 (the first 3D scene, in all five runs), 24 at
 the title's logo scene (1414), 38 and 34 at the start of the city (2733) and 30 at the start of a
 race (3122). The other new programs come in ones to six, and only the 6 at frame 1535 and the 5 at
 4788 pushed a frame over 16.7 ms. The guest also stalls for 117 to 401 ms at a handful of frames
 (303, 1002, 1413, 1801, 2103, 2732 and others). What it was doing then wasn't checked.
 
-| Trigger | Threshold | Measured on GL | Verdict |
-|---|---|---|---|
-| Four-player cost | `[rt]` 99th percentile over 8 ms | 1.96 ms (3.64 ms with dumps) | Doesn't fire |
-| Shader-compile hitches | Any frame after 300 over 33 ms | 4 frames across the five cold runs, from 56 ms to 65 ms, each on first sight of 24 to 38 programs | Fires |
+| Check | Limit | Measured on GL |
+|---|---|---|
+| Four-player cost | `[rt]` 99th percentile of 8 ms | 1.96 ms (3.64 ms with dumps) |
+| Shader-compile hitches, cold cache, before the warm-up | A frame after frame 300 of 33 ms | 4 frames across the five cold runs, from 56 ms to 65 ms, each on first sight of 24 to 38 programs |
 
 The hitches are cold-start costs. Frame 902 showed up in all five runs. The bigger bursts (1414,
 2733, 3122) each showed up in the runs of the routes that reach that scene, from one run of each
@@ -222,17 +223,24 @@ What a player's first session looks like after the warm-up, against the bars set
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
 
-An earlier warm-up left 35 compiles in City Trial, 33 in four-player, 9 in the race and 3 in the
-title. The cause was the memory card. The title pass made one in the scratch directory and every
-later pass started on it, where the routes' A presses take the load menus instead of the "make a
-new save data file" ones, and play other scenes. Each pass now starts from a blank card. The keys
-don't depend on the render scale or on `--fast` against `--real-time`. A City Trial pass at scale
-1 `--fast`, scale 2 `--fast` and scale 2 `--real-time` built the same 107 keys. The title pass
-and the others now run 900 frames (15 s) past their last required frame, as the measured runs do.
+How these were measured, at Dragoon `62b114b` and gcn-recomp `caf12a2`, on a Mac with an M4 Max.
+Each route ran as `tools/probe.sh NAME SECONDS tests/routes/ROUTE.txt 100000 GCN_FRAMETIME=1 --real-time --scale=2`
+(plus `--pads=4` for the four-player route). SECONDS was the route's last required frame over 60,
+plus 15, rounded up. That gave 31, 35, 70, 73 and 115 for the title, menu, City Trial, four-player and race
+routes. Each run started from a copy of the cache of one warm-up, not from five separate warm-ups.
+Stalls are the frames `tools/frametime.py build/probe/NAME/stdout.txt --slow 33` lists after frame
+300. Compiles are the `[shaders] compiled program` lines, counted with `grep -c`. The boot time is
+read from the `[shaders] ... programs from cache ... in N ms` line the game prints at startup. The
+42.6 s is one `/usr/bin/time -p python3 tools/warm_shaders.py --saves DIR` on an empty `DIR`.
+Apple's own shader cache was warm from earlier runs. Whether the warm-up fills it on a fresh Mac
+wasn't checked.
 
-Measured on a Mac with an M4 Max at `--real-time --scale=2`. Apple's own shader cache was warm from
-earlier runs, and the warm-up fills it on a player's Mac too. The 42.6 s is a warm-up timed with
-`/usr/bin/time -p`. The five route runs used copies of the cache of an identical warm-up.
+An earlier warm-up left 35 compiles in City Trial, 33 in four-player, 9 in the race and 3 in the
+title. Starting each pass from a blank card, with 900 frames (15 s) past the last checkpoint,
+removed them. Before that, the title pass made a memory card in the scratch directory and every
+later pass started on it, where the routes' A presses take the load menus instead of the "make a
+new save data file" ones. On City Trial, a pass at scale 1 `--fast`, scale 2 `--fast` and
+scale 2 `--real-time` built the same 107 keys.
 
 ## Fixes on the way
 
