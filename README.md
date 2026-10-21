@@ -16,7 +16,7 @@ Tested on one Mac, an M4 Max on macOS 26.
 | Stadium | Not reached yet |
 | Top Ride | Not tried |
 | Audio | Partial. Effects like reverb are misrouted ([details](docs/dev/audio.md)) |
-| Controllers | Up to four gamepads, one per port. Each gets the same port next launch. The keyboard is on port 1. Tested with simulated gamepads, not with four real ones |
+| Controllers | Up to four gamepads, one per port. Each takes the port of its player number when that port is free, and otherwise the lowest free one. Pulling one out frees its port. Nothing is kept between launches. The keyboard is on port 1. Tested with simulated gamepads, not with four real ones or Steam Input |
 | Picture | 4:3 only |
 | Other platforms | Not tested |
 

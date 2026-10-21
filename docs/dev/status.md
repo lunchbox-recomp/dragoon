@@ -2,7 +2,8 @@
 
 What's true of Dragoon today, measured on one machine. Build numbers are from a clean
 build directory at gcn-recomp `67a7e30`, and the game was run at `7d30377`. The four-player
-numbers are from `fda6926`.
+numbers are from `fda6926`. The controller row is from `25c4f26`, where the five frame-hash
+routes also pass.
 
 | Feature | Status | Note |
 |---|---|---|
@@ -14,7 +15,7 @@ numbers are from `fda6926`.
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. Stadium not reached yet |
 | Top Ride | Not tried | |
 | Audio | Partial | Details in `audio.md` |
-| Controllers | Four ports, live | Each gamepad takes the next free port as it connects and gets the same one next launch, kept by GUID and serial in `saves/gamepads.txt`. The keyboard stays on port 1. A gamepad pulled out mid-game leaves its port plugged in until it's back. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`--test-ports`), not yet with four real controllers |
+| Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Nothing is saved between launches. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`: 42 port checks, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
 | Picture | 4:3 | gcn-recomp letterboxes the desktop window to 4:3 |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
 | Build from the disc | Works | 23 s from an empty build directory: 3.5 s to configure, 19.5 s for Ninja |
