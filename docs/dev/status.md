@@ -3,7 +3,8 @@
 What's true of Dragoon today, measured on one machine. Build numbers are from a clean
 build directory at gcn-recomp `67a7e30`, and the game was run at `7d30377`. The four-player
 numbers are from `fda6926`. The controller row is from `25c4f26`, where the five frame-hash
-routes also pass.
+routes also pass. The audio row is from gcn-recomp `bf31b7b`, where the five frame-hash routes
+and the five audio-hash routes pass.
 
 | Feature | Status | Note |
 |---|---|---|
@@ -14,7 +15,7 @@ routes also pass.
 | Air Ride race | Runs | `tests/routes/air-ride-race.txt`. Fantasy Meadows, three CPUs, three laps to the results screen with nobody steering |
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. Stadium not reached yet |
 | Top Ride | Not tried | |
-| Audio | Partial | Details in `audio.md` |
+| Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. The low-pass filter and polyphase resampling aren't done. Nobody has listened, and nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. Details in `audio.md` |
 | Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Nothing is saved between launches. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`: 42 port checks, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
 | Picture | 4:3 | gcn-recomp letterboxes the desktop window to 4:3 |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
@@ -136,6 +137,44 @@ The benchmark has no renderer, so its figure is the guest alone. The whole 120 s
 118,257 frames, past the end of City Trial. The real-speed run fell behind only while the
 city loaded, between frames 2,706 and 2,750. It showed 44 frames in that second and made 9
 catch-up jumps of the clock there, 109 ms in all. It made no more in the city.
+
+## Audio
+
+At gcn-recomp `bf31b7b`. `GCN_AXSTATS=1` makes the game print its mixer's counts every 400
+command lists. Three runs played the race route as
+`env SDL_AUDIO_DRIVER=dummy tools/probe.sh NAME 30 tests/routes/air-ride-race.txt 60 GCN_AXSTATS=1 --bench`,
+unpaced. One had `GCN_AX_LAYOUT=2001` and two were default. The table covers the 257 windows
+(102,800 lists) that all three reached. Before is the `GCN_AX_LAYOUT=2001` run, which reads
+the control word the way the 2001 ucode does and skips the compressor command, as this
+runtime did until now. After is the default for `07F88145`.
+
+| Race route | Before | After |
+|---|---|---|
+| Windows with a main L or R peak over 32,767 | 13 | 2 |
+| Highest main peak | 93,113 | 71,311 |
+| Samples the output clamp changed | 4,435 | 923 |
+| Windows with an AuxA L or R peak over 0 | 22 | 97 |
+| Highest AuxA L or R peak | 6,989 | 8,702 |
+| Windows with an AuxB L or R peak over 0 | 0 | 20 |
+| Highest AuxB L or R peak | 0 | 15,408 |
+
+Surround peaks were 0 on every bus in all three runs. Peaks are what the ucode writes before
+the output clamp. The two default runs printed the same hash at every list count they
+share.
+
+The commands counted come from ten default runs, two of each route (title 79 `cmds` lines
+each, mode select 59, race 258 and 257, City Trial 107, four-player 103). Every line reads
+`skipped=0 unknown=0` and counts commands 00, 02, 03, 07, 0E, 0F and 12 in all 400 lists of
+its window, and 04 and 05 in every list after the first window (398 in it). The compressor
+command (12) ran in each of them.
+
+Not done or not checked:
+
+- The low-pass filter and polyphase resampling (`audio.md`).
+- Nobody has listened to it, and nothing has been compared with recordings from a real console.
+- No game on the 2001 ucode ran, so that layout's path is untested here beyond the
+  `GCN_AX_LAYOUT=2001` run.
+- One machine, one macOS version.
 
 ## Renderer cost
 

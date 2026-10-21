@@ -15,7 +15,7 @@ Tested on one Mac, an M4 Max on macOS 26.
 | City Trial | Runs with one player, or four in split screen at full speed. An effect the tested routes don't reach can stutter the first time it shows up |
 | Stadium | Not reached yet |
 | Top Ride | Not tried |
-| Audio | Partial. Effects like reverb are misrouted ([details](docs/dev/audio.md)) |
+| Audio | Partial. Voices now send to the effect buses and the game's compressor runs. Nobody has listened against a real console, and the low-pass filter and polyphase resampling are missing ([details](docs/dev/audio.md)) |
 | Controllers | Up to four gamepads, one per port. Each takes the port of its player number when that port is free, and otherwise the lowest free one. Pulling one out frees its port. Nothing is kept between launches. The keyboard is on port 1. Tested with simulated gamepads, not with four real ones or Steam Input |
 | Picture | 4:3 only |
 | Other platforms | Not tested |
