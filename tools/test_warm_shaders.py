@@ -15,6 +15,7 @@ FAKE_GAME = f"""#!{sys.executable}
 import os, sys
 os.makedirs("saves", exist_ok=True)
 line = " ".join(sys.argv[1:]) + " SDL=" + os.environ.get("SDL_AUDIO_DRIVER", "") + " INPUT=" + os.environ.get("GCN_INPUT", "-")
+line += " CARD=" + str(os.path.exists("saves/memcard_a.raw"))
 with open("saves/shaders.bin", "ab") as f:
     f.write((line + "\\n").encode())
 with open("saves/memcard_a.raw", "wb") as f:
@@ -70,13 +71,12 @@ class ScriptTextTest(unittest.TestCase):
 
 
 class PassesTest(unittest.TestCase):
-    def test_one_attract_pass_then_one_per_route(self):
-        ps = warm_shaders.passes(parse_manifest(MANIFEST), 20000)
-        self.assertEqual([p.name for p in ps], ["attract", "title", "city-trial-4p"])
-        self.assertEqual([p.exit_after for p in ps], [20000, 960 + 600, 3480 + 600])
-        self.assertEqual([p.pads for p in ps], [1, 1, 4])
-        self.assertIsNone(ps[0].script)
-        self.assertEqual(ps[1].script, warm_shaders.ROUTES / "title.txt")
+    def test_one_pass_per_route_run_15_s_past_its_last_frame(self):
+        ps = warm_shaders.passes(parse_manifest(MANIFEST))
+        self.assertEqual([p.name for p in ps], ["title", "city-trial-4p"])
+        self.assertEqual([p.exit_after for p in ps], [960 + 900, 3480 + 900])
+        self.assertEqual([p.pads for p in ps], [1, 4])
+        self.assertEqual(ps[0].script, warm_shaders.ROUTES / "title.txt")
 
 
 class StampTest(unittest.TestCase):
@@ -120,13 +120,13 @@ class WarmTest(WarmTestCase):
         self.assertEqual(code, 0)
         new = (self.saves / "shaders.bin").read_bytes()
         self.assertTrue(new.startswith(old))
-        self.assertEqual(len(self.cache_lines()), 1 + 3)  # the old line, then one per pass
+        self.assertEqual(len(self.cache_lines()), 1 + 2)  # the old line, then one per pass
 
     def test_blank_start_installs_every_pass(self):
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
-        self.assertEqual(len(self.cache_lines()), 3)
-        self.assertIn("3 passes", out)
+        self.assertEqual(len(self.cache_lines()), 2)
+        self.assertIn("2 passes", out)
 
     def test_memory_card_and_other_saves_are_untouched(self):
         self.saves.mkdir()
@@ -141,32 +141,31 @@ class WarmTest(WarmTestCase):
 
     def test_children_are_hidden_fast_silent_and_run_in_scratch(self):
         self.assertEqual(self.warm()[0], 0)
-        attract, title, four = self.cache_lines()
-        for line in (attract, title, four):
+        title, four = self.cache_lines()
+        for line in (title, four):
             for flag in ("--hidden", "--fast", "--no-input-log"):
                 self.assertIn(flag, line.split())
             self.assertIn("SDL=dummy", line.split())
+            self.assertNotIn("INPUT=999:B:1", line.split())  # the parent's GCN_INPUT never reaches it
         # The scratch cwd, not saves/, took the fake's memory card.
         self.assertFalse((self.saves / "memcard_a.raw").exists())
-        self.assertIn("--exit-after=20000", attract.split())
-        self.assertIn("INPUT=-", attract.split())  # the parent's GCN_INPUT never reaches it
         self.assertIn("INPUT=120:A:5,300:A:5", title.split())
         self.assertIn("--pads=4", four.split())
-        self.assertIn("--exit-after=4080", four.split())
+        self.assertIn("--exit-after=4380", four.split())
 
     def test_failing_pass_leaves_saves_identical_and_exits_non_zero(self):
         self.saves.mkdir()
         write_file(self.saves, "shaders.bin", b"old\n")
         write_file(self.saves, "memcard_a.raw", b"card")
         before = self.snapshot()
-        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=4080"}):  # the last pass
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=4380"}):  # the last pass
             code, _, err = self.warm()
         self.assertNotEqual(code, 0)
         self.assertIn("city-trial-4p", err)
         self.assertEqual(self.snapshot(), before)
 
     def test_failing_pass_creates_nothing_when_there_were_no_saves(self):
-        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=1560"}):  # the middle pass
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=1860"}):  # the first pass
             code, _, _ = self.warm()
         self.assertNotEqual(code, 0)
         self.assertFalse(self.saves.exists())
@@ -177,36 +176,35 @@ class WarmTest(WarmTestCase):
 
     def test_stamp_skips_a_second_run_unless_forced(self):
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 3)
+        self.assertEqual(len(self.cache_lines()), 2)
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
         self.assertIn("current", out)
-        self.assertEqual(len(self.cache_lines()), 3)
+        self.assertEqual(len(self.cache_lines()), 2)
         self.assertEqual(self.warm("--force")[0], 0)
-        self.assertEqual(len(self.cache_lines()), 6)
+        self.assertEqual(len(self.cache_lines()), 4)
 
     def test_new_engine_revision_or_manifest_runs_again(self):
         self.assertEqual(self.warm()[0], 0)
         self.rev = "rev2"
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 6)
+        self.assertEqual(len(self.cache_lines()), 4)
         write_file(self.dir, "manifest.txt", MANIFEST + "menu 20 60 1200\n")
         write_file(self.routes, "menu.txt", "1:A:1\n")
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 6 + 4)
+        self.assertEqual(len(self.cache_lines()), 4 + 3)
 
     def test_failed_run_does_not_write_the_stamp(self):
-        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=1560"}):
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=1860"}):
             self.warm()
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 3)
+        self.assertEqual(len(self.cache_lines()), 2)
 
-    def test_no_routes_runs_only_the_attract_pass_and_leaves_no_stamp(self):
-        code, _, _ = self.warm("--no-routes", "--attract-frames", "50")
-        self.assertEqual(code, 0)
-        self.assertEqual(len(self.cache_lines()), 1)
-        self.assertIn("--exit-after=50", self.cache_lines()[0].split())
-        self.assertFalse((self.saves / ".shader-warmup").exists())
+    def test_every_pass_starts_from_a_blank_card(self):
+        # The fake leaves a card behind, as the game does; a route that found it would take
+        # the "load" menus instead of the "make a new file" ones the manifest's routes assume.
+        self.assertEqual(self.warm()[0], 0)
+        self.assertEqual([l.split()[-1] for l in self.cache_lines()], ["CARD=False", "CARD=False"])
 
     def test_deleted_cache_warms_again_despite_a_current_stamp(self):
         self.assertEqual(self.warm()[0], 0)
@@ -214,13 +212,13 @@ class WarmTest(WarmTestCase):
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
         self.assertNotIn("current", out)
-        self.assertEqual(len(self.cache_lines()), 3)
+        self.assertEqual(len(self.cache_lines()), 2)
 
     def test_hung_game_is_killed_and_fails_the_pass(self):
         self.saves.mkdir()
         write_file(self.saves, "shaders.bin", b"old\n")
         before = self.snapshot()
-        with mock.patch.dict(os.environ, {"FAKE_SLEEP_ON": "--exit-after=1560"}), \
+        with mock.patch.dict(os.environ, {"FAKE_SLEEP_ON": "--exit-after=1860"}), \
                 mock.patch.object(warm_shaders, "pass_timeout", lambda n: 1):
             code, _, err = self.warm()
         self.assertNotEqual(code, 0)
@@ -239,12 +237,12 @@ class WarmTest(WarmTestCase):
             code, _, err = self.warm()
             self.assertEqual(code, 0)
             self.assertIn("SHA-1", err)
-            self.assertEqual(len(self.cache_lines()), 3)
+            self.assertEqual(len(self.cache_lines()), 2)
             self.assertEqual(self.warm()[0], 0)  # the same binary is current
-            self.assertEqual(len(self.cache_lines()), 3)
+            self.assertEqual(len(self.cache_lines()), 2)
             self.game.write_text(FAKE_GAME + "# relinked\n")
             self.assertEqual(self.warm()[0], 0)
-            self.assertEqual(len(self.cache_lines()), 6)
+            self.assertEqual(len(self.cache_lines()), 4)
 
     def test_missing_route_file_exits_2_and_leaves_saves_alone(self):
         (self.routes / "city-trial-4p.txt").unlink()

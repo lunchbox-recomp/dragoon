@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """Warm the player's shader cache by playing the game once, hidden and silent.
 
-Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--attract-frames N]
-                       [--force] [--no-routes]
+Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--force]
 
-Runs the game in a scratch directory with its own blank memory card: one pass at the title
-with nobody at the controls, then one pass per route in tests/hashes/manifest.txt. Every
-pass is --hidden --fast --no-input-log with SDL's dummy audio driver, so nothing shows or
+Runs the game in a scratch directory, one pass per route in tests/hashes/manifest.txt, each
+from a blank memory card as a fresh install is. (A route that finds the card an earlier
+pass made takes other menus and builds other keys.) Every pass is --hidden --fast --no-input-log with SDL's dummy audio driver, so nothing shows or
 sounds. The scratch saves/shaders.bin starts as a copy of <saves>/shaders.bin and grows
 pass by pass; the player's cache is only replaced once every pass has succeeded, by a copy
 to a temp file in <saves> and an os.replace, so a reader never sees half a file. Nothing
 else in <saves> is read or written except the stamp, <saves>/.shader-warmup, which holds
 the gcn-recomp commit (the game binary's SHA-1 if there is no checkout, with a warning) and
 a SHA-1 of the manifest. If both match the stamp and shaders.bin exists, the run is skipped.
-A pass that outlasts twice its real-time length plus 30 s is killed and fails. --force runs anyway. --no-routes runs only the attract pass and neither reads nor
-writes the stamp (for measuring what the attract demos alone build). --game and --saves
-default to build/dragoon and saves under the repository, wherever the tool is run from.
+A pass that outlasts twice its real-time length plus 30 s is killed and fails. --force runs
+anyway. --game and --saves default to build/dragoon and saves under the repository, wherever
+the tool is run from.
 
 Prints one line per pass and a closing line with the cache's size. A failed pass prints
 the game's last output to stderr.
@@ -43,9 +42,10 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "hashes" / "manifest.txt"
 ROUTES = ROOT / "tests" / "routes"
 CACHE = "shaders.bin"
+CARD_GLOB = "memcard_*.raw"
 STAMP = ".shader-warmup"
 TAIL_LINES = 15
-ROUTE_TAIL_FRAMES = 600  # past the last frame a route must reach, to build what follows it
+ROUTE_TAIL_FRAMES = 900  # past the last frame a route must reach, to build what follows it
 
 
 @dataclass
@@ -53,7 +53,7 @@ class Pass:
     name: str
     exit_after: int
     pads: int
-    script: Path | None  # the route file, or None for nobody at the controls
+    script: Path  # the route file
 
 
 def script_text(path: Path) -> str:
@@ -67,10 +67,9 @@ def route_pads(route: Route) -> int:
     return pads[-1] if pads else 1
 
 
-def passes(routes: list[Route], attract_frames: int) -> list[Pass]:
-    return [Pass("attract", attract_frames, 1, None)] + [
-        Pass(r.name, max(r.required) + ROUTE_TAIL_FRAMES, route_pads(r), ROUTES / f"{r.name}.txt")
-        for r in routes]
+def passes(routes: list[Route]) -> list[Pass]:
+    return [Pass(r.name, max(r.required) + ROUTE_TAIL_FRAMES, route_pads(r), ROUTES / f"{r.name}.txt")
+            for r in routes]
 
 
 def stamp(engine_rev: str, manifest_text: str) -> str:
@@ -119,8 +118,7 @@ def install(cache_from: Path, saves_dir: Path) -> None:
 def run_pass(game: Path, p: Pass, scratch: Path) -> None:
     env = {k: v for k, v in os.environ.items() if k != "GCN_INPUT"}
     env["SDL_AUDIO_DRIVER"] = "dummy"
-    if p.script is not None:
-        env["GCN_INPUT"] = script_text(p.script)
+    env["GCN_INPUT"] = script_text(p.script)
     cmd = [str(game), "--hidden", "--fast", "--no-input-log", f"--pads={p.pads}",
            f"--exit-after={p.exit_after}"]
     log = scratch / "stdout.txt"
@@ -148,6 +146,8 @@ def warm(game: Path, saves: Path, plan: list[Pass]) -> None:
         if (saves / CACHE).exists():
             shutil.copyfile(saves / CACHE, cache)
         for p in plan:
+            for card in (scratch / "saves").glob(CARD_GLOB):
+                card.unlink()
             start = time.monotonic()
             run_pass(game, p, scratch)
             print(f"{p.name}: {p.exit_after} frames, {time.monotonic() - start:.1f} s")
@@ -161,9 +161,7 @@ def main(argv: list[str]) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--game", type=Path, default=ROOT / "build" / "dragoon")
     ap.add_argument("--saves", type=Path, default=ROOT / "saves")
-    ap.add_argument("--attract-frames", type=int, default=20000)
     ap.add_argument("--force", action="store_true", help="run even if the stamp is current")
-    ap.add_argument("--no-routes", action="store_true", help="run only the attract pass")
     args = ap.parse_args(argv)
     try:
         if not args.game.is_file():
@@ -171,22 +169,21 @@ def main(argv: list[str]) -> int:
         manifest_text = MANIFEST.read_text()
         want = stamp(revision(args.game), manifest_text)
         stamp_path = args.saves / STAMP
-        if not (args.force or args.no_routes) and stamp_path.exists() \
+        if not args.force and stamp_path.exists() \
                 and (args.saves / CACHE).exists() and stamp_path.read_text().strip() == want:
             print("shader cache is current, nothing to do (--force to rerun)")
             return 0
-        routes = [] if args.no_routes else parse_manifest(manifest_text)
+        routes = parse_manifest(manifest_text)
         start = time.monotonic()
         try:
-            warm(args.game.resolve(), args.saves, passes(routes, args.attract_frames))
+            warm(args.game.resolve(), args.saves, passes(routes))
         except PassFailed as e:
             print(f"shader warm-up failed, {args.saves} left as it was: {e}\n"
                   "(configure with -DDRAGOON_WARMUP=OFF to skip the warm-up)", file=sys.stderr)
             return 1
-        if not args.no_routes:
-            stamp_path.write_text(want + "\n")
+        stamp_path.write_text(want + "\n")
         size = (args.saves / CACHE).stat().st_size
-        print(f"warm: {1 + len(routes)} passes, {args.saves / CACHE} is {size} bytes, "
+        print(f"warm: {len(routes)} passes, {args.saves / CACHE} is {size} bytes, "
               f"{time.monotonic() - start:.1f} s")
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
