@@ -23,36 +23,15 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 from frame_dumps import frame_files
+from routes import MANIFEST, Route, parse_manifest, route_file
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "tools" / "probe.sh"
 HASHES = ROOT / "tests" / "hashes"
 GOLDEN_LINE = re.compile(r"frame_(\d{5,}) ([0-9a-f]{40})")
-
-
-@dataclass
-class Route:
-    name: str
-    seconds: int
-    dump_every: int
-    required: list[int]
-    extra: list[str]
-
-
-def parse_manifest(text: str) -> list[Route]:
-    routes = []
-    for line in text.splitlines():
-        line = line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        name, seconds, every, required, *extra = line.split()
-        routes.append(Route(name, int(seconds), int(every),
-                            [int(f) for f in required.split(",")], extra))
-    return routes
 
 
 def hash_frames(directory: Path) -> dict[int, str]:
@@ -94,7 +73,7 @@ def reached(got: dict[int, str], needed: int) -> str:
 
 
 def probe_args(route: Route, name: str) -> list[str]:
-    return [str(PROBE), name, str(route.seconds), str(ROOT / "tests" / "routes" / f"{route.name}.txt"),
+    return [str(PROBE), name, str(route.seconds), str(route_file(route.name)),
             str(route.dump_every), *route.extra]
 
 
@@ -145,7 +124,7 @@ def check_route(route: Route, got: dict[int, str], golden: dict[int, str]) -> bo
 
 
 def select_routes(names: list[str]) -> list[Route]:
-    routes = parse_manifest((HASHES / "manifest.txt").read_text())
+    routes = parse_manifest(MANIFEST.read_text())
     unknown = set(names) - {r.name for r in routes}
     if unknown:
         raise ValueError(f"not in the manifest: {sorted(unknown)}")

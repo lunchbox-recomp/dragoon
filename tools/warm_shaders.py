@@ -35,11 +35,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from frame_hashes import Route, parse_manifest
+from routes import MANIFEST, Route, parse_manifest, route_file
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "tests" / "hashes" / "manifest.txt"
-ROUTES = ROOT / "tests" / "routes"
 CACHE = "shaders.bin"
 CARD_GLOB = "memcard_*.raw"
 STAMP = ".shader-warmup"
@@ -67,7 +65,7 @@ def route_pads(route: Route) -> int:
 
 
 def passes(routes: list[Route]) -> list[Pass]:
-    return [Pass(r.name, max(r.required) + ROUTE_TAIL_FRAMES, route_pads(r), ROUTES / f"{r.name}.txt")
+    return [Pass(r.name, max(r.required) + ROUTE_TAIL_FRAMES, route_pads(r), route_file(r.name))
             for r in routes]
 
 

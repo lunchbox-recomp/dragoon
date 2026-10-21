@@ -5,19 +5,11 @@ from pathlib import Path
 from unittest import mock
 
 import frame_hashes
+import routes
 from testutil import run_main, write_file
 
 A, B, C = "a" * 40, "b" * 40, "c" * 40
 MANIFEST = "title 20 60 120\n"
-
-
-class ManifestTest(unittest.TestCase):
-    def test_parses_routes_and_extra_args(self):
-        routes = frame_hashes.parse_manifest("# comment\n\ncity-trial-4p 30 60 2700,3480 --pads=4\n")
-        self.assertEqual(len(routes), 1)
-        r = routes[0]
-        self.assertEqual((r.name, r.seconds, r.dump_every, r.required, r.extra),
-                         ("city-trial-4p", 30, 60, [2700, 3480], ["--pads=4"]))
 
 
 class HashTest(unittest.TestCase):
@@ -85,7 +77,7 @@ class HashRouteTest(unittest.TestCase):
         self.run_route(False, run)
         self.assertEqual(run.call_args.args[0],
                          [str(frame_hashes.PROBE), "hashes-title", "20",
-                          str(frame_hashes.ROOT / "tests" / "routes" / "title.txt"), "60"])
+                          str(routes.route_file("title")), "60"])
         self.assertEqual(self.got, {60: A})
 
     def test_trashes_a_directory_left_from_an_earlier_run_before_and_after(self):
@@ -108,9 +100,10 @@ class MainTest(unittest.TestCase):
         self.hashes = Path(tmp.name)
         write_file(self.hashes, "manifest.txt", MANIFEST)
         (self.hashes / "gl").mkdir()
-        patch = mock.patch.object(frame_hashes, "HASHES", self.hashes)
-        patch.start()
-        self.addCleanup(patch.stop)
+        for patch in (mock.patch.object(frame_hashes, "HASHES", self.hashes),
+                      mock.patch.object(frame_hashes, "MANIFEST", self.hashes / "manifest.txt")):
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def golden(self, text: str) -> Path:
         return write_file(self.hashes / "gl", "title.txt", text)

@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import routes
 import warm_shaders
-from frame_hashes import parse_manifest
 from testutil import run_main, write_file
 
 ENGINE_REV = warm_shaders.engine_rev
@@ -50,8 +50,9 @@ class WarmTestCase(unittest.TestCase):
         self.saves = self.dir / "saves"
         self.rev = "rev1"
         self.tool = "tool1"
-        for patch in (mock.patch.object(warm_shaders, "tool_sha", lambda: self.tool),mock.patch.object(warm_shaders, "MANIFEST", self.manifest),
-                      mock.patch.object(warm_shaders, "ROUTES", self.routes),
+        for patch in (mock.patch.object(warm_shaders, "tool_sha", lambda: self.tool),
+                      mock.patch.object(warm_shaders, "MANIFEST", self.manifest),
+                      mock.patch.object(routes, "ROUTES", self.routes),
                       mock.patch.object(warm_shaders, "engine_rev", lambda: self.rev),
                       mock.patch.dict(os.environ, {"GCN_INPUT": "999:B:1"})):
             patch.start()
@@ -78,11 +79,11 @@ class ScriptTextTest(unittest.TestCase):
 
 class PassesTest(unittest.TestCase):
     def test_one_pass_per_route_run_15_s_past_its_last_frame(self):
-        ps = warm_shaders.passes(parse_manifest(MANIFEST))
+        ps = warm_shaders.passes(routes.parse_manifest(MANIFEST))
         self.assertEqual([p.name for p in ps], ["title", "city-trial-4p"])
         self.assertEqual([p.exit_after for p in ps], [TITLE_FRAMES, FOUR_FRAMES])
         self.assertEqual([p.pads for p in ps], [1, 4])
-        self.assertEqual(ps[0].route_file, warm_shaders.ROUTES / "title.txt")
+        self.assertEqual(ps[0].route_file, routes.ROUTES / "title.txt")
 
 
 class WarmTest(WarmTestCase):
