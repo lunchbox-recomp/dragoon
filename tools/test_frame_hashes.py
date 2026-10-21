@@ -66,7 +66,7 @@ class ReachedTest(unittest.TestCase):
 
 class HashRouteTest(unittest.TestCase):
     route = frame_hashes.Route("title", 20, 60, [120], [])
-    out = frame_hashes.ROOT / "build" / "probe" / "hashes-gl-title"
+    out = frame_hashes.ROOT / "build" / "probe" / "hashes-title"
 
     def run_route(self, exists: bool, run: mock.Mock) -> mock.Mock:
         trash = mock.Mock()
@@ -75,7 +75,7 @@ class HashRouteTest(unittest.TestCase):
               mock.patch.object(frame_hashes, "hash_frames", return_value={60: A}),
               mock.patch.object(Path, "exists", return_value=exists)):
             try:
-                self.got = frame_hashes.hash_route(self.route, "gl")
+                self.got = frame_hashes.hash_route(self.route)
             except ValueError:
                 self.got = None
         return trash
@@ -84,9 +84,8 @@ class HashRouteTest(unittest.TestCase):
         run = mock.Mock()
         self.run_route(False, run)
         self.assertEqual(run.call_args.args[0],
-                         [str(frame_hashes.PROBE), "hashes-gl-title", "20",
-                          str(frame_hashes.ROOT / "tests" / "routes" / "title.txt"), "60",
-                          "--renderer=gl"])
+                         [str(frame_hashes.PROBE), "hashes-title", "20",
+                          str(frame_hashes.ROOT / "tests" / "routes" / "title.txt"), "60"])
         self.assertEqual(self.got, {60: A})
 
     def test_trashes_a_directory_left_from_an_earlier_run_before_and_after(self):

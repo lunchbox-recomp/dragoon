@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Did a change alter what the renderer draws? Run routes and compare their frame hashes.
 
-Usage: frame_hashes.py check  [--backend gl|metal] [ROUTE ...]
-       frame_hashes.py record [--backend gl|metal] [ROUTE ...]
+Usage: frame_hashes.py check  [ROUTE ...]
+       frame_hashes.py record [ROUTE ...]
 
 Routes and their probe settings are in tests/hashes/manifest.txt; with no ROUTE every route
-runs. Goldens are in tests/hashes/<backend>/<route>.txt, one "frame_NNNNN <sha1>" line per
+runs. Goldens are in tests/hashes/gl/<route>.txt, one "frame_NNNNN <sha1>" line per
 frame. check prints one status line per route and one line per frame that changed or wasn't
 reached. record rewrites the goldens, and writes none for a route that skipped a dump. A
 check reads every golden before it runs the game. The frames come from the player's disc, so
@@ -93,9 +93,9 @@ def reached(got: dict[int, str], needed: int) -> str:
     return f"reached frame {max(got)} (needs {needed})"
 
 
-def probe_args(route: Route, backend: str, name: str) -> list[str]:
+def probe_args(route: Route, name: str) -> list[str]:
     return [str(PROBE), name, str(route.seconds), str(ROOT / "tests" / "routes" / f"{route.name}.txt"),
-            str(route.dump_every), *route.extra, f"--renderer={backend}"]
+            str(route.dump_every), *route.extra]
 
 
 def trash(directory: Path) -> None:
@@ -103,13 +103,13 @@ def trash(directory: Path) -> None:
     shutil.move(str(directory), str(dest))
 
 
-def hash_route(route: Route, backend: str) -> dict[int, str]:
-    out = ROOT / "build" / "probe" / f"hashes-{backend}-{route.name}"
+def hash_route(route: Route) -> dict[int, str]:
+    out = ROOT / "build" / "probe" / f"hashes-{route.name}"
     if out.exists():
         trash(out)  # a blank memory card, and no frames from an older build
     try:
         try:
-            subprocess.run(probe_args(route, backend, out.name), check=True, cwd=ROOT,
+            subprocess.run(probe_args(route, out.name), check=True, cwd=ROOT,
                            stdout=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             raise ValueError(f"{route.name}: probe.sh exited {e.returncode}") from None
@@ -156,16 +156,15 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=["check", "record"])
-    ap.add_argument("--backend", choices=["gl", "metal"], default="gl")
     ap.add_argument("routes", nargs="*")
     args = ap.parse_args(argv)
     try:
         routes = select_routes(args.routes)
-        paths = {r.name: HASHES / args.backend / f"{r.name}.txt" for r in routes}
+        paths = {r.name: HASHES / "gl" / f"{r.name}.txt" for r in routes}
         goldens = {r.name: read_golden(paths[r.name]) for r in routes} if args.mode == "check" else {}
         failed = 0
         for route in routes:
-            got = hash_route(route, args.backend)
+            got = hash_route(route)
             if args.mode == "record":
                 ok = record_route(route, got, paths[route.name])
             else:
