@@ -1,3 +1,4 @@
+import hashlib
 import os
 import stat
 import sys
@@ -11,6 +12,10 @@ from frame_hashes import parse_manifest
 from testutil import run_main, write_file
 
 MANIFEST = "# comment\ntitle 20 60 60,960\ncity-trial-4p 30 60 2700,3480 --pads=4\n"
+TITLE_FRAMES = 960 + warm_shaders.ROUTE_TAIL_FRAMES
+FOUR_FRAMES = 3480 + warm_shaders.ROUTE_TAIL_FRAMES
+TITLE_EXIT = f"--exit-after={TITLE_FRAMES}"
+FOUR_EXIT = f"--exit-after={FOUR_FRAMES}"
 FAKE_GAME = f"""#!{sys.executable}
 import os, sys
 os.makedirs("saves", exist_ok=True)
@@ -74,17 +79,18 @@ class PassesTest(unittest.TestCase):
     def test_one_pass_per_route_run_15_s_past_its_last_frame(self):
         ps = warm_shaders.passes(parse_manifest(MANIFEST))
         self.assertEqual([p.name for p in ps], ["title", "city-trial-4p"])
-        self.assertEqual([p.exit_after for p in ps], [960 + 900, 3480 + 900])
+        self.assertEqual([p.exit_after for p in ps], [TITLE_FRAMES, FOUR_FRAMES])
         self.assertEqual([p.pads for p in ps], [1, 4])
         self.assertEqual(ps[0].script, warm_shaders.ROUTES / "title.txt")
 
 
 class StampTest(unittest.TestCase):
     def test_changes_with_engine_revision_and_manifest(self):
-        base = warm_shaders.stamp("rev1", MANIFEST)
-        self.assertEqual(base, warm_shaders.stamp("rev1", MANIFEST))
-        self.assertNotEqual(base, warm_shaders.stamp("rev2", MANIFEST))
-        self.assertNotEqual(base, warm_shaders.stamp("rev1", MANIFEST + "menu 20 60 1200\n"))
+        base = warm_shaders.stamp("rev1", MANIFEST, "tool1")
+        self.assertEqual(base, warm_shaders.stamp("rev1", MANIFEST, "tool1"))
+        self.assertNotEqual(base, warm_shaders.stamp("rev2", MANIFEST, "tool1"))
+        self.assertNotEqual(base, warm_shaders.stamp("rev1", MANIFEST + "menu 20 60 1200\n", "tool1"))
+        self.assertNotEqual(base, warm_shaders.stamp("rev1", MANIFEST, "tool2"))
 
 
 class InstallTest(WarmTestCase):
@@ -151,21 +157,21 @@ class WarmTest(WarmTestCase):
         self.assertFalse((self.saves / "memcard_a.raw").exists())
         self.assertIn("INPUT=120:A:5,300:A:5", title.split())
         self.assertIn("--pads=4", four.split())
-        self.assertIn("--exit-after=4380", four.split())
+        self.assertIn(FOUR_EXIT, four.split())
 
     def test_failing_pass_leaves_saves_identical_and_exits_non_zero(self):
         self.saves.mkdir()
         write_file(self.saves, "shaders.bin", b"old\n")
         write_file(self.saves, "memcard_a.raw", b"card")
         before = self.snapshot()
-        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=4380"}):  # the last pass
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": FOUR_EXIT}):  # the last pass
             code, _, err = self.warm()
         self.assertNotEqual(code, 0)
         self.assertIn("city-trial-4p", err)
         self.assertEqual(self.snapshot(), before)
 
     def test_failing_pass_creates_nothing_when_there_were_no_saves(self):
-        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=1860"}):  # the first pass
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": TITLE_EXIT}):  # the first pass
             code, _, _ = self.warm()
         self.assertNotEqual(code, 0)
         self.assertFalse(self.saves.exists())
@@ -194,8 +200,20 @@ class WarmTest(WarmTestCase):
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.cache_lines()), 4 + 3)
 
+    def test_stamp_from_an_older_tool_warms_again(self):
+        # What a player's saves/ holds from before the stamp had the tool's hash in it.
+        self.saves.mkdir()
+        write_file(self.saves, "shaders.bin", b"old keys\n")
+        old = f"rev1 {hashlib.sha1(MANIFEST.encode()).hexdigest()}\n"
+        write_file(self.saves, ".shader-warmup", old)
+        code, out, _ = self.warm()
+        self.assertEqual(code, 0)
+        self.assertNotIn("current", out)
+        self.assertEqual(len(self.cache_lines()), 1 + 2)
+        self.assertNotEqual((self.saves / ".shader-warmup").read_text(), old)
+
     def test_failed_run_does_not_write_the_stamp(self):
-        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": "--exit-after=1860"}):
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": TITLE_EXIT}):
             self.warm()
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.cache_lines()), 2)
@@ -218,7 +236,7 @@ class WarmTest(WarmTestCase):
         self.saves.mkdir()
         write_file(self.saves, "shaders.bin", b"old\n")
         before = self.snapshot()
-        with mock.patch.dict(os.environ, {"FAKE_SLEEP_ON": "--exit-after=1860"}), \
+        with mock.patch.dict(os.environ, {"FAKE_SLEEP_ON": TITLE_EXIT}), \
                 mock.patch.object(warm_shaders, "pass_timeout", lambda n: 1):
             code, _, err = self.warm()
         self.assertNotEqual(code, 0)

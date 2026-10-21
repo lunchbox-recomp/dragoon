@@ -5,13 +5,14 @@ Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--force]
 
 Runs the game in a scratch directory, one pass per route in tests/hashes/manifest.txt, each
 from a blank memory card as a fresh install is. (A route that finds the card an earlier
-pass made takes other menus and builds other keys.) Every pass is --hidden --fast --no-input-log with SDL's dummy audio driver, so nothing shows or
-sounds. The scratch saves/shaders.bin starts as a copy of <saves>/shaders.bin and grows
+pass made takes other menus and builds other keys.) Every pass is --hidden --fast
+--no-input-log with SDL's dummy audio driver, so nothing shows or sounds. The scratch saves/shaders.bin starts as a copy of <saves>/shaders.bin and grows
 pass by pass; the player's cache is only replaced once every pass has succeeded, by a copy
 to a temp file in <saves> and an os.replace, so a reader never sees half a file. Nothing
 else in <saves> is read or written except the stamp, <saves>/.shader-warmup, which holds
 the gcn-recomp commit (the game binary's SHA-1 if there is no checkout, with a warning) and
-a SHA-1 of the manifest. If both match the stamp and shaders.bin exists, the run is skipped.
+a SHA-1 of the manifest and a SHA-1 of this script, so an edit to the tool warms again. If all
+three match the stamp and shaders.bin exists, the run is skipped.
 A pass that outlasts twice its real-time length plus 30 s is killed and fails. --force runs
 anyway. --game and --saves default to build/dragoon and saves under the repository, wherever
 the tool is run from.
@@ -72,8 +73,12 @@ def passes(routes: list[Route]) -> list[Pass]:
             for r in routes]
 
 
-def stamp(engine_rev: str, manifest_text: str) -> str:
-    return f"{engine_rev} {hashlib.sha1(manifest_text.encode()).hexdigest()}"
+def stamp(engine_rev: str, manifest_text: str, tool_sha: str) -> str:
+    return f"{engine_rev} {hashlib.sha1(manifest_text.encode()).hexdigest()} {tool_sha}"
+
+
+def tool_sha() -> str:
+    return hashlib.sha1(Path(__file__).read_bytes()).hexdigest()
 
 
 def engine_rev() -> str:
@@ -167,7 +172,7 @@ def main(argv: list[str]) -> int:
         if not args.game.is_file():
             raise ValueError(f"{args.game}: no such game, build it first")
         manifest_text = MANIFEST.read_text()
-        want = stamp(revision(args.game), manifest_text)
+        want = stamp(revision(args.game), manifest_text, tool_sha())
         stamp_path = args.saves / STAMP
         if not args.force and stamp_path.exists() \
                 and (args.saves / CACHE).exists() and stamp_path.read_text().strip() == want:
