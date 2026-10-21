@@ -12,10 +12,10 @@ Kirby Air Ride (USA, `GKYE01`) static recompilation on gcn-recomp. Design:
 - AI use is disclosed with specifics in the README, CONTRIBUTING and release notes, not in
   commits.
 
-## Human-written prose
+## Prose for people
 
-The README, CONTRIBUTING, PR descriptions, issues, announcements and replies to people are
-written by the user. Claude writes technical docs and drafts facts and outlines for the rest.
+AI drafts the README, CONTRIBUTING, PR descriptions, issues, announcements and replies to
+people. The user approves or rewrites every line before it goes out.
 
 ## Voice
 
