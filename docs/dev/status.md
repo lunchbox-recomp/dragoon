@@ -212,28 +212,27 @@ What a player's first session looks like after the warm-up, against the bars set
 
 | Target | Bar | Measured | Result |
 |---|---|---|---|
-| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five, worst frame 28.2 ms | Pass |
-| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | Title 3, menu 0, City Trial 35, four players 33, race 9 | Fail |
-| How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The attract pass builds 3 keys. Title 3 of 66 (4.5%), menu 3 of 27 (11.1%), City Trial 3 of 107 (2.8%), four players 3 of 110 (2.7%), race 3 of 141 (2.1%) | Reported |
-| Time added to the first build | 90 s or less | 42.8 s (attract 7.1 s, routes 35.7 s), 136 keys | Pass |
-| Time added to every boot on macOS GL | 1,000 ms or less | 198 to 221 ms for 136 programs | Pass |
+| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five, worst render frame 11.1 ms | Pass |
+| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five | Pass |
+| How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
+| Time added to the first build | 90 s or less | 42.6 s, 191 keys | Pass |
+| Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs | Pass |
 | Frames | `tools/frame_hashes.py check` passes | All five routes OK | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
 
-The compiles that remain after the warm-up are the keys the warm-up's `--fast` passes didn't build.
-The 136-key cache lacks 3 of the title's 66 keys, none of the menu's 27, 35 of City Trial's 107, 33
-of the four-player route's 110 and 9 of the race's 141. The worst frames are City Trial
-2733 (28.2 ms, 10 programs, draws 1937/386, verts 36,131, idx 77,673) and four-player 2734
-(24.0 ms, 9 programs, draws 4399/635, verts 84,681, idx 185,319).
+An earlier warm-up left 35 compiles in City Trial, 33 in four-player, 9 in the race and 3 in the
+title. The cause was the memory card. The title pass made one in the scratch directory and every
+later pass started on it, where the routes' A presses take the load menus instead of the "make a
+new save data file" ones, and play other scenes. Each pass now starts from a blank card. The keys
+don't depend on the render scale or on `--fast` against `--real-time`. A City Trial pass at scale
+1 `--fast`, scale 2 `--fast` and scale 2 `--real-time` built the same 107 keys. The title pass
+and the others now run 900 frames (15 s) past their last required frame, as the measured runs do.
 
-Measured on a Mac with an M4 Max at `--real-time --scale=2`, with the build's `tools/warm_shaders.py`
-(`--saves` a fresh directory for each route) and the Dragoon commit `d3c9c15`. Apple's own shader
-cache was warm from earlier runs, and the warm-up fills it on a player's Mac too. The 42.8 s is the
-first warm-up, timed with `/usr/bin/time -p`. The other four warm-ups ran for real as well, because
-each used a fresh saves directory with no stamp, and took 44.2 to 45.7 s. The runs with dumps off
-used a copy of a sixth, separate warm-up's cache.
+Measured on a Mac with an M4 Max at `--real-time --scale=2`. Apple's own shader cache was warm from
+earlier runs, and the warm-up fills it on a player's Mac too. The 42.6 s is a warm-up timed with
+`/usr/bin/time -p`. The five route runs used copies of the cache of an identical warm-up.
 
 ## Fixes on the way
 
