@@ -5,7 +5,9 @@ build directory at gcn-recomp `67a7e30`, and the game was run at `7d30377`. The 
 numbers are from `fda6926`. The controller row is from `25c4f26`, where the five frame-hash
 routes also pass. The audio row is from gcn-recomp `bf31b7b` and its click counts from
 `fd1f6a8` and `e6ea431`, where the five frame-hash routes and the five audio-hash routes pass.
-Both sets pass again at `b848158`, after the review fixes.
+Both sets pass again at `b848158`, after the review fixes. The other Air Ride courses, their
+pacing and the twelve-route warm-up were measured at Dragoon `788571c` and gcn-recomp
+`b848158`, where all twelve frame-hash routes and all twelve audio-hash routes pass.
 
 | Feature | Status | Note |
 |---|---|---|
@@ -13,7 +15,7 @@ Both sets pass again at `b848158`, after the review fixes.
 | Opening movie | Plays | Then the title and the attract demos, races and mode movies |
 | Title screen | Works | `tests/routes/title.txt` |
 | Mode select | Works | `tests/routes/menu.txt`. The panel at its right stays plain gray |
-| Air Ride race | Runs | `tests/routes/air-ride-race.txt`. Fantasy Meadows, three CPUs, three laps to the results screen with nobody steering |
+| Air Ride race | Runs | All eight courses a blank memory card can pick load and race past the countdown, one route each in `tests/routes/`, with no crash and nothing seen drawn wrong. Fantasy Meadows (`air-ride-race.txt`) has three laps and the other seven two. With nobody steering, six reach the results screen and Kirby stays stopped against a wall on the other two (table under How far it gets). Nebula Belt, the ninth course, is locked on a blank card behind an Air Ride checklist box that counts 100 laps |
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. Stadium not reached yet |
 | Top Ride | Not tried | |
 | Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in the DMA's blocks fell from 928 to 19 (table under Audio). The low-pass filter and polyphase resampling aren't done. It was listened to once, before the type 2 fix. It crackled. Nobody has listened since. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. [`scorecard.md`](scorecard.md) runs the routes twice on gcn-recomp `caf12a2` (before any of the audio work) and twice on `b848158`. On the title route played to 91 s the clicks in the DMA's blocks fell from 1,097 and 979 to 22 and 22. Over the five routes the device's clicks a minute fell from 57.9 to 36.3 and from 45.1 to 33.1, and the DMA blocks' clicks a minute rose from 22.3 to 26.4 and from 24.4 to 30.2. Details in `audio.md` |
@@ -109,7 +111,14 @@ needs `--pads=4`.
 | Memory card | `title.txt` | 60 | The prompt to make a save file on the card in slot A |
 | Title | `title.txt` | 960 | The logo and PRESS START/PAUSE |
 | Mode select | `menu.txt` | 1200 | Air Ride, Top Ride, City Trial, Options, LAN |
-| Air Ride race | `air-ride-race.txt` | 4200 | Fantasy Meadows, lap 1, 0:14 on the clock, CPUs ahead |
+| Fantasy Meadows | `air-ride-race.txt` | 4200 | Lap 1 of 3, 0:14 on the clock, CPUs ahead |
+| Celestial Valley | `air-ride-celestial-valley.txt` | 4200 | Lap 1 of 2, 0:14, second, under a night sky with a CPU ahead |
+| Sky Sands | `air-ride-sky-sands.txt` | 4200 | Lap 1 of 2, 0:14, second, on pale sand with ruins in the haze |
+| Frozen Hillside | `air-ride-frozen-hillside.txt` | 4200 | Lap 1 of 2, 0:14, fourth, in a stone corridor under a purple sky |
+| Magma Flows | `air-ride-magma-flows.txt` | 4200 | Lap 1 of 2, 0:14, fourth, on a rock path between lava flows |
+| Beanstalk Park | `air-ride-beanstalk-park.txt` | 4200 | Lap 1 of 2, 0:14, first, on a grass slope with beanstalks against the clouds |
+| Machine Passage | `air-ride-machine-passage.txt` | 4200 | Lap 1 of 2, 0:14, fourth, stopped against a dark metal wall |
+| Checker Knights | `air-ride-checker-knights.txt` | 4200 | Lap 1 of 2, 0:14, fourth, beside the sea with checkered blocks overhead |
 | City Trial | `city-trial.txt` | 3300 | The city, 4:54 left |
 | Four-player entry | `city-trial-4p.txt` | 2700 | P1 OK to P4 OK under READY?, each player joined from its own port |
 | Four-player City Trial | `city-trial-4p.txt` | 3480 | Four views, 4:51 left, ports 1 and 3 steering left and 2 and 4 right |
@@ -119,9 +128,82 @@ frame 25,800. City Trial with nobody steering drives into the sea and stays ther
 clock runs. The opening movie, when it isn't skipped, plays to the end and hands over to the
 title and the attract demos.
 
+The seven other course routes were left running for 120 s each with `--fast` and a dump every
+300 frames, four and then three at a time. Checker Knights ran again for 200 s to reach its
+results.
+
+Nobody steers after the start, and the Warpstar keeps moving on its own. Whether a console's
+Kirby gets stuck in the same places wasn't checked.
+
+| Course | Left alone | Results screen by frame |
+|---|---|---|
+| Celestial Valley | Fourth in 2:21.00 | 21,300 |
+| Sky Sands | Fourth in 2:11.43 | 20,100 |
+| Frozen Hillside | Stopped against a wall between 0:14 and 0:19, still on lap 1 at 7:49 (frame 31,500) | Not reached |
+| Magma Flows | Fourth in 2:28.63 | 22,200 |
+| Beanstalk Park | Fourth in 2:15.73 | 20,700 |
+| Machine Passage | Stopped against a wall by 0:09. It had crept to the next corner by 1:34 and was still on lap 1 at 7:49 (frame 31,500) | Not reached |
+| Checker Knights | Stopped against a wall by 1:34 and moving again by 3:04, so lap 1 took 3:09.57 and lap 2 took 1:20.90. Fourth in 4:30.46 | 36,600 |
+
+Nebula Belt's slot on the course select is gray with no name on a blank card, so it has no
+route. The course select's setup (`fn_8003C114` in the generated C, its call at guest address
+0x8003C21C) puts a locked entry in that slot unless `fn_8000C0E0(8)` says course 8 is open. In
+the wowjinxy/KAR decomp that function asks
+`ClearChecker_CheckUnlocked(0, 0x22)` (`src/kar/gm/gmautodemo.c:2902`), the Air Ride
+checklist reward whose clear kind is 0 (`src/kar/gm/gmclearchecker.c:77`).
+
+Clear kind 0 is marked once a running total reaches 100 (`kar_gmclearchecker__near_8004ac34`,
+`src/kar/gm/gmclearchecker_8004a648.c:346`). The total is a saved count plus one per-player
+count for the race in progress, kept at 0x80536240 (`fn_8000B1EC`, `gmautodemo.c:2326`). The
+attract demo skips course 8 on the same check (`gmautodemo.c:4141`).
+
+RAM dumps taken with `GCN_RAM_DUMP_AT` show what's counted. On the race route each racer's
+count went up by one as it finished a lap, and the saved total at 0x80536834 went from 0 before
+the race to 3 after it. Celestial Valley's route ended with every count at 2 and the saved
+total at 2.
+
+Only Kirby's laps count toward the total, so a blank card needs 100 Air Ride laps before the box
+is marked. Reaching 100 sets bit 0 of the box's flags (`gmclearchecker.c:211`), while the course
+select's check reads bit 3 (`gmclearchecker.c:162`). The code that sets bit 3 isn't decompiled, so
+whether the course opens at once or after the checklist screen shows the new box wasn't
+traced.
+
 The race runs at about 500 frames a second in the hidden window with `--fast`, 8 times the
 game's 60. That's 9,600 frames between frames 3600 and 13,200 in 19.3 s of wall time, with
 other work on the machine at the time.
+
+## Air Ride pacing
+
+Each course route ran once at the game's own speed, hidden at 640x480, as
+`tools/probe.sh NAME 130 tests/routes/ROUTE.txt 100000 --real-time GCN_FRAMETIME=1`. Each
+started with the cache from a warm-up of all twelve manifest routes copied to its
+`saves/shaders.bin`. Two or three other copies of Dragoon were running the game on the same
+machine each time `ps` was checked.
+
+The rows are `tools/frametime.py build/probe/NAME/stdout.txt --from 3400 --slow 16.7`, from
+just after the start to the end of the run. Compiles are the `[shaders] compiled program`
+lines after boot, and boot is the `programs from cache` line's time for 222 programs.
+
+| Course | Frames | Guest mean | 95th | 99th | Worst | `[rt]` mean | `[rt]` 99th | `[rt]` worst | Compiles | Boot |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Fantasy Meadows | 4,226 | 16.69 ms | 17.95 ms | 18.37 ms | 43.94 ms (5314) | 0.60 ms | 0.91 ms | 41.57 ms (7110) | 1 (7110) | 380 ms |
+| Celestial Valley | 4,227 | 16.69 ms | 17.92 ms | 18.33 ms | 41.71 ms (7359) | 0.57 ms | 1.19 ms | 2.73 ms | 0 | 362 ms |
+| Sky Sands | 4,223 | 16.70 ms | 17.95 ms | 18.34 ms | 85.51 ms (5376) | 0.58 ms | 0.96 ms | 1.60 ms | 0 | 368 ms |
+| Frozen Hillside | 4,230 | 16.69 ms | 18.01 ms | 18.31 ms | 32.52 ms (6425) | 0.52 ms | 0.71 ms | 3.86 ms (5752) | 1 (5752) | 377 ms |
+| Magma Flows | 4,226 | 16.69 ms | 17.91 ms | 18.24 ms | 40.83 ms (6053) | 0.61 ms | 1.01 ms | 1.50 ms | 0 | 376 ms |
+| Beanstalk Park | 4,228 | 16.68 ms | 17.92 ms | 18.22 ms | 18.97 ms | 0.51 ms | 0.85 ms | 2.96 ms (5648) | 1 (5648) | 374 ms |
+| Machine Passage | 4,225 | 16.69 ms | 17.98 ms | 18.29 ms | 38.05 ms (7583) | 0.46 ms | 0.66 ms | 3.25 ms (6007) | 1 (6007) | 368 ms |
+| Checker Knights | 4,227 | 16.69 ms | 17.92 ms | 18.24 ms | 34.43 ms (6152) | 0.57 ms | 0.94 ms | 1.46 ms | 0 | 387 ms |
+
+Every course averaged 16.68 to 16.70 ms a guest frame, and 99 frames in 100 took under
+18.4 ms. Each worst guest frame over 30 ms was a single late frame, with frames near 16.7 ms
+on both sides. Its `[ft]` line shows no new texture and a front end under 0.6 ms, and no
+compile came near it, so the log doesn't say what held it up.
+
+Four courses compiled one program each in play, at frames past where the warm-up's pass for
+that route stops (6,900 for Fantasy Meadows and 5,100 for the others). Each compile took 1.7
+to 2.0 ms. The render frame that first drew with it took 41.57 ms on Fantasy Meadows and under
+4 ms on the other three.
 
 ## Four players
 
@@ -301,9 +383,9 @@ What a player's first session looks like after the warm-up, against the bars set
 | Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five, worst render frame 11.1 ms | Pass |
 | Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five | Pass |
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
-| Time added to the first build | 90 s or less | 42.6 s, 191 keys | Pass |
-| Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All five routes OK | Pass |
+| Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys | Fail |
+| Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `788571c` | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
@@ -320,6 +402,17 @@ read from the `[shaders] ... programs from cache ... in N ms` line the game prin
 42.6 s is one warm-up timed with `/usr/bin/time -p`.
 Apple's own shader cache was warm from earlier runs. Whether the warm-up fills it on a fresh Mac
 wasn't checked.
+
+The 47.1 s and 120.5 s are later warm-ups at Dragoon `788571c` and gcn-recomp `b848158`, each
+`tools/warm_shaders.py --force` from an empty cache under `/usr/bin/time -p`, with the manifest
+at five routes and then at twelve. Other copies of Dragoon were running the game on the same
+machine that afternoon, so neither is an idle machine's time. Each of the seven new passes
+played 5,100 frames in 9.4 to 11.2 s.
+
+The 362 to 387 ms boots are from the Air Ride pacing runs above, which also went past the frames
+the warm-up plays and compiled one program each on four courses. On Fantasy Meadows that
+compile came with a 41.57 ms render frame at frame 7110, over the 33 ms stall bar, at 640x480
+rather than the scale 2 the rows above used.
 
 An earlier warm-up left 35 compiles in City Trial, 33 in four-player, 9 in the race and 3 in the
 title. Starting each pass from a blank card, with 900 frames (15 s) past the last checkpoint,
