@@ -62,7 +62,7 @@ tools/shader_cache.py diff build/old-keys.bin build/probe/demo/saves/shaders.bin
 
 Did a change alter what the renderer draws? It runs each route in `tests/hashes/manifest.txt` through probe.sh and compares the SHA-1 of every dumped frame with the golden in `tests/hashes/gl/<route>.txt`. `check` reports each frame that changed or wasn't reached. `record` rewrites the goldens, so use it only when a change to the output is on purpose. The frames are moved to the Trash once hashed and are never committed.
 
-The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. A `check` of all five routes takes about two minutes.
+The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. A `check` of all twelve routes took 302 s while other copies of the game ran on the same machine.
 
 ```
 tools/frame_hashes.py check title
@@ -77,7 +77,7 @@ tools/audio_hashes.py check air-ride-race
 tools/audio_hashes.py record title --lists 7200,20000
 ```
 
-A `check` of all five routes takes about two minutes. Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is moved to the Trash first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
+A `check` of all twelve routes took 300 s while other copies of the game ran on the same machine. Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is moved to the Trash first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
 
 ## audio_clicks.py
 

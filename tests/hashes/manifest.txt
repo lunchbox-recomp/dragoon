@@ -6,3 +6,10 @@ menu           20 60 1200
 air-ride-race  30 60 4200,6000
 city-trial     25 60 3300
 city-trial-4p  30 60 2700,3480 --pads=4
+air-ride-celestial-valley  25 60 4200
+air-ride-sky-sands         25 60 4200
+air-ride-frozen-hillside   25 60 4200
+air-ride-magma-flows       25 60 4200
+air-ride-beanstalk-park    25 60 4200
+air-ride-machine-passage   25 60 4200
+air-ride-checker-knights   25 60 4200
