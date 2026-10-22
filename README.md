@@ -41,7 +41,7 @@ ninja -C build
 build/dragoon
 ```
 
-The first build also runs the game hidden and silent, for about 45 seconds on an M4 Max, so the shaders it draws are compiled before you play. If that run fails, the build stops and says how to skip it. To skip it from the start, add `-DDRAGOON_WARMUP=OFF` to the `cmake` line.
+The first build also runs the game hidden and silent, for about two minutes on an M4 Max, so the shaders it draws are compiled before you play. If that run fails, the build stops and says how to skip it. To skip it from the start, add `-DDRAGOON_WARMUP=OFF` to the `cmake` line.
 
 The wrong disc stops the configure step and prints the disc ID it found.
 

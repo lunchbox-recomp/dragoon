@@ -30,6 +30,6 @@ if(DRAGOON_WARMUP AND TARGET dragoon AND NOT CMAKE_CROSSCOMPILING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/warm_shaders.py
             --game $<TARGET_FILE:dragoon> --saves ${CMAKE_SOURCE_DIR}/saves
     DEPENDS dragoon
-    COMMENT "Warming up shaders, about a minute the first time"
+    COMMENT "Warming up shaders, about two minutes the first time"
     USES_TERMINAL VERBATIM)
 endif()
