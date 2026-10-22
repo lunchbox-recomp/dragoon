@@ -233,6 +233,8 @@ tools/launcher_build.py --source /tmp/dragoon-source --disc "$HOME/Kirby Air Rid
   --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk --sdl-tarball /tmp/SDL3-3.4.18.tar.gz
 ```
 
+A first build on an M4 Max took 112 s, with 24 s to configure, 33 s to compile (SDL's source included) and 55 s to warm up. A second build of the same commit took 57 s, because the warm-up found its stamp current.
+
 `--no-disc` builds `runtime_check` and stops, which proves the tools and SDL's source configure and compile with no disc. `--no-warmup` skips the warm-up. `--keep-build` keeps `<cache>/build` and the SDL source it points at, which are deleted after a good build otherwise.
 
 ## sdl_source.py
