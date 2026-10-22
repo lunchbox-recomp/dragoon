@@ -6,8 +6,9 @@ numbers are from `fda6926`. The controller row is from `25c4f26`, where the five
 routes also pass. The audio row is from gcn-recomp `bf31b7b` and its click counts from
 `fd1f6a8` and `e6ea431`, where the five frame-hash routes and the five audio-hash routes pass.
 Both sets pass again at `b848158`, after the review fixes. The other Air Ride courses, their
-pacing and the twelve-route warm-up were measured at Dragoon `788571c` and gcn-recomp
-`b848158`, where all twelve frame-hash routes and all twelve audio-hash routes pass.
+pacing and the twelve-route warm-up were measured on a build of Dragoon `788571c` and
+gcn-recomp `b848158` with the seven course routes added. All twelve frame-hash routes and all
+twelve audio-hash routes pass at `fe0c0bf`.
 
 | Feature | Status | Note |
 |---|---|---|
@@ -385,7 +386,7 @@ What a player's first session looks like after the warm-up, against the bars set
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys | Fail |
 | Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `788571c` | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf` | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
