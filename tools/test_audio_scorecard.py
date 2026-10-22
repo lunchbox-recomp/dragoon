@@ -87,7 +87,7 @@ class MainTest(unittest.TestCase):
                       mock.patch.object(audio_scorecard, "play", self.play),
                       mock.patch.object(audio_scorecard, "finished", self.finished),
                       mock.patch.object(audio_scorecard, "measure", side_effect=measured),
-                      mock.patch.object(audio_scorecard, "describe", return_value="abc1234")):
+                      mock.patch.object(audio_scorecard, "describe", side_effect=lambda path: path.name)):
             patch.start()
             self.addCleanup(patch.stop)
 
@@ -102,7 +102,8 @@ class MainTest(unittest.TestCase):
 
     def test_prints_a_table_per_route_and_the_totals(self):
         _, out, _ = self.main()
-        self.assertIn("base: /a/build, Dragoon abc1234, gcn-recomp abc1234", out)
+        self.assertIn("base: /a/build, Dragoon a, gcn-recomp gcn-recomp", out)
+        self.assertIn("now: /b/build, Dragoon b, gcn-recomp gcn-recomp", out)
         self.assertIn("title: 31 s a run, to frame 960", out)
         self.assertIn("menu: 35 s a run, to frame 1200", out)
         total = out[out.index("total: 2 routes"):]
@@ -140,7 +141,8 @@ class MainTest(unittest.TestCase):
         got = json.loads(out)
         self.assertEqual(got["routes"], ["title", "menu"])
         base = got["builds"][0]
-        self.assertEqual((base["label"], base["build"], base["gcn_recomp"]), ("base", "/a/build", "abc1234"))
+        self.assertEqual((base["label"], base["build"], base["dragoon"], base["gcn_recomp"]),
+                         ("base", "/a/build", "a", "gcn-recomp"))
         self.assertEqual(base["routes"]["menu"]["mixer"]["clicks"], 20)
         self.assertEqual(base["total"]["mixer"]["clicks"], 30)
         self.assertEqual(base["total"]["clamped"], 14)
@@ -156,6 +158,12 @@ class MainTest(unittest.TestCase):
         code, _, err = self.main()
         self.assertEqual(code, 2)
         self.assertEqual(err, "base title: probe.sh exited 2\n")
+
+    def test_a_recording_that_cant_be_read_exits_2_with_one_line(self):
+        audio_scorecard.measure.side_effect = FileNotFoundError(2, "No such file or directory", "/a/stdout.txt")
+        code, _, err = self.main()
+        self.assertEqual(code, 2)
+        self.assertEqual(err, "[Errno 2] No such file or directory: '/a/stdout.txt'\n")
 
     def test_a_build_probe_sh_wont_run_exits_2_before_anything_plays(self):
         with mock.patch.object(audio_scorecard, "check_build", side_effect=ValueError("/b/build: not built")):
