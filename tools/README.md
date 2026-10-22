@@ -12,7 +12,7 @@ Every tool takes `--help`, which prints its usage and what it reads. Results go 
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py and audio_clicks.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py and audio_scorecard.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -104,6 +104,21 @@ tools/probe.sh title-cuts 90 tests/routes/title.txt 100000 --real-time GCN_WAV=o
 sed -n -E 's/^\[ring\] cut .* frame ([0-9]+)$/\1/p' build/probe/title-cuts/stdout.txt > build/probe/title-cuts/cuts.txt
 tools/audio_clicks.py build/probe/title-cuts/out.wav --marks build/probe/title-cuts/cuts.txt
 ```
+
+## audio_scorecard.py
+
+How does each build's sound measure, route by route? It plays every route in `tests/hashes/manifest.txt` on one or more Dragoon builds and counts clicks, gaps and clipping at two stages, with nobody listening. Each build is a clone's `build/` directory with a label. A route plays on each build in turn before the next route starts, through that clone's own probe.sh, hidden, `--real-time`, with SDL's dummy audio driver and `GCN_AXSTATS=1`. The route files come from this clone, so every build plays the same presses.
+
+```
+tools/audio_scorecard.py base=/path/to/old-clone/build current=build
+tools/audio_scorecard.py base=/path/to/old-clone/build current=build --routes title --json
+```
+
+A run lasts the route's last checkpoint at 60 frames a second plus 15 s, and dumps that one frame. A run that doesn't reach it stops the tool with exit 2. Runs go to `build/probe/scorecard-ROUTE/` in each clone, and an earlier run in that directory goes to the Trash first, so every run starts from a blank memory card and an empty shader cache. `--no-run` measures the runs already there. The five routes take about 5.5 minutes a build.
+
+The mixer stage is `GCN_AIDWAV`, the DMA's blocks before the audio ring, read with audio_clicks.py's `--raw 32000 --period 160`. The device stage is `GCN_WAV`, what went to the device. Each gets clicks a minute, gaps and clipped runs as audio_clicks.py counts them. The device stage also counts the clicks within 2 samples of a `[ring] cut` line's output frame, when the build logs cuts. The log gives the ring's cuts and underruns, the highest `[ax] frames` peak (main L before the output clamp) and the sum of the `[ax] bus` lines' `clipped`. An older build that doesn't print one of these reads `not logged`, and a missing recording reads `not recorded`. Underruns are the last `[ring] fill` line's, which comes every 400 pulls of the device. A table per route prints as the route finishes, then the totals, where clicks a minute is over the summed seconds. `--json` prints it all at the end, with each clone's commit and its gcn-recomp commit. It only reports, so it never exits 1.
+
+scorecard_runs.py plays a route on a build and scorecard_measure.py scores a run's files. Neither has a command line.
 
 ## warm_shaders.py
 
