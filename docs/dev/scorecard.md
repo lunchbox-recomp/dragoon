@@ -155,8 +155,8 @@ Neither build had an underrun in any run, and current made no ring cut in any ru
 
 ## The title route at 91 s
 
-`status.md`'s source type 2 counts come from 90-second title runs, and the manifest's title run
-stops at 31 s. `--routes title --margin 75` plays the same route for 91 s. It ran twice on each
+`status.md`'s source type 2 counts come from 90-second title runs, and the five-route pass
+plays the title for 31 s. `--routes title --margin 75` plays the same route for 91 s. It ran twice on each
 build, with the tool at `13acaf4`.
 
 | Title route, 91 s | Baseline | Current |
@@ -177,7 +177,7 @@ build, with the tool at `13acaf4`.
 | Highest main L peak before the clamp | 51,738, 57,485 | 33,845, 34,590 |
 | Samples the clamp changed | Not logged | 16, 20 |
 
-The clicks come after the manifest's 31 s. In the baseline's second run, 970 of the 979 came
+The clicks come after the five-route run's 31 s. In the baseline's second run, 970 of the 979 came
 later than that, the first of them at 41.71 s. 586 of those 970 fell on a block join, where
 chance gives 30.3. In current's second run, 10 of its 22 came after 31 s.
 
