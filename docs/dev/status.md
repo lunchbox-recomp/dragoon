@@ -380,8 +380,8 @@ What a player's first session looks like after the warm-up, against the bars set
 
 | Target | Bar | Measured | Result |
 |---|---|---|---|
-| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five, worst render frame 11.1 ms | Pass |
-| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five | Pass |
+| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five to the frames those runs reached (6,900 on the race), worst render frame 11.1 ms. Run to 130 s, the race had one at frame 7110, 41.57 ms, with a compile | Fail |
+| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five to the end of those runs. 1 on the race at frame 7110, past the warm-up's 6,900, and 1 each on Frozen Hillside (5752), Beanstalk Park (5648) and Machine Passage (6007), past 5,100 | Fail |
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys | Fail |
 | Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
