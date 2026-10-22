@@ -109,7 +109,7 @@ tools/audio_clicks.py build/probe/title-cuts/out.wav --marks build/probe/title-c
 
 Will a player's first session stall on shader compiles? It plays the game once so the cache is already warm. The build runs it as the `dragoon_warmup` target, unless it's configured with `-DDRAGOON_WARMUP=OFF`, has no disc or is a cross build. It runs the game hidden and fast, with SDL's dummy audio driver, in a scratch directory, with one pass per route in `tests/hashes/manifest.txt`. Each pass starts from a blank memory card, as a fresh install does, because a route that finds an earlier pass's card takes other menus and builds other keys. The scratch `shaders.bin` starts as a copy of the player's own and grows pass by pass.
 
-The cache is copied over `saves/shaders.bin` only once every pass has succeeded, and it only gains keys. No other file in `saves/` is touched, so the player's memory card stays as it is. A failed pass exits 1 and leaves `saves/` as it was. `saves/.shader-warmup` holds the gcn-recomp commit and a SHA-1 each of the manifest (with the route files' text) and of warm_shaders.py. If all three match, the next run does nothing. A relink doesn't replay the game, but an edited route or tool does. A copy with no gcn-recomp checkout exits 2. `--force` plays it anyway. A pass that outlasts twice its length at 60 fps plus 30 s is killed and counts as failed.
+The cache is copied over `saves/shaders.bin` only once every pass has succeeded, and it only gains keys. No other file in `saves/` is touched, so the player's memory card stays as it is. A failed pass exits 1 and leaves `saves/` as it was. `saves/.shader-warmup` holds the gcn-recomp commit and a SHA-1 each of the manifest (with the route files' text) and of warm_shaders.py. If all three match, the next run does nothing. A relink doesn't replay the game, but an edited route or tool does. A checkout asks git for the gcn-recomp commit. A source snapshot has no history, so it takes the commit from its `source-info.json`. A copy with neither exits 2. `--force` plays it anyway. A pass that outlasts twice its length at 60 fps plus 30 s is killed and counts as failed.
 
 ```
 tools/warm_shaders.py --force
@@ -119,6 +119,10 @@ tools/shader_cache.py count saves/shaders.bin
 ## routes.py
 
 Which routes does the repository play? `tests/hashes/manifest.txt` lists them, and `tests/routes/` holds their files. routes.py reads the manifest into `Route` records and gives each route file's path, for frame_hashes.py, audio_hashes.py and warm_shaders.py. It also picks routes by name for the first two. It has no command line.
+
+## source_info.py
+
+What does a source snapshot hold? Its `source-info.json` names the Dragoon and gcn-recomp commits and the disc they build, as `disc_id` and `dol_sha1`. source_info.py reads that file and refuses one with a field missing or malformed, naming the file. warm_shaders.py reads the engine commit through it. It has no command line.
 
 ## probe_dirs.py
 

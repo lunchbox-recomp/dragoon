@@ -9,8 +9,9 @@ pass made takes other menus and builds other keys.) Every pass is --hidden --fas
 --no-input-log with SDL's dummy audio driver, so nothing shows or sounds. The scratch
 saves/shaders.bin starts as a copy of <saves>/shaders.bin and grows pass by pass, and the
 player's cache is only replaced once every pass has succeeded. Nothing else in <saves> is
-read or written except the stamp, <saves>/.shader-warmup. It holds the gcn-recomp commit, a
-SHA-1 of the manifest with the route files' text and a SHA-1 of this script. If all three
+read or written except the stamp, <saves>/.shader-warmup. It holds the gcn-recomp commit (from
+git, or from source-info.json in a source snapshot), a SHA-1 of the manifest with the route
+files' text and a SHA-1 of this script. If all three
 match and shaders.bin exists, the run is skipped. A pass that outlasts twice its real-time
 length plus 30 s is killed and fails. --force runs anyway. --game and --saves default to
 build/dragoon and saves under the repository, wherever the tool is run from.
@@ -20,7 +21,8 @@ the game's last output to stderr.
 
 Exits 0 when the cache is warm, whether the passes ran or the stamp was current, 1 when a
 pass failed or the game left no shaders.bin (the player's saves are untouched), 2 when it
-couldn't run: a bad argument, or a missing game, route or gcn-recomp checkout.
+couldn't run: a bad argument, a missing game or route, or neither a gcn-recomp checkout nor a
+readable source-info.json.
 """
 from __future__ import annotations
 
@@ -35,6 +37,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import source_info
 from routes import MANIFEST, Route, parse_manifest, route_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,16 +81,24 @@ def tool_sha() -> str:
 
 
 def engine_rev() -> str:
-    """The commit of the gcn-recomp checkout the game was built from."""
-    if not (ROOT / "gcn-recomp" / ".git").exists():
-        raise ValueError("no gcn-recomp checkout, so the stamp can't name the engine "
-                         "(configure with -DDRAGOON_WARMUP=OFF to skip the warm-up)")
-    try:
-        done = subprocess.run(["git", "-C", str(ROOT / "gcn-recomp"), "rev-parse", "HEAD"],
-                              capture_output=True, text=True, check=True)
-    except (OSError, subprocess.CalledProcessError) as e:
-        raise ValueError(f"can't read the gcn-recomp commit: {e}") from None
-    return done.stdout.strip()
+    """The gcn-recomp commit the game was built from.
+
+    A checkout asks git. A source snapshot has no history, so it reads the commit its
+    source-info.json names, and git wins in a tree that has both.
+    """
+    checkout = ROOT / "gcn-recomp"
+    if (checkout / ".git").exists():
+        try:
+            done = subprocess.run(["git", "-C", str(checkout), "rev-parse", "HEAD"],
+                                  capture_output=True, text=True, check=True)
+        except (OSError, subprocess.CalledProcessError) as e:
+            raise ValueError(f"can't read the gcn-recomp commit: {e}") from None
+        return done.stdout.strip()
+    info = ROOT / source_info.NAME
+    if not info.exists():
+        raise ValueError(f"no gcn-recomp checkout or {source_info.NAME}, so the stamp can't "
+                         "name the engine (configure with -DDRAGOON_WARMUP=OFF to skip the warm-up)")
+    return source_info.read(info)["gcn-recomp"]
 
 
 def pass_timeout(exit_after: int) -> float:
