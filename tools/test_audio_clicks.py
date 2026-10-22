@@ -40,7 +40,7 @@ def write_wav(directory: Path, name: str, *channels: list[int], width: int = 2) 
 
 
 def clicks(*channels: list[int]) -> list[float]:
-    return audio_clicks.analyse(rec(*channels), 0).clicks
+    return [c.at for c in audio_clicks.analyse(rec(*channels), 0).clicks]
 
 
 class ClickTest(unittest.TestCase):
@@ -91,6 +91,16 @@ class ClickTest(unittest.TestCase):
         got = clicks(left, right)
         self.assertEqual(len(got), 1)
         self.assertAlmostEqual(got[0], 30000 / RATE, delta=2 / RATE)
+
+    def test_a_click_is_as_big_as_its_largest_second_difference_in_db_from_full_scale(self):
+        # An impulse of n in silence has second differences n, -2n and n.
+        for size, db in ((1000, 20 * math.log10(2000 / 32768)), (100, 20 * math.log10(200 / 32768))):
+            x = [0] * RATE
+            x[RATE // 2] = size
+            with self.subTest(size=size):
+                got = audio_clicks.analyse(rec(x), 0).clicks
+                self.assertEqual(len(got), 1)
+                self.assertAlmostEqual(got[0].db, db)
 
     def test_detections_under_1_ms_apart_are_one_click(self):
         for apart, want in ((20, 1), (100, 2)):
@@ -151,7 +161,7 @@ class AnalyseTest(unittest.TestCase):
         report = audio_clicks.analyse(rec(x), 0.5)
         self.assertEqual(report.start, 0.5)
         self.assertEqual(len(report.clicks), 1)
-        self.assertAlmostEqual(report.clicks[0], 0.8, delta=2 / RATE)
+        self.assertAlmostEqual(report.clicks[0].at, 0.8, delta=2 / RATE)
 
     def test_period_counts_clicks_on_block_joins_beside_what_chance_would_put_there(self):
         x = [0] * RATE
@@ -239,7 +249,7 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out.splitlines(), [
             f"{self.path}: 1.00 s, 48000 Hz, 2 channels, from 0.00 s",
-            "clicks   1 (60.0 a minute)", "  0.625 s",
+            "clicks   1 (60.0 a minute)", "  0.625 s, -0.8 dB",
             "gaps     0",
             "clipped  0 runs, 0 samples"])
 
@@ -262,7 +272,7 @@ class MainTest(unittest.TestCase):
         raw = write_file(self.path.parent, "aid.raw", self.path.read_bytes()[44:])
         _, out, _ = run_main(audio_clicks.main, str(raw), "--raw", "32000")
         self.assertEqual(out.splitlines()[:3], [f"{raw}: 1.50 s, 32000 Hz, 2 channels, from 0.00 s",
-                                                "clicks   1 (40.0 a minute)", "  0.937 s"])
+                                                "clicks   1 (40.0 a minute)", "  0.937 s, -0.8 dB"])
 
     def test_json_has_the_whole_result(self):
         code, out, _ = run_main(audio_clicks.main, str(self.path), "--json")
@@ -270,7 +280,7 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual((got["seconds"], got["rate"], got["channels"], got["gaps"], got["clipped"]),
                          (1.0, RATE, 2, [], []))
-        self.assertEqual(len(got["clicks"]), 1)
+        self.assertEqual(list(got["clicks"][0]), ["at", "db"])
 
     def test_bad_input_exits_2_naming_it(self):
         for argv, msg in (([str(self.path) + "x"], str(self.path) + "x"),

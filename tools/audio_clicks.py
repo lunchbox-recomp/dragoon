@@ -11,7 +11,8 @@ ring. Prints its length, then three counts, each with the times it was found at:
   clicks   a sample that breaks from the waveform around it: its second difference is over
            8 times the RMS second difference of the 5 ms either side, and at least 128. A
            splice, such as a skip in the audio ring, shows as one. Detections less than 1 ms
-           apart, on any channel, are one click.
+           apart, on any channel, are one click. Each is given with its size, the largest
+           second difference among them in dB from full scale (32,768).
   gaps     5 ms or more of digital silence on every channel, starting straight after sound
            (over 300 RMS on some channel in the 5 ms before). A dropout shows as one, and
            usually clicks at either edge too. A sound that fades out first doesn't.
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import wave
 from array import array
@@ -59,6 +61,12 @@ class Recording:
     @property
     def frames(self) -> int:
         return len(self.channels[0])
+
+
+@dataclass
+class Click:
+    at: float
+    db: float
 
 
 @dataclass
@@ -94,7 +102,7 @@ class Report:
     rate: int
     channels: int
     start: float
-    clicks: list[float]
+    clicks: list[Click]
     gaps: list[Gap]
     clipped: list[Clip]
     joins: Joins | None = None
@@ -140,9 +148,10 @@ def read_marks(path: Path) -> list[int]:
     return marks
 
 
-def click_samples(x: array, rate: int) -> list[int]:
-    """Indices of the samples whose second difference stands out from the CONTEXT_MS either
-    side, leaving out the two samples next to it, which a click disturbs too."""
+def click_samples(x: array, rate: int) -> list[tuple[int, int]]:
+    """(index, size of the second difference) of the samples whose second difference stands
+    out from the CONTEXT_MS either side, leaving out the two samples next to it, which a click
+    disturbs too."""
     d = [c - 2 * b + a for a, b, c in zip(x, x[1:], x[2:])]  # d[i] is centred on x[i + 1]
     sums = [0, *accumulate(v * v for v in d)]
     w = rate * CONTEXT_MS // 1000
@@ -155,19 +164,21 @@ def click_samples(x: array, rate: int) -> list[int]:
         count = (hi - lo) - (near_hi - near_lo)
         energy = sums[hi] - sums[lo] - (sums[near_hi] - sums[near_lo])
         if count and v * v * count > CLICK_RATIO * CLICK_RATIO * energy:
-            found.append(i + 1)
+            found.append((i + 1, abs(v)))
     return found
 
 
-def merge(indices: list[int], within: int) -> list[int]:
-    """The first index of each run whose neighbours are under `within` apart."""
-    starts: list[int] = []
+def merge(found: list[tuple[int, int]], within: int) -> list[tuple[int, int]]:
+    """(first index, largest size) of each run whose neighbours are under `within` apart."""
+    runs: list[tuple[int, int]] = []
     last = None
-    for i in sorted(indices):
+    for i, size in sorted(found):
         if last is None or i - last >= within:
-            starts.append(i)
+            runs.append((i, size))
+        else:
+            runs[-1] = (runs[-1][0], max(runs[-1][1], size))
         last = i
-    return starts
+    return runs
 
 
 def gap_runs(rec: Recording) -> list[tuple[int, int]]:
@@ -234,11 +245,13 @@ def analyse(rec: Recording, start_s: float, period: int = 0, marks: list[int] | 
     def at(i: int) -> float:
         return (skip + i) / rec.rate
 
-    clicks = merge([i for ch in part.channels for i in click_samples(ch, rec.rate)],
-                   rec.rate * MERGE_MS // 1000)
+    found = merge([f for ch in part.channels for f in click_samples(ch, rec.rate)],
+                  rec.rate * MERGE_MS // 1000)
+    clicks = [i for i, _ in found]
     clips = sorted(r for ch in part.channels for r in clip_runs(ch))
     return Report(seconds=rec.frames / rec.rate, rate=rec.rate, channels=len(rec.channels),
-                  start=skip / rec.rate, clicks=[at(i) for i in clicks],
+                  start=skip / rec.rate,
+                  clicks=[Click(at(i), 20 * math.log10(size / -FULL_SCALE[0])) for i, size in found],
                   gaps=[Gap(at(s), n * 1000 / rec.rate) for s, n in gap_runs(part)],
                   clipped=[Clip(at(s), n) for s, n in clips],
                   joins=on_joins([skip + i for i in clicks], period) if period else None,
@@ -251,7 +264,7 @@ def print_report(path: Path, r: Report, limit: int) -> None:
     minutes = (r.seconds - r.start) / 60
     sections = (
         ("clicks", f"{len(r.clicks)} ({len(r.clicks) / minutes:.1f} a minute)",
-         [f"{t:.3f} s" for t in r.clicks]),
+         [f"{c.at:.3f} s, {c.db:.1f} dB" for c in r.clicks]),
         ("gaps", f"{len(r.gaps)}", [f"{g.at:.3f} s, {g.ms:.1f} ms" for g in r.gaps]),
         ("clipped", f"{len(r.clipped)} runs, {sum(c.samples for c in r.clipped)} samples",
          [f"{c.at:.3f} s, {c.samples} samples" for c in r.clipped]),
