@@ -5,6 +5,7 @@ build directory at gcn-recomp `67a7e30`, and the game was run at `7d30377`. The 
 numbers are from `fda6926`. The controller row is from `25c4f26`, where the five frame-hash
 routes also pass. The audio row is from gcn-recomp `bf31b7b` and its click counts from
 `fd1f6a8` and `e6ea431`, where the five frame-hash routes and the five audio-hash routes pass.
+Both sets pass again at `b848158`, after the review fixes.
 
 | Feature | Status | Note |
 |---|---|---|
