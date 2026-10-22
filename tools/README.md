@@ -88,7 +88,7 @@ tools/probe.sh title-wav 90 tests/routes/title.txt 100000 --real-time GCN_WAV=ou
 tools/audio_clicks.py build/probe/title-wav/out.wav --from 5
 ```
 
-The game runs inside the probe directory, so a relative `GCN_WAV` path lands there. Use `--real-time`, because under `--fast` the game makes sound faster than the device takes it. Under probe.sh the device is SDL's dummy driver, which takes sound on a millisecond timer instead of a sound card's clock. In one 90-second run it took 81.7 s of sound, so the audio ring cut back about once a second and most of the clicks in the recording were those cuts. `GCN_AIDWAV` (below) records the game's sound before the ring. The recording is the game's own sound, so it stays in `build/probe/` and is never committed. `--list N` caps the times printed for each, and `--json` prints the whole result.
+The game runs inside the probe directory, so a relative `GCN_WAV` path lands there. Use `--real-time`, because under `--fast` the game makes sound faster than the device takes it. Under probe.sh the device is SDL's dummy driver, and gcn-recomp pulls the sound itself at a sound card's pace under it, so the recording is what a sound card would get. `GCN_AIDWAV` (below) records the game's sound before the audio ring. The recording is the game's own sound, so it stays in `build/probe/` and is never committed. `--list N` caps the times printed for each, and `--json` prints the whole result.
 
 `GCN_AIDWAV=<path>` records the DMA's own blocks instead, before the audio ring touches them, as headerless 16-bit stereo at 32 kHz. `--raw 32000` reads that. `--period 160` also counts the clicks within 2 samples of a multiple of 160 samples (the DMA's 5 ms block) and how many would land there by chance.
 

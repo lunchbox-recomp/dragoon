@@ -4,7 +4,7 @@ What's true of Dragoon today, measured on one machine. Build numbers are from a 
 build directory at gcn-recomp `67a7e30`, and the game was run at `7d30377`. The four-player
 numbers are from `fda6926`. The controller row is from `25c4f26`, where the five frame-hash
 routes also pass. The audio row is from gcn-recomp `bf31b7b` and its click counts from
-`fd1f6a8`, where the five frame-hash routes and the five audio-hash routes pass.
+`fd1f6a8` and `e6ea431`, where the five frame-hash routes and the five audio-hash routes pass.
 
 | Feature | Status | Note |
 |---|---|---|
@@ -184,20 +184,32 @@ with `--raw 32000 --period 160` for the DMA blocks.
 
 Nine of the 19 left come in threes at 2.33, 5.34 and 15.75 s, when the route's three A
 presses play the menu's sounds. The 5 ms gap at 15.74 s is the opening movie being skipped.
-The device's extra clicks are the audio ring's cuts. A third run at `3f5da1e`, with
+The nine are 40 to 44 dB under full scale and the same at each press. The other ten are 18
+to 38 dB under.
+
+The device's extra clicks were the audio ring's cuts. A third run at `3f5da1e`, with
 `GCN_AXSTATS=1` added, logged each time the ring held over 100 ms more than its cushion and
 cut back to it. Under probe.sh the device is SDL's dummy driver, and it took 81.7 s of sound
 while the DMA delivered 89.2 s, so the ring cut 75 times, about 100 ms each. 56 of the
 run's 79 device clicks fell within 2 samples of a cut (`--marks`, 0.0 by chance). The
-others in its first 15 seconds match the DMA's own clicks, later by the ring's delay. Under
-the dummy driver only the DMA's blocks measure the game's own clicks.
+others in its first 15 seconds match the DMA's own clicks, later by the ring's delay.
+
+At `e6ea431` gcn-recomp pulls the sound itself at a sound card's pace under the dummy
+driver, and since `3ae8463` the ring's cuts and dropouts are fades instead of steps. A run
+there made no cuts and no underruns, with the ring at its cushion. Its device stream had 22
+clicks and its DMA blocks 19. The extra few are the same sharp onsets as the DMA's, judged
+at 48 kHz instead of 32. One device click at 13.01 s is a rise of 2,522 in one sample in
+the DMA's blocks, under the threshold there.
 
 Not done or not checked:
 
 - The low-pass filter and polyphase resampling (`audio.md`).
 - It crackled the one time it was listened to, before the type 2 fix. Nothing has been
   compared with recordings from a real console.
-- How often the ring cuts with a real sound card, and whether a cut can be heard there.
+- How often the ring cuts or runs dry with a real sound card. Either is a fade now, checked
+  on a tone by gcn-recomp's `test_audio_ring` and not by ear.
+- Whether the ten clicks during the attract demo are in the game's own sound. A capture of
+  the same scenes from Dolphin would tell.
 - No game on the 2001 ucode ran, so that layout's path is untested here beyond the
   `GCN_AX_LAYOUT=2001` run.
 - One machine, one macOS version.
