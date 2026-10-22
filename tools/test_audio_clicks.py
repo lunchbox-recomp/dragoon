@@ -193,6 +193,65 @@ class AnalyseTest(unittest.TestCase):
             audio_clicks.analyse(rec([0] * RATE), 2)
 
 
+class AnalyseLongTest(unittest.TestCase):
+    """analyse_long must find what one pass finds, with every event near a part's edge."""
+
+    def recording(self) -> Recording:
+        noise = random.Random(7)
+        left = [a + noise.randint(-300, 300) for a in tone(330, 1, 6000)]
+        right = [a + noise.randint(-300, 300) for a in tone(500, 1, 6000)]
+        for i in (4799, 4800, 4801, 9597, 14403, 19200 + 500):  # parts of 4800 frames
+            left[i] += 9000
+        for ch in (left, right):
+            ch[12000:20500] = [0] * 8500  # a gap across two part edges
+            ch[24000:24400] = [0] * 400   # one that starts on an edge
+        left[28790:28812] = [32767] * 22  # a clipped run across an edge
+        right[33598:33600] = [-32768] * 2  # one that ends on an edge
+        right[38399:38401] = [32767] * 2  # one that straddles it
+        return rec(left, right)
+
+    def test_finds_what_one_pass_finds(self):
+        r = self.recording()
+        whole = audio_clicks.analyse(r, 0)
+        self.assertGreater(len(whole.clicks), 4)
+        self.assertEqual(len(whole.gaps), 2)
+        self.assertEqual(len(whole.clipped), 3)
+        for part_s in (0.1, 0.0371, 0.25, 5):
+            with self.subTest(part_s=part_s):
+                self.assertEqual(audio_clicks.analyse_long(r, part_s), whole)
+
+    def test_a_sample_near_a_parts_end_is_judged_on_the_context_past_it(self):
+        # An impulse 5 samples before the edge at 9600 stands out from silence, but a burst
+        # 220 to 236 samples after it is inside its 5 ms of context and drowns it out.
+        x = [0] * RATE
+        x[9595] = 2000
+        x[9820:9836] = [3000 if i % 2 else -3000 for i in range(16)]
+        whole = audio_clicks.analyse(rec(x), 0)
+        self.assertNotIn(9595, [round(c.at * RATE) for c in whole.clicks])
+        self.assertEqual(audio_clicks.analyse_long(rec(x), 0.1), whole)
+
+    def test_follows_a_gap_and_a_clipped_run_to_their_ends(self):
+        r = self.recording()
+        got = audio_clicks.analyse_long(r, 0.1)
+        self.assertAlmostEqual(got.gaps[0].ms, 8500 / 48)
+        self.assertEqual(got.clipped[0].samples, 22)
+
+    def test_noise_with_random_events_matches_at_any_part_size(self):
+        rnd = random.Random(3)
+        x = [rnd.randint(-2000, 2000) for _ in range(RATE)]
+        for _ in range(40):
+            x[rnd.randrange(RATE)] += rnd.choice((-1, 1)) * rnd.randint(5000, 20000)
+        for _ in range(6):
+            at, length = rnd.randrange(1000, RATE - 2000), rnd.randint(100, 1500)
+            x[at:at + length] = [0] * length
+        x = [max(-32768, min(32767, v)) for v in x]
+        self.assertEqual(len(x), RATE)
+        whole = audio_clicks.analyse(rec(x), 0)
+        for part_s in (0.013, 0.1, 0.33):
+            with self.subTest(part_s=part_s):
+                self.assertEqual(audio_clicks.analyse_long(rec(x), part_s), whole)
+
+
 class ReadTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

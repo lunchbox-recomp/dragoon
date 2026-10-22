@@ -54,6 +54,7 @@ GAP_MS = 5           # the shortest silence that's a gap, and the stretch before
 GAP_LEVEL = 300      # the RMS the stretch before a silence must be over
 JOIN_SLACK = 2       # how near a join or a mark a click must be to count as on it
 FULL_SCALE = (-32768, 32767)
+PART_S = 30          # how much of a recording analyse_long works on at once
 
 
 @dataclass
@@ -260,6 +261,49 @@ def analyse(rec: Recording, start_s: float, period: int = 0, marks: list[int] | 
                   joins=on_joins([skip + i for i in clicks], period) if period else None,
                   marks=None if marks is None else on_marks(
                       [skip + i for i in clicks], [m for m in marks if skip <= m < rec.frames], part.frames))
+
+
+def analyse_long(rec: Recording, part_s: float = PART_S) -> Report:
+    """What analyse(rec, 0) finds, worked out part_s seconds at a time. One pass holds every
+    sample's second difference as a Python int, about 5 MB a second of stereo, so an hour's
+    session would need gigabytes. Each part is read with enough of its neighbours that every
+    sample in it is judged on the same context as in one pass, and a gap or a clipped run that
+    starts in a part and goes on past it is followed to its end."""
+    n, rate, chans = rec.frames, rec.rate, rec.channels
+    part = max(1, round(part_s * rate))
+    margin = rate * CONTEXT_MS // 1000 + 3  # a click's context, its two neighbours and the sample itself
+    need = rate * GAP_MS // 1000
+    found: list[tuple[int, int]] = []
+    gaps: list[tuple[int, int]] = []
+    clips: list[tuple[int, int]] = []
+    for a in range(0, n, part):
+        b = min(n, a + part)
+        lo, hi = max(0, a - margin), min(n, b + margin)
+        for ch in chans:
+            found += [(lo + i, size) for i, size in click_samples(ch[lo:hi], rate) if a <= lo + i < b]
+        # A gap's run must start in the part, with the stretch before it in hand.
+        lo, hi = max(0, a - need - 1), min(n, b + need)
+        for s, length in gap_runs(Recording(rate, [ch[lo:hi] for ch in chans])):
+            if a <= lo + s < b:
+                end = lo + s + length
+                if end == hi:  # it runs to the end of what was read, so follow it
+                    while end < n and not any(ch[end] for ch in chans):
+                        end += 1
+                gaps.append((lo + s, end - lo - s))
+        for ch in chans:
+            for s, length in clip_runs(ch[a:min(n, b + 1)]):
+                start = a + s
+                if start >= b or (s == 0 and a > 0 and ch[a - 1] == ch[a]):
+                    continue  # the next part's, or one that started in the last
+                end = start + length
+                while end < n and ch[end] == ch[start]:
+                    end += 1
+                clips.append((start, end - start))
+    merged = merge(found, rate * MERGE_MS // 1000)
+    return Report(seconds=n / rate, rate=rate, channels=len(chans), start=0.0,
+                  clicks=[Click(i / rate, 20 * math.log10(size / -FULL_SCALE[0])) for i, size in merged],
+                  gaps=[Gap(s / rate, length * 1000 / rate) for s, length in gaps],
+                  clipped=[Clip(s / rate, length) for s, length in sorted(clips)])
 
 
 def print_report(path: Path, r: Report, limit: int) -> None:

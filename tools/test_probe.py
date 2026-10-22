@@ -109,6 +109,40 @@ class ProbeTreeTest(unittest.TestCase):
         args = self.game_args()
         self.assertEqual([a for a in args if a == "" or a.startswith("--log")], [])
 
+    def test_a_run_keeps_no_input_log_unless_it_is_a_session(self):
+        self.assertIn("--no-input-log", self.game_args())
+        self.assertNotIn("--no-input-log", self.game_args("GCN_SESSION=/somewhere/session"))
+        self.assertIn("--no-input-log", self.game_args("GCN_SESSION="))
+
+    def test_replay_and_exit_after_reach_the_windowed_game(self):
+        args = self.game_args("--replay=/somewhere/inputs", "--exit-after=900")
+        self.assertIn("--replay=/somewhere/inputs", args)
+        self.assertIn("--exit-after=900", args)
+        self.assertEqual([a for a in self.game_args() if a.startswith(("--replay", "--exit-after"))], [])
+
+    def test_exit_after_must_be_a_positive_whole_number(self):
+        self.add_game("dragoon", "")
+        for bad in ("--exit-after=", "--exit-after=0", "--exit-after=9x", "--replay="):
+            with self.subTest(bad=bad):
+                r = probe(NAME, "1", "", "60", bad, script=self.script)
+                self.assertEqual(r.returncode, 2)
+                self.assertIn(bad, r.stderr)
+        self.assertFalse((self.root / "build" / "probe").exists())
+
+    def test_replay_and_exit_after_with_bench_exit_2(self):
+        self.add_game("dragoon_bench", "echo 'whole run'\n")
+        for setting in ("--replay=/somewhere/inputs", "--exit-after=900"):
+            with self.subTest(setting=setting):
+                r = probe(NAME, "1", "", "60", setting, "--bench", script=self.script)
+                self.assertEqual(r.returncode, 2)
+                self.assertIn(setting.split("=")[0] + " needs a windowed run", r.stderr)
+        self.assertFalse((self.root / "build" / "probe").exists())
+
+    def test_a_game_that_exits_ends_the_run_early(self):
+        self.add_game("dragoon", "exit 0\n")
+        r = subprocess.run([str(self.script), NAME, "8"], capture_output=True, text=True, timeout=6)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

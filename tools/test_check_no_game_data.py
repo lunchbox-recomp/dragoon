@@ -18,6 +18,12 @@ class ViolationsTest(unittest.TestCase):
         paths = ["build/gen/recomp_0.c", "build-nodisc/x.o", "saves/memcard_a.raw"]
         self.assertEqual(check_no_game_data.violations(paths), paths)
 
+    def test_playtest_sessions_fail(self):
+        session = "build/playtest/20261022-160000/"
+        paths = [session + name for name in ("session.json", "out.wav", "aid.raw", "aid.raw.txt", "stdout.txt",
+                                             "inputs/inputs.txt", "inputs/memcard_a.raw", "run-2/out.wav")]
+        self.assertEqual(check_no_game_data.violations(paths), paths)
+
     def test_anything_else_in_rom_fails(self):
         self.assertEqual(check_no_game_data.violations(["rom/notes.txt"]), ["rom/notes.txt"])
 
