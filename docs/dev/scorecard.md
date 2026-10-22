@@ -210,8 +210,10 @@ click, gap, clipping and peak total moved the same way from baseline to current 
 - A click here is any sharp edge, the game's own sounds included. The counts say where to look,
   not what a listener hears.
 - `audio_clicks.py` counts a clipped run at 32,767 or -32,768. The mixer's clamp stops at
-  -32,767, so the mixer stage's negative clipping isn't in its clipped runs. The clamp count
-  from `[ax] bus` has both signs.
+  -32,767, so the mixer stage's negative clipping isn't in its clipped runs. The device stage
+  plays those samples through the ring, which never makes one larger, so its clipped runs miss
+  negative clipping too. Only the music mix clamps at -32,768. The clamp count from `[ax] bus`
+  has both signs.
 - Underruns are as of each run's last `[ring] fill` line, which comes every 400 pulls of the
   device.
 - Nobody listened to any of it, and nothing was compared with a real console. One machine, an
