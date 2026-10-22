@@ -38,6 +38,14 @@ class ReadTest(unittest.TestCase):
                     source_info.read(path)
                 self.assertIn(str(path), str(caught.exception))
 
+    def test_write_round_trips_and_refuses_a_bad_field(self):
+        path = self.dir / source_info.NAME
+        source_info.write(path, GOOD)
+        self.assertEqual(source_info.read(path), GOOD)
+        with self.assertRaises(ValueError):
+            source_info.write(self.dir / "other.json", {**GOOD, "disc_id": "x"})
+        self.assertFalse((self.dir / "other.json").exists())
+
     def test_a_missing_file_raises_os_error(self):
         with self.assertRaises(OSError):
             source_info.read(self.dir / source_info.NAME)

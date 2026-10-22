@@ -165,7 +165,7 @@ Which routes does the repository play? `tests/hashes/manifest.txt` lists them, a
 
 ## source_info.py
 
-What does a source snapshot hold? Its `source-info.json` names the Dragoon and gcn-recomp commits and the disc they build, as `disc_id` and `dol_sha1`. source_info.py reads that file and refuses one with a field missing or malformed, naming the file. warm_shaders.py reads the engine commit through it. It has no command line.
+What does a source snapshot hold? Its `source-info.json` names the Dragoon and gcn-recomp commits and the disc they build, as `disc_id` and `dol_sha1`. source_info.py reads and writes that file, and refuses one with a field missing or malformed, naming the file. export_source.py writes it, and warm_shaders.py reads the engine commit through it. It has no command line.
 
 ## probe_dirs.py
 
@@ -188,6 +188,22 @@ It prints one line per path and exits 1 if it found any, so it can run in CI. It
 ```
 tools/check_no_game_data.py
 ```
+
+## export_source.py
+
+What source does the launcher build? export_source.py writes a snapshot of Dragoon's HEAD, with gcn-recomp in `gcn-recomp/` at the commit HEAD pins, as `git archive` gives them. Untracked and ignored files such as `rom/game.iso`, `build/` and `saves/` never reach it. Nor does git history. It adds `source-info.json` (see source_info.py) and `source-manifest.txt`, which lists every other file as a `<sha256>  <path>` line sorted by path.
+
+```
+tools/export_source.py /tmp/dragoon-source
+```
+
+It writes nothing and exits 2 when:
+
+- a tracked file in either repository has uncommitted changes. Untracked files don't count, since `git archive` leaves them out anyway
+- gcn-recomp is checked out at another commit than HEAD pins, or isn't checked out
+- OUT isn't empty
+
+`--repo` names a checkout other than the one holding the tool. A missing OUT is made.
 
 ## The engine's own tools
 
