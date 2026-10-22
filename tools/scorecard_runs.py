@@ -60,29 +60,29 @@ def check_build(build: Build) -> None:
         raise ValueError(f"{game}: not built")
 
 
-def seconds(route: Route) -> int:
-    """The route's last checkpoint at the game's 60 frames a second, plus MARGIN_S."""
-    return math.ceil(max(route.required) / 60) + MARGIN_S
+def seconds(route: Route, margin: int = MARGIN_S) -> int:
+    """The route's last checkpoint at the game's 60 frames a second, plus MARGIN seconds."""
+    return math.ceil(max(route.required) / 60) + margin
 
 
 def run_for(build: Build, route: Route) -> Run:
     return Run(build.directory / "probe" / f"scorecard-{route.name}")
 
 
-def probe_args(build: Build, route: Route) -> list[str]:
+def probe_args(build: Build, route: Route, margin: int = MARGIN_S) -> list[str]:
     """Dumps one frame, the route's last checkpoint, so the run shows it got there."""
-    run = run_for(build, route)
-    return [str(build.probe), run.directory.name, str(seconds(route)), str(route_file(route.name)),
-            str(max(route.required)), "--real-time", f"GCN_WAV={run.device}",
+    run, last = run_for(build, route), max(route.required)
+    return [str(build.probe), run.directory.name, str(seconds(route, margin)), str(route_file(route.name)),
+            str(last), "--real-time", f"GCN_DUMP_RANGE={last}", f"GCN_WAV={run.device}",
             f"GCN_AIDWAV={run.mixer}", "GCN_AXSTATS=1", *route.extra]
 
 
-def play(build: Build, route: Route) -> Run:
+def play(build: Build, route: Route, margin: int = MARGIN_S) -> Run:
     run = run_for(build, route)
     if run.directory.exists():
         trash(run.directory)  # a blank memory card; the last run stays after this one
     try:
-        subprocess.run(probe_args(build, route), check=True, cwd=build.clone, stdout=subprocess.DEVNULL,
+        subprocess.run(probe_args(build, route, margin), check=True, cwd=build.clone, stdout=subprocess.DEVNULL,
                        env={**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
     except subprocess.CalledProcessError as e:
         raise ValueError(f"{build.label} {route.name}: probe.sh exited {e.returncode}") from None

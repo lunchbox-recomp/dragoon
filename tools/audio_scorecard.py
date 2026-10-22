@@ -2,14 +2,16 @@
 """How does each build's sound measure, route by route? Clicks, gaps and clipping before and
 after the audio ring, with nobody listening.
 
-Usage: audio_scorecard.py LABEL=BUILD_DIR [LABEL=BUILD_DIR ...] [--routes R,R] [--no-run] [--json]
+Usage: audio_scorecard.py LABEL=BUILD_DIR [LABEL=BUILD_DIR ...] [--routes R,R] [--margin S]
+                          [--no-run] [--json]
 
 BUILD_DIR is a Dragoon clone's build/ directory, and LABEL names it in the tables. Every route
 in tests/hashes/manifest.txt (or the ones --routes names) plays on each build, a route at a
 time across the builds, through that clone's own tools/probe.sh: a hidden window, SDL's dummy
 audio driver, --real-time, GCN_AXSTATS=1, and the route file and manifest settings from this
-clone. A run lasts the route's last checkpoint at 60 frames a second plus 15 s, and dumps that
-one frame to show it got there. It goes to <clone>/build/probe/scorecard-ROUTE/, and an earlier
+clone. A run lasts the route's last checkpoint at 60 frames a second plus --margin seconds (15
+by default), and dumps that one frame to show it got there. It goes to
+<clone>/build/probe/scorecard-ROUTE/, and an earlier
 run there is moved to the Trash first, so the game starts from a blank memory card and an empty
 shader cache. --no-run measures the runs already there instead.
 
@@ -42,7 +44,7 @@ from pathlib import Path
 
 from routes import MANIFEST, Route, select_routes
 from scorecard_measure import Score, Stage, measure, total
-from scorecard_runs import Build, check_build, finished, play, seconds
+from scorecard_runs import MARGIN_S, Build, check_build, finished, play, seconds
 
 NOT_LOGGED, NOT_RECORDED = "not logged", "not recorded"
 
@@ -111,8 +113,10 @@ def table(title: str, labels: list[str], scores: list[Score]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def route_title(route: Route) -> str:
-    return f"{route.name}: {seconds(route)} s a run, to frame {max(route.required)}"
+def route_title(route: Route, margin: int | None) -> str:
+    """With no margin, the runs were already there, and how long they played isn't known."""
+    played = "" if margin is None else f"{seconds(route, margin)} s a run, "
+    return f"{route.name}: {played}to frame {max(route.required)}"
 
 
 def as_json(builds: list[Build], routes: list[Route], scores: dict[str, list[Score]]) -> str:
@@ -129,9 +133,12 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("builds", nargs="+", metavar="LABEL=BUILD_DIR")
     ap.add_argument("--routes", default="", help="comma-separated route names (default: every route)")
+    ap.add_argument("--margin", type=int, default=MARGIN_S, help="seconds played past the last checkpoint")
     ap.add_argument("--no-run", action="store_true", help="measure the runs already in build/probe/")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
+    if args.margin < 0:
+        ap.error("--margin can't be negative")
     try:
         builds = parse_builds(args.builds)
         for b in builds:
@@ -146,10 +153,11 @@ def main(argv: list[str]) -> int:
         scores: dict[str, list[Score]] = {b.label: [] for b in builds}
         for route in routes:
             for b in builds:
-                run = finished(b, route) if args.no_run else play(b, route)
+                run = finished(b, route) if args.no_run else play(b, route, args.margin)
                 scores[b.label].append(measure(run.log, run.mixer, run.device))
             if not args.json:
-                print(table(route_title(route), labels, [scores[label][-1] for label in labels]), flush=True)
+                print(table(route_title(route, None if args.no_run else args.margin), labels,
+                            [scores[label][-1] for label in labels]), flush=True)
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
         return 2

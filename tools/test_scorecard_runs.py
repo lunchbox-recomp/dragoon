@@ -60,14 +60,22 @@ class SecondsTest(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertEqual(scorecard_runs.seconds(Route("r", 20, 60, required, [])), want)
 
+    def test_a_margin_replaces_the_15(self):
+        self.assertEqual(scorecard_runs.seconds(Route("r", 20, 60, [60, 960], []), 75), 91)
+
 
 class ProbeArgsTest(Clone):
     def test_a_real_time_run_of_the_route_recording_both_stages_with_absolute_paths(self):
         self.assertEqual(scorecard_runs.probe_args(self.build, RACE), [
             str(self.clone / "tools" / "probe.sh"), "scorecard-air-ride-race", "115",
-            str(routes.route_file("air-ride-race")), "6000", "--real-time",
+            str(routes.route_file("air-ride-race")), "6000", "--real-time", "GCN_DUMP_RANGE=6000",
             f"GCN_WAV={self.out / 'device.wav'}", f"GCN_AIDWAV={self.out / 'mixer.raw'}",
             "GCN_AXSTATS=1", "--pads=4"])
+
+    def test_a_margin_lengthens_the_run_and_still_dumps_one_frame(self):
+        args = scorecard_runs.probe_args(self.build, RACE, 60)
+        self.assertEqual(args[2], "160")
+        self.assertEqual(args[4:7], ["6000", "--real-time", "GCN_DUMP_RANGE=6000"])
 
     def test_the_route_file_is_this_clones_whatever_the_build(self):
         self.assertEqual(scorecard_runs.probe_args(self.build, RACE)[3],
@@ -75,13 +83,13 @@ class ProbeArgsTest(Clone):
 
 
 class PlayTest(Clone):
-    def play(self, run: mock.Mock) -> mock.Mock:
+    def play(self, run: mock.Mock, *margin: int) -> mock.Mock:
         self.calls = mock.Mock()
         trash = self.calls.trash
         self.calls.attach_mock(run, "run")
         with (mock.patch.object(scorecard_runs, "trash", trash),
               mock.patch.object(scorecard_runs.subprocess, "run", run)):
-            self.result = scorecard_runs.play(self.build, RACE)
+            self.result = scorecard_runs.play(self.build, RACE, *margin)
         return trash
 
     def reaches(self, frame: int = 6000):
@@ -97,6 +105,11 @@ class PlayTest(Clone):
         self.assertEqual(run.call_args.kwargs["cwd"], self.clone)
         self.assertEqual(run.call_args.kwargs["env"]["SDL_AUDIO_DRIVER"], "dummy")
         self.assertTrue(run.call_args.kwargs["check"])
+
+    def test_plays_for_the_margin_it_is_given(self):
+        run = self.reaches()
+        self.play(run, 60)
+        self.assertEqual(run.call_args.args[0], scorecard_runs.probe_args(self.build, RACE, 60))
 
     def test_returns_the_runs_files(self):
         self.play(self.reaches())

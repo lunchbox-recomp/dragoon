@@ -73,7 +73,7 @@ class MainTest(unittest.TestCase):
         self.scores = {("base", "title"): score(10), ("now", "title"): score(2),
                        ("base", "menu"): score(20, 90), ("now", "menu"): score(1, 90)}
 
-        def run(build, route):
+        def run(build, route, *margin):
             self.order.append((build.label, route.name))
             return Run(self.dir / build.label / route.name)
 
@@ -110,9 +110,25 @@ class MainTest(unittest.TestCase):
         self.assertRegex(total, r"mixer clicks a minute +15.0 +1.5\n")
 
     def test_no_run_measures_the_runs_already_there(self):
-        self.assertEqual(self.main("--no-run")[0], 0)
+        code, out, _ = self.main("--no-run")
+        self.assertEqual(code, 0)
         self.play.assert_not_called()
         self.assertEqual(len(self.finished.call_args_list), 4)
+        self.assertIn("title: to frame 960\n", out)
+
+    def test_runs_play_15_s_past_the_last_checkpoint_unless_a_margin_is_given(self):
+        self.main()
+        self.assertEqual({c.args[2] for c in self.play.call_args_list}, {15})
+        self.play.reset_mock()
+        _, out, _ = self.main("--margin", "75")
+        self.assertEqual({c.args[2] for c in self.play.call_args_list}, {75})
+        self.assertIn("title: 91 s a run, to frame 960", out)
+
+    def test_a_negative_margin_exits_2_before_anything_plays(self):
+        code, _, err = self.main("--margin", "-1")
+        self.assertEqual(code, 2)
+        self.assertIn("--margin can't be negative", err)
+        self.play.assert_not_called()
 
     def test_routes_picks_routes_in_manifest_order(self):
         self.main("--routes", "menu")
