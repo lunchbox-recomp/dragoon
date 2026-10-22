@@ -88,13 +88,21 @@ tools/probe.sh title-wav 90 tests/routes/title.txt 100000 --real-time GCN_WAV=ou
 tools/audio_clicks.py build/probe/title-wav/out.wav --from 5
 ```
 
-The game runs inside the probe directory, so a relative `GCN_WAV` path lands there. Use `--real-time`, because under `--fast` the game makes sound faster than the device takes it. Under probe.sh the device is SDL's dummy driver, which takes sound on a millisecond timer instead of a sound card's clock, so the ring's skips and underruns can differ from a run you hear. The recording is the game's own sound, so it stays in `build/probe/` and is never committed. `--list N` caps the times printed for each, and `--json` prints the whole result.
+The game runs inside the probe directory, so a relative `GCN_WAV` path lands there. Use `--real-time`, because under `--fast` the game makes sound faster than the device takes it. Under probe.sh the device is SDL's dummy driver, which takes sound on a millisecond timer instead of a sound card's clock. In one 90-second run it took 81.7 s of sound, so the audio ring cut back about once a second and most of the clicks in the recording were those cuts. `GCN_AIDWAV` (below) records the game's sound before the ring. The recording is the game's own sound, so it stays in `build/probe/` and is never committed. `--list N` caps the times printed for each, and `--json` prints the whole result.
 
 `GCN_AIDWAV=<path>` records the DMA's own blocks instead, before the audio ring touches them, as headerless 16-bit stereo at 32 kHz. `--raw 32000` reads that. `--period 160` also counts the clicks within 2 samples of a multiple of 160 samples (the DMA's 5 ms block) and how many would land there by chance.
 
 ```
 tools/probe.sh title-aid 90 tests/routes/title.txt 100000 --real-time GCN_AIDWAV=aid.raw
 tools/audio_clicks.py build/probe/title-aid/aid.raw --raw 32000 --period 160
+```
+
+`--marks FILE` reads sample indices from a text file (one a line) and counts the clicks near one and the marks with a click near them. With `GCN_AXSTATS=1` the game prints a `[ring] cut N frames at output frame F` line each time the audio ring throws away what it has too much of, and F is an index into the `GCN_WAV` recording.
+
+```
+tools/probe.sh title-cuts 90 tests/routes/title.txt 100000 --real-time GCN_WAV=out.wav GCN_AXSTATS=1
+sed -n -E 's/^\[ring\] cut .* frame ([0-9]+)$/\1/p' build/probe/title-cuts/stdout.txt > build/probe/title-cuts/cuts.txt
+tools/audio_clicks.py build/probe/title-cuts/out.wav --marks build/probe/title-cuts/cuts.txt
 ```
 
 ## warm_shaders.py

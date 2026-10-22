@@ -165,6 +165,19 @@ class AnalyseTest(unittest.TestCase):
         x[160 * 100] = 1000
         self.assertEqual(audio_clicks.analyse(rec(x), 101 / RATE, 160).joins.on_joins, 1)
 
+    def test_marks_count_the_clicks_near_one_and_the_marks_with_a_click_beside_chance(self):
+        x = [0] * RATE
+        x[10000] = x[20000] = x[30000] = 1000
+        got = audio_clicks.analyse(rec(x), 0, marks=[40000, 10000, 20001]).marks
+        self.assertEqual(got, audio_clicks.Marks(3, 2, 2, 3 * 3 * 5 / RATE))
+        self.assertIsNone(audio_clicks.analyse(rec(x), 0).marks)
+
+    def test_marks_outside_what_is_analysed_are_left_out(self):
+        x = [0] * RATE
+        x[30000] = 1000
+        got = audio_clicks.analyse(rec(x), 0.5, marks=[10000, 30000, RATE]).marks
+        self.assertEqual(got, audio_clicks.Marks(1, 1, 1, 1 * 1 * 5 / (RATE // 2)))
+
     def test_from_past_the_end_is_refused(self):
         with self.assertRaisesRegex(ValueError, "--from 2 is past the end, 1.00 s"):
             audio_clicks.analyse(rec([0] * RATE), 2)
@@ -194,6 +207,15 @@ class ReadTest(unittest.TestCase):
         path = write_file(self.dir, "aid.raw", b"")
         with self.assertRaisesRegex(ValueError, f"{path}: no samples"):
             audio_clicks.read_raw(path, 32000)
+
+    def test_reads_marks_one_a_line_skipping_blanks_and_comments(self):
+        path = write_file(self.dir, "cuts.txt", "# where the ring cut\n100\n\n200  # second\n")
+        self.assertEqual(audio_clicks.read_marks(path), [100, 200])
+
+    def test_a_mark_that_is_not_a_sample_index_is_refused(self):
+        path = write_file(self.dir, "cuts.txt", "100\n12.5\n")
+        with self.assertRaisesRegex(ValueError, f"{path}:2: '12.5' isn't a sample index"):
+            audio_clicks.read_marks(path)
 
     def test_refuses_what_it_cannot_read(self):
         for name, path, msg in (
@@ -230,6 +252,12 @@ class MainTest(unittest.TestCase):
         self.assertEqual(out.splitlines()[-1],
                          "joins    0 of 1 clicks within 2 samples of a multiple of 160 (0.0 by chance)")
 
+    def test_marks_adds_a_line_counting_the_clicks_near_them(self):
+        marks = write_file(self.path.parent, "cuts.txt", "30000\n1000\n")
+        _, out, _ = run_main(audio_clicks.main, str(self.path), "--marks", str(marks))
+        self.assertEqual(out.splitlines()[-1], "marks    1 of 1 clicks within 2 samples of a mark "
+                                               "(0.0 by chance), 1 of 2 marks with a click")
+
     def test_raw_reads_the_file_as_stereo_at_the_rate_given(self):
         raw = write_file(self.path.parent, "aid.raw", self.path.read_bytes()[44:])
         _, out, _ = run_main(audio_clicks.main, str(raw), "--raw", "32000")
@@ -249,7 +277,8 @@ class MainTest(unittest.TestCase):
                           ([str(self.path), "--from", "5"], "past the end"),
                           ([str(self.path), "--list", "-1"], "can't be negative"),
                           ([str(self.path), "--period", "-160"], "can't be negative"),
-                          ([str(self.path), "--raw", "-1"], "can't be negative")):
+                          ([str(self.path), "--raw", "-1"], "can't be negative"),
+                          ([str(self.path), "--marks", str(self.path) + "y"], str(self.path) + "y")):
             with self.subTest(argv=argv):
                 code, _, err = run_main(audio_clicks.main, *argv)
                 self.assertEqual(code, 2)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Where does a recording of the game's output click, drop out or clip?
 
-Usage: audio_clicks.py FILE [--raw RATE] [--from S] [--list N] [--period N] [--json]
+Usage: audio_clicks.py FILE [--raw RATE] [--from S] [--list N] [--period N] [--marks F] [--json]
 
 FILE is a 16-bit PCM WAV, such as the one GCN_WAV=<path> makes of exactly what went to the
 audio device. With --raw RATE it is raw 16-bit little-endian stereo at RATE Hz instead, such
@@ -21,7 +21,9 @@ ring. Prints its length, then three counts, each with the times it was found at:
 --list N prints the times of the first N of each (default 20). --period N counts the
 clicks within 2 samples of a multiple of N samples from the start, beside the count chance
 would put there: a recording made of N-sample blocks that clicks at their joins has far
-more there than chance, and a sound's own sharp edges don't. --json prints the whole
+more there than chance, and a sound's own sharp edges don't. --marks F does the same for
+the sample indices in the text file F, one a line (# starts a comment), such as where the
+audio ring cut, and counts the marks with a click near them too. --json prints the whole
 result as JSON.
 
 Exits 0 once it has read the recording, 2 on a bad argument or a file that isn't 16-bit
@@ -34,6 +36,7 @@ import json
 import sys
 import wave
 from array import array
+from bisect import bisect_left
 from dataclasses import asdict, dataclass
 from itertools import accumulate
 from pathlib import Path
@@ -44,7 +47,7 @@ CONTEXT_MS = 5       # the stretch either side a sample is judged against
 MERGE_MS = 1         # detections closer than this are one click
 GAP_MS = 5           # the shortest silence that's a gap, and the stretch before it
 GAP_LEVEL = 300      # the RMS the stretch before a silence must be over
-JOIN_SLACK = 2       # how near a multiple of --period a click must be to count as on a join
+JOIN_SLACK = 2       # how near a join or a mark a click must be to count as on it
 FULL_SCALE = (-32768, 32767)
 
 
@@ -78,6 +81,14 @@ class Joins:
 
 
 @dataclass
+class Marks:
+    marks: int
+    clicks_on_marks: int
+    marks_with_clicks: int
+    by_chance: float
+
+
+@dataclass
 class Report:
     seconds: float
     rate: int
@@ -87,6 +98,7 @@ class Report:
     gaps: list[Gap]
     clipped: list[Clip]
     joins: Joins | None = None
+    marks: Marks | None = None
 
 
 def read_wav(path: Path) -> Recording:
@@ -114,6 +126,18 @@ def split(path: Path, raw: bytes, n: int, rate: int) -> Recording:
     if not data:
         raise ValueError(f"{path}: no samples")
     return Recording(rate, [data[c::n] for c in range(n)])
+
+
+def read_marks(path: Path) -> list[int]:
+    """Sample indices, one a line. Blank lines and what follows a # are skipped."""
+    marks = []
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        text = line.split("#")[0].strip()
+        if text and not text.isdigit():
+            raise ValueError(f"{path}:{n}: {text!r} isn't a sample index")
+        if text:
+            marks.append(int(text))
+    return marks
 
 
 def click_samples(x: array, rate: int) -> list[int]:
@@ -189,7 +213,19 @@ def on_joins(indices: list[int], period: int) -> Joins:
     return Joins(period, near, len(indices) * min(1, (2 * JOIN_SLACK + 1) / period))
 
 
-def analyse(rec: Recording, start_s: float, period: int = 0) -> Report:
+def near(i: int, points: list[int]) -> bool:
+    """Whether i is within JOIN_SLACK of one of the sorted points."""
+    k = bisect_left(points, i - JOIN_SLACK)
+    return k < len(points) and points[k] <= i + JOIN_SLACK
+
+
+def on_marks(indices: list[int], marks: list[int], frames: int) -> Marks:
+    clicks, marks = sorted(indices), sorted(marks)
+    return Marks(len(marks), sum(near(i, marks) for i in clicks), sum(near(m, clicks) for m in marks),
+                 len(clicks) * min(1, len(marks) * (2 * JOIN_SLACK + 1) / frames))
+
+
+def analyse(rec: Recording, start_s: float, period: int = 0, marks: list[int] | None = None) -> Report:
     skip = round(start_s * rec.rate)
     if skip >= rec.frames:
         raise ValueError(f"--from {start_s:g} is past the end, {rec.frames / rec.rate:.2f} s")
@@ -205,7 +241,9 @@ def analyse(rec: Recording, start_s: float, period: int = 0) -> Report:
                   start=skip / rec.rate, clicks=[at(i) for i in clicks],
                   gaps=[Gap(at(s), n * 1000 / rec.rate) for s, n in gap_runs(part)],
                   clipped=[Clip(at(s), n) for s, n in clips],
-                  joins=on_joins([skip + i for i in clicks], period) if period else None)
+                  joins=on_joins([skip + i for i in clicks], period) if period else None,
+                  marks=None if marks is None else on_marks(
+                      [skip + i for i in clicks], [m for m in marks if skip <= m < rec.frames], part.frames))
 
 
 def print_report(path: Path, r: Report, limit: int) -> None:
@@ -227,6 +265,10 @@ def print_report(path: Path, r: Report, limit: int) -> None:
     if r.joins:
         print(f"joins    {r.joins.on_joins} of {len(r.clicks)} clicks within {JOIN_SLACK} samples of a "
               f"multiple of {r.joins.period} ({r.joins.by_chance:.1f} by chance)")
+    if r.marks:
+        print(f"marks    {r.marks.clicks_on_marks} of {len(r.clicks)} clicks within {JOIN_SLACK} samples of a "
+              f"mark ({r.marks.by_chance:.1f} by chance), {r.marks.marks_with_clicks} of {r.marks.marks} "
+              f"marks with a click")
 
 
 def main(argv: list[str]) -> int:
@@ -237,13 +279,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--from", dest="start", type=float, default=0.0)
     ap.add_argument("--list", type=int, default=20)
     ap.add_argument("--period", type=int, default=0)
+    ap.add_argument("--marks", type=Path)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     if args.raw < 0 or args.start < 0 or args.list < 0 or args.period < 0:
         ap.error("--raw, --from, --list and --period can't be negative")
     try:
         rec = read_raw(args.file, args.raw) if args.raw else read_wav(args.file)
-        report = analyse(rec, args.start, args.period)
+        marks = read_marks(args.marks) if args.marks else None
+        report = analyse(rec, args.start, args.period, marks)
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
         return 2
