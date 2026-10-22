@@ -197,9 +197,23 @@ lines after boot, and boot is the `programs from cache` line's time for 222 prog
 | Checker Knights | 4,227 | 16.69 ms | 17.92 ms | 18.24 ms | 34.43 ms (6152) | 0.57 ms | 0.94 ms | 1.46 ms | 0 | 387 ms |
 
 Every course averaged 16.68 to 16.70 ms a guest frame, and 99 frames in 100 took under
-18.4 ms. Each worst guest frame over 30 ms was a single late frame, with frames near 16.7 ms
-on both sides. Its `[ft]` line shows no new texture and a front end under 0.6 ms, and no
-compile came near it, so the log doesn't say what held it up.
+18.4 ms. Seven of the eight courses had a guest frame over 30 ms, one on each of six and two
+on Machine Passage. Beanstalk Park had none.
+
+| Course | Guest frames over 30 ms from frame 3400 |
+|---|---|
+| Fantasy Meadows | 43.94 ms (5314) |
+| Celestial Valley | 41.71 ms (7359) |
+| Sky Sands | 85.51 ms (5376) |
+| Frozen Hillside | 32.52 ms (6425) |
+| Magma Flows | 40.83 ms (6053) |
+| Beanstalk Park | None. The worst was 18.97 ms |
+| Machine Passage | 34.53 ms (6936) and 38.05 ms (7583) |
+| Checker Knights | 34.43 ms (6152) |
+
+Each was a single late frame, with frames of 15.7 to 17.9 ms on both sides. Its `[ft]` line
+shows no new texture and a front end of 0.33 to 0.55 ms, and no compile came near it, so the
+log doesn't say what held it up.
 
 Four courses compiled one program each in play, at frames past where the warm-up's pass for
 that route stops (6,900 for Fantasy Meadows and 5,100 for the others). Each compile took 1.7
