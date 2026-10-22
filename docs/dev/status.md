@@ -414,7 +414,7 @@ and race routes. Each run started from a copy of the cache of one warm-up, not f
 Stalls are the frames `tools/frametime.py build/probe/NAME/stdout.txt --slow 33` lists after frame
 300. Compiles are the `[shaders] compiled program` lines, counted with `grep -c`. The boot time is
 read from the `[shaders] ... programs from cache ... in N ms` line the game prints at startup. The
-42.6 s is one warm-up timed with `/usr/bin/time -p`.
+row's earlier figure, 42.6 s at `62b114b`, was one warm-up timed with `/usr/bin/time -p`.
 Apple's own shader cache was warm from earlier runs. Whether the warm-up fills it on a fresh Mac
 wasn't checked.
 
