@@ -1,0 +1,8 @@
+# Blank memory card to an Air Ride race on Celestial Valley, one player and three CPUs.
+# air-ride-race.txt with one press on the course select. 2000 RIGHT: Celestial Valley,
+# the second course on the top row. 2200 A to 3100 START as in air-ride-race.txt.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:A:5,1600:A:5,1900:A:5,
+2000:RIGHT:5,
+2200:A:5,2500:A:5,2800:A:5,3100:START:5

@@ -12,8 +12,27 @@ the rest is joined into one script.
 | `title.txt` | The title screen | 960 |
 | `menu.txt` | The mode select menu | 1200 |
 | `air-ride-race.txt` | An Air Ride race on Fantasy Meadows, past the countdown | 4200 |
+| `air-ride-celestial-valley.txt` | An Air Ride race on Celestial Valley, past the countdown | 4200 |
+| `air-ride-sky-sands.txt` | An Air Ride race on Sky Sands, past the countdown | 4200 |
+| `air-ride-frozen-hillside.txt` | An Air Ride race on Frozen Hillside, past the countdown | 4200 |
+| `air-ride-magma-flows.txt` | An Air Ride race on Magma Flows, past the countdown | 4200 |
+| `air-ride-beanstalk-park.txt` | An Air Ride race on Beanstalk Park, past the countdown | 4200 |
+| `air-ride-machine-passage.txt` | An Air Ride race on Machine Passage, past the countdown | 4200 |
+| `air-ride-checker-knights.txt` | An Air Ride race on Checker Knights, past the countdown | 4200 |
 | `city-trial.txt` | City Trial, one player, the clock running | 3300 |
 | `city-trial-4p.txt` | City Trial, four players on ports 1 to 4, each steering its own way | 3480 |
+
+Each Air Ride course route is `air-ride-race.txt` with up to four presses on the course
+select, between frames 2000 and 2120, where the cursor starts on Fantasy Meadows. The grid
+has two rows of five.
+
+| Row | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Top | Fantasy Meadows | Celestial Valley | Sky Sands | Frozen Hillside | Magma Flows |
+| Bottom | Beanstalk Park | Machine Passage | Checker Knights | Locked | Random |
+
+The locked slot is Nebula Belt, the ninth course. A blank memory card can't pick it, so it
+has no route. `docs/dev/status.md` says what the game checks before it opens.
 
 Run one with `tools/probe.sh`, which takes a route file in place of a script.
 
@@ -40,3 +59,6 @@ frontend's loop next looked, and two runs of `city-trial.txt` showed 4:54:10 and
 on the clock at frame 3300, from different spots. The RTC starts at the host's time on
 every run that isn't a replay, but it doesn't move the start. The two runs nine minutes
 apart start in the same place.
+
+Each of the seven other course routes drew the same 70 frames, every 60th up to 4200, in a
+`tools/frame_hashes.py record` run and in the `check` run straight after it.
