@@ -2,10 +2,11 @@
 the DMA's blocks (GCN_AIDWAV), what went to the device (GCN_WAV) and the GCN_AXSTATS log."""
 from __future__ import annotations
 
+import json
 import math
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from frame_dumps import frame_files
@@ -16,6 +17,7 @@ MARGIN_S = 15  # seconds played past a route's last checkpoint
 MIXER_FILE = "mixer.raw"
 DEVICE_FILE = "device.wav"
 LOG_FILE = "stdout.txt"
+COMMITS_FILE = "commits.json"
 
 
 @dataclass
@@ -33,8 +35,20 @@ class Build:
 
 
 @dataclass
+class Commits:
+    """What a build was made of when its runs played: describe()'s text for the clone and for
+    its gcn-recomp, None outside git."""
+    dragoon: str | None
+    gcn_recomp: str | None
+
+
+@dataclass
 class Run:
     directory: Path
+
+    @property
+    def commits(self) -> Path:
+        return self.directory / COMMITS_FILE
 
     @property
     def mixer(self) -> Path:
@@ -77,7 +91,8 @@ def probe_args(build: Build, route: Route, margin: int = MARGIN_S) -> list[str]:
             f"GCN_AIDWAV={run.mixer}", "GCN_AXSTATS=1", *route.extra]
 
 
-def play(build: Build, route: Route, margin: int = MARGIN_S) -> Run:
+def play(build: Build, route: Route, margin: int = MARGIN_S, *, commits: Commits) -> Run:
+    """Plays the route and leaves COMMITS in the run's directory, for a later --no-run."""
     run = run_for(build, route)
     if run.directory.exists():
         trash(run.directory)  # a blank memory card; the last run stays after this one
@@ -86,7 +101,19 @@ def play(build: Build, route: Route, margin: int = MARGIN_S) -> Run:
                        env={**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
     except subprocess.CalledProcessError as e:
         raise ValueError(f"{build.label} {route.name}: probe.sh exited {e.returncode}") from None
-    return finished(build, route)
+    run = finished(build, route)
+    run.commits.write_text(json.dumps(asdict(commits)) + "\n")
+    return run
+
+
+def read_commits(run: Run) -> Commits | None:
+    """What the run was made of, or None for a run made before the tool recorded it."""
+    if not run.commits.exists():
+        return None
+    try:
+        return Commits(**json.loads(run.commits.read_text()))
+    except (ValueError, TypeError):
+        raise ValueError(f"{run.commits}: not a commits file") from None
 
 
 def finished(build: Build, route: Route) -> Run:

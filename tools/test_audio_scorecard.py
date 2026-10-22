@@ -2,12 +2,13 @@ import json
 import re
 import tempfile
 import unittest
+from dataclasses import asdict
 from pathlib import Path
 from unittest import mock
 
 import audio_scorecard
 from scorecard_measure import Score, Stage
-from scorecard_runs import Build, Run
+from scorecard_runs import Build, Commits, Run
 from testutil import run_main, write_file
 
 MANIFEST = "title 20 60 60,960\nmenu 20 60 1200\n"
@@ -70,12 +71,18 @@ class MainTest(unittest.TestCase):
         self.dir = Path(tmp.name)
         manifest = write_file(self.dir, "manifest.txt", MANIFEST)
         self.order = []
+        self.events = []  # every describe and every run, in the order they happened
         self.scores = {("base", "title"): score(10), ("now", "title"): score(2),
                        ("base", "menu"): score(20, 90), ("now", "menu"): score(1, 90)}
 
-        def run(build, route, *margin):
+        def run(build, route, *margin, **kwargs):
             self.order.append((build.label, route.name))
+            self.events.append(f"run {build.label} {route.name}")
             return Run(self.dir / build.label / route.name)
+
+        def describe(path):
+            self.events.append(f"describe {path.name}")
+            return path.name
 
         def measured(log, mixer, device):
             return self.scores[(log.parent.parent.name, log.parent.name)]
@@ -87,7 +94,7 @@ class MainTest(unittest.TestCase):
                       mock.patch.object(audio_scorecard, "play", self.play),
                       mock.patch.object(audio_scorecard, "finished", self.finished),
                       mock.patch.object(audio_scorecard, "measure", side_effect=measured),
-                      mock.patch.object(audio_scorecard, "describe", side_effect=lambda path: path.name)):
+                      mock.patch.object(audio_scorecard, "describe", side_effect=describe)):
             patch.start()
             self.addCleanup(patch.stop)
 
@@ -116,6 +123,46 @@ class MainTest(unittest.TestCase):
         self.play.assert_not_called()
         self.assertEqual(len(self.finished.call_args_list), 4)
         self.assertIn("title: to frame 960\n", out)
+
+    def test_the_commits_are_read_before_the_first_run_plays(self):
+        self.main()
+        described = [i for i, event in enumerate(self.events) if event.startswith("describe")]
+        played = [i for i, event in enumerate(self.events) if event.startswith("run")]
+        self.assertEqual(len(described), 4)
+        self.assertLess(max(described), min(played))
+
+    def test_each_run_is_given_its_builds_commits_to_leave_behind(self):
+        self.main()
+        given = {c.args[0].label: c.kwargs["commits"] for c in self.play.call_args_list}
+        self.assertEqual(given, {"base": Commits("a", "gcn-recomp"), "now": Commits("b", "gcn-recomp")})
+
+    def record(self, label: str, route: str, commits: Commits) -> None:
+        directory = self.dir / label / route
+        directory.mkdir(parents=True)
+        write_file(directory, "commits.json", json.dumps(asdict(commits)))
+
+    def test_no_run_prints_the_commits_the_runs_recorded_not_the_clones_now(self):
+        for route in ("title", "menu"):
+            self.record("base", route, Commits("6b81b6e", "caf12a2"))
+            self.record("now", route, Commits("788571c-dirty", "b848158"))
+        _, out, _ = self.main("--no-run")
+        self.assertIn("base: /a/build, Dragoon 6b81b6e, gcn-recomp caf12a2\n", out)
+        self.assertIn("now: /b/build, Dragoon 788571c-dirty, gcn-recomp b848158\n", out)
+        _, out, _ = self.main("--no-run", "--json")
+        now = json.loads(out)["builds"][1]
+        self.assertEqual((now["dragoon"], now["gcn_recomp"]), ("788571c-dirty", "b848158"))
+        self.assertEqual([e for e in self.events if e.startswith("describe")], [])
+
+    def test_no_run_says_so_when_a_run_has_no_commits_recorded(self):
+        _, out, _ = self.main("--no-run")
+        self.assertIn("base: /a/build, Dragoon not recorded, gcn-recomp not recorded\n", out)
+
+    def test_no_run_gives_every_commit_when_the_runs_differ(self):
+        self.record("base", "title", Commits("6b81b6e", "caf12a2"))
+        self.record("base", "menu", Commits("6b81b6e", "8fabc65"))
+        _, out, _ = self.main("--no-run")
+        self.assertIn("base: /a/build, Dragoon 6b81b6e, gcn-recomp caf12a2 and 8fabc65\n", out)
+        self.assertIn("now: /b/build, Dragoon not recorded, gcn-recomp not recorded\n", out)
 
     def test_runs_play_15_s_past_the_last_checkpoint_unless_a_margin_is_given(self):
         self.main()

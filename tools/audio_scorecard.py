@@ -15,6 +15,10 @@ by default), and dumps that one frame to show it got there. It goes to
 run there is moved to the Trash first, so the game starts from a blank memory card and an empty
 shader cache. --no-run measures the runs already there instead.
 
+The tool reads each clone's Dragoon and gcn-recomp commits (with -dirty when tracked files have
+changed) before the first route plays, and leaves them in each run's commits.json. --no-run
+prints the commits its runs recorded, or "not recorded" for a run made before the file existed.
+
 Each run is measured at two stages with audio_clicks.py's functions.
 
   mixer   GCN_AIDWAV, the DMA's blocks before the ring (raw, 32 kHz). Clicks a minute, the
@@ -44,7 +48,7 @@ from pathlib import Path
 
 from routes import MANIFEST, Route, select_routes
 from scorecard_measure import Score, Stage, measure, total
-from scorecard_runs import MARGIN_S, Build, check_build, finished, play, seconds
+from scorecard_runs import MARGIN_S, Build, Commits, Run, check_build, finished, play, read_commits, seconds
 
 NOT_LOGGED, NOT_RECORDED = "not logged", "not recorded"
 
@@ -70,6 +74,21 @@ def describe(path: Path) -> str | None:
     got = subprocess.run(["git", "-C", str(path), "describe", "--always", "--dirty", "--abbrev=7", "--exclude=*"],
                          capture_output=True, text=True)
     return (got.stdout.strip() or None) if got.returncode == 0 else None
+
+
+def agree(values: list[str | None]) -> str | None:
+    """The one value every run has, or all of them when the runs differ."""
+    distinct = list(dict.fromkeys(values))
+    return distinct[0] if len(distinct) == 1 else " and ".join(map(str, distinct))
+
+
+def commits_of(build: Build, runs: list[Run] | None) -> Commits:
+    """What the build's RUNS were made of when they're already there (--no-run), else what its
+    clone has checked out now, which the tool reads before any route plays."""
+    if runs is None:
+        return Commits(describe(build.clone), describe(build.clone / "gcn-recomp"))
+    found = [read_commits(run) or Commits(NOT_RECORDED, NOT_RECORDED) for run in runs]
+    return Commits(agree([c.dragoon for c in found]), agree([c.gcn_recomp for c in found]))
 
 
 def count(n: int | None) -> str:
@@ -119,11 +138,12 @@ def route_title(route: Route, margin: int | None) -> str:
     return f"{route.name}: {played}to frame {max(route.required)}"
 
 
-def as_json(builds: list[Build], routes: list[Route], scores: dict[str, list[Score]]) -> str:
+def as_json(builds: list[Build], routes: list[Route], scores: dict[str, list[Score]],
+            commits: dict[str, Commits]) -> str:
     return json.dumps({
         "routes": [r.name for r in routes],
-        "builds": [{"label": b.label, "build": str(b.directory), "dragoon": describe(b.clone),
-                    "gcn_recomp": describe(b.clone / "gcn-recomp"),
+        "builds": [{"label": b.label, "build": str(b.directory), "dragoon": commits[b.label].dragoon,
+                    "gcn_recomp": commits[b.label].gcn_recomp,
                     "routes": {r.name: asdict(s) for r, s in zip(routes, scores[b.label])},
                     "total": asdict(total(scores[b.label]))} for b in builds],
     }, indent=1)
@@ -145,15 +165,17 @@ def main(argv: list[str]) -> int:
             check_build(b)
         routes = select_routes([n for n in args.routes.split(",") if n], MANIFEST)
         labels = [b.label for b in builds]
+        found = {b.label: [finished(b, r) for r in routes] for b in builds} if args.no_run else None
+        commits = {b.label: commits_of(b, None if found is None else found[b.label]) for b in builds}
         if not args.json:
             for b in builds:
-                print(f"{b.label}: {b.directory}, Dragoon {describe(b.clone)}, "
-                      f"gcn-recomp {describe(b.clone / 'gcn-recomp')}")
+                print(f"{b.label}: {b.directory}, Dragoon {commits[b.label].dragoon}, "
+                      f"gcn-recomp {commits[b.label].gcn_recomp}")
             print()
         scores: dict[str, list[Score]] = {b.label: [] for b in builds}
-        for route in routes:
+        for i, route in enumerate(routes):
             for b in builds:
-                run = finished(b, route) if args.no_run else play(b, route, args.margin)
+                run = found[b.label][i] if found is not None else play(b, route, args.margin, commits=commits[b.label])
                 scores[b.label].append(measure(run.log, run.mixer, run.device))
             if not args.json:
                 print(table(route_title(route, None if args.no_run else args.margin), labels,
@@ -162,7 +184,7 @@ def main(argv: list[str]) -> int:
         print(e, file=sys.stderr)
         return 2
     if args.json:
-        print(as_json(builds, routes, scores))
+        print(as_json(builds, routes, scores, commits))
     else:
         print(table(f"total: {len(routes)} route{'s' * (len(routes) != 1)}", labels,
                     [total(scores[label]) for label in labels]), end="")

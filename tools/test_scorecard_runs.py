@@ -1,3 +1,4 @@
+import json
 import subprocess
 import tempfile
 import unittest
@@ -7,10 +8,11 @@ from unittest import mock
 import routes
 import scorecard_runs
 from routes import Route
-from scorecard_runs import Build
+from scorecard_runs import Build, Commits, Run
 from testutil import write_file
 
 RACE = Route("air-ride-race", 30, 60, [4200, 6000], ["--pads=4"])
+COMMITS = Commits("6b81b6e-dirty", "caf12a2")
 
 
 def executable(directory: Path, name: str) -> Path:
@@ -89,7 +91,7 @@ class PlayTest(Clone):
         self.calls.attach_mock(run, "run")
         with (mock.patch.object(scorecard_runs, "trash", trash),
               mock.patch.object(scorecard_runs.subprocess, "run", run)):
-            self.result = scorecard_runs.play(self.build, RACE, *margin)
+            self.result = scorecard_runs.play(self.build, RACE, *margin, commits=COMMITS)
         return trash
 
     def reaches(self, frame: int = 6000):
@@ -115,6 +117,12 @@ class PlayTest(Clone):
         self.play(self.reaches())
         self.assertEqual((self.result.mixer, self.result.device, self.result.log),
                          (self.out / "mixer.raw", self.out / "device.wav", self.out / "stdout.txt"))
+
+    def test_leaves_the_commits_it_was_given_in_the_runs_directory(self):
+        self.play(self.reaches())
+        self.assertEqual(json.loads((self.out / "commits.json").read_text()),
+                         {"dragoon": "6b81b6e-dirty", "gcn_recomp": "caf12a2"})
+        self.assertEqual(scorecard_runs.read_commits(self.result), COMMITS)
 
     def test_trashes_an_earlier_run_before_playing_so_the_card_is_blank(self):
         self.out.mkdir(parents=True)
@@ -144,6 +152,25 @@ class FinishedTest(Clone):
     def test_no_earlier_run_is_refused(self):
         with self.assertRaisesRegex(ValueError, "no run in .*scorecard-air-ride-race reached frame 6000"):
             scorecard_runs.finished(self.build, RACE)
+
+
+class ReadCommitsTest(Clone):
+    def test_a_run_made_before_commits_were_recorded_has_none(self):
+        self.out.mkdir(parents=True)
+        self.assertIsNone(scorecard_runs.read_commits(Run(self.out)))
+
+    def test_a_commit_outside_git_comes_back_as_none(self):
+        self.out.mkdir(parents=True)
+        write_file(self.out, "commits.json", '{"dragoon": null, "gcn_recomp": "caf12a2"}\n')
+        self.assertEqual(scorecard_runs.read_commits(Run(self.out)), Commits(None, "caf12a2"))
+
+    def test_a_file_that_isnt_two_commits_is_refused_by_name(self):
+        self.out.mkdir(parents=True)
+        for bad in ("", "{", "[]", '{"dragoon": "a"}'):
+            with self.subTest(bad=bad):
+                write_file(self.out, "commits.json", bad)
+                with self.assertRaisesRegex(ValueError, "commits.json: not a commits file"):
+                    scorecard_runs.read_commits(Run(self.out))
 
 
 if __name__ == "__main__":
