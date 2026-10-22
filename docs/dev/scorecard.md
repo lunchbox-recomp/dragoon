@@ -28,13 +28,17 @@ clicks on block joins rose too.
 | `[ax] bus` lines, with the samples the clamp changed | None | Every 400 lists |
 
 `git -C gcn-recomp log --oneline 9b0a2fe..caf12a2` lists the 13 commits the baseline adds to
-upstream `9b0a2fe`. They're what this game needs to boot and be driven.
+upstream `9b0a2fe`. They're two runtime fixes, controller and input support, the SDL3 frontend
+and two commits for tooling.
 
 - `b326dcd` resumes a guest `longjmp` at its `setjmp`'s call site.
 - `7d30377` leaves a Z texture out of the depth when Z compares before texturing.
 - `d558e3d`, `0197460`, `3aebdc9` and `fda6926` plug in controllers on ports 2 to 4 and let
   scripts press them.
-- `340da84`, `1c164b2` and `642187a` give each gamepad a port of its own and test that.
+- `340da84` gives each gamepad a port of its own.
+- `1c164b2` loads controller mappings from a `gamecontrollerdb.txt`, so a controller SDL has
+  no mapping for can get a port.
+- `642187a` adds `--test-ports`, which checks the port rules against SDL's virtual joysticks.
 - `e08cde3` and `d9ee73d` move the frontend to SDL3.
 - `caf12a2` adds `--exit-after`, and `67a7e30` adds this game's names to `tools/game_terms.txt`.
 
