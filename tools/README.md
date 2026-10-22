@@ -12,7 +12,7 @@ Every tool takes `--help`, which prints its usage and what it reads. Results go 
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py and shader_cache.py only report, so they never exit 1.
+frametime.py, shader_cache.py and audio_clicks.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -78,6 +78,24 @@ tools/audio_hashes.py record title --lists 7200,20000
 ```
 
 A `check` of all five routes takes about two minutes. Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is moved to the Trash first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
+
+## audio_clicks.py
+
+Where does the sound click, drop out or clip? It reads a 16-bit PCM WAV, such as the one `GCN_WAV=<path>` records of exactly what went to the audio device, and prints how many of each it found and when. A click is a sample whose second difference is over 8 times the RMS second difference of the 5 ms either side, and at least 128. A splice, such as the audio ring skipping ahead, shows as one. A gap is 5 ms or more of digital silence on every channel straight after sound. A clipped run is two or more samples at full scale on one channel.
+
+```
+tools/probe.sh title-wav 90 tests/routes/title.txt 100000 --real-time GCN_WAV=out.wav
+tools/audio_clicks.py build/probe/title-wav/out.wav --from 5
+```
+
+The game runs inside the probe directory, so a relative `GCN_WAV` path lands there. Use `--real-time`, because under `--fast` the game makes sound faster than the device takes it. Under probe.sh the device is SDL's dummy driver, which takes sound on a millisecond timer instead of a sound card's clock, so the ring's skips and underruns can differ from a run you hear. The recording is the game's own sound, so it stays in `build/probe/` and is never committed. `--list N` caps the times printed for each, and `--json` prints the whole result.
+
+`GCN_AIDWAV=<path>` records the DMA's own blocks instead, before the audio ring touches them, as headerless 16-bit stereo at 32 kHz. `--raw 32000` reads that. `--period 160` also counts the clicks within 2 samples of a multiple of 160 samples (the DMA's 5 ms block) and how many would land there by chance.
+
+```
+tools/probe.sh title-aid 90 tests/routes/title.txt 100000 --real-time GCN_AIDWAV=aid.raw
+tools/audio_clicks.py build/probe/title-aid/aid.raw --raw 32000 --period 160
+```
 
 ## warm_shaders.py
 
