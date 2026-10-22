@@ -190,8 +190,8 @@ lines after boot, and boot is the `programs from cache` line's time for 222 prog
 | Fantasy Meadows | 4,226 | 16.69 ms | 17.95 ms | 18.37 ms | 43.94 ms (5314) | 0.60 ms | 0.91 ms | 41.57 ms (7110) | 1 (7110) | 380 ms |
 | Celestial Valley | 4,227 | 16.69 ms | 17.92 ms | 18.33 ms | 41.71 ms (7359) | 0.57 ms | 1.19 ms | 2.73 ms | 0 | 362 ms |
 | Sky Sands | 4,223 | 16.70 ms | 17.95 ms | 18.34 ms | 85.51 ms (5376) | 0.58 ms | 0.96 ms | 1.60 ms | 0 | 368 ms |
-| Frozen Hillside | 4,230 | 16.69 ms | 18.01 ms | 18.31 ms | 32.52 ms (6425) | 0.52 ms | 0.71 ms | 3.86 ms (5752) | 1 (5752) | 377 ms |
-| Magma Flows | 4,226 | 16.69 ms | 17.91 ms | 18.24 ms | 40.83 ms (6053) | 0.61 ms | 1.01 ms | 1.50 ms | 0 | 376 ms |
+| Frozen Hillside | 4,230 | 16.69 ms | 18.01 ms | 18.31 ms | 32.52 ms (6425) | 0.52 ms | 0.71 ms | 3.86 ms (5752) | 1 (5752) | 376 ms |
+| Magma Flows | 4,226 | 16.69 ms | 17.91 ms | 18.24 ms | 40.83 ms (6053) | 0.61 ms | 1.01 ms | 1.50 ms | 0 | 377 ms |
 | Beanstalk Park | 4,228 | 16.68 ms | 17.92 ms | 18.22 ms | 18.97 ms | 0.51 ms | 0.85 ms | 2.96 ms (5648) | 1 (5648) | 374 ms |
 | Machine Passage | 4,225 | 16.69 ms | 17.98 ms | 18.29 ms | 38.05 ms (7583) | 0.46 ms | 0.66 ms | 3.25 ms (6007) | 1 (6007) | 368 ms |
 | Checker Knights | 4,227 | 16.69 ms | 17.92 ms | 18.24 ms | 34.43 ms (6152) | 0.57 ms | 0.94 ms | 1.46 ms | 0 | 387 ms |
