@@ -16,7 +16,7 @@ frametime.py, shader_cache.py and audio_clicks.py only report, so they never exi
 
 ## probe.sh
 
-How does the game behave when nobody is playing it? It runs the game in a hidden window for a number of seconds, feeds it a route of button presses and dumps every Nth frame as a PNG. A run leaves its frames (`frame_NNNNN.png`), its log (`stdout.txt`), its memory card (`saves/memcard_a.raw`), its shader cache (`saves/shaders.bin`) and, after a crash, `panic.txt` in `build/probe/NAME/`. Audio goes through SDL's dummy driver, so a run is silent. Audio never paces the guest, so the dummy driver doesn't change timing. A new NAME starts from a blank memory card, and a NAME that's run again keeps the card its last run left behind.
+How does the game behave when nobody is playing it? It runs the game in a hidden window for a number of seconds, feeds it a route of button presses and dumps every Nth frame as a PNG. A run leaves its frames (`frame_NNNNN.png`), its log (`stdout.txt`), its memory card (`saves/memcard_a.raw`), its shader cache (`saves/shaders.bin`) and, after a crash, `panic.txt` in `build/probe/NAME/`. probe.sh doesn't pick an audio driver, so a run plays through the real device unless `SDL_AUDIO_DRIVER=dummy` is set. audio_hashes.py sets it, and a dummy run is silent. Audio never paces the guest, so the dummy driver doesn't change timing. A new NAME starts from a blank memory card, and a NAME that's run again keeps the card its last run left behind.
 
 After the NAME and seconds come an input script or a route file from `tests/routes/`, the dump interval and any settings. A setting is `GCN_*=value` (the list is in `gcn-recomp/docs/diagnostics.md`), `--pads=N`, `--real-time`, `--scale=N`, `--bench` or `--log=LIST`. `--log=dsp,ai` turns on those log categories in the game. It works in windowed runs only, because `dragoon_bench` takes no `--log`, so probe.sh refuses it with `--bench`. An unknown category stops the game at once, and `stdout.txt` names it. `tools/probe.sh --help` prints the settings. Route files are described in `tests/routes/README.md`.
 
@@ -89,7 +89,6 @@ tools/audio_clicks.py build/probe/title-wav/out.wav --from 5
 ```
 
 The game runs inside the probe directory, so a relative `GCN_WAV` path lands there. Use `--real-time`, because under `--fast` the game makes sound faster than the device takes it. Under probe.sh the device is SDL's dummy driver, and gcn-recomp pulls the sound itself at a sound card's pace under it, so the recording is what a sound card would get. `GCN_AIDWAV` (below) records the game's sound before the audio ring. The recording is the game's own sound, so it stays in `build/probe/` and is never committed. `--list N` caps the times printed for each, and `--json` prints the whole result.
-
 `GCN_AIDWAV=<path>` records the DMA's own blocks instead, before the audio ring touches them, as headerless 16-bit stereo at 32 kHz. `--raw 32000` reads that. `--period 160` also counts the clicks within 2 samples of a multiple of 160 samples (the DMA's 5 ms block) and how many would land there by chance.
 
 ```

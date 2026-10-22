@@ -16,7 +16,7 @@ Both sets pass again at `b848158`, after the review fixes.
 | Air Ride race | Runs | `tests/routes/air-ride-race.txt`. Fantasy Meadows, three CPUs, three laps to the results screen with nobody steering |
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. Stadium not reached yet |
 | Top Ride | Not tried | |
-| Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in the DMA's blocks fell from 928 to 19 (table under Audio). The low-pass filter and polyphase resampling aren't done. It crackled the one time it was listened to, before the type 2 fix. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. Details in `audio.md` |
+| Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in the DMA's blocks fell from 928 to 19 (table under Audio). The low-pass filter and polyphase resampling aren't done. It was listened to once, before the type 2 fix. It crackled. Nobody has listened since. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. Details in `audio.md` |
 | Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Nothing is saved between launches. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`: 42 port checks, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
 | Picture | 4:3 | gcn-recomp letterboxes the desktop window to 4:3 |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
@@ -146,8 +146,11 @@ command lists. Three runs played the race route as
 `env SDL_AUDIO_DRIVER=dummy tools/probe.sh NAME 30 tests/routes/air-ride-race.txt 60 GCN_AXSTATS=1 --bench`,
 unpaced. One had `GCN_AX_LAYOUT=2001` and two were default. The table covers the 257 windows
 (102,800 lists) that all three reached. Before is the `GCN_AX_LAYOUT=2001` run, which reads
-the control word the way the 2001 ucode does and skips the compressor command, as this
-runtime did until now. After is the default for `07F88145`.
+the control word the way the 2001 ucode does and, at `bf31b7b`, also skipped the compressor
+command, as this runtime did until now. At the pinned gcn-recomp (since `b839cf6`) the
+compressor follows the ucode hash alone, so `GCN_AX_LAYOUT` changes only how the mixer
+control word is decoded, and the Before column can't be reproduced with that switch. After
+is the default for `07F88145`.
 
 | Race route | Before | After |
 |---|---|---|
@@ -205,8 +208,8 @@ the DMA's blocks, under the threshold there.
 Not done or not checked:
 
 - The low-pass filter and polyphase resampling (`audio.md`).
-- It crackled the one time it was listened to, before the type 2 fix. Nothing has been
-  compared with recordings from a real console.
+- The sound was listened to once, before the type 2 fix. It crackled. Nobody has
+  listened since. Nothing has been compared with recordings from a real console.
 - How often the ring cuts or runs dry with a real sound card. Either is a fade now, checked
   on a tone by gcn-recomp's `test_audio_ring` and not by ear.
 - Whether the ten clicks during the attract demo are in the game's own sound. A capture of

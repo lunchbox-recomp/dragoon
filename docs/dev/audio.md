@@ -3,8 +3,11 @@
 Kirby Air Ride boots Nintendo's AX ucode, build `07F88145`. gcn-recomp's AX HLE was written
 for the 2001 build (`4E8A8B21`). At gcn-recomp `fd1f6a8` it takes the ucode's hash and reads
 the PB mixer control word with the 2001 layout for that hash only. Every other hash, this one
-included, gets the later layout. The compressor command runs on the later layout. The newer
-build's low-pass filter is still missing. Line numbers are at gcn-recomp `fd1f6a8`.
+included, gets the later layout. The compressor command runs on the same hash test, so at the
+pinned gcn-recomp (since `b839cf6`) it follows the ucode hash alone and `GCN_AX_LAYOUT` leaves
+it be. The newer build's low-pass filter is still missing. The `ax.cpp` line numbers below
+are at gcn-recomp `fd1f6a8`. The pin is later, where `compress` starts at line 380 and
+`ax_init` at 424.
 
 ## The ucode
 
@@ -37,13 +40,16 @@ same at boot.
 - `ax_init` (`ax.cpp:421-431`) gives the 2001 hash the 2001 mixer control layout and every
   other hash the later one. The choice is made once, when AX starts. `--log=dsp` logs it
   (`AX: later mixer layout, ucode hash=07F88145`). `GCN_AX_LAYOUT=2001` or
-  `GCN_AX_LAYOUT=later` overrides it, for comparing the two.
-- `ax.cpp` mixes with the decoder the layout picks (`:298-300`), and runs command `12` on the
-  later layout only (`:472-478`).
+  `GCN_AX_LAYOUT=later` overrides the layout, for comparing how the two decode the mixer
+  control word. It doesn't change the compressor.
+- `ax.cpp` mixes with the decoder the layout picks (`:298-300`). It runs command `12` for any
+  hash but the 2001 one (`:472-478` at `fd1f6a8`, where the gate read the layout and not the
+  hash).
 - In a 30-second run at an earlier gcn-recomp (`67a7e30`) the game sent 5,834 command lists,
   about 29 seconds of 5 ms frames. Each got `DCD10002` back (`dsp_hle.cpp:98-99`). The ten
   runs in `status.md` counted 484,400 lists and none had an unknown command.
-- Audibility hasn't been judged by ear. `GCN_AXSTATS` counts levels and `GCN_WAV` captures
+- The sound was listened to once, before the source type 2 fix. It crackled. Nobody has
+  listened since. `GCN_AXSTATS` counts levels and `GCN_WAV` captures
   the output, and both are environment switches. On the later layout a voice reaches main
   left only when its mixer control sets `0001` and main right only when it sets `0002`
   (`:247-255`, `:298-300`).
@@ -62,7 +68,7 @@ list per 5 ms frame. This is from reading the DOL, not from a trace.
 | `02` PB address, `03` process | every frame | `:444-445` |
 | `04` AuxA, `05` AuxB | not DPL2 and that bus has a callback | `:446-449` |
 | `13` send aux and mix, `10` AuxB L and R | DPL2 mode (`13` only with an AuxA callback) | `:479-488`, `:464-470` |
-| `12` compressor | the compressor is on | runs on the later layout (`:472-478`), skipped on the 2001 one |
+| `12` compressor | the compressor is on | runs for any hash but the 2001 one (`:472-478`), skipped on that one |
 | `0E` output, `0F` end | every frame | `:462`, `:463` |
 
 Every argument count in `ax.cpp` matches what the game writes, so no list is cut short. The
@@ -121,20 +127,19 @@ The newer PB has a one-pole low-pass filter at words 93 to 96 (on, `yn1`, `a0`, 
 moves the loop counter from word 93 to 97. When the filter is on, each sample after the
 volume envelope becomes `(a0 * x + b0 * yn1) >> 15` clamped to 16 bits, and that result is
 the next `yn1`. The runtime still reads and writes 93 words (`ax.cpp:35`, `:44-49`) and drops
-parameter updates past word 92 (`:315`). Whether the game turns the filter on isn't known
-yet.
+parameter updates past word 92 (`:315`). Whether the game turns the filter on isn't known.
 
 ### Compressor
 
 Command `12` carries a threshold, a release length in lists and the address of a gain table
 in main RAM. The table holds 160-entry ramps of unsigned 16-bit gains with 0x8000 as 1.0:
-11 attack ramps, then the release ramps. On the later layout `compress` (`ax.cpp:372-396`)
+11 attack ramps, then the release ramps. For any hash but the 2001 one, `compress` (`ax.cpp:372-396`)
 checks whether any main L or R sample in the list is over the threshold. If so, both
 channels are scaled by the attack ramp numbered by the release count left from the earlier
 lists (0 when none), and the count restarts at the release length. Otherwise, while the
 count is nonzero, it steps down and both channels are scaled by release ramp 11 plus the
 count. Surround is never touched. The count is kept from list to list and reset when AX
-starts (`:424`). The 2001 build has no such command, so on that layout the four words are
+starts (`:424`). The 2001 build has no such command, so on that hash the four words are
 skipped and counted as skipped (`:476`). The game sent it in every list of the ten runs in
 `status.md`. The threshold and release it sends weren't logged.
 
