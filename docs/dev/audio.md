@@ -171,6 +171,9 @@ pair the game refills every list fell behind its refills and jumped at each join
 `ax.cpp:269-273` now takes a sample for every sample out. The counts before and after are in
 `status.md`.
 
+[`scorecard.md`](scorecard.md) measures the five routes at both stages on gcn-recomp `caf12a2`,
+which has none of this work, and on `b848158`, twice each, with `tools/audio_scorecard.py`.
+
 ## What was done and what is left
 
 Generic runtime work in `runtime/hw/`.
