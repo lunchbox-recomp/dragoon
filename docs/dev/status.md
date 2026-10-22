@@ -3,8 +3,8 @@
 What's true of Dragoon today, measured on one machine. Build numbers are from a clean
 build directory at gcn-recomp `67a7e30`, and the game was run at `7d30377`. The four-player
 numbers are from `fda6926`. The controller row is from `25c4f26`, where the five frame-hash
-routes also pass. The audio row is from gcn-recomp `bf31b7b`, where the five frame-hash routes
-and the five audio-hash routes pass.
+routes also pass. The audio row is from gcn-recomp `bf31b7b` and its click counts from
+`fd1f6a8`, where the five frame-hash routes and the five audio-hash routes pass.
 
 | Feature | Status | Note |
 |---|---|---|
@@ -15,7 +15,7 @@ and the five audio-hash routes pass.
 | Air Ride race | Runs | `tests/routes/air-ride-race.txt`. Fantasy Meadows, three CPUs, three laps to the results screen with nobody steering |
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. Stadium not reached yet |
 | Top Ride | Not tried | |
-| Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. The low-pass filter and polyphase resampling aren't done. Nobody has listened, and nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. Details in `audio.md` |
+| Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in what went to the device fell from 1,124 to 81 (table under Audio). The low-pass filter and polyphase resampling aren't done. It crackled the one time it was listened to, before the type 2 fix. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. Details in `audio.md` |
 | Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Nothing is saved between launches. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`: 42 port checks, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
 | Picture | 4:3 | gcn-recomp letterboxes the desktop window to 4:3 |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
@@ -168,10 +168,31 @@ each, mode select 59, race 258 and 257, City Trial 107, four-player 103). Every 
 its window, and 04 and 05 in every list after the first window (398 in it). The compressor
 command (12) ran in each of them.
 
+### Clicks
+
+At gcn-recomp `bf31b7b` (before) and `fd1f6a8` (after), which plays source type 2 voices
+with no rate conversion (`audio.md`). Each played the title route for 90 seconds with
+`--real-time`, recording what went to the device (`GCN_WAV`, 48 kHz) and the DMA's own
+blocks (`GCN_AIDWAV`, 32 kHz, before the audio ring). `tools/audio_clicks.py` counted them,
+with `--raw 32000 --period 160` for the DMA blocks.
+
+| Title route | Before | After |
+|---|---|---|
+| Clicks in the device's stream | 1,124 in 81.4 s | 81 in 80.9 s |
+| Clicks in the DMA's blocks | 928 in 89.2 s | 19 in 88.7 s |
+| DMA clicks within 2 samples of a 160-sample block join | 575 (29 by chance) | 5 (0.6 by chance) |
+
+Nine of the 19 left come in threes at 2.33, 5.34 and 15.75 s, when the route's three A
+presses play the menu's sounds. The 5 ms gap at 15.74 s is the opening movie being skipped.
+The device's 81 aren't explained yet. Under probe.sh the device is SDL's dummy driver, which
+takes sound on a millisecond timer instead of a sound card's clock.
+
 Not done or not checked:
 
 - The low-pass filter and polyphase resampling (`audio.md`).
-- Nobody has listened to it, and nothing has been compared with recordings from a real console.
+- It crackled the one time it was listened to, before the type 2 fix. Nothing has been
+  compared with recordings from a real console.
+- The 81 clicks left in the device's stream.
 - No game on the 2001 ucode ran, so that layout's path is untested here beyond the
   `GCN_AX_LAYOUT=2001` run.
 - One machine, one macOS version.

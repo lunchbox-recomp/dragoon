@@ -1,10 +1,10 @@
 # Audio: the AX ucode
 
 Kirby Air Ride boots Nintendo's AX ucode, build `07F88145`. gcn-recomp's AX HLE was written
-for the 2001 build (`4E8A8B21`). At gcn-recomp `bf31b7b` it takes the ucode's hash and reads
+for the 2001 build (`4E8A8B21`). At gcn-recomp `fd1f6a8` it takes the ucode's hash and reads
 the PB mixer control word with the 2001 layout for that hash only. Every other hash, this one
 included, gets the later layout. The compressor command runs on the later layout. The newer
-build's low-pass filter is still missing. Line numbers are at gcn-recomp `bf31b7b`.
+build's low-pass filter is still missing. Line numbers are at gcn-recomp `fd1f6a8`.
 
 ## The ucode
 
@@ -34,19 +34,19 @@ same at boot.
 - `dsp_hle.cpp:51-65` takes the first ucode a game boots that isn't JAudio as AX, remembers
   its IRAM length and passes its hash to `ax_init` (`:65`). The hash is logged (`:47-48`)
   and checked against JAudio's (`:52`).
-- `ax_init` (`ax.cpp:416-426`) gives the 2001 hash the 2001 mixer control layout and every
+- `ax_init` (`ax.cpp:421-431`) gives the 2001 hash the 2001 mixer control layout and every
   other hash the later one. The choice is made once, when AX starts. `--log=dsp` logs it
   (`AX: later mixer layout, ucode hash=07F88145`). `GCN_AX_LAYOUT=2001` or
   `GCN_AX_LAYOUT=later` overrides it, for comparing the two.
-- `ax.cpp` mixes with the decoder the layout picks (`:293-295`), and runs command `12` on the
-  later layout only (`:467-473`).
+- `ax.cpp` mixes with the decoder the layout picks (`:298-300`), and runs command `12` on the
+  later layout only (`:472-478`).
 - In a 30-second run at an earlier gcn-recomp (`67a7e30`) the game sent 5,834 command lists,
   about 29 seconds of 5 ms frames. Each got `DCD10002` back (`dsp_hle.cpp:98-99`). The ten
   runs in `status.md` counted 484,400 lists and none had an unknown command.
 - Audibility hasn't been judged by ear. `GCN_AXSTATS` counts levels and `GCN_WAV` captures
   the output, and both are environment switches. On the later layout a voice reaches main
   left only when its mixer control sets `0001` and main right only when it sets `0002`
-  (`:247-255`, `:293-295`).
+  (`:247-255`, `:298-300`).
   `status.md` has the levels measured on the race route.
 
 ## What the game sends
@@ -56,14 +56,14 @@ list per 5 ms frame. This is from reading the DOL, not from a trace.
 
 | Command | Sent when | gcn-recomp |
 |---|---|---|
-| `00` setup | every frame | `ax.cpp:437`, `:357-365` |
-| `07` main L and R from one buffer | stereo mode | `:446` |
-| `11` the same with left inverted | surround mode | `:466` |
-| `02` PB address, `03` process | every frame | `:439-440` |
-| `04` AuxA, `05` AuxB | not DPL2 and that bus has a callback | `:441-444` |
-| `13` send aux and mix, `10` AuxB L and R | DPL2 mode (`13` only with an AuxA callback) | `:474-483`, `:459-465` |
-| `12` compressor | the compressor is on | runs on the later layout (`:467-473`), skipped on the 2001 one |
-| `0E` output, `0F` end | every frame | `:457`, `:458` |
+| `00` setup | every frame | `ax.cpp:442`, `:362-370` |
+| `07` main L and R from one buffer | stereo mode | `:451` |
+| `11` the same with left inverted | surround mode | `:471` |
+| `02` PB address, `03` process | every frame | `:444-445` |
+| `04` AuxA, `05` AuxB | not DPL2 and that bus has a callback | `:446-449` |
+| `13` send aux and mix, `10` AuxB L and R | DPL2 mode (`13` only with an AuxA callback) | `:479-488`, `:464-470` |
+| `12` compressor | the compressor is on | runs on the later layout (`:472-478`), skipped on the 2001 one |
+| `0E` output, `0F` end | every frame | `:462`, `:463` |
 
 Every argument count in `ax.cpp` matches what the game writes, so no list is cut short. The
 builder never writes `01`, `08`, `09` or `0A` to `0D`. In the ten runs in `status.md`, `04`
@@ -81,7 +81,7 @@ here. The low-pass filter isn't.
 The PB's mixer control word (word 6) has a different bit layout in the newer build. It gives
 every bus its own enable bit and ramps by group. `ax.cpp:209-256` decodes the word into an
 enable flag and a ramp flag for each of the nine buses, with one decoder for each layout,
-and `:294-295` mixes each bus by its own flags.
+and `:299-300` mixes each bus by its own flags.
 
 | Bit | Later layout (default for `07F88145`, `decode_mixer_later`) | 2001 layout (`4E8A8B21`, or `GCN_AX_LAYOUT=2001`, `decode_mixer_2001`) |
 |---|---|---|
@@ -121,21 +121,21 @@ The newer PB has a one-pole low-pass filter at words 93 to 96 (on, `yn1`, `a0`, 
 moves the loop counter from word 93 to 97. When the filter is on, each sample after the
 volume envelope becomes `(a0 * x + b0 * yn1) >> 15` clamped to 16 bits, and that result is
 the next `yn1`. The runtime still reads and writes 93 words (`ax.cpp:35`, `:44-49`) and drops
-parameter updates past word 92 (`:310`). Whether the game turns the filter on isn't known
+parameter updates past word 92 (`:315`). Whether the game turns the filter on isn't known
 yet.
 
 ### Compressor
 
 Command `12` carries a threshold, a release length in lists and the address of a gain table
 in main RAM. The table holds 160-entry ramps of unsigned 16-bit gains with 0x8000 as 1.0:
-11 attack ramps, then the release ramps. On the later layout `compress` (`ax.cpp:367-391`)
+11 attack ramps, then the release ramps. On the later layout `compress` (`ax.cpp:372-396`)
 checks whether any main L or R sample in the list is over the threshold. If so, both
 channels are scaled by the attack ramp numbered by the release count left from the earlier
 lists (0 when none), and the count restarts at the release length. Otherwise, while the
 count is nonzero, it steps down and both channels are scaled by release ramp 11 plus the
 count. Surround is never touched. The count is kept from list to list and reset when AX
-starts (`:419`). The 2001 build has no such command, so on that layout the four words are
-skipped and counted as skipped (`:471`). The game sent it in every list of the ten runs in
+starts (`:424`). The 2001 build has no such command, so on that layout the four words are
+skipped and counted as skipped (`:476`). The game sent it in every list of the ten runs in
 `status.md`. The threshold and release it sends weren't logged.
 
 ### Gaps every AX build has
@@ -145,12 +145,26 @@ too, and none of them silences a game.
 
 | Gap | Where |
 |---|---|
-| Polyphase resampling (`src_type` 0) runs as linear interpolation. The real filter needs a 0x800-entry coefficient table from the DSP's ROM, which the runtime doesn't have | `ax.cpp:268-283` |
+| Polyphase resampling (`src_type` 0) runs as linear interpolation. The real filter needs a 0x800-entry coefficient table from the DSP's ROM, which the runtime doesn't have | `ax.cpp:275-288` |
 | Dolphin writes each bus's last mixed sample into the PB's depop words (41 to 49). The runtime doesn't | `ax.cpp:198-207` |
 | Dolphin bumps the loop counter each time a stream loops. The runtime doesn't | `ax.cpp:178-186` |
-| Dolphin reads the volume envelope as signed on GameCube. The runtime reads it unsigned, which differs only at `0x8000` and up | `ax.cpp:287-291` |
-| Resampler type 2 reads the last sample without interpolating | `ax.cpp:275` |
+| Dolphin reads the volume envelope as signed on GameCube. The runtime reads it unsigned, which differs only at `0x8000` and up | `ax.cpp:292-296` |
 | The initial time delay block (words 27 to 33) is ignored. Dolphin ignores it too | none |
+
+## Clicks where the blocks join
+
+The output clicked. `tools/audio_clicks.py` counts a click wherever a sample's second
+difference stands over 8 times the RMS second difference around it. On the title route the
+DMA's own blocks (`GCN_AIDWAV`, 32 kHz, before the audio ring) had 928 clicks in 89 seconds,
+and 575 of them fell within 2 samples of a 160-sample block join, where chance gives 29.
+
+Source type 2 (PB word 4) was the cause. It means no rate conversion, so the ucode reads one
+sample from the accelerator for every sample out and ignores the ratio. Dolphin's
+`AXVoice.h` does the same. The runtime stepped through the input by the ratio and held the
+newest sample, so a type 2 voice played at the ratio's speed as a staircase. A PCM16 stereo
+pair the game refills every list fell behind its refills and jumped at each join.
+`ax.cpp:269-273` now takes a sample for every sample out. The counts before and after are in
+`status.md`.
 
 ## What was done and what is left
 
@@ -158,12 +172,13 @@ Generic runtime work in `runtime/hw/`.
 
 | Change | Where | State |
 |---|---|---|
-| Hand the hash to AX and keep the 2001 behavior for `4E8A8B21` only | `dsp_hle.cpp:65`, `ax.h`, `ax.cpp:412-426` | Done |
-| Decode both mixer layouts into per-bus enable and ramp flags, then mix each of the nine buses by its own flags | `ax.cpp:209-256`, `:294-295` | Done |
-| Compressor | `ax.cpp:367-391`, `:467-473` | Done |
-| PB layout with the filter and the loop counter | `ax.cpp:22-45`, `:310` | Not done |
-| Low-pass filter | after the volume envelope, `ax.cpp:287-291` | Not done |
-| Depop words, loop counter and signed envelope | `ax.cpp:178-207`, `:287-291` | Not done |
+| Hand the hash to AX and keep the 2001 behavior for `4E8A8B21` only | `dsp_hle.cpp:65`, `ax.h`, `ax.cpp:417-431` | Done |
+| Decode both mixer layouts into per-bus enable and ramp flags, then mix each of the nine buses by its own flags | `ax.cpp:209-256`, `:299-300` | Done |
+| Compressor | `ax.cpp:372-396`, `:472-478` | Done |
+| Source type 2 with no rate conversion | `ax.cpp:269-273` | Done |
+| PB layout with the filter and the loop counter | `ax.cpp:22-45`, `:315` | Not done |
+| Low-pass filter | after the volume envelope, `ax.cpp:292-296` | Not done |
+| Depop words, loop counter and signed envelope | `ax.cpp:178-207`, `:292-296` | Not done |
 
 Polyphase resampling isn't counted, since it needs ROM data before it needs code.
 
