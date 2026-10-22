@@ -34,6 +34,10 @@ class TotalsTest(unittest.TestCase):
         self.assertNotIn("src0_coef", t)
         self.assertEqual(t["mixer_rest"], 6)
 
+    def test_until_stops_at_that_list(self):
+        t = ax_stats.totals(run_text((10, 6, 500, 1), (20, 8, 300, 0), (40, 1, 900, 5)), until=800)
+        self.assertEqual((t["windows"], t["voice_ms"], t["depop"], t["main_l"]), (2, 30, 1, 500))
+
     def test_only_ax_pb_and_bus_lines_count(self):
         t = ax_stats.totals(run_text((1, 1, 1, 1)))
         self.assertEqual(t["src0"], 1)
@@ -58,6 +62,15 @@ class MainTest(unittest.TestCase):
         self.assertEqual(rows["voice_ms"], ["10", "20", "30"])
         self.assertEqual(rows["main_l"], ["500", "700", "700"])
         self.assertEqual(rows["depop"], ["1", "2", "3"])
+
+    def test_until_past_no_window_and_a_bad_until_exit_2(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = write_file(Path(d), "stdout.txt", run_text((10, 6, 500, 1)))
+            self.assertEqual(run_main(ax_stats.main, str(path), "--until", "399")[0], 2)
+            self.assertEqual(run_main(ax_stats.main, str(path), "--until", "0")[0], 2)
+            code, out, _ = run_main(ax_stats.main, str(path), "--until", "400")
+        self.assertEqual(code, 0)
+        self.assertIn("voice_ms", out)
 
     def test_a_run_without_stats_exits_2(self):
         with tempfile.TemporaryDirectory() as d:

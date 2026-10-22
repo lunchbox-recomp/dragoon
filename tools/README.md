@@ -150,11 +150,12 @@ tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw
 
 ## ax_stats.py
 
-What did the game's voices ask the AX mixer for over a run? It reads the `[ax] pb` and `[ax] bus` lines that a run with `GCN_AXSTATS=1` prints every 400 command lists, and prints a row per count with a column per run and a total. Counts are summed over the windows, and the bus peaks take the largest window. `src0_coef=a/b/c/d` becomes four rows, and the mixer's top eight values are left out. The fields are described in `gcn-recomp/docs/diagnostics.md`. A file with no such lines exits 2.
+What did the game's voices ask the AX mixer for over a run? It reads the `[ax] pb` and `[ax] bus` lines that a run with `GCN_AXSTATS=1` prints every 400 command lists, and prints a row per count with a column per run and a total. Counts are summed over the windows, and the bus peaks take the largest window. `src0_coef=a/b/c/d` becomes four rows, and the mixer's top eight values are left out. The fields are described in `gcn-recomp/docs/diagnostics.md`. `--until N` stops at the window that ends at list N. Two unpaced runs of one route reach different lists in the same time, so it lets them be compared over the same lists. A file with no such lines up to there exits 2, and so does an `--until` of 0 or less.
 
 ```
 tools/audio_hashes.py check
 tools/ax_stats.py build/probe/audio-title/stdout.txt build/probe/audio-air-ride-race/stdout.txt
+tools/ax_stats.py before/stdout.txt build/probe/audio-title/stdout.txt --until 20000
 ```
 
 ## warm_shaders.py
