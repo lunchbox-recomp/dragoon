@@ -19,12 +19,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 from frame_dumps import frame_files
-from probe_dirs import trash
+from probe_dirs import run_probe, trash
 from routes import MANIFEST, Route, route_file, select_routes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,11 +80,7 @@ def hash_route(route: Route) -> dict[int, str]:
     if out.exists():
         trash(out)  # a blank memory card, and no frames from an older build
     try:
-        try:
-            subprocess.run(probe_args(route, out.name), check=True, cwd=ROOT,
-                           stdout=subprocess.DEVNULL)
-        except subprocess.CalledProcessError as e:
-            raise ValueError(f"{route.name}: probe.sh exited {e.returncode}") from None
+        run_probe(probe_args(route, out.name), ROOT, route.name)
         return hash_frames(out)
     finally:
         if out.exists():

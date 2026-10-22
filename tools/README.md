@@ -137,7 +137,7 @@ Which routes does the repository play? `tests/hashes/manifest.txt` lists them, a
 
 ## probe_dirs.py
 
-What happens to a probe run's directory? It holds `trash`, which frame_hashes.py and audio_hashes.py use to move a directory from `build/probe/` into `~/.Trash` under a time-stamped name. It has no command line.
+What happens to a probe run and its directory? It holds `trash`, which moves a directory from `build/probe/` into `~/.Trash` under a time-stamped name, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error. frame_hashes.py, audio_hashes.py and the scorecard use both. It has no command line.
 
 ## check_no_game_data.py
 

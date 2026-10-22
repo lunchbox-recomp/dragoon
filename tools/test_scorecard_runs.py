@@ -90,7 +90,7 @@ class PlayTest(Clone):
         trash = self.calls.trash
         self.calls.attach_mock(run, "run")
         with (mock.patch.object(scorecard_runs, "trash", trash),
-              mock.patch.object(scorecard_runs.subprocess, "run", run)):
+              mock.patch.object(subprocess, "run", run)):
             self.result = scorecard_runs.play(self.build, RACE, *margin, commits=COMMITS)
         return trash
 

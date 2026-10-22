@@ -63,7 +63,7 @@ class HashRouteTest(unittest.TestCase):
     def run_route(self, exists: bool, run: mock.Mock) -> mock.Mock:
         trash = mock.Mock()
         with (mock.patch.object(frame_hashes, "trash", trash),
-              mock.patch.object(frame_hashes.subprocess, "run", run),
+              mock.patch.object(subprocess, "run", run),
               mock.patch.object(frame_hashes, "hash_frames", return_value={60: A}),
               mock.patch.object(Path, "exists", return_value=exists)):
             try:

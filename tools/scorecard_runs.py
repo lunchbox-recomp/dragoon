@@ -5,12 +5,11 @@ from __future__ import annotations
 import json
 import math
 import os
-import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from frame_dumps import frame_files
-from probe_dirs import trash
+from probe_dirs import run_probe, trash
 from routes import Route, route_file
 
 MARGIN_S = 15  # seconds played past a route's last checkpoint
@@ -96,11 +95,8 @@ def play(build: Build, route: Route, margin: int = MARGIN_S, *, commits: Commits
     run = run_for(build, route)
     if run.directory.exists():
         trash(run.directory)  # a blank memory card; the last run stays after this one
-    try:
-        subprocess.run(probe_args(build, route, margin), check=True, cwd=build.clone, stdout=subprocess.DEVNULL,
-                       env={**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
-    except subprocess.CalledProcessError as e:
-        raise ValueError(f"{build.label} {route.name}: probe.sh exited {e.returncode}") from None
+    run_probe(probe_args(build, route, margin), build.clone, f"{build.label} {route.name}",
+              {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
     run = finished(build, route)
     run.commits.write_text(json.dumps(asdict(commits)) + "\n")
     return run

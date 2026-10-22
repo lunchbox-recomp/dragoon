@@ -115,7 +115,7 @@ class HashRouteTest(unittest.TestCase):
         trash = self.calls.trash
         self.calls.attach_mock(run, "run")
         with (mock.patch.object(audio_hashes, "trash", trash),
-              mock.patch.object(audio_hashes.subprocess, "run", run)):
+              mock.patch.object(subprocess, "run", run)):
             return audio_hashes.hash_route(self.route), trash
 
     def test_trashes_a_directory_left_from_an_earlier_run_before_the_run_and_keeps_the_last(self):
