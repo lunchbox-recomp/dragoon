@@ -1,3 +1,4 @@
+import json
 import os
 import stat
 import sys
@@ -7,8 +8,9 @@ from pathlib import Path
 from unittest import mock
 
 import routes
+import source_info
 import warm_shaders
-from testutil import run_main, write_file
+from testutil import GIT_ENV, commit, run_main, write_file
 
 ENGINE_REV = warm_shaders.engine_rev
 MANIFEST = "# comment\ntitle 20 60 60,960\ncity-trial-4p 30 60 2700,3480 --pads=4\n"
@@ -84,6 +86,45 @@ class PassesTest(unittest.TestCase):
         self.assertEqual([p.exit_after for p in ps], [TITLE_FRAMES, FOUR_FRAMES])
         self.assertEqual([p.pads for p in ps], [1, 4])
         self.assertEqual(ps[0].route_file, routes.ROUTES / "title.txt")
+
+
+class EngineRevTest(unittest.TestCase):
+    """engine_rev() in a tree that's a git checkout, a source snapshot, both or neither."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        (self.root / "gcn-recomp").mkdir()
+        for patch in (mock.patch.object(warm_shaders, "ROOT", self.root),
+                      mock.patch.dict(os.environ, GIT_ENV)):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def write_info(self, engine: str) -> Path:
+        info = {"dragoon": "d" * 40, "gcn-recomp": engine, "disc_id": "GKYE01", "dol_sha1": "a" * 40}
+        return write_file(self.root, source_info.NAME, json.dumps(info))
+
+    def test_a_checkout_asks_git_even_when_the_file_disagrees(self):
+        rev = commit(self.root / "gcn-recomp", {"engine.txt": "engine"})
+        self.write_info("f" * 40)
+        self.assertEqual(warm_shaders.engine_rev(), rev)
+
+    def test_a_snapshot_reads_the_file(self):
+        self.write_info("e" * 40)
+        self.assertEqual(warm_shaders.engine_rev(), "e" * 40)
+
+    def test_neither_raises_with_the_hint(self):
+        with self.assertRaises(ValueError) as caught:
+            warm_shaders.engine_rev()
+        self.assertIn(source_info.NAME, str(caught.exception))
+        self.assertIn("-DDRAGOON_WARMUP=OFF", str(caught.exception))
+
+    def test_a_malformed_file_raises_with_its_path(self):
+        path = self.write_info("not a commit")
+        with self.assertRaises(ValueError) as caught:
+            warm_shaders.engine_rev()
+        self.assertIn(str(path), str(caught.exception))
 
 
 class WarmTest(WarmTestCase):
@@ -209,6 +250,15 @@ class WarmTest(WarmTestCase):
         self.assertIn("gcn-recomp", err)
         self.assertTrue(err.strip().endswith("-DDRAGOON_WARMUP=OFF to skip the warm-up)"))
         self.assertFalse(self.saves.exists())
+
+    def test_a_snapshot_stamps_the_engine_its_source_info_names(self):
+        (self.dir / "gcn-recomp").mkdir()
+        info = {"dragoon": "d" * 40, "gcn-recomp": "e" * 40, "disc_id": "GKYE01", "dol_sha1": "a" * 40}
+        write_file(self.dir, source_info.NAME, json.dumps(info))
+        with mock.patch.object(warm_shaders, "ROOT", self.dir), \
+                mock.patch.object(warm_shaders, "engine_rev", ENGINE_REV):
+            self.assertEqual(self.warm()[0], 0)
+        self.assertTrue((self.saves / ".shader-warmup").read_text().startswith("e" * 40 + " "))
 
     def test_failed_run_does_not_write_the_stamp(self):
         with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": TITLE_EXIT}):
