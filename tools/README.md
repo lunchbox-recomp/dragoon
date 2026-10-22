@@ -12,7 +12,7 @@ Every tool takes `--help`, which prints its usage and what it reads. Results go 
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py and noise_blocks.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py and ax_stats.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -146,6 +146,15 @@ Where do the DMA's blocks turn to loud noise? It weighs each 160-sample block of
 
 ```
 tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw
+```
+
+## ax_stats.py
+
+What did the game's voices ask the AX mixer for over a run? It reads the `[ax] pb` and `[ax] bus` lines that a run with `GCN_AXSTATS=1` prints every 400 command lists, and prints a row per count with a column per run and a total. Counts are summed over the windows, and the bus peaks take the largest window. `src0_coef=a/b/c/d` becomes four rows, and the mixer's top eight values are left out. The fields are described in `gcn-recomp/docs/diagnostics.md`. A file with no such lines exits 2.
+
+```
+tools/audio_hashes.py check
+tools/ax_stats.py build/probe/audio-title/stdout.txt build/probe/audio-air-ride-race/stdout.txt
 ```
 
 ## warm_shaders.py
