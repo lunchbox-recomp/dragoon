@@ -144,6 +144,12 @@ class WarmTest(WarmTestCase):
         self.assertEqual(len(self.cache_lines()), 2)
         self.assertIn("2 passes", out)
 
+    def test_each_pass_prints_one_pass_line(self):
+        code, out, _ = self.warm()
+        self.assertEqual(code, 0)
+        passes = [l for l in out.splitlines() if warm_shaders.PASS_LINE.fullmatch(l)]
+        self.assertEqual([l.split(":")[0] for l in passes], ["title", "city-trial-4p"])
+
     def test_memory_card_and_other_saves_are_untouched(self):
         self.saves.mkdir()
         write_file(self.saves, "memcard_a.raw", b"the player's card")
