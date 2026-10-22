@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -46,6 +47,8 @@ CARD_GLOB = "memcard_*.raw"
 STAMP = ".shader-warmup"
 TAIL_LINES = 15
 ROUTE_TAIL_FRAMES = 900  # past the last frame a route must reach, to build what follows it
+# The line each finished pass prints, which the launcher's build counts as progress.
+PASS_LINE = re.compile(r"\S+: \d+ frames, \d+\.\d s")
 
 
 @dataclass
@@ -106,21 +109,21 @@ def pass_timeout(exit_after: int) -> float:
     return 2 * exit_after / 60 + 30
 
 
-def install(cache_from: Path, saves_dir: Path) -> None:
-    """Replace <saves_dir>/shaders.bin with cache_from, whole or not at all.
+def install(src: Path, dest: Path) -> None:
+    """Replace DEST with a copy of SRC, whole or not at all.
 
-    The copy goes to a temp file in saves_dir and an os.replace puts it in place, so a reader
+    The copy goes to a temp file beside DEST and an os.replace puts it in place, so a reader
     never sees half a file.
     """
-    saves_dir.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=CACHE + ".", suffix=".tmp", dir=saves_dir)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=dest.name + ".", suffix=".tmp", dir=dest.parent)
     try:
-        with os.fdopen(fd, "wb") as out, cache_from.open("rb") as src:
-            shutil.copyfileobj(src, out)
+        with os.fdopen(fd, "wb") as out, src.open("rb") as f:
+            shutil.copyfileobj(f, out)
             out.flush()
             os.fsync(out.fileno())
-        shutil.copymode(cache_from, tmp)
-        os.replace(tmp, saves_dir / CACHE)
+        shutil.copymode(src, tmp)
+        os.replace(tmp, dest)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
@@ -161,10 +164,10 @@ def warm(game: Path, saves: Path, plan: list[Pass]) -> None:
                 card.unlink()
             start = time.monotonic()
             run_pass(game, p, scratch)
-            print(f"{p.name}: {p.exit_after} frames, {time.monotonic() - start:.1f} s")
+            print(f"{p.name}: {p.exit_after} frames, {time.monotonic() - start:.1f} s", flush=True)
         if not cache.exists():
             raise PassFailed(f"the game wrote no {CACHE}")
-        install(cache, saves)
+        install(cache, saves / CACHE)
 
 
 def main(argv: list[str]) -> int:

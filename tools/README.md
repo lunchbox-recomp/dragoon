@@ -158,6 +158,40 @@ It writes nothing and exits 2 when:
 
 `--repo` names a checkout other than the one holding the tool. A missing OUT is made.
 
+## launcher_build.py
+
+How does the launcher build the game? launcher_build.py is its recipe, and a developer can run it from a shell. Given a snapshot from export_source.py, the player's disc and every tool by full path, it builds `<data>/game/<id>/Dragoon.app` and points `<data>/game/current` at it. It prints one JSON event per line on stdout (the format is in `--help`) and writes every line the tools print to `--log`, with each command and each step's time.
+
+| Step | What it does |
+|---|---|
+| sdl | Checks the SDL tarball against gcn-recomp's pin and extracts it to `<cache>/sdl` |
+| source | Copies the snapshot to `<data>/source/<commit>` and checks the copy against its manifest |
+| configure | Runs CMake into an empty `<cache>/build`, which recompiles the disc |
+| compile | Runs Ninja for `dragoon`, whose `[done/total]` lines become progress events |
+| warmup | Runs the copy's warm_shaders.py on a copy of the player's shader cache, one progress event per pass |
+| package | Wraps the game in an app sealed ad hoc, with a `stamp.json` naming both commits and the SDK |
+| swap | Points `game/current` at the new build, then installs the warmed cache in `<data>/saves` |
+
+The tools run with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and five other variables, listed in `--help`. CMake ignores `/opt/homebrew`, `/usr/local` and `/opt/local`, so Homebrew's Python, SDL or libusb can't reach the build. `FETCHCONTENT_FULLY_DISCONNECTED` makes any download an error.
+
+Before the swap nothing in `<data>` changes but the new `source/<commit>` and `game/<id>`. A failed or killed build leaves the old game current and `saves/` as it was. Earlier builds stay in `<data>/game` for the launcher to delete. A second build while one runs exits 3 at `<cache>/build.lock` without touching anything.
+
+```
+tools/launcher_build.py --source /tmp/dragoon-source --disc "$HOME/Kirby Air Ride (USA).gcm" \
+  --data /tmp/dragoon-data --cache /tmp/dragoon-cache --log /tmp/dragoon-build.log \
+  --cmake /opt/homebrew/bin/cmake --ninja /opt/homebrew/bin/ninja \
+  --cc /Library/Developer/CommandLineTools/usr/bin/clang \
+  --cxx /Library/Developer/CommandLineTools/usr/bin/clang++ \
+  --python /Library/Developer/CommandLineTools/usr/bin/python3 \
+  --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk --sdl-tarball /tmp/SDL3-3.4.18.tar.gz
+```
+
+`--no-disc` builds `runtime_check` and stops, which proves the tools and SDL's source configure and compile with no disc. `--no-warmup` skips the warm-up. `--keep-build` keeps `<cache>/build` and the SDL source it points at, which are deleted after a good build otherwise.
+
+## sdl_source.py
+
+Where does SDL's source come from when nothing downloads? gcn-recomp's `CMakeLists.txt` pins SDL's release tarball by URL and SHA-256 in its `sdl3` `FetchContent_Declare`. sdl_source.py reads that pin, so the hash has one home. Its extraction checks every member before it writes anything, and refuses absolute paths, `..` and anything but plain files and directories, since the tools' Python 3.9 has no tarfile filter. It has no command line.
+
 ## The engine's own tools
 
 Two tools in `gcn-recomp/tools/` matter when debugging here.

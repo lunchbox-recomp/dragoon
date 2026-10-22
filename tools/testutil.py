@@ -5,6 +5,7 @@ import contextlib
 import io
 import os
 import subprocess
+import tarfile
 from pathlib import Path
 from typing import Callable
 
@@ -37,6 +38,24 @@ def write_file(directory: Path, name: str, data: bytes | str) -> Path:
         path.write_text(data)
     else:
         path.write_bytes(data)
+    return path
+
+
+def tar_member(name: str, kind: bytes = tarfile.REGTYPE, mode: int = 0o644,
+               link: str = "") -> tarfile.TarInfo:
+    info = tarfile.TarInfo(name)
+    info.type = kind
+    info.mode = mode
+    info.linkname = link
+    return info
+
+
+def make_tarball(path: Path, members: list[tuple[tarfile.TarInfo, bytes]]) -> Path:
+    """A .tar.gz at PATH holding MEMBERS, each a header and its data."""
+    with tarfile.open(path, "w:gz") as tar:
+        for info, data in members:
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data) if data else None)
     return path
 
 
