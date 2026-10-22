@@ -44,6 +44,11 @@ class ProbeArgumentsTest(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertIn("--log=", r.stderr)
 
+    def test_empty_aspect_exits_2(self):
+        r = probe(NAME, "1", "", "60", "--aspect=")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("--aspect=", r.stderr)
+
 
 class ProbeTreeTest(unittest.TestCase):
     """probe.sh copied into a temp tree, so the game it runs is whatever the test puts in build/."""
@@ -81,6 +86,14 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertIn("--log", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
+    def test_aspect_or_output_with_bench_exits_2_before_making_a_run_directory(self):
+        self.add_game("dragoon_bench", "echo 'whole run'\n")
+        for setting in ("--aspect=16:9", "--output"):
+            r = probe(NAME, "1", "", "60", setting, "--bench", script=self.script)
+            self.assertEqual(r.returncode, 2, setting)
+            self.assertIn(setting, r.stderr)
+            self.assertFalse((self.root / "build" / "probe").exists())
+
     def test_crashed_bench_with_no_report_exits_1(self):
         self.add_game("dragoon_bench", "exit 3\n")
         r = probe(NAME, "1", "", "60", "--bench", script=self.script)
@@ -108,6 +121,23 @@ class ProbeTreeTest(unittest.TestCase):
     def test_no_log_setting_passes_no_log_argument(self):
         args = self.game_args()
         self.assertEqual([a for a in args if a == "" or a.startswith("--log")], [])
+
+    def test_aspect_reaches_the_windowed_game(self):
+        self.assertIn("--aspect=16:9", self.game_args("--aspect=16:9"))
+        self.assertIn("--aspect=window", self.game_args("--aspect=window"))
+
+    def test_output_asks_the_game_for_output_dumps(self):
+        self.assertIn("--dump-output", self.game_args("--output"))
+
+    def test_no_aspect_or_output_setting_passes_neither(self):
+        args = self.game_args()
+        self.assertEqual([a for a in args if a.startswith(("--aspect", "--dump-output"))], [])
+
+    def test_frame_count_leaves_out_output_dumps(self):
+        self.add_game("dragoon", "touch frame_00060.png output_00060.png\n")
+        r = probe(NAME, "1", "", "60", "--output", script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(r.stdout.rstrip().endswith(": 1 frames"), r.stdout)
 
 
 if __name__ == "__main__":
