@@ -155,12 +155,14 @@ def main(argv: list[str]) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=["check", "record"])
     ap.add_argument("routes", nargs="*")
-    ap.add_argument("--lists", default="", help="record: comma-separated list counts")
+    ap.add_argument("--lists", default=None, help="record: comma-separated list counts")
     args = ap.parse_args(argv)
-    if args.mode == "check" and args.lists:
+    if args.mode == "check" and args.lists is not None:
         ap.error("--lists is for record")
     try:
-        chosen = parse_lists(args.lists)
+        chosen = parse_lists(args.lists) if args.lists is not None else []
+        if args.lists is not None and not chosen:
+            raise ValueError("--lists names no list counts")
         routes = select_routes(args.routes, MANIFEST)
         paths = {r.name: HASHES / "audio" / f"{r.name}.txt" for r in routes}
         goldens = {r.name: read_golden(paths[r.name]) for r in routes} if args.mode == "check" else {}

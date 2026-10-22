@@ -276,6 +276,16 @@ class MainTest(unittest.TestCase):
                 self.assertIn(f"{bad} is not a positive multiple of 400", err)
                 hash_route.assert_not_called()
 
+    def test_an_empty_lists_exits_2_before_the_game_runs_and_writes_nothing(self):
+        self.golden(f"400 {A}\n")
+        for bad in ("", ","):
+            with self.subTest(bad=bad):
+                code, _, err, hash_route = self.main({400: A}, "record", "--lists", bad)
+                self.assertEqual(code, 2)
+                self.assertIn("--lists names no list counts", err)
+                hash_route.assert_not_called()
+                self.assertEqual(audio_hashes.read_golden(self.path), {400: A})
+
     def test_check_refuses_lists(self):
         self.golden(f"400 {A}\n")
         code, _, err, hash_route = self.main({400: A}, "check", "--lists", "400")

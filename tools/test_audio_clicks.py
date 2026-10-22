@@ -227,6 +227,11 @@ class ReadTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, f"{path}:2: '12.5' isn't a sample index"):
             audio_clicks.read_marks(path)
 
+    def test_a_mark_in_non_ascii_digits_is_refused(self):
+        path = write_file(self.dir, "cuts.txt", "١٢\n")
+        with self.assertRaisesRegex(ValueError, f"{path}:1: .* isn't a sample index"):
+            audio_clicks.read_marks(path)
+
     def test_refuses_what_it_cannot_read(self):
         for name, path, msg in (
                 ("8-bit", write_wav(self.dir, "b.wav", [0, 0], width=1), "8-bit samples"),
@@ -287,12 +292,18 @@ class MainTest(unittest.TestCase):
                           ([str(self.path), "--from", "5"], "past the end"),
                           ([str(self.path), "--list", "-1"], "can't be negative"),
                           ([str(self.path), "--period", "-160"], "can't be negative"),
-                          ([str(self.path), "--raw", "-1"], "can't be negative"),
                           ([str(self.path), "--marks", str(self.path) + "y"], str(self.path) + "y")):
             with self.subTest(argv=argv):
                 code, _, err = run_main(audio_clicks.main, *argv)
                 self.assertEqual(code, 2)
                 self.assertIn(msg, err)
+
+    def test_raw_below_1_exits_2_instead_of_reading_a_wav(self):
+        for rate in ("0", "-1"):
+            with self.subTest(rate=rate):
+                code, _, err = run_main(audio_clicks.main, str(self.path), "--raw", rate)
+                self.assertEqual(code, 2)
+                self.assertIn("--raw RATE must be at least 1", err)
 
     def test_help_exits_0(self):
         code, out, _ = run_main(audio_clicks.main, "--help")

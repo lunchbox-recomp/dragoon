@@ -11,8 +11,11 @@ ring. Prints its length, then three counts, each with the times it was found at:
   clicks   a sample that breaks from the waveform around it: its second difference is over
            8 times the RMS second difference of the 5 ms either side, and at least 128. A
            splice, such as a skip in the audio ring, shows as one. Detections less than 1 ms
-           apart, on any channel, are one click. Each is given with its size, the largest
-           second difference among them in dB from full scale (32,768).
+           apart, on any channel, are one click, and they chain: a run of detections each
+           under 1 ms from the last is one click, however long the run. A click is reported at
+           the run's first sample, so --marks and --period match that sample. Each is given
+           with its size, the largest second difference among them in dB from full scale
+           (32,768).
   gaps     5 ms or more of digital silence on every channel, starting straight after sound
            (over 300 RMS on some channel in the 5 ms before). A dropout shows as one, and
            usually clicks at either edge too. A sound that fades out first doesn't.
@@ -27,8 +30,8 @@ the sample indices in the text file F, one a line (# starts a comment), such as 
 audio ring cut, and counts the marks with a click near them too. --json prints the whole
 result as JSON.
 
-Exits 0 once it has read the recording, 2 on a bad argument or a file that isn't 16-bit
-PCM WAV (without --raw).
+Exits 0 once it has read the recording, 2 on a bad argument (--raw below 1 included) or a
+file that isn't 16-bit PCM WAV (without --raw).
 """
 from __future__ import annotations
 
@@ -141,7 +144,7 @@ def read_marks(path: Path) -> list[int]:
     marks = []
     for n, line in enumerate(path.read_text().splitlines(), 1):
         text = line.split("#")[0].strip()
-        if text and not text.isdigit():
+        if text and not (text.isascii() and text.isdigit()):
             raise ValueError(f"{path}:{n}: {text!r} isn't a sample index")
         if text:
             marks.append(int(text))
@@ -288,17 +291,19 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file", type=Path)
-    ap.add_argument("--raw", type=int, default=0, metavar="RATE")
+    ap.add_argument("--raw", type=int, default=None, metavar="RATE")
     ap.add_argument("--from", dest="start", type=float, default=0.0)
     ap.add_argument("--list", type=int, default=20)
     ap.add_argument("--period", type=int, default=0)
     ap.add_argument("--marks", type=Path)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    if args.raw < 0 or args.start < 0 or args.list < 0 or args.period < 0:
-        ap.error("--raw, --from, --list and --period can't be negative")
+    if args.raw is not None and args.raw < 1:
+        ap.error("--raw RATE must be at least 1")
+    if args.start < 0 or args.list < 0 or args.period < 0:
+        ap.error("--from, --list and --period can't be negative")
     try:
-        rec = read_raw(args.file, args.raw) if args.raw else read_wav(args.file)
+        rec = read_raw(args.file, args.raw) if args.raw is not None else read_wav(args.file)
         marks = read_marks(args.marks) if args.marks else None
         report = analyse(rec, args.start, args.period, marks)
     except (OSError, ValueError) as e:

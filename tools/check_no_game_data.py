@@ -5,8 +5,8 @@ Usage: check_no_game_data.py
 
 Checks every tracked file and prints one "game data tracked: PATH" line per path that looks
 like game data:
-  - a disc image or executable by suffix (.iso, .gcm, .dol, ...), a .raw memory card or a
-    .bin shader cache or key list
+  - a disc image or executable by suffix (.iso, .gcm, .dol, ...), a .raw memory card or audio
+    recording, a .wav recording (anywhere, like .raw) or a .bin shader cache or key list
   - anything under a top-level build*/ or rom/ (except rom/README.md), or under a saves/
     at any depth
   - a frame dump (frame_NNNNN.png), stdout.txt or panic.txt anywhere
@@ -26,7 +26,7 @@ from frame_dumps import FRAME_NAME
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_SUFFIXES = (".iso", ".gcm", ".ciso", ".rvz", ".gcz", ".wbfs", ".dol", ".rel", ".gci", ".raw",
-                 ".bin")
+                 ".wav", ".bin")
 LOG_NAMES = ("stdout.txt", "panic.txt")
 
 

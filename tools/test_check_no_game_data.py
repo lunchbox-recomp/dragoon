@@ -26,6 +26,10 @@ class ViolationsTest(unittest.TestCase):
                  "x/stdout.txt", "panic.txt"]
         self.assertEqual(check_no_game_data.violations(paths), paths)
 
+    def test_wav_recordings_fail_anywhere(self):
+        paths = ["out.wav", "tools/x/out.WAV", "docs/clip.wav"]
+        self.assertEqual(check_no_game_data.violations(paths), paths)
+
     def test_lookalikes_pass(self):
         paths = ["x/frame_00060.png.bak", "x/xframe_00060.png", "x/saves.txt", "x/stdout.txt.md"]
         self.assertEqual(check_no_game_data.violations(paths), [])
