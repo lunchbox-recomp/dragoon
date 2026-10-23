@@ -182,14 +182,15 @@ same five routes. Clicks a minute is over the summed seconds.
 | Highest main L peak before the clamp | 85,094 | 64,999 |
 | Samples the clamp changed | Not logged | 587 |
 
-The audio work didn't reduce the mixer stage's clicks over these seconds. The totals are 132 and 136, no route
-differs by more than one click and the race has 45 in both. The clicks on a block join are 35 in
-both, against about 4 by chance. What the work cut was clipping. The clipped runs, as
-`audio_clicks.py` counts them, fell from 208 to 25 and the race peak from 85,094 to 64,999. The three routes that clipped at the baseline,
-the title with 48 runs, the race with 150 and four players with 10, have 0, 25 and 0 at current,
-and the race is the only one still clipping. Every route gained exactly one gap, 3 to 8 in all.
-The baseline prints no `[ax] bus` lines, so it has no clamp count to compare. Each build is one
-unpaced run, and the baseline's wasn't compared with a second one.
+The audio work didn't reduce the mixer stage's clicks over these seconds. The totals are 132
+and 136, no route differs by more than one click and the race has 45 in both. The clicks on a
+block join are 35 in both, against about 4 by chance. What the work cut was clipping. The
+clipped runs, as `audio_clicks.py` counts them, fell from 208 to 25 and the race peak from
+85,094 to 64,999. Three routes clipped at the baseline, the title with 48 runs, the race with
+150 and four players with 10. At current they have 0, 25 and 0, so the race is the only one
+still clipping. Every route gained exactly one gap, 3 to 8 in all. The baseline prints no
+`[ax] bus` lines, so it has no clamp count to compare. Each build is one unpaced run, and the
+baseline's wasn't compared with a second one.
 
 | Pass 4, unpaced | Clicks (a minute) | On a block join (by chance) | Gaps | Clipped runs (samples) | Main L peak | Clamped samples |
 |---|---|---|---|---|---|---|
@@ -266,9 +267,9 @@ Passes 1 and 2 scored the mixer stage from their real-time runs.
 
 Current clicked more on every route in both passes. Unpaced, the bisect found the work took
 the clicks only from 131 to 135, and passes 4 and 3 found them go from 132 to 136. The bisect
-found current's real-time runs made 26 more clicks than its
-unpaced ones while the baseline's made one fewer, which matches pass 2's 161 and 130 against 135
-and 131. It put the 26 down to four things.
+found current's real-time runs made 26 more clicks than its unpaced ones while the baseline's
+made one fewer, which matches pass 2's 161 and 130 against 135 and 131. It put the 26 down to
+four things.
 
 - 7 clicks (2 in the baseline), all on joins, sit on blocks the DMA played twice while the clock
   caught up. The code that replays them is unchanged since upstream. Three more real-time menu
