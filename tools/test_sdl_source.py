@@ -16,11 +16,13 @@ FetchContent_Declare(sdl3
   URL_HASH SHA256={sha}
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
 """.format(other="1" * 64, sha="2" * 64)
+GCN_CMAKE = sdl_source.ROOT / "gcn-recomp" / "CMakeLists.txt"
 
 
 class PinTest(unittest.TestCase):
+    @unittest.skipUnless(GCN_CMAKE.exists(), "gcn-recomp isn't checked out")
     def test_finds_the_real_pin_in_gcn_recomp(self):
-        text = (sdl_source.ROOT / "gcn-recomp" / "CMakeLists.txt").read_text()
+        text = GCN_CMAKE.read_text()
         self.assertEqual(sdl_source.pin(text), sdl_source.Pin(REAL_URL, REAL_SHA256))
 
     def test_takes_sdl3s_declare_and_names_its_directory(self):
