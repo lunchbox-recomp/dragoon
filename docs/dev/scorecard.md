@@ -90,8 +90,10 @@ directory as `base`. Pass 3 played current alone, because the baseline clone had
 other commits.
 
 ```sh
-tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --json
-tools/audio_scorecard.py current=build --json
+tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --json \
+  --routes title,menu,air-ride-race,city-trial,city-trial-4p
+tools/audio_scorecard.py current=build --json \
+  --routes title,menu,air-ride-race,city-trial,city-trial-4p
 ```
 
 The tool plays a route on each build in turn, then moves to the next route. Each run goes
@@ -352,7 +354,8 @@ the same way as current.
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk -DDRAGOON_WARMUP=OFF
 ninja -C build
-tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build
+tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build \
+  --routes title,menu,air-ride-race,city-trial,city-trial-4p
 tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes title --margin 75
 ```
 
