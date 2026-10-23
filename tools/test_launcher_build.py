@@ -456,6 +456,21 @@ class FailureTest(RecipeTestCase):
         self.assertEqual((self.cache / "sdl" / "SDL3-3.4.18" / "CMakeLists.txt").read_text(),
                          "project(SDL3)\n")
 
+    def test_the_hash_is_of_the_bytes_that_were_read(self):
+        real, tarball = Path.read_bytes, self.tarball
+
+        def rewritten_after_reading(path):
+            data = real(path)
+            if path == tarball:  # someone replaces the file right after it was read
+                make_tarball(tarball, [(tar_member("SDL3-3.4.18/CMakeLists.txt"), b"swapped\n")])
+            return data
+
+        with mock.patch.object(Path, "read_bytes", rewritten_after_reading):
+            code, events, _ = self.build("--keep-build")
+        self.assertEqual((code, self.of(events, "error")), (0, []))
+        self.assertEqual((self.cache / "sdl" / "SDL3-3.4.18" / "CMakeLists.txt").read_text(),
+                         "project(SDL3)\n")
+
     def test_a_failed_package_removes_the_half_made_build(self):
         self.old_game()
         write_file(self.dir, "fail codesign", "")
