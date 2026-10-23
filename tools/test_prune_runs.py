@@ -254,6 +254,57 @@ class KeepTest(PruneTestCase):
         self.assertTrue(run.exists())
 
 
+class CaseTest(PruneTestCase):
+    def case_insensitive(self) -> bool:
+        marker = self.root / "CaseMarker"
+        marker.write_text("")
+        found = (self.root / "casemarker").exists()
+        marker.unlink()
+        return found
+
+    def test_a_keep_file_in_other_capitals_is_never_removed(self):
+        for i, spelling in enumerate(("Keep", "KEEP", "kEeP")):
+            clone = self.make_clone(f"clone-{i}")
+            keep = clone / "build" / "probe" / spelling
+            keep.write_text("")
+            self.touch(keep, 100)
+            code, out, err = self.prune("--delete", str(clone))
+            self.assertEqual(code, 0, spelling)
+            self.assertEqual(os.listdir(keep.parent), [spelling])
+            self.assertEqual(out, "freed 0 B from 0 entries\n")
+
+    def test_a_keep_file_in_other_capitals_is_read_on_a_volume_that_ignores_case(self):
+        if not self.case_insensitive():
+            self.skipTest("this volume is case-sensitive")
+        for i, spelling in enumerate(("Keep", "KEEP")):
+            clone = self.make_clone(f"clone-{i}")
+            victim = self.make_run("victim", 100, clone=clone)
+            doomed = self.make_run("doomed", 100, clone=clone)
+            keep = clone / "build" / "probe" / spelling
+            keep.write_text("victim\n")
+            self.touch(keep, 100)
+            code, out, err = self.prune("--delete", str(clone))
+            self.assertEqual(code, 0, spelling)
+            self.assertEqual(sorted(os.listdir(keep.parent)), sorted([spelling, victim.name]))
+            self.assertFalse(doomed.exists())
+
+    def test_a_keep_line_protects_a_name_in_other_capitals(self):
+        for name in ("Case", "Straße", "unlisted"):
+            self.make_run(name, 100)
+        (self.probe / "keep").write_text("case\nSTRASSE\n", encoding="utf-8")
+        code, out, err = self.prune("--delete", str(self.clone))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.names(), ["Case", "Straße", "keep"])
+
+    def test_a_capitalised_keep_line_protects_a_lowercase_name(self):
+        stale = self.make_run("stale", 100)
+        pinned = self.make_run("pinned", 100)
+        (self.probe / "keep").write_text("PINNED\n")
+        self.prune("--delete", str(self.clone))
+        self.assertFalse(stale.exists())
+        self.assertTrue(pinned.exists())
+
+
 class LinkTest(PruneTestCase):
     def test_a_stale_symlinked_child_goes_as_a_link_and_its_target_stays(self):
         target = self.make_target()

@@ -4,10 +4,11 @@
 Usage: prune_runs.py [--hours N] [--delete] CLONE ...
 
 For each CLONE, looks at the direct children of CLONE/build/probe/ and nothing else. A child
-is stale when the newest mtime of it and of everything under it is more than N hours old (24
+is stale when its own mtime and those of everything under it are all more than N hours old (24
 unless given), and a file's age is its own mtime. The names in build/probe/keep, one a line,
 are never stale. Blank lines and lines starting with # are skipped. keep itself is never
-touched.
+touched. Names are compared ignoring case, since the default macOS volume does, so Keep is
+never touched and a keep line "case" protects Case. That only ever keeps more.
 
 Links are never followed. The walk for mtimes doesn't go through them, a link's age is its own
 mtime, and a stale link is removed as a link while its target stays. A CLONE is refused, with
@@ -67,8 +68,8 @@ def probe_dir(clone: Path) -> Path | None:
 
 
 def read_keep(probe: Path) -> set[str]:
-    """The names in probe/keep. A keep that exists but isn't a readable plain file is an error,
-    since the names it protects can't be known."""
+    """The names in probe/keep, casefolded. A keep that exists but isn't a readable plain file is
+    an error, since the names it protects can't be known."""
     path = probe / KEEP
     try:
         mode = path.lstat().st_mode
@@ -78,12 +79,12 @@ def read_keep(probe: Path) -> set[str]:
         raise ValueError(f"{path}: not a plain file")
     lines = path.read_text(encoding="utf-8", errors="surrogateescape").split("\n")
     names = (line.strip() for line in lines)
-    return {name for name in names if name and not name.startswith("#")}
+    return {name.casefold() for name in names if name and not name.startswith("#")}
 
 
 def measure(path: Path) -> tuple[int, float]:
     """The bytes in the regular files under PATH and the newest mtime of PATH and everything
-    under it. A link is measured as itself and a directory link is not entered."""
+    under it. A link is measured as itself and a directory link isn't entered."""
     st = path.lstat()
     size = st.st_size if stat.S_ISREG(st.st_mode) else 0
     newest = st.st_mtime
@@ -108,11 +109,13 @@ def measure(path: Path) -> tuple[int, float]:
 
 def find_stale(probe: Path, keep: set[str], cutoff: float) -> tuple[list[Child], list[str]]:
     """The children of PROBE whose newest mtime is before CUTOFF, by name, and a line for each
-    child that couldn't be read. keep and the names in KEEP are left out."""
+    child that couldn't be read. A child named keep in any case, or whose casefolded name is in
+    the set `keep` (from read_keep), is left out."""
     stale: list[Child] = []
     unreadable: list[str] = []
     for name in sorted(os.listdir(probe)):
-        if name == KEEP or name in keep:
+        folded = name.casefold()
+        if folded == KEEP or folded in keep:
             continue
         path = probe / name
         try:

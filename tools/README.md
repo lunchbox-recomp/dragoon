@@ -193,7 +193,9 @@ tools/prune_runs.py /path/to/clone
 tools/prune_runs.py --hours 6 --delete /path/to/clone /path/to/old-clone
 ```
 
-Names listed in `build/probe/keep`, one a line, stay. Blank lines and lines that start with `#` are skipped, and `keep` itself is never touched. Links are never followed. A symlinked child is removed as a link and its target stays, and the age walk doesn't go through links.
+Names listed in `build/probe/keep`, one a line, stay. Blank lines and lines that start with `#` are skipped, and `keep` itself is never touched. Names are compared ignoring case, as the default macOS volume does, so `Keep` is never touched and a line `case` protects `Case`. A run you mean to read later, such as the last `audio-ROUTE` directory that audio_hashes.py leaves for its `[ax]` lines or the `scorecard-ROUTE` directories that audio_scorecard.py `--no-run` reads back, is prunable after 24 hours unless its name is in `keep`.
+
+Links are never followed. A symlinked child is removed as a link and its target stays, and the age walk doesn't go through links.
 
 A CLONE is refused when it isn't a directory, when its `build/probe` isn't `CLONE/build/probe` once links are resolved (a link to elsewhere, say) or when its `keep` isn't a readable plain file. Nothing is removed from any CLONE then, and it exits 2. A CLONE with no `build/probe` is skipped with a note on stderr. A child it can't read or remove is named on stderr and the rest still go. That exits 1, and a child that failed to remove counts as nothing freed. Otherwise it exits 0.
 
