@@ -2,5 +2,5 @@
 # the mixer has written since boot, as GCN_AXSTATS=1 prints it. They hold for unpaced runs only:
 # tools/probe.sh --bench, the way tools/audio_hashes.py runs them. Paced runs make catch-up jumps.
 # Rows carry no frame number, because lists per presented frame isn't constant.
-11200 0964FB1601F873FE
-24000 036D33B2FC014728
+11200 66E6491271BD59A9
+24000 02F9EF90750EF3CD
