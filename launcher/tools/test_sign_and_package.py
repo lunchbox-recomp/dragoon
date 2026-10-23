@@ -50,16 +50,22 @@ marker() { [ -e "$FAKE_SWITCHES/$1" ]; }
 BODIES = {
     "codesign": """
 if marker "fail codesign"; then exit 1; fi
+if [ "$1" = "--verify" ] && marker "fail verify"; then exit 1; fi
 """,
     "ditto": """
 cp -R "$1" "$2"
 """,
     "hdiutil": """
 if marker "fail hdiutil"; then exit 1; fi
+if marker "hdiutil flakes"; then
+  tries=$(grep -c '^tool hdiutil' "$FAKE_RECORDS")
+  if [ "$tries" -le 2 ]; then echo "hdiutil: create failed - Resource busy" >&2; exit 1; fi
+fi
 printf 'a fake dmg' > "$last"
 """,
     "xcrun": """
 if [ "$1 $2" = "notarytool submit" ]; then
+  if marker "notarytool hangs"; then exec sleep 30; fi
   if marker "no json"; then echo "notarytool broke"; exit 1; fi
   status=Accepted
   if marker "invalid"; then status=Invalid; fi
@@ -136,6 +142,9 @@ class SignTestCase(unittest.TestCase):
             patch = mock.patch.object(sign_plan, tool.upper(), path)
             patch.start()
             self.addCleanup(patch.stop)
+        pause = mock.patch.object(sign_and_package, "RETRY_PAUSE_SECONDS", 0)
+        pause.start()
+        self.addCleanup(pause.stop)
         self.app = make_app(self.dir / "dist dir" / "Dragoon Dev.app")
         self.out = self.dir / "release out"
         self.key = self.dir / "AuthKey.p8"
@@ -209,7 +218,8 @@ class SignTestCase(unittest.TestCase):
                          self.sign(framework, identity=identity)]
         commands += [
             self.sign(app, identity=identity),
-            [self.fakes["hdiutil"], "create", "-format", "UDZO", "-volname", "Dragoon",
+            [self.fakes["codesign"], "--verify", "--strict", "--deep", str(app)],
+            [self.fakes["hdiutil"], "create", "-format", "UDZO", "-volname", "Dragoon", "-ov",
              "-srcfolder", str(staged), str(dmg)],
             [self.fakes["codesign"], "-s", identity,
              "--timestamp=none" if identity == "-" else "--timestamp", "-i", BUNDLE_ID + ".dmg",
@@ -220,7 +230,6 @@ class SignTestCase(unittest.TestCase):
             commands += [[self.fakes["xcrun"], "notarytool", "submit", str(dmg), *key, "--wait",
                           "--output-format", "json"],
                          [self.fakes["xcrun"], "stapler", "staple", str(dmg)]]
-        commands.append([self.fakes["codesign"], "--verify", "--strict", "--deep", str(app)])
         if notarize:
             commands += [
                 [self.fakes["xcrun"], "stapler", "validate", str(dmg)],
@@ -353,8 +362,8 @@ class FlagTest(SignTestCase):
         tools = [a[0] for a in self.argvs()]
         self.assertNotIn(self.fakes["xcrun"], tools)
         self.assertNotIn(self.fakes["spctl"], tools)
-        self.assertEqual(self.argvs()[-1], [self.fakes["codesign"], "--verify", "--strict", "--deep",
-                                            str(self.out / "dmg-root" / APP)])
+        self.assertEqual(self.argvs()[-1][:3], [self.fakes["codesign"], "-s", "-"])  # the DMG's
+        self.assertEqual(self.argvs()[-1][-1], str(self.out / "Dragoon.dmg"))
         self.assertEqual({a[a.index("-s") + 1] for a in self.signing()}, {"-"})
         self.assertEqual(out.splitlines()[-1], str(self.out / "Dragoon.dmg"))
 
@@ -388,11 +397,40 @@ class FailureTest(SignTestCase):
         self.assertIn("cmake", err)
         self.assertIn("exited 1", err)
 
-    def test_a_failed_dmg_stops_before_it_is_signed(self):
+    def test_a_failed_dmg_stops_before_it_is_signed_after_three_tries(self):
         self.switch("fail hdiutil")
         code, _, _ = self.run_tool()
         self.assertEqual(code, 1)
         self.assertEqual(self.calls()[-1]["tool"], "hdiutil")
+        self.assertEqual([c["tool"] for c in self.calls()].count("hdiutil"), 3)
+
+    def test_hdiutil_create_is_tried_again_after_a_busy_failure(self):
+        self.switch("hdiutil flakes")  # fails twice, as its Resource busy flake does
+        code, out, err = self.run_tool()
+        self.assertEqual(code, 0)
+        self.assertEqual([c["tool"] for c in self.calls()].count("hdiutil"), 3)
+        self.assertIn("trying again", err)
+        self.assertEqual(out.splitlines()[-1], str(self.out / "Dragoon.dmg"))
+
+    def test_a_signature_that_does_not_verify_stops_before_the_dmg_exists(self):
+        self.switch("fail verify")
+        code, _, err = self.run_tool()
+        self.assertEqual(code, 1)
+        self.assertEqual(self.calls()[-1]["argv"][:3], ["--verify", "--strict", "--deep"])
+        self.assertNotIn("hdiutil", [c["tool"] for c in self.calls()])
+        self.assertFalse((self.out / "Dragoon.dmg").exists())
+        self.assertIn("exited 1", err)
+
+    def test_a_notarization_that_never_finishes_is_cut_off_and_says_how_to_look(self):
+        self.switch("notarytool hangs")
+        with mock.patch.object(sign_plan, "NOTARY_SECONDS", 1):
+            code, _, err = self.run_tool()
+        self.assertEqual(code, 1)
+        self.assertIn("didn't finish in 1 s", err)
+        history = shlex.join([self.fakes["xcrun"], "notarytool", "history", "--key", str(self.key),
+                              "--key-id", KEY_ID, "--issuer", ISSUER])
+        self.assertIn(history, err)
+        self.assertEqual(self.calls()[-1]["argv"][:2], ["notarytool", "submit"])  # never stapled
 
     def test_a_rejected_notarization_stops_and_says_how_to_see_why(self):
         self.switch("invalid", "notarytool exits 1")
@@ -465,6 +503,11 @@ class RefusalTest(SignTestCase):
     def test_an_app_missing_cmake_or_ninja(self):
         (self.app / "Contents/MacOS/ninja").unlink()
         self.assert_refused("ninja")
+
+    def test_an_output_directory_inside_the_app(self):
+        self.out = self.app / "release out"  # ditto would copy the app into itself
+        self.assert_refused("inside")
+        self.assert_refused("inside", "--dry-run")
 
     def test_an_app_that_still_has_sparkles_xpc_services(self):
         self.app = make_app(self.dir / "with xpc" / "Dragoon.app", xpc=True)

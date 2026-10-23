@@ -27,6 +27,7 @@ STAGING = "dmg-root"  # what hdiutil packs: the app and an Applications link
 VOLUME = "Dragoon"
 SPARKLE = "Contents/Frameworks/Sparkle.framework"
 TOOLS = ("cmake", "ninja")  # bare executables in Contents/MacOS, signed with an identifier
+NOTARY_SECONDS = 1800  # Apple finishes 98 percent of submissions within 15 minutes
 
 
 class Notary(NamedTuple):
@@ -113,8 +114,9 @@ def applications_link(staging: Path) -> list[str]:
 
 
 def make_dmg(staging: Path, dmg: Path) -> list[str]:
-    return [HDIUTIL, "create", "-format", "UDZO", "-volname", VOLUME, "-srcfolder", str(staging),
-            str(dmg)]
+    """-ov lets a second try replace what a failed first one left behind."""
+    return [HDIUTIL, "create", "-format", "UDZO", "-volname", VOLUME, "-ov", "-srcfolder",
+            str(staging), str(dmg)]
 
 
 def sign_dmg(identity: str, dmg: Path, identifier: str) -> list[str]:
@@ -130,17 +132,24 @@ def notary_log(submission: str, notary: Notary) -> list[str]:
     return [XCRUN, "notarytool", "log", submission, *notary.flags()]
 
 
+def notary_history(notary: Notary) -> list[str]:
+    return [XCRUN, "notarytool", "history", *notary.flags()]
+
+
 def staple(dmg: Path) -> list[str]:
     return [XCRUN, "stapler", "staple", str(dmg)]
 
 
-def verify(app: Path, dmg: Path, notarized: bool) -> list[list[str]]:
-    """The signature on the app, then for a notarized DMG its ticket and the assessments Apple
-    gives for an app and for a disk image."""
-    steps = [[CODESIGN, "--verify", "--strict", "--deep", str(app)]]
-    if notarized:
-        steps += [[XCRUN, "stapler", "validate", str(dmg)],
-                  [SPCTL, "--assess", "--type", "execute", "-vv", str(app)],
-                  [SPCTL, "--assess", "--type", "open", "--context", "context:primary-signature",
-                   "-vv", str(dmg)]]
-    return steps
+def verify_app(app: Path) -> list[str]:
+    """The signature on the signed app. It runs before the DMG is made, so a broken signature
+    costs no notarization round trip."""
+    return [CODESIGN, "--verify", "--strict", "--deep", str(app)]
+
+
+def verify_notarized(app: Path, dmg: Path) -> list[list[str]]:
+    """For a notarized DMG its ticket and the assessments Apple gives for an app and for a
+    disk image."""
+    return [[XCRUN, "stapler", "validate", str(dmg)],
+            [SPCTL, "--assess", "--type", "execute", "-vv", str(app)],
+            [SPCTL, "--assess", "--type", "open", "--context", "context:primary-signature",
+             "-vv", str(dmg)]]
