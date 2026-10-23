@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 import block_clicks
+from aid_blocks import Block
 from testutil import pcm, run_main, tone, write_file
 
 RATE, BLOCK = 32000, 160
@@ -91,6 +92,10 @@ class PlaceTest(unittest.TestCase):
                                                 r".*mixer\.raw is 2\.00 s, so it isn't this recording's log"):
             block_clicks.place(self.write(x, two_blocks))
 
+    def test_a_recording_with_its_own_log_is_accepted_however_long(self):
+        x, log = dma(400, replays={40})
+        self.assertEqual(block_clicks.place(self.write(x, log)).blocks, 401)
+
     def test_a_log_may_end_up_to_a_second_either_side_of_the_recording(self):
         x, _ = dma(400)  # 64,000 samples
         for ends, ok in ((32000, True), (31999, False), (96000, True), (96001, False)):
@@ -101,6 +106,38 @@ class PlaceTest(unittest.TestCase):
                 else:
                     with self.assertRaisesRegex(ValueError, "isn't this recording's log"):
                         block_clicks.place(path)
+
+    def test_the_first_block_isnt_a_replay_of_the_last_one(self):
+        x, log = dma(101)  # the buffers alternate, so the first and the last share an address
+        self.assertEqual(self.counts(block_clicks.place(self.write(x, log)))["replayed"][0], 0)
+
+    def test_a_marked_block_is_cut_to_the_recording_at_either_end(self):
+        # One click, on the replayed block, so each kind's chance is the share of samples it covers.
+        for caught_up, covered in (({0}, BLOCK + 3), ({100}, BLOCK + 2)):
+            with self.subTest(caught_up=caught_up):
+                x, log = dma(100, replays={40}, caught_up=caught_up)
+                got = self.counts(block_clicks.place(self.write(x, log)))["caught up"]
+                self.assertEqual(got[0], 1)
+                self.assertAlmostEqual(got[2], covered / len(x))
+
+    def test_a_block_the_log_has_past_the_recording_covers_nothing(self):
+        x, log = dma(100, replays={40})
+        log += f"{len(x) + 800} {BLOCK} 21223426 1 00571E00 1\n"
+        self.assertEqual(self.counts(block_clicks.place(self.write(x, log)))["caught up"], (1, 0, 0.0))
+
+    def test_a_click_is_on_a_block_from_2_samples_before_it_to_2_after_its_end(self):
+        covered = block_clicks.spans([Block(1000, BLOCK, False, "00571E00")], 5000)
+        self.assertEqual(covered, [(998, 1163)])
+        self.assertEqual([i for i in (997, 998, 1162, 1163) if block_clicks.inside(i, covered)], [998, 1162])
+
+    def test_a_click_is_placed_by_its_sample_where_its_time_in_seconds_rounds_down(self):
+        # The spike makes a click at sample 1001, whose time over 32000 times 32000 comes to a
+        # hair under 1001. It's 2 samples before the block 1003 starts, so a click taken for
+        # sample 1000 would miss that block.
+        x = tone(3200, RATE)
+        x[1002] += 6000
+        got = block_clicks.place(self.write(x, "1003 160 21223426 1 00571E00 1\n"))
+        self.assertEqual((got.clicks, self.counts(got)["caught up"][:2]), (1, (1, 1)))
 
 
 class MainTest(unittest.TestCase):
