@@ -1,10 +1,26 @@
 name: CI
 on:
-  push:
   pull_request:
+  push:
+    branches: [main]
 permissions:
   contents: read
 jobs:
+  tools:
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [python3, /usr/bin/python3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: No game data in the tree
+        run: ${{ matrix.python }} tools/check_no_game_data.py
+      - name: Tool tests
+        run: ${{ matrix.python }} -m unittest discover -s tools -p 'test_*.py'
   macos:
     runs-on: macos-26
     steps:
@@ -12,13 +28,25 @@ jobs:
         with:
           submodules: true
           persist-credentials: false
-      - name: No game data in the tree
-        run: python3 tools/check_no_game_data.py
-      - name: Tool tests
-        run: python3 -m unittest discover -s tools -p 'test_*.py'
       - name: Dependencies
         run: brew install ninja
       - name: Configure without a disc
         run: cmake -S . -B build-nodisc -G Ninja
       - name: Compile the runtime
         run: ninja -C build-nodisc runtime_check
+      - name: Engine unit tests
+        run: ninja -C build-nodisc unit
+  launcher:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Launcher tool tests
+        run: python3 -m unittest discover -s launcher/tools -p 'test_*.py'
+      - name: Launcher tool tests, system Python
+        run: /usr/bin/python3 -m unittest discover -s launcher/tools -p 'test_*.py'
+      - name: Swift tests
+        if: ${{ hashFiles('launcher/Package.swift') != '' }}
+        run: swift test --package-path launcher
