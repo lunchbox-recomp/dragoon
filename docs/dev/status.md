@@ -11,10 +11,10 @@ gcn-recomp `b848158` with the seven course routes added. All twelve frame-hash r
 twelve audio-hash routes pass at `fe0c0bf`. At gcn-recomp `b97c019` eleven routes' frames and
 all twelve routes' audio changed, and both sets of goldens were recorded again there. The pin
 is now `e1016b8`, where all twelve matched them. The goldens of the nine Top Ride and stadium
-routes were recorded at `e1016b8` on Dragoon `4f25003`, and all twenty-one routes' frames and
+routes were recorded at `e1016b8` on Dragoon `1a88f62`, and all twenty-one routes' frames and
 audio match there (under gcn-recomp `e1016b8` below). The Top Ride and stadium pacing numbers
 are from Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen findings
-were checked again at `e1016b8` on `4f25003`.
+were checked again at `e1016b8` on `1a88f62`.
 
 | Feature | Status | Note |
 |---|---|---|
@@ -250,7 +250,9 @@ to 2.0 ms. The render frame that first drew with it took 41.57 ms on Fantasy Mea
 Three runs at gcn-recomp `e1016b8` under one probe NAME, so each launch found the card the
 last one left. Each had `--log=exi`, which logs every card command. The page writes
 (`memcard cmd F2`) were counted between the scripted presses in the log. Runs 2 and 3 dumped
-a frame every 50 and run 1 dumped none.
+a frame every 50 and run 1 dumped none. The runs shared one dump directory, so only run 3's log,
+frames and `sram.raw` timestamp are kept. Runs 1 and 2's counts and frames were read as they ran
+and can't be checked again.
 
 | Run | Presses | Card writes | What the frames show |
 |---|---|---|---|
@@ -341,18 +343,19 @@ counts guest intervals of 20 ms or more.
 | Stadium, four players | 16.73, 17.90, 134.16 ms | 31 | 0.91, 13.99 ms | 0 |
 
 The Fire row is a second run. The first, made while the load average was near 11, had 34 guest
-intervals over 20 ms, bunched between frames 4,140 and 4,200, and a worst of 55.90 ms. Every
+intervals over 20 ms between frames 3,452 and 4,221, 14 of them between 4,140 and 4,200, and a
+worst of 55.90 ms. Every
 render frame over 16.7 ms in these tables compiled new shaders, which a warm cache would have
 built already. From frame 300 on, the stadium runs' worst render frames were the city's first
-frame (89.89 ms with 38 new programs, 96.12 ms with 34 for four players) and frame 902 (15 new
-programs).
+frame (89.89 ms with 38 new programs, 96.12 ms with 34 for four players) and frame 902 (901 for
+four players, 15 new programs).
 
 The stadium's long guest intervals come where the game changes scene. On the one-player run
 they were 98 ms at frame 15,606 just after time ran out, 100 ms at 16,202 as the stats screen
 closed, 135 ms at 16,502 as the stadium loaded 69 new textures (4.6 MB) and 122 ms at 20,051
-at the results. The four-player run stalled at the same four scene changes. One more, 111 ms at frame
-17,547 in the middle of Drag Race 3, came with no new textures. What the guest was doing then
-wasn't checked. The rest of the slow intervals were between 20 and 50 ms.
+at the results. One more, 111 ms at frame 17,547 in the middle of Drag Race 3, came with no new
+textures. What the guest was doing then wasn't checked. The four-player run stalled at the same
+four scene changes. The rest of the slow intervals were between 20 and 50 ms.
 
 ## Audio
 
@@ -592,7 +595,7 @@ write fix in `216fe38` and window sizing, and none touches the audio files there
 matched, all 739 frames and all 24 audio rows.
 
 The seven Top Ride routes and the two stadium routes came onto that pin afterward, and their
-goldens were recorded at `e1016b8` on Dragoon `4f25003`. Frames use each route's seconds and
+goldens were recorded at `e1016b8` on Dragoon `1a88f62`. Frames use each route's seconds and
 dump interval in `tests/hashes/manifest.txt`. Audio rows are at lists 12,000 and 16,000 for
 Top Ride and 56,000 and 68,000 for the stadium routes. After each `record`, two `check` runs of
 the nine matched every frame (558) and every audio row (18), so two runs at one build agreed.
