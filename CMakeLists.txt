@@ -9,6 +9,9 @@ endif()
 # Ride's own tables and code live in this repository.
 add_subdirectory(gcn-recomp)
 
+# src/, the C++ the tables' hooks call. SOURCES compiles it into the game targets.
+set(DRAGOON_SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp)
+
 gcn_add_game(
   NAME dragoon
   TITLE "Kirby Air Ride"
@@ -17,7 +20,41 @@ gcn_add_game(
   DOL_SHA1 977533bb96e6a16e127946396489be1b4164ac42
   SYMBOLS ${CMAKE_SOURCE_DIR}/analysis/symbols.txt
   TABLES ${CMAKE_SOURCE_DIR}/recomp
-  FPS 60)
+  FPS 60
+  SOURCES ${DRAGOON_SOURCES})
+
+# runtime_check compiles src/ too. That checks it with no disc, and it puts src/ in the
+# engine kit, which tools/engine_kit.py makes of runtime_check's objects, so a game the
+# launcher links from the kit has the hooks its generated C calls.
+if(TARGET runtime_check)
+  target_sources(runtime_check PRIVATE ${DRAGOON_SOURCES})
+endif()
+
+# The unit tests of src/'s pure parts, run by ctest. Off by default, since they download
+# GoogleTest's source release, checked by its SHA-256. They need no disc.
+option(DRAGOON_TESTS "Build the unit tests of src/ (downloads GoogleTest)" OFF)
+if(DRAGOON_TESTS)
+  include(FetchContent)
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(googletest
+    URL https://github.com/google/googletest/releases/download/v1.17.0/googletest-1.17.0.tar.gz
+    URL_HASH SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  FetchContent_MakeAvailable(googletest)
+  enable_testing()
+  include(GoogleTest)
+  add_executable(dragoon_tests ${CMAKE_SOURCE_DIR}/tests/src/test_census.cpp)
+  set_target_properties(dragoon_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+  target_include_directories(dragoon_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+  target_link_libraries(dragoon_tests PRIVATE GTest::gtest_main)
+  gtest_discover_tests(dragoon_tests)
+  # gcn-recomp's `unit` target runs every test in this directory through CTest, so it builds
+  # these too.
+  if(TARGET unit)
+    add_dependencies(unit dragoon_tests)
+  endif()
+endif()
 
 # Play the game once, hidden and silent, so a player's first session doesn't stall on shader
 # compiles. It runs again only when the engine pin, the route list or a route changes. It

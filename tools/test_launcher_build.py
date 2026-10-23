@@ -616,14 +616,19 @@ class RealTreeTest(unittest.TestCase):
         self.assertTrue((ROOT / launcher_build.TABLES).is_dir())
 
     def test_gcn_add_game_takes_nothing_the_recipe_doesnt_pass(self):
-        """A DOL fixup, modules or sources of the game's own would need steps the recipe
-        doesn't have."""
-        (call,) = re.findall(r"\bgcn_add_game\s*\(([^)]*)\)", (ROOT / "CMakeLists.txt").read_text())
+        """A DOL fixup or modules would need steps the recipe doesn't have. The game's own
+        sources reach the recipe's link in the kit's engine.o, so runtime_check has to compile
+        the same list."""
+        text = (ROOT / "CMakeLists.txt").read_text()
+        (call,) = re.findall(r"\bgcn_add_game\s*\(([^)]*)\)", text)
         keywords = set(re.findall(r"^\s*([A-Z_]+)\s", call, re.M))
         self.assertLessEqual(keywords, {"NAME", "TITLE", "LABEL", "DISC_ID", "DOL_SHA1", "SYMBOLS",
-                                        "TABLES", "FPS", "IMAGE_DIR"})
+                                        "TABLES", "FPS", "IMAGE_DIR", "SOURCES"})
         self.assertIn(f"SYMBOLS ${{CMAKE_SOURCE_DIR}}/{launcher_build.SYMBOLS}\n", call)
         self.assertIn(f"TABLES ${{CMAKE_SOURCE_DIR}}/{launcher_build.TABLES}\n", call)
+        if "SOURCES" in keywords:
+            self.assertRegex(call, r"\bSOURCES \$\{DRAGOON_SOURCES\}\s*$")
+            self.assertIn("target_sources(runtime_check PRIVATE ${DRAGOON_SOURCES})", text)
 
     def test_the_kit_makefile_prints_each_compile_as_the_progress_counts_it(self):
         with tempfile.TemporaryDirectory() as tmp:
