@@ -60,16 +60,17 @@ class HashRouteTest(unittest.TestCase):
     route = frame_hashes.Route("title", 20, 60, [120], [])
     out = frame_hashes.ROOT / "build" / "probe" / "hashes-title"
 
-    def run_route(self, exists: bool, run: mock.Mock) -> mock.Mock:
+    def run_route(self, exists: bool, run: mock.Mock, fails: bool = False) -> mock.Mock:
         trash = mock.Mock()
         with (mock.patch.object(frame_hashes, "trash", trash),
               mock.patch.object(subprocess, "run", run),
               mock.patch.object(frame_hashes, "hash_frames", return_value={60: A}),
               mock.patch.object(Path, "exists", return_value=exists)):
-            try:
+            if fails:
+                with self.assertRaisesRegex(ValueError, r"^title: probe\.sh exited 1$"):
+                    frame_hashes.hash_route(self.route)
+            else:
                 self.got = frame_hashes.hash_route(self.route)
-            except ValueError:
-                self.got = None
         return trash
 
     def test_runs_probe_with_the_route_and_hashes_the_frames(self):
@@ -86,10 +87,9 @@ class HashRouteTest(unittest.TestCase):
 
     def test_trashes_the_frames_when_the_probe_fails(self):
         run = mock.Mock(side_effect=subprocess.CalledProcessError(1, "probe"))
-        trash = self.run_route(False, run)
-        self.assertIsNone(self.got)
+        trash = self.run_route(False, run, fails=True)
         trash.assert_not_called()
-        trash = self.run_route(True, run)
+        trash = self.run_route(True, run, fails=True)
         self.assertEqual(trash.call_count, 2)
 
 
