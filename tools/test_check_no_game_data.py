@@ -23,7 +23,7 @@ class ViolationsTest(unittest.TestCase):
 
     def test_what_the_tools_make_fails(self):
         paths = ["tools/keys.bin", "old-keys.bin", "x/saves/notes.txt", "x/frame_00060.png",
-                 "x/stdout.txt", "panic.txt"]
+                 "x/output_00060.png", "x/stdout.txt", "panic.txt"]
         self.assertEqual(check_no_game_data.violations(paths), paths)
 
     def test_wav_recordings_fail_anywhere(self):
@@ -31,7 +31,8 @@ class ViolationsTest(unittest.TestCase):
         self.assertEqual(check_no_game_data.violations(paths), paths)
 
     def test_lookalikes_pass(self):
-        paths = ["x/frame_00060.png.bak", "x/xframe_00060.png", "x/saves.txt", "x/stdout.txt.md"]
+        paths = ["x/frame_00060.png.bak", "x/xframe_00060.png", "x/output_00060.png.bak",
+                 "x/xoutput_00060.png", "x/saves.txt", "x/stdout.txt.md"]
         self.assertEqual(check_no_game_data.violations(paths), [])
 
 

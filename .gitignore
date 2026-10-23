@@ -11,6 +11,7 @@ saves/
 *.dol
 *.bin
 frame_*.png
+output_*.png
 stdout.txt
 panic.txt
 .DS_Store
