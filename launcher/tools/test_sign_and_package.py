@@ -75,16 +75,18 @@ if marker "fail spctl"; then exit 3; fi
 }
 
 
-def make_app(path: Path, sparkle: bool = True) -> Path:
-    """A stand-in app, as L5 lays it out, with Sparkle 2.9.1's layout (XPC services included)."""
+def make_app(path: Path, sparkle: bool = True, xpc: bool = False) -> Path:
+    """A stand-in app, as L5 lays it out, with Sparkle 2.9.1's layout. make_app.py removes the
+    XPC services, so they are there only when XPC is true."""
     files = {"Contents/MacOS/Dragoon": "launcher", "Contents/MacOS/cmake": "cmake",
              "Contents/MacOS/ninja": "ninja"}
     if sparkle:
         version = "Contents/Frameworks/Sparkle.framework/Versions/B"
         files.update({f"{version}/Sparkle": "s", f"{version}/Autoupdate": "a",
-                      f"{version}/Updater.app/Contents/MacOS/Updater": "u",
-                      f"{version}/XPCServices/Installer.xpc/Contents/MacOS/Installer": "i",
-                      f"{version}/XPCServices/Downloader.xpc/Contents/MacOS/Downloader": "d"})
+                      f"{version}/Updater.app/Contents/MacOS/Updater": "u"})
+        if xpc:
+            files.update({f"{version}/XPCServices/Installer.xpc/Contents/MacOS/Installer": "i",
+                          f"{version}/XPCServices/Downloader.xpc/Contents/MacOS/Downloader": "d"})
     for name, data in files.items():
         file = path / name
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +96,7 @@ def make_app(path: Path, sparkle: bool = True) -> Path:
     if sparkle:
         framework = path / "Contents/Frameworks/Sparkle.framework"
         os.symlink("B", framework / "Versions" / "Current")
-        for name in ("Sparkle", "Autoupdate", "Updater.app", "XPCServices"):
+        for name in ("Sparkle", "Autoupdate", "Updater.app") + (("XPCServices",) if xpc else ()):
             os.symlink(f"Versions/Current/{name}", framework / name)
     return path
 
@@ -239,10 +241,6 @@ class OrderTest(SignTestCase):
         code, _, _ = self.run_tool()
         self.assertEqual(code, 0)
         self.assertEqual(self.argvs(), [c for c in self.expected(sparkle=False) if c[0] != "/bin/ln"])
-
-    def test_the_xpc_services_are_never_signed(self):
-        self.run_tool()
-        self.assertEqual([a for a in self.argvs() if any("XPC" in word for word in a)], [])
 
     def test_the_dmg_is_signed_after_it_is_made_and_notarized_before_it_is_stapled(self):
         self.run_tool()
@@ -431,6 +429,16 @@ class RefusalTest(SignTestCase):
     def test_an_app_missing_cmake_or_ninja(self):
         (self.app / "Contents/MacOS/ninja").unlink()
         self.assert_refused("ninja")
+
+    def test_an_app_that_still_has_sparkles_xpc_services(self):
+        self.app = make_app(self.dir / "with xpc" / "Dragoon.app", xpc=True)
+        self.assert_refused("Versions/B/XPCServices")
+        self.assert_refused("Versions/B/XPCServices", "--dry-run")
+
+    def test_an_app_with_a_leftover_link_to_the_xpc_services(self):
+        framework = self.app / "Contents/Frameworks/Sparkle.framework"
+        os.symlink("Versions/Current/XPCServices", framework / "XPCServices")
+        self.assert_refused("Sparkle.framework/XPCServices")
 
     def test_an_output_directory_that_is_not_empty(self):
         self.out.mkdir()

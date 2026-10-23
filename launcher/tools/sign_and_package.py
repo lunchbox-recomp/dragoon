@@ -9,7 +9,8 @@ APP is left as it is. The tool signs a copy in DIR, which must be empty or missi
   2  codesign -f -s NAME -o runtime --timestamp, inside out and never with --deep. Contents/
      MacOS/cmake and ninja go first with -i identifiers made from the app's bundle ID, then
      Sparkle's Autoupdate, Updater.app and framework if the app has them, then the app. The
-     launcher claims no entitlements
+     launcher claims no entitlements. An app that still has Sparkle's XPC services is refused,
+     since nothing here would sign them
   3  hdiutil create -format UDZO makes DIR/Dragoon.dmg from dmg-root, and codesign --timestamp
      -i signs it
   4  with the Team API key, notarytool submit --wait, then stapler staple on the DMG

@@ -7,6 +7,7 @@ and verify. The launcher claims no entitlements, so no command passes any.
 """
 from __future__ import annotations
 
+import os
 import plistlib
 from pathlib import Path
 from typing import NamedTuple
@@ -49,13 +50,20 @@ def bundle_identifier(app: Path) -> str:
 
 
 def check_app(app: Path) -> None:
-    """Raise ValueError unless APP is an app this plan can sign."""
+    """Raise ValueError unless APP is an app this plan can sign: one with a bundle ID, cmake
+    and ninja, and none of Sparkle's XPC services, which would hold code this plan never signs."""
     if not app.is_dir():
         raise ValueError(f"{app} isn't a directory")
     bundle_identifier(app)
     for tool in TOOLS:
         if not (app / "Contents" / "MacOS" / tool).is_file():
             raise ValueError(f"{app} has no Contents/MacOS/{tool}")
+    framework = app / SPARKLE
+    for services in [*sorted(framework.glob("Versions/*/XPCServices")), framework / "XPCServices"]:
+        if os.path.lexists(services):  # a link counts, even one with nothing left to point at
+            raise ValueError(f"{app} still has Sparkle's XPC services at "
+                             f"{services.relative_to(app)}. A launcher that isn't sandboxed "
+                             "doesn't need them, so take them out before signing")
 
 
 def sign_item(identity: str, path: Path, identifier: str = "") -> list[str]:
