@@ -8,18 +8,20 @@ routes also pass. The audio row is from gcn-recomp `bf31b7b` and its click count
 Both sets pass again at `b848158`, after the review fixes. The other Air Ride courses, their
 pacing and the twelve-route warm-up were measured on a build of Dragoon `788571c` and
 gcn-recomp `b848158` with the seven course routes added. All twelve frame-hash routes and all
-twelve audio-hash routes pass at `fe0c0bf`.
+twelve audio-hash routes pass at `fe0c0bf`. At gcn-recomp `b97c019` eleven routes' frames and
+all twelve routes' audio changed, and both sets of goldens were recorded again there. The pin
+is now `e1016b8`, where every route matched them (under gcn-recomp `e1016b8` below).
 
 | Feature | Status | Note |
 |---|---|---|
 | Boot and memory card | Works | A blank card gets the game's prompt by frame 60, and the save file is made |
 | Opening movie | Plays | Then the title and the attract demos, races and mode movies |
 | Title screen | Works | `tests/routes/title.txt` |
-| Mode select | Works | `tests/routes/menu.txt`. The panel at its right stays plain gray |
+| Mode select | Works | `tests/routes/menu.txt`. Since gcn-recomp `b97c019` the preview window at its right shows a race, where it was a plain gray box (under gcn-recomp `e1016b8`) |
 | Air Ride race | Runs | All eight courses a blank memory card can pick load and race past the countdown, one route each in `tests/routes/`, with no crash and nothing seen drawn wrong. Fantasy Meadows (`air-ride-race.txt`) has three laps and the other seven two. With nobody steering, six reach the results screen and Kirby stays stopped against a wall on the other two (table under How far it gets). Nebula Belt, the ninth course, is locked on a blank card behind an Air Ride checklist box that counts 100 laps |
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. Stadium not reached yet |
 | Top Ride | Not tried | |
-| Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in the DMA's blocks fell from 928 to 19 (table under Audio). The low-pass filter and polyphase resampling aren't done. It was listened to once, before the type 2 fix. It crackled. Nobody has listened since. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. [`scorecard.md`](scorecard.md) runs the routes on gcn-recomp `caf12a2` (before any of the audio work) and on `b848158`. On the title route played to 91 s in real time the clicks in the DMA's blocks fell from 1,097 and 979 to 22 and 22. Over the five routes the device stage's clicks a minute fell from 57.9 to 36.3 and from 45.1 to 33.1. Unpaced, over those routes' 324 s, the DMA's blocks went from 132 clicks to 136 and from 208 clipped runs to 25, and a bisect on 2026-10-22 agrees with 131 to 135 and 203 to 25. The audio work didn't reduce the clicks over those seconds. Rescored with `audio_scorecard.py --no-run`, the title's first 91 s (`--margin 75`) went from 1,085 clicks to 19 and the mode select's first 170 s (`--margin 150`) from 118 to 16, so on those two routes the clicks that fell are past the scored seconds, in the same recordings (`scorecard.md`). In the scored seconds what it cut was clipping. Real-time runs showed the DMA's clicks rising, and the bisect found that most of that rise came from playing in real time. Details in `audio.md` |
+| Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in the DMA's blocks fell from 928 to 19 (table under Audio). Since gcn-recomp `b97c019` source type 0, 98.9% of the voice time in twelve unpaced runs, resamples through a polyphase filter whose coefficients the runtime works out, because the console's are in the DSP's ROM. None of those runs turned the low-pass filter on, and the runtime doesn't apply it. It was listened to once, before the type 2 fix. It crackled. Nobody has listened since. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. [`scorecard.md`](scorecard.md) runs the routes on gcn-recomp `caf12a2` (before any of the audio work) and on `b848158`. On the title route played to 91 s in real time the clicks in the DMA's blocks fell from 1,097 and 979 to 22 and 22. Over the five routes the device stage's clicks a minute fell from 57.9 to 36.3 and from 45.1 to 33.1. Unpaced, over those routes' 324 s, the DMA's blocks went from 132 clicks to 136 and from 208 clipped runs to 25, and a bisect on 2026-10-22 agrees with 131 to 135 and 203 to 25. The audio work didn't reduce the clicks over those seconds. Rescored with `audio_scorecard.py --no-run`, the title's first 91 s (`--margin 75`) went from 1,085 clicks to 19 and the mode select's first 170 s (`--margin 150`) from 118 to 16, so on those two routes the clicks that fell are past the scored seconds, in the same recordings (`scorecard.md`). In the scored seconds what it cut was clipping. Real-time runs showed the DMA's clicks rising, and the bisect found that most of that rise came from playing in real time. Details in `audio.md` |
 | Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Nothing is saved between launches. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`: 42 port checks, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
 | Picture | 4:3 | gcn-recomp letterboxes the desktop window to 4:3 |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
@@ -315,7 +317,9 @@ the DMA's blocks, under the threshold there.
 
 Not done or not checked:
 
-- The low-pass filter and polyphase resampling (`audio.md`).
+- The low-pass filter (`audio.md`). The game didn't turn it on in the twelve audio-hash runs
+  at `b97c019`.
+- The polyphase coefficients are worked out, not the console's own from its DSP ROM.
 - The sound was listened to once, before the type 2 fix. It crackled. Nobody has
   listened since. Nothing has been compared with recordings from a real console.
 - How often the ring cuts or runs dry with a real sound card. Either is a fade now, checked
@@ -411,7 +415,7 @@ What a player's first session looks like after the warm-up, against the bars set
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys | Fail |
 | Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf` | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019` | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
@@ -446,6 +450,41 @@ removed them. Before that, the title pass made a memory card in the scratch dire
 later pass started on it, where the routes' A presses take the load menus instead of the "make a
 new save data file" ones. On City Trial, a pass at scale 1 `--fast`, scale 2 `--fast` and
 scale 2 `--real-time` built the same 107 keys.
+
+## gcn-recomp `e1016b8`
+
+The pin moved from gcn-recomp `b848158` to `e1016b8`, 87 commits, by way of `b97c019`, 66
+commits on. Built at `b97c019`, the game ran `tools/frame_hashes.py check` and
+`tools/audio_hashes.py check` against the goldens on `main` before anything was recorded.
+
+| Check against `main`'s goldens | Matched | Changed |
+|---|---|---|
+| Frames | The title, all 16 of its frames | The other eleven routes, 62 frames in all, every one between frames 1020 and 1500 |
+| Audio | None | All twelve routes, every row, 24 in all |
+
+The menu route changed at frames 1020 to 1200, the eight race routes at 1020 to 1260 and the
+two City Trial routes at 1020 to 1500. Each of those nine frame numbers got one new hash, the
+same on every route that dumps it. The title's goldens stop at frame 960.
+
+These are the frames gcn-recomp `affc7b5` says its EFB copy fix moves. Its message says the
+game copies a render target from an RGB8 EFB to an RGBA8 texture and draws it with alpha, and
+the copy took whatever alpha the GL framebuffer held, so the window that shows it drew as an
+empty box. On the mode select that's the preview window at the right. Frame 1200 of the menu
+route hashes to its old golden `a3f1408d` at `b848158`, where the window is a plain gray box.
+At `b97c019` it hashes to `ba0a9f9b`, and the window shows a race.
+
+The audio changes are in `audio.md`. The hashes cover the mix since boot, so they show that
+every route's sound changed and not which commit changed it.
+
+Both tools then ran `record` at `b97c019`, and a second `check` matched every route, all 739
+frames and all 24 audio rows. So the three runs of each route at `b97c019` gave the same frames
+at every checkpoint, and the second check's audio rows were the ones recorded. Every `[ax]
+hash` line that the first and third audio runs both printed was the same.
+
+`e1016b8` adds 21 commits to `b97c019`. Six of them touch `runtime/`, among them an IPL SRAM
+write fix in `216fe38` and window sizing, and none touches the audio files there. Built at
+`e1016b8`, the game ran both checks against the goldens recorded at `b97c019`, and every route
+matched, all 739 frames and all 24 audio rows.
 
 ## Fixes on the way
 

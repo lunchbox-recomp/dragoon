@@ -5,9 +5,9 @@ for the 2001 build (`4E8A8B21`). At gcn-recomp `fd1f6a8` it takes the ucode's ha
 the PB mixer control word with the 2001 layout for that hash only. Every other hash, this one
 included, gets the later layout. The compressor command runs on the same hash test, so at the
 pinned gcn-recomp (since `b839cf6`) it follows the ucode hash alone and `GCN_AX_LAYOUT` leaves
-it be. The newer build's low-pass filter is still missing. The `ax.cpp` line numbers below
-are at gcn-recomp `fd1f6a8`. The pin is later, where `compress` starts at line 380 and
-`ax_init` at 424.
+it be. The newer build's low-pass filter still isn't applied. The `ax.cpp` line numbers below
+are at gcn-recomp `fd1f6a8`. The pin is now `e1016b8`, where `compress` starts at line 492
+and `ax_init` at 536.
 
 ## The ucode
 
@@ -126,8 +126,11 @@ Dolphin leaves bit `4000` unmapped, with a TODO saying it selects Dolby Pro Logi
 The newer PB has a one-pole low-pass filter at words 93 to 96 (on, `yn1`, `a0`, `b0`), which
 moves the loop counter from word 93 to 97. When the filter is on, each sample after the
 volume envelope becomes `(a0 * x + b0 * yn1) >> 15` clamped to 16 bits, and that result is
-the next `yn1`. The runtime still reads and writes 93 words (`ax.cpp:35`, `:44-49`) and drops
-parameter updates past word 92 (`:315`). Whether the game turns the filter on isn't known.
+the next `yn1`. Since gcn-recomp `3056588` the runtime reads and writes all 97 words on every
+build but the 2001 one and takes parameter updates up to word 96, but it doesn't apply the
+filter. The game didn't turn it on in the twelve audio-hash runs at `b97c019`.
+`tools/ax_stats.py` over their logs counts 0 voice-milliseconds with word 93 set, out of
+46,540,374 in 1,449 windows.
 
 ### Compressor
 
@@ -150,8 +153,7 @@ too, and none of them silences a game.
 
 | Gap | Where |
 |---|---|
-| Polyphase resampling (`src_type` 0) runs as linear interpolation. The real filter needs a 0x800-entry coefficient table from the DSP's ROM, which the runtime doesn't have | `ax.cpp:275-288` |
-| Dolphin writes each bus's last mixed sample into the PB's depop words (41 to 49). The runtime doesn't | `ax.cpp:198-207` |
+| Polyphase resampling (`src_type` 0) runs through three coefficient sets the runtime works out when AX starts, because the console's come from the DSP's ROM, which the runtime doesn't have. The output differs from a console's by however much those sets differ from the ROM's | `make_polyphase` at `e1016b8` |
 | Dolphin bumps the loop counter each time a stream loops. The runtime doesn't | `ax.cpp:178-186` |
 | Dolphin reads the volume envelope as signed on GameCube. The runtime reads it unsigned, which differs only at `0x8000` and up | `ax.cpp:292-296` |
 | The initial time delay block (words 27 to 33) is ignored. Dolphin ignores it too | none |
@@ -182,6 +184,33 @@ work didn't reduce the mixer stage's clicks over those seconds. Rescored with
 clicks that fell are past the scored seconds, in the same recordings. In the scored seconds what
 it cut was clipping.
 
+## What the move to gcn-recomp `e1016b8` changed
+
+The pin moved from gcn-recomp `b848158` to `e1016b8`, 87 commits. These are the ones that
+change what the mixer or the AI DMA makes. All of them come by `b97c019`, 66 commits in, and
+none of the 21 after it touches the audio files under `runtime/`.
+
+| Commit | Change |
+|---|---|
+| `3056588` | `GCN_AXSTATS` counts voices with the filter on and ramped voices, and splits voice time by resampler type and coefficient set. The PB is 97 words on every build but the 2001 one |
+| `3b025ac` | Each bus a voice mixes into leaves the voice's last sample in the PB's depop words, 41 to 49 |
+| `cce9fbc`, `795ccc4` | Source type 0 resamples through a four-tap polyphase filter of 128 phases, from three sets worked out when AX starts |
+| `84471cc` | A bus the setup command starts at zero stays silent whatever its slope |
+| `2b7ae75` | A sample mixed into a bus clamps at -32,768 instead of -32,767 |
+| `3d4fe9b` | Command `0E` clamps its output at -32,768 instead of -32,767 |
+| `6def94c` | The ADPCM decoder saturates at -32,768 instead of -32,767, and the history the next sample reads carries it |
+| `a87ab06`, `3c55458` | A catch-up jump no longer ends a block the guest hasn't queued after, so the DMA doesn't play that buffer twice. A held block ends once the guest queues |
+
+`tools/audio_hashes.py check` at `b97c019`, against the goldens on `main`, failed every row
+of all twelve routes, 24 rows in all. The hashes cover the whole mix since boot, so they say
+each route's sound changed and not which commit changed it. The goldens were recorded again
+at `b97c019`, and at `e1016b8` the check matched them on all twelve routes (`status.md`).
+
+In those twelve runs `tools/ax_stats.py` counts 46,540,374 voice-milliseconds. 46,043,984 of
+them, 98.9%, were source type 0 with coefficient set 0, and the other 496,390 were type 2. So
+nearly every voice the game plays now goes through the polyphase filter. The setup command
+started a bus off zero 25 times in the 1,449 windows.
+
 ## What was done and what is left
 
 Generic runtime work in `runtime/hw/`.
@@ -192,11 +221,13 @@ Generic runtime work in `runtime/hw/`.
 | Decode both mixer layouts into per-bus enable and ramp flags, then mix each of the nine buses by its own flags | `ax.cpp:209-256`, `:299-300` | Done |
 | Compressor | `ax.cpp:372-396`, `:472-478` | Done |
 | Source type 2 with no rate conversion | `ax.cpp:269-273` | Done |
-| PB layout with the filter and the loop counter | `ax.cpp:22-45`, `:315` | Not done |
+| PB layout with the filter's four words, 97 words on every build but the 2001 one | `PB_WORDS_LATER`, `pb_words` at `e1016b8` | Done in `3056588` |
 | Low-pass filter | after the volume envelope, `ax.cpp:292-296` | Not done |
-| Depop words, loop counter and signed envelope | `ax.cpp:178-207`, `:292-296` | Not done |
+| Depop words | `mix_add` at `e1016b8` | Done in `3b025ac` |
+| Polyphase resampling through worked-out coefficient sets | `make_polyphase`, `resample_polyphase` at `e1016b8` | Done in `cce9fbc` and `795ccc4` |
+| Loop counter and signed envelope | `ax.cpp:178-186`, `:292-296` | Not done |
 
-Polyphase resampling isn't counted, since it needs ROM data before it needs code.
+The polyphase sets aren't the console's own, which need the DSP's ROM.
 
 The change is generic. It keys on the ucode hash the way `jaudio.cpp:68-69` keys on
 JAudio's, and it names no game. Metroid Prime boots `4E8A8B21` (upstream commit `ddc05c0`),
