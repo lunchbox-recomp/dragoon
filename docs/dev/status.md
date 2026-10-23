@@ -10,17 +10,18 @@ pacing and the twelve-route warm-up were measured on a build of Dragoon `788571c
 gcn-recomp `b848158` with the seven course routes added. All twelve frame-hash routes and all
 twelve audio-hash routes pass at `fe0c0bf`. At gcn-recomp `b97c019` eleven routes' frames and
 all twelve routes' audio changed, and both sets of goldens were recorded again there. The pin
-is now `e1016b8`, where every route matched them (under gcn-recomp `e1016b8` below).
+is now `e1016b8`, where every route matched them (under gcn-recomp `e1016b8` below). The Top
+Ride, stadium and memory card findings are from Dragoon `788571c` at gcn-recomp `b848158`.
 
 | Feature | Status | Note |
 |---|---|---|
-| Boot and memory card | Works | A blank card gets the game's prompt by frame 60, and the save file is made |
+| Boot and memory card | Works, but stereo or mono isn't kept | A blank card gets the game's prompt by frame 60, and the save file is made. The game writes the card again after each title screen and when its Sound screen closes, and what it wrote comes back on the next launch. The music and effects balance moved in one run sat where it was left in the next. Stereo or mono doesn't come back, because the game keeps it in the console's SRAM, which gcn-recomp starts afresh at every launch (table under Memory card) |
 | Opening movie | Plays | Then the title and the attract demos, races and mode movies |
 | Title screen | Works | `tests/routes/title.txt` |
 | Mode select | Works | `tests/routes/menu.txt`. Since gcn-recomp `b97c019` the preview window at its right shows a race, where it was a plain gray box (under gcn-recomp `e1016b8`) |
 | Air Ride race | Runs | All eight courses a blank memory card can pick load and race past the countdown, one route each in `tests/routes/`, with no crash and nothing seen drawn wrong. Fantasy Meadows (`air-ride-race.txt`) has three laps and the other seven two. With nobody steering, six reach the results screen and Kirby stays stopped against a wall on the other two (table under How far it gets). Nebula Belt, the ninth course, is locked on a blank card behind an Air Ride checklist box that counts 100 laps |
-| City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. Stadium not reached yet |
-| Top Ride | Not tried | |
+| City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. With the clock cut to three minutes and the stadium set to Drag Race in Game Settings, one player (`city-trial-stadium.txt`) or four (`city-trial-stadium-4p.txt`) play out the clock and reach Drag Race 3 and its results. A fresh save offers only Drag Race, Target Flight and Destruction Derby, besides Shuffle. Target Flight and Destruction Derby weren't played |
+| Top Ride | Runs | All seven courses a fresh save offers (Grass, Sand, Sky, Fire, Light, Water and Metal) race past the countdown with one player and three CPUs (`top-ride-<course>.txt`) |
 | Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in the DMA's blocks fell from 928 to 19 (table under Audio). Since gcn-recomp `b97c019` source type 0, 98.9% of the voice time in twelve unpaced runs, resamples through a polyphase filter whose coefficients the runtime works out, because the console's are in the DSP's ROM. None of those runs turned the low-pass filter on, and the runtime doesn't apply it. It was listened to once, before the type 2 fix. It crackled. Nobody has listened since. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. [`scorecard.md`](scorecard.md) runs the routes on gcn-recomp `caf12a2` (before any of the audio work) and on `b848158`. On the title route played to 91 s in real time the clicks in the DMA's blocks fell from 1,097 and 979 to 22 and 22. Over the five routes the device stage's clicks a minute fell from 57.9 to 36.3 and from 45.1 to 33.1. Unpaced, over those routes' 324 s, the DMA's blocks went from 132 clicks to 136 and from 208 clipped runs to 25, and a bisect on 2026-10-22 agrees with 131 to 135 and 203 to 25. The audio work up to `b848158` didn't reduce the clicks over those seconds. Rescored with `audio_scorecard.py --no-run`, the title's first 91 s (`--margin 75`) went from 1,085 clicks to 19 and the mode select's first 170 s (`--margin 150`) from 118 to 16, so on those two routes the clicks that fell are past the scored seconds, in the same recordings (`scorecard.md`). In the scored seconds what it cut was clipping. Real-time runs showed the DMA's clicks rising, and the bisect found that most of that rise came from playing in real time. Pass 5 scored `b848158` against `b97c019`, and the pin `e1016b8` changes no audio file after it. Unpaced, over the same 324 s, the DMA's blocks went from 136 clicks to 94 and from 35 clicks on a block join to 7. In one real-time run of each build the device stage's clicks went from 191 to 70. Details in `audio.md` |
 | Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Nothing is saved between launches. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`: 42 port checks, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
 | Picture | 4:3 | gcn-recomp letterboxes the desktop window to 4:3 |
@@ -106,8 +107,8 @@ about speed in play.
 ## How far it gets
 
 Every checkpoint below was reached by a route in `tests/routes/` from a blank memory card,
-run with `tools/probe.sh` (hidden window, `--fast`, 640x480). The four-player route also
-needs `--pads=4`.
+run with `tools/probe.sh` (hidden window, `--fast`, 640x480). The four-player routes also
+need `--pads=4`.
 
 | Checkpoint | Route | Frame | What's on screen |
 |---|---|---|---|
@@ -125,6 +126,13 @@ needs `--pads=4`.
 | City Trial | `city-trial.txt` | 3300 | The city, 4:54 left |
 | Four-player entry | `city-trial-4p.txt` | 2700 | P1 OK to P4 OK under READY?, each player joined from its own port |
 | Four-player City Trial | `city-trial-4p.txt` | 3480 | Four views, 4:51 left, ports 1 and 3 steering left and 2 and 4 right |
+| Three-minute City Trial | `city-trial-stadium.txt` | 4800 | The city, 2:55 left. The entry screen before it read "Time: 3 min [Drag Race]" |
+| Time up | `city-trial-stadium.txt` | 15600 | `TIME!` at 0:00:00. Each player's machine stats follow and wait for A. The screen behind them draws black (see Stats screen) |
+| Drag Race 3 | `city-trial-stadium.txt` | 17100 | Under way, 0:06 on the clock, P1 fourth behind three CPUs |
+| Stadium results | `city-trial-stadium.txt` | 20400 | P1 fourth in 0:50.87 behind CPUs on 0:35.83, 0:47.36 and 0:47.62, waiting for START |
+| Four-player stadium | `city-trial-stadium-4p.txt` | 17100 | Drag Race 3 in four views, 0:06 on the clock |
+| Four-player results | `city-trial-stadium-4p.txt` | 21000 | P3 first in 0:53.31, then P2, P4 and P1 in 1:00.15, under confetti |
+| Top Ride race | `top-ride-<course>.txt` | 3600 | Each course 3.62 s into the race. Seven laps on Grass and Sand, six on Sky, Fire and Light, five on Water and Metal |
 
 Left alone, the race route finishes three laps in 1:12.60 and reaches the results screen by
 frame 25,800. City Trial with nobody steering drives into the sea and stays there while the
@@ -233,6 +241,55 @@ that route stops (6,900 for Fantasy Meadows and 5,100 for the others). Each comp
 to 2.0 ms. The render frame that first drew with it took 41.57 ms on Fantasy Meadows and under
 4 ms on the other three.
 
+## Memory card
+
+Three runs under one probe NAME, so each launch found the card the last one left. Each had
+`--log=exi`, which logs every card command. The page writes (`memcard cmd F2`) were counted
+between the presses around them. The card's SHA-1 changed after each run.
+
+| Run | Presses | Card writes | What the frames show |
+|---|---|---|---|
+| 1 | `tests/routes/title.txt` on a blank card | 1,024 pages, the new save file | The title |
+| 2 | Options, Sound, Mono, the balance moved two steps toward Effects, then B twice | 448 pages between START at the title and frame 700, then 320 after B left the Sound screen | Mono picked and the balance moved |
+| 3 | Options, Sound and no change | 448 pages between START at the title and frame 700 | The balance where run 2 left it, and Stereo |
+
+With a save on the card the game skips the card prompts and starts the opening movie at once,
+so these presses come earlier than a route's. Runs 2 and 3 began
+`200:A:5,400:START:5,700:RIGHT:5,800:A:5,1100:DOWN:5,1200:A:5`, and run 2 went on with
+`1500:RIGHT:5,1600:A:5,1700:DOWN:5,1800:RIGHT:20,1900:RIGHT:20,2000:B:5,2300:B:5`.
+
+Stereo or mono goes through the SDK. The Sound screen (the call at 800AEB78 in
+`kar_smsoundtest__near_800aeb20`) calls `HSD_SynthSetSoundMode`, whose call at 80448534 is
+`OSSetSoundMode`, and that writes bit 2 of SRAM byte 0x13. At boot `HSD_SynthInit` reads it
+back with `OSGetSoundMode` at 8044EA84. A console keeps SRAM on a battery. gcn-recomp's
+`sram_init` (`runtime/hw/exi.cpp`) sets byte 0x13 to 0x2C, stereo, at every launch and never
+saves it, so Mono lasts only until the game closes.
+
+City Trial's Game Settings didn't come back either, because the game doesn't write them
+when its menus close. In one pair of runs the second showed 5 min and Shuffle after the
+first set 3 min and Drag Race. A third run that made the same change with `--log=exi`
+logged no card writes after it, as every write came before frame 700. Whether the game
+saves them after a match wasn't checked.
+
+## Stats screen
+
+When City Trial's clock runs out, each player's machine stats come up on a screen that draws
+black here. The draw log of frame
+15,900 in `city-trial-stadium.txt` (`GCN_DRAWLOG=15900 GCN_DRAWLOG_VERBOSE=1`) shows why.
+Draws 0 to 7 are a green background and draws 8 to 99 are the four machines with their riders,
+one camera to a quarter of the screen. Draw 100 covers the screen with colour updates off and
+alpha updates on (blend register `007012`). Draw 101 covers it again with blend `0050D9`, a
+source factor of zero and a destination factor of DSTALPHA, while the pixel engine's format is
+RGB8_Z24 (`pecntrl=000040`), which has no alpha. Draw 102 is the dimming quad.
+
+The GL renderer (`runtime/gx/render_gl.cpp` in gcn-recomp `b848158`) turns GX's DSTALPHA into
+`GL_DST_ALPHA` from its `kBlendDst` table whatever the format. For RGB8 it masks alpha writes
+(`has_alpha` from `bp[0x43] & 7`), so draw 101 multiplies the frame by an alpha the game never
+set, and the frame comes out black. Dolphin's `RenderState.cpp` (GPL, read and not copied) reads DSTALPHA as one and
+INVDSTALPHA as zero when the format has no alpha, which makes draw 101 a no-op. Run again with `GCN_DRAW_SKIP=101-101`, the frame shows the dimmed green view with all four
+machines. The mode select's gray panel is something else, as none of its draws at frame 1,300
+use a destination alpha factor.
+
 ## Four players
 
 `city-trial-4p.txt` with `--pads=4`, at gcn-recomp `fda6926`. The game's full speed is 60
@@ -248,6 +305,43 @@ The benchmark has no renderer, so its figure is the guest alone. The whole 120 s
 118,257 frames, past the end of City Trial. The real-speed run fell behind only while the
 city loaded, between frames 2,706 and 2,750. It showed 44 frames in that second and made 9
 catch-up jumps of the clock there, 109 ms in all. It made no more in the city.
+
+## Top Ride and the stadium at the game's speed
+
+Each Top Ride and stadium route ran once in a hidden window at 640x480 as
+`tools/probe.sh pace-ROUTE SECONDS tests/routes/ROUTE.txt 100000 GCN_FRAMETIME=1 --real-time`
+(plus `--pads=4` for four players), at Dragoon `788571c` and gcn-recomp `b848158`. Each played
+past its route's last checkpoint. A new NAME meant an empty shader cache, and other runs kept the
+machine's load average between 8 and 12. The numbers are `tools/frametime.py`'s. For Top Ride
+they start at frame 3,400 and cover about 1,820 frames of the race. For the stadium they start at
+frame 4,400 and cover the city, the stats, Drag Race 3 and the results. The over 20 ms column
+counts guest intervals of 20 ms or more.
+
+| Route | Guest mean, 95th, worst | Guest over 20 ms | `[rt]` mean, worst | `[rt]` over 16.7 ms |
+|---|---|---|---|---|
+| Top Ride, Grass | 16.68, 17.92, 19.81 ms | 0 | 0.72, 34.69 ms | 2 |
+| Top Ride, Sand | 16.68, 17.97, 18.81 ms | 0 | 0.81, 25.53 ms | 1 |
+| Top Ride, Sky | 16.70, 17.90, 48.64 ms | 1 | 0.76, 12.98 ms | 0 |
+| Top Ride, Fire | 16.68, 18.00, 21.32 ms | 1 | 0.74, 59.87 ms | 1 |
+| Top Ride, Light | 16.72, 18.07, 49.14 ms | 8 | 0.61, 34.65 ms | 2 |
+| Top Ride, Water | 16.72, 17.84, 46.61 ms | 3 | 0.73, 68.88 ms | 3 |
+| Top Ride, Metal | 16.70, 17.91, 38.12 ms | 2 | 0.78, 15.07 ms | 0 |
+| Stadium, one player | 16.73, 17.93, 134.92 ms | 24 | 0.46, 20.69 ms | 1 |
+| Stadium, four players | 16.73, 17.90, 134.16 ms | 31 | 0.91, 13.99 ms | 0 |
+
+The Fire row is a second run. The first, made while the load average was near 11, had 34 guest
+intervals over 20 ms, bunched between frames 4,140 and 4,200, and a worst of 55.90 ms. Every
+render frame over 16.7 ms in these tables compiled new shaders, which a warm cache would have
+built already. From frame 300 on, the stadium runs' worst render frames were the city's first
+frame (89.89 ms with 38 new programs, 96.12 ms with 34 for four players) and frame 902 (15 new
+programs).
+
+The stadium's long guest intervals come where the game changes scene. On the one-player run
+they were 98 ms at frame 15,606 just after time ran out, 100 ms at 16,202 as the stats screen
+closed, 135 ms at 16,502 as the stadium loaded 69 new textures (4.6 MB) and 122 ms at 20,051
+at the results. The four-player run stalled at the same four scene changes. One more, 111 ms at frame
+17,547 in the middle of Drag Race 3, came with no new textures. What the guest was doing then
+wasn't checked. The rest of the slow intervals were between 20 and 50 ms.
 
 ## Audio
 
