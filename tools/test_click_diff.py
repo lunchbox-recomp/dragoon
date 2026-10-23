@@ -3,12 +3,18 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from array import array
 from pathlib import Path
 
 import click_diff
+from audio_clicks import Recording
 from testutil import pcm, run_main, spliced, tone, write_file
 
 RATE = 32000
+
+
+def rec(*channels: list[int]) -> Recording:
+    return Recording(RATE, [array("h", ch) for ch in channels])
 
 
 class DiffTest(unittest.TestCase):
@@ -80,6 +86,48 @@ class DiffTest(unittest.TestCase):
         self.assertEqual(self.diff(b, b, 0.8).b_clicks, 1)
         with self.assertRaisesRegex(ValueError, r"a.raw: 0.50 s recorded, short of 0.8 s"):
             self.diff(a, b, 0.8)
+
+    def test_a_sample_is_the_same_only_when_every_channel_is(self):
+        # The right channel is one step off in the second half and the left is the same throughout.
+        x = tone(32000, RATE)
+        right = x[:16000] + [v + 1 for v in x[16000:]]
+        a, b = write_file(self.dir, "a.raw", pcm(x, x)), write_file(self.dir, "b.raw", pcm(x, right))
+        self.assertEqual(click_diff.diff(a, b).same_samples, 0.5)
+
+
+class UnmatchedTest(unittest.TestCase):
+    def test_a_click_is_shared_when_the_other_has_one_within_1_ms_either_side(self):
+        # 1 ms is 32 samples.
+        for gap, shared in ((31, True), (32, True), (33, False)):
+            for sign in (1, -1):
+                with self.subTest(gap=gap, sign=sign):
+                    self.assertEqual(click_diff.unmatched([1000], [1000 + sign * gap]), [] if shared else [1000])
+
+    def test_only_the_clicks_with_no_partner_are_left(self):
+        self.assertEqual(click_diff.unmatched([100, 5000, 9000], [110, 9100]), [5000, 9000])
+        self.assertEqual(click_diff.unmatched([100], []), [100])
+
+
+class DescribeTest(unittest.TestCase):
+    def test_the_second_difference_and_the_peak_are_taken_around_the_click(self):
+        # B - A is 1000, 5000, 2000 across the click at 300 and 9000 a hundred samples before it.
+        n, i = 600, 300
+        left = [0] * n
+        left[i - 1:i + 2] = [1000, 5000, 2000]
+        left[i - 100] = 9000
+        got = click_diff.describe(i, "B", -20.0, rec([1] * n, [1] * n), rec([0] * n, [0] * n), [left, [0] * n])
+        self.assertEqual((got.diff_d2, got.diff_peak), (7000, 9000))
+        self.assertEqual((got.a_silent, got.b_silent, got.offset), (False, True, i % 160))
+
+    def test_silence_needs_every_channel(self):
+        r = rec([0] * 100, [0] * 50 + [5] * 50)
+        self.assertEqual((click_diff.silent(r, 0, 50), click_diff.silent(r, 0, 100)), (True, False))
+
+    def test_a_step_must_be_over_8_times_the_differences_around_it_and_at_least_8(self):
+        # Flat, then up by STEP. Nothing else moves, so the floor of 1 on the RMS sets the bar.
+        for step, stepping in ((8, False), (9, True)):
+            with self.subTest(step=step):
+                self.assertEqual(click_diff.steps_at([0] * 10 + [step] * 10, 10), stepping)
 
 
 class MainTest(unittest.TestCase):
