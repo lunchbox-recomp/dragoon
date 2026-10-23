@@ -39,9 +39,19 @@ FAIL = os.path.exists({fail!r})
 """
 CMAKE = """
 build = sys.argv[sys.argv.index("-B") + 1]
+source = sys.argv[sys.argv.index("-S") + 1]
+cache = os.path.join(build, "CMakeCache.txt")
+# Like CMake, refuse a build directory that an earlier configure made from another source.
+if os.path.exists(cache):
+    with open(cache) as f:
+        made_from = f.read().strip().split("=", 1)[1]
+    if made_from != source:
+        print("CMake Error: " + source + " does not match the source " + made_from
+              + " used to generate cache")
+        sys.exit(1)
 os.makedirs(build, exist_ok=True)
-with open(os.path.join(build, "CMakeCache.txt"), "w") as f:
-    f.write("CMAKE_HOME_DIRECTORY:INTERNAL=" + sys.argv[sys.argv.index("-S") + 1] + "\\n")
+with open(cache, "w") as f:
+    f.write("CMAKE_HOME_DIRECTORY:INTERNAL=" + source + "\\n")
 if FAIL:
     print("cmake failed on purpose")
     sys.exit(1)
@@ -133,7 +143,7 @@ class RecipeTestCase(unittest.TestCase):
     def fail_marker(self, tool: str) -> Path:
         return self.dir / f"fail {tool}"
 
-    def make_snapshot(self, tarball: Path) -> None:
+    def make_snapshot(self, tarball: Path, commit: str = COMMIT) -> None:
         if self.source.exists():
             shutil.rmtree(self.source)
         for d in ("gcn-recomp", "tools", "tests/hashes"):
@@ -144,7 +154,7 @@ class RecipeTestCase(unittest.TestCase):
         self.fake("warm_shaders", WARM, self.source / "tools")
         write_file(self.source / "tests" / "hashes", "manifest.txt", ROUTES)
         source_info.write(self.source / source_info.NAME, {
-            "dragoon": COMMIT, "gcn-recomp": ENGINE, "disc_id": "GKYE01", "dol_sha1": "a" * 40})
+            "dragoon": commit, "gcn-recomp": ENGINE, "disc_id": "GKYE01", "dol_sha1": "a" * 40})
         write_file(self.source, export_source.MANIFEST,
                    export_source.format_manifest(export_source.manifest(self.source)))
 
@@ -338,6 +348,26 @@ class FailureTest(RecipeTestCase):
         parts = path.split("/")
         return parts in (["source"], ["source", COMMIT]) or parts[:2] == ["source", COMMIT] \
             or (parts[0] == "game" and len(parts) > 1 and parts[1] not in ("current", OLD))
+
+    def build_again_at_another_commit(self) -> None:
+        """A good build of a snapshot at another commit into the cache the last run left, as
+        the fake cmake refuses a build directory made from another source, like CMake's."""
+        self.assertTrue((self.cache / "build" / "CMakeCache.txt").is_file())
+        later = "f" * 40
+        self.make_snapshot(self.tarball, later)
+        code, events, _ = self.build()
+        self.assertEqual((code, self.of(events, "error")), (0, []))
+        self.assertEqual(self.records_of("cmake")[-1]["argv"][1], str(self.data / "source" / later))
+
+    def test_the_build_directory_of_a_failed_run_doesnt_stop_the_next_commit(self):
+        write_file(self.dir, "fail ninja", "")
+        self.assertEqual(self.build()[0], 1)
+        self.fail_marker("ninja").unlink()
+        self.build_again_at_another_commit()
+
+    def test_the_build_directory_kept_by_a_good_run_doesnt_stop_the_next_commit(self):
+        self.assertEqual(self.build("--keep-build")[0], 0)
+        self.build_again_at_another_commit()
 
     def test_a_tarball_with_the_wrong_hash_stops_before_anything(self):
         make_tarball(self.tarball, [(tar_member("SDL3-3.4.18/other"), b"not the pinned one")])
