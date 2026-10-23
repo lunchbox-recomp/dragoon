@@ -121,6 +121,16 @@ class DescribeTest(unittest.TestCase):
         self.assertEqual((got.diff_d2, got.diff_peak), (7000, 9000))
         self.assertEqual((got.a_silent, got.b_silent, got.offset), (False, True, i % 160))
 
+    def test_the_peak_covers_160_samples_either_side_of_the_click_and_no_more(self):
+        n, i = 1000, 500  # 5 ms is 160 samples
+        for at, counts in ((i - 161, False), (i - 160, True), (i + 160, True), (i + 161, False)):
+            with self.subTest(at=at):
+                left = [0] * n
+                left[at] = 7000
+                got = click_diff.describe(i, "B", -20.0, rec([1] * n, [1] * n), rec([0] * n, [0] * n),
+                                          [left, [0] * n])
+                self.assertEqual(got.diff_peak, 7000 if counts else 0)
+
     def test_silence_needs_every_channel(self):
         r = rec([0] * 100, [0] * 50 + [5] * 50)
         self.assertEqual((click_diff.silent(r, 0, 50), click_diff.silent(r, 0, 100)), (True, False))
