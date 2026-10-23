@@ -133,6 +133,12 @@ class ProbeTreeTest(unittest.TestCase):
         args = self.game_args()
         self.assertEqual([a for a in args if a.startswith(("--aspect", "--dump-output"))], [])
 
+    def test_dragoon_setting_reaches_the_game_environment(self):
+        self.add_game("dragoon", "printf '%s' \"$DRAGOON_CENSUS\" > census.txt\n")
+        r = probe(NAME, "1", "", "60", "DRAGOON_CENSUS=1", script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.root / "build" / "probe" / NAME / "census.txt").read_text(), "1")
+
     def test_frame_count_leaves_out_output_dumps(self):
         self.add_game("dragoon", "touch frame_00060.png output_00060.png\n")
         r = probe(NAME, "1", "", "60", "--output", script=self.script)

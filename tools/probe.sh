@@ -10,6 +10,8 @@
 #   SETTING       any number of these:
 #     GCN_*=value   any of gcn-recomp's GCN_* diagnostics (its docs/diagnostics.md), e.g.
 #                   GCN_DRAWLOG=3600
+#     DRAGOON_*=value  Dragoon's own switches in src/, e.g. DRAGOON_CENSUS=1 (the camera
+#                   census, docs/dev/widescreen.md)
 #     --pads=N      controllers plugged in on ports 1 to N, 1 to 4 (default 1)
 #     --real-time   run at the game's own speed instead of as fast as it goes, for frame
 #                   pacing (with GCN_FRAMETIME=1 or GCN_CLOCKLOG=1)
@@ -30,7 +32,7 @@
 # Exits 0 once the run ends, 1 when the bench printed no report, 2 on a bad argument or when
 # the game binary (build/dragoon, or build/dragoon_bench under --bench) isn't built.
 set -e
-case ${1:-} in -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case ${1:-} in -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 if [ $# -lt 2 ]; then
   echo "usage: tools/probe.sh NAME SECONDS [INPUT_SCRIPT [DUMP_EVERY [SETTING ...]]] (--help for more)" >&2
   exit 2
@@ -50,11 +52,11 @@ scale=1
 log=
 aspect=
 output=
-# Keeps the GCN_ settings in "$@" and takes the rest out.
+# Keeps the GCN_ and DRAGOON_ settings in "$@" and takes the rest out.
 for s in "$@"; do
   shift
   case $s in
-    GCN_*=*) set -- "$@" "$s" ;;
+    GCN_*=*|DRAGOON_*=*) set -- "$@" "$s" ;;
     --pads=[1-4]) pads=${s#--pads=} ;;
     --real-time) fast= ;;
     --bench) bench=1 ;;
