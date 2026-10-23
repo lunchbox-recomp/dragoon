@@ -157,11 +157,11 @@ checklist reward whose clear kind is 0 (`src/kar/gm/gmclearchecker.c:77`). In LA
 
 Clear kind 0 is marked once a running total reaches 100 (`kar_gmclearchecker__near_8004ac34`,
 `src/kar/gm/gmclearchecker_8004a648.c:346`). That total is the value at 0x80536834
-(`clearchecker_total_0`) plus a lap count for each racer slot in the race in progress, kept at
-0x80536240 (`fn_8000B1EC`, `gmautodemo.c:2326`). The decomp adds the counts of every slot whose
-kind is 0, plus kind 1 when the race mode is 1 (`gmclearchecker_8004a648.c:334`). Whether the
-value at 0x80536834 reaches the memory card wasn't checked. The attract demo skips course 8 on the
-same check (`gmautodemo.c:4141`).
+(`clearchecker_total_0`) plus the lap counts of the racer slots it counts, kept per slot at
+0x80536240 (`fn_8000B1EC`, `gmautodemo.c:2326`). Those are the slots whose kind is 0, plus kind
+1 when the race mode is 1 (`gmclearchecker_8004a648.c:334`). Whether the value at 0x80536834
+reaches the memory card wasn't checked. The attract demo skips course 8 on the same check
+(`gmautodemo.c:4141`).
 
 RAM dumps taken with `GCN_RAM_DUMP_AT` show what's counted. On the race route each racer's
 count went up by one as it finished a lap, and the running total at 0x80536834 went from 0
