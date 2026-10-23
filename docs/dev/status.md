@@ -139,8 +139,8 @@ need `--pads=4`.
 | Four-player results | `city-trial-stadium-4p.txt` | 21000 | P3 first in 0:53.31, then P2, P4 and P1 in 1:00.15, under confetti |
 | Top Ride race | `top-ride-<course>.txt` | 3600 | Each course 3.62 s into the race. Seven laps on Grass and Sand, six on Sky, Fire and Light, five on Water and Metal |
 
-Left alone, the race route finishes three laps in 1:12.60 and reaches the results screen by
-frame 25,800. City Trial with nobody steering drives into the sea and stays there while the
+Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
+frame 25,800. It showed 1:12.60 when this was first written, at gcn-recomp `7d30377`. City Trial with nobody steering drives into the sea and stays there while the
 clock runs. The opening movie, when it isn't skipped, plays to the end and hands over to the
 title and the attract demos.
 
