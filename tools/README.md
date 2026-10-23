@@ -244,7 +244,7 @@ Where does SDL's source come from when nothing downloads? gcn-recomp's `CMakeLis
 
 ## check_bundle.py
 
-Does the launcher ship anything game-derived? The disc never reaches CI, so nothing can compare bytes with the game. check_bundle.py looks for the shapes game data takes in `Dragoon.app`, or in a DMG that it attaches read-only and detaches again. Run it before anything is signed.
+Does the launcher ship anything game-derived? The disc never reaches CI, so nothing can compare bytes with the game. check_bundle.py looks for the shapes game data takes in `Dragoon.app`, or in a DMG that it attaches read-only and detaches again. Run it on the unsigned app and again on the signed DMG, since the manifest allows the `_CodeSignature` that signing adds.
 
 | Check | What fails |
 |---|---|

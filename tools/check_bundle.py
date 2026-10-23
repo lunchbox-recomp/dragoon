@@ -4,7 +4,8 @@
 Usage: check_bundle.py PATH --commit SHA [--repo DIR] [--manifest FILE]
 
 PATH is a .app or a .dmg. A DMG is attached read-only (hdiutil attach -readonly -nobrowse
--mountpoint), checked and detached. Run it before anything is signed. The checks are:
+-mountpoint), checked and detached. Run it on the unsigned app and again on the signed DMG,
+since the manifest allows the _CodeSignature that signing adds. The checks are:
   1  paths        outside the source snapshot every file, link and empty directory is on the
                   manifest (launcher/bundle-manifest.txt). Nothing anywhere matches
                   check_no_game_data.is_game_data or is a build's own output (gen/, rels/,
