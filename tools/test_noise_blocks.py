@@ -73,6 +73,16 @@ class FindTest(unittest.TestCase):
         x = tone(160, RATE, freq=RATE / 6)
         self.assertEqual(noise_blocks.find(rec(x, x)).noisy_blocks, 1)
 
+    def test_a_block_at_a_ratio_of_exactly_1_isnt_over_it(self):
+        # Every step is 1 or -1 and the squares sum to 160, so the mean over the 159 steps and
+        # the mean over the 160 samples are both 1 times a square. Scaled to a peak of 10,000
+        # they are exactly equal, and a block is noise-like only when the first is bigger.
+        walk = [0, 1] * 60 + [2, 1] * 20
+        tie = [5000 * v for v in walk]
+        self.assertEqual(noise_blocks.find(rec(tie, tie)).noisy_blocks, 0)
+        over = tie[:-1] + [0]  # one step of 2 instead of 1 and a little less energy
+        self.assertEqual(noise_blocks.find(rec(over, over)).noisy_blocks, 1)
+
     def test_noise_resampled_to_48_khz_is_flagged_in_far_fewer_blocks(self):
         # The ring interpolates linearly to the device's 48 kHz, which leaves little above
         # 16 kHz. That takes white noise from a ratio of about 1.41 to about 0.97, so most of
