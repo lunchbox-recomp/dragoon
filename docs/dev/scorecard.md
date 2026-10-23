@@ -184,10 +184,11 @@ four players has 44, which makes pass 3's 136.
 The bisect traced what the work changed in the mixer stage.
 
 - The compressor, `bf31b7b`, took the clipped runs from 211 to 25.
-- The work adds 4 clicks and 5 gaps, all from `fd1f6a8` and all in the intro stream. From
-  6.3 s to 15.74 s two type 2 voices play a stereo stream that was digital silence before
-  `fd1f6a8`. Its click at 10.139 s is in the music itself, not on a join. Its gap at 15.740 s
-  is the game stopping the stream at the frame 900 press, which steps straight to zero.
+- `fd1f6a8` adds 5 clicks and 5 gaps, all in the intro stream. The work nets 4 clicks, since
+  `3bde515` took one away. From 6.3 s to 15.74 s two type 2 voices play a stereo stream that
+  was digital silence before `fd1f6a8`. Its click at 10.139 s is in the music itself, not on a
+  join. Its gap at 15.740 s is the game stopping the stream at the frame 900 press, which
+  steps straight to zero.
 - The game's AX library depops stopped voices. `fn_803EDBA4`, called from `SortVoices`, sums PB
   words 41 to 49 into nine accumulators that the setup command fades out. `b848158` never
   writes those words. gcn-recomp `e6ce0a5` (PR #11) does, and its author found that no hash
