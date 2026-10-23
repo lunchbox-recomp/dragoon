@@ -20,9 +20,16 @@ fell from 208 (2,200 samples) to 25 (371), the highest main L peak before the cl
 85,094 to 64,999, and the gaps rose from 3 to 8. A bisect on 2026-10-22 ran both builds
 unpaced at passes 1 and 2's lengths, 319.8 s in all. It agrees. It counted 131 clicks (24.6 a
 minute) at `caf12a2` and 135 (25.3) at `b848158`, while the clipped runs fell from 203 to 25 and
-the gaps rose from 3 to 8. The title route played to 91 s in real time is where clicks did
-fall. In the baseline's second run, 970 of its 979 came after the first 31 s that the five-route
-cut scores (below).
+the gaps rose from 3 to 8.
+
+The seconds scored end at each route's last checkpoint plus 15 s, and the unpaced recordings go
+on past them. The clicks did fall there. Scored again with `--no-run` and a longer `--margin`
+(the commands are under Running it again), the title's first 91 s have 1,085 clicks at the
+baseline and 19 at current, against 9 and 10 in the first 31 s. The mode select's first 170 s
+have 118 clicks and 16, with the clipped runs falling from 230 to 6, against 13 and 14 clicks in
+the first 35 s. So the clicks that fell are past the seconds the totals score. Four players has
+43 and 44 at its own 73 s, and the race and City Trial weren't scored past their cuts. The title
+played to 91 s in real time shows the same fall (below).
 
 Across the five routes the device stage's clicks a minute fell from 57.9 to 36.3 in pass 1 and
 from 45.1 to 33.1 in pass 2, and pass 3 gave current 32.2. Passes 1 and 2 had the mixer stage's
@@ -38,10 +45,12 @@ that rise came from playing in real time.
 | A bisect on 2026-10-22 | `caf12a2`, `b848158` and six audio commits between | Five routes unpaced at passes 1 and 2's lengths, and three more real-time menu runs a build | Prototypes |
 | Pass 3 | Current | Five routes, real-time and unpaced | `5ff734e` |
 | Pass 4 | Baseline | Five routes, real-time and unpaced | `3698f16` |
+| Past the cut | Baseline and current | Pass 4's and pass 3's unpaced recordings, rescored with `--no-run` | `8aaae9a` |
 
-All but pass 4 ran on 2026-10-22. The bisect's notes aren't in this repository, so its numbers
-are quoted below and named as its own. `tools/block_clicks.py`, `click_diff.py` and
-`noise_blocks.py` are its prototypes made into tools, and pass 3's checks below use them.
+All but pass 4 ran on 2026-10-22. The rescoring plays no game and was done on 2026-10-23. The
+bisect's notes aren't in this repository, so its numbers are quoted below and named as its own.
+`tools/block_clicks.py`, `click_diff.py` and `noise_blocks.py` are its prototypes made into
+tools, and pass 3's checks below use them.
 
 Pass 4 ran on 2026-10-23 at Dragoon `6b81b6e` and gcn-recomp `caf12a2`, with the tool at
 `3698f16`. That tool scores the same as `5ff734e`. It takes the 32 kHz rate and the 160-sample
@@ -173,7 +182,7 @@ same five routes. Clicks a minute is over the summed seconds.
 | Highest main L peak before the clamp | 85,094 | 64,999 |
 | Samples the clamp changed | Not logged | 587 |
 
-The audio work didn't reduce the mixer stage's clicks. The totals are 132 and 136, no route
+The audio work didn't reduce the mixer stage's clicks over these seconds. The totals are 132 and 136, no route
 differs by more than one click and the race has 45 in both. The clicks on a block join are 35 in
 both, against about 4 by chance. What the work cut was clipping. The clipped runs, as
 `audio_clicks.py` counts them, fell from 208 to 25 and the race peak from 85,094 to 64,999. The three routes that clipped at the baseline,
@@ -414,6 +423,21 @@ tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build \
 tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes title --margin 75
 ```
 
+The numbers past the cut in the summary come from these three commands, run on the unpaced
+recordings of pass 4 and pass 3. They play no game.
+
+```sh
+tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes title --margin 75 --no-run
+tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes menu --margin 150 --no-run
+tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes city-trial-4p --margin 15 --no-run
+```
+
+With `--no-run` the margin picks how much of each unpaced recording the mixer stage scores. That's
+91 s for the title, 170 s for the mode select and 73 s for four players. Read the mixer rows.
+The device rows come from the real-time run, which the margin doesn't cut. A margin that
+reaches past a recording exits 2. At `--routes title --margin 400` the tool said the baseline's
+recording held 203.01 s, short of the 416 s asked for.
+
 A later engine goes in a clone of its own and gets a label of its own, as in
 `next=/path/to/that/build`. The tool reads each clone's Dragoon and gcn-recomp commits before
 the first route plays, prints them and leaves them in each run's `commits.json`, which
@@ -431,3 +455,4 @@ committed. With `--no-run`, a build with no unpaced run shows its mixer stage as
 | The tool, title at 91 s | `13acaf4`, then `13acaf4-dirty` |
 | The tool, pass 3 | `5ff734e` |
 | The tool, pass 4 | `3698f16` |
+| The tool, past the cut | `8aaae9a` |
