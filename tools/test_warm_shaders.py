@@ -27,12 +27,15 @@ FOUR_EXIT = f"--exit-after={FOUR_FRAMES}"
 # hash that is the same number and no binary, as on macOS. It prints the lines the real game
 # prints once it has built what the cache held and under GCN_FRAMETIME=1 for each program built
 # in play. FAKE_SLEEP_ON and FAKE_FAIL_ON name the runs (by a part of the line logged) that hang
-# or exit 1, and FAKE_MEET makes each wait until another run has started too.
+# or exit 1, and FAKE_MEET makes each wait until another run has started too. FAKE_HOLD_ON
+# names a run that waits until every other run is done (FAKE_RELEASE is the file they make)
+# and then half a second more, so it ends last.
 FAKE_GAME = f"""#!{sys.executable}
 import json, os, struct, sys, time
 os.makedirs("saves", exist_ok=True)
 frames = [a for a in sys.argv if a.startswith("--exit-after=")][0].split("=")[1]
 line = " ".join(sys.argv[1:]) + " SDL=" + os.environ.get("SDL_AUDIO_DRIVER", "") + " INPUT=" + os.environ.get("GCN_INPUT", "-")
+line += " GCN=" + ",".join(sorted(k for k in os.environ if k.startswith("GCN_")))
 line += " CARD=" + str(os.path.exists("saves/memcard_a.raw"))
 with open(os.environ["FAKE_LOG"], "a") as f:
     f.write(line + "\\n")
@@ -61,6 +64,18 @@ if os.environ.get("FAKE_MEET"):
         time.sleep(0.1)
     else:
         sys.exit(3)
+if os.environ.get("FAKE_HOLD_ON"):
+    release = os.environ["FAKE_RELEASE"]
+    if os.environ["FAKE_HOLD_ON"] not in line:
+        open(release, "w").close()
+    else:
+        for _ in range(200):
+            if os.path.exists(release):
+                break
+            time.sleep(0.05)
+        else:
+            sys.exit(3)
+        time.sleep(0.5)
 if os.environ.get("FAKE_SLEEP_ON") and os.environ["FAKE_SLEEP_ON"] in line:
     time.sleep(30)
 if os.environ.get("FAKE_FAIL_ON") and os.environ["FAKE_FAIL_ON"] in line:
@@ -114,8 +129,8 @@ class WarmTestCase(unittest.TestCase):
         """How the game was run, once per run, in the order the runs began."""
         return self.log.read_text().splitlines() if self.log.exists() else []
 
-    def cache_keys(self, saves: Path | None = None) -> list[bytes]:
-        return shader_cache.load((saves or self.saves) / "shaders.bin").keys
+    def cache_keys(self) -> list[bytes]:
+        return shader_cache.load(self.saves / "shaders.bin").keys
 
     def snapshot(self) -> dict[str, bytes]:
         if not self.saves.exists():
@@ -241,6 +256,16 @@ class WarmTest(WarmTestCase):
         self.assertIn("INPUT=120:A:5,300:A:5", title.split())
         self.assertIn("--pads=4", four.split())
         self.assertIn(FOUR_EXIT, four.split())
+
+    def test_switches_that_write_one_file_are_not_inherited(self):
+        # Up to six games at once would all write the file, so only the pass's own GCN_INPUT
+        # and the diagnostics that read nothing but the environment get through.
+        env = {"GCN_WAV": "a.wav", "GCN_PROFILE": "p", "GCN_FEED_DUMP": "f", "GCN_SESSION": "s",
+               "GCN_FRAMETIME": "1"}
+        with mock.patch.dict(os.environ, env):
+            self.assertEqual(self.warm()[0], 0)
+        for line in self.game_lines():
+            self.assertIn("GCN=GCN_FRAMETIME,GCN_INPUT", line.split())
 
     def test_failing_pass_leaves_saves_identical_and_exits_non_zero(self):
         self.saves.mkdir()
@@ -389,6 +414,17 @@ class ParallelTest(WarmTestCase):
         with mock.patch.dict(os.environ, {"FAKE_MEET": str(meet)}):
             code, _, err = self.warm("--jobs", "2")
         self.assertEqual(code, 0, err)
+        self.assertEqual(self.cache_keys(), [fake_key(1), fake_key(2)])
+
+    def test_a_later_pass_finishing_first_leaves_the_merge_in_the_plans_order(self):
+        # The title is first in the manifest and holds back until the four-player pass is done,
+        # so the passes finish, and start, in the reverse of the order their keys merge in.
+        release = self.dir / "released"
+        with mock.patch.dict(os.environ, {"FAKE_HOLD_ON": TITLE_EXIT, "FAKE_RELEASE": str(release)}):
+            code, out, err = self.warm("--jobs", "2")
+        self.assertEqual(code, 0, err)
+        finished = [l.split(":")[0] for l in out.splitlines() if warm_shaders.PASS_LINE.fullmatch(l)]
+        self.assertEqual(finished, ["city-trial-4p", "title"])
         self.assertEqual(self.cache_keys(), [fake_key(1), fake_key(2)])
 
     def test_the_cache_is_the_same_however_many_play_at_once(self):

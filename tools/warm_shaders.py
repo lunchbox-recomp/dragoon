@@ -7,7 +7,8 @@ Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--force] [--jobs 
 Runs the game, one pass per route in tests/hashes/manifest.txt, each in a scratch directory
 of its own with a blank memory card as a fresh install has. (A route that finds the card an
 earlier pass made takes other menus and builds other keys.) Every pass is --hidden --fast
---no-input-log with SDL's dummy audio driver, so nothing shows or sounds. A pass's
+--no-input-log with SDL's dummy audio driver, so nothing shows or sounds, and the caller's
+GCN_INPUT, GCN_WAV, GCN_PROFILE, GCN_FEED_DUMP and GCN_SESSION are dropped. A pass's
 saves/shaders.bin starts as a copy of <saves>/shaders.bin and gains the keys its route
 builds. --jobs passes play at once (by default a third of the cores, 6 at most), the longest
 first. Once every pass has succeeded their caches are merged, each key once, in the
@@ -63,6 +64,9 @@ CACHE = "shaders.bin"
 STAMP = ".shader-warmup"
 JOBS = default_jobs(os.cpu_count())  # passes played at once
 STOP_POLL_S = 0.25  # how often a running pass looks for the order to stop
+# The game's switches that a pass must not inherit: the route is its own, and the others write
+# a file at one path, which up to six games at once would all write.
+OWN_ENV = ("GCN_INPUT", "GCN_WAV", "GCN_PROFILE", "GCN_FEED_DUMP", "GCN_SESSION")
 PRINT_LOCK = threading.Lock()
 TAIL_LINES = 15
 ROUTE_TAIL_FRAMES = 900  # past the last frame a route must reach, to build what follows it
@@ -165,7 +169,7 @@ def last_compile_frame(log: str) -> int:
 
 def run_pass(game: Path, p: Pass, scratch: Path, stop: threading.Event) -> None:
     """Play P in SCRATCH, killing the game if STOP is set or it outlasts its time limit."""
-    env = {k: v for k, v in os.environ.items() if k != "GCN_INPUT"}
+    env = {k: v for k, v in os.environ.items() if k not in OWN_ENV}
     env["SDL_AUDIO_DRIVER"] = "dummy"
     env["GCN_INPUT"] = script_text(p.route_file)
     cmd = [str(game), "--hidden", "--fast", "--no-input-log", f"--pads={p.pads}",
