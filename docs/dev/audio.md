@@ -208,8 +208,8 @@ at `b97c019`, and at `e1016b8` the check matched them on all twelve routes (`sta
 
 In those twelve runs `tools/ax_stats.py` counts 46,540,374 voice-milliseconds. 46,043,984 of
 them, 98.9%, were source type 0 with coefficient set 0, and the other 496,390 were type 2. So
-nearly every voice the game plays now goes through the polyphase filter. The setup command
-started a bus off zero 25 times in the 1,449 windows.
+nearly all the voice time the game plays now goes through the polyphase filter. 25 setup
+commands started a bus off zero in the 1,449 windows.
 
 ## What was done and what is left
 

@@ -45,12 +45,18 @@ In pass 5 the clicks fell. Unpaced, over the same 324 s, next's mixer stage made
 fell from 35 to 7, where chance gives 4.2 and 2.9. Past the cut they fell too, from 19 to 16 in
 the title's first 91 s and from 16 to 11 in the mode select's first 170 s. In one real-time run
 of each build the device stage's clicks fell from 191 to 70, 35.5 a minute to 13.0. The
-clipped runs didn't fall. The mixer stage's went from 25 (371 samples) to 28 (564),
-all of them on the race, and the device stage's from none to 35 (852). Next clamps at -32,768
-where current clamps at -32,767, so next's negative clipping counts as clipped runs and
-current's doesn't, and the two counts can't be set side by side. The samples the mixer's clamp
-changed, which count both signs on both builds, went from 587 to 574. The mixer stage's gaps
-stayed at 8.
+clipped runs rose, but they don't compare across the builds. The mixer stage's went from 25
+(371 samples) to 28 (564), all of them on the race. Next clamps at -32,768 where current
+clamps at -32,767, so next's negative clipping counts as clipped runs and current's doesn't.
+Split by sign, the race's runs at +32,767 went from 25 (371 samples) to 22 (367), and next's
+other 6 runs (197 samples) are at -32,768, where current held 199 samples at -32,767. The
+device stage's clipped runs went from none to 35 (852), also all on the race. They don't
+compare either, for a reason that comes before the clamp. The two real-time races went
+differently, and current's never reached the race's loud stretch. Its log's highest main L peak
+is 33,396 against next's 61,359. Next's 35 runs are 20 at +32,767 and 15 at -32,768, and
+current's device stage clipped 27, 23 and 14 runs on the race in passes 1 to 3. The samples
+the mixer's clamp changed, which count both signs on both builds, went from 587 to 574. The
+mixer stage's gaps held at 8, and the device stage's went from 8 to 9.
 
 ## Where the numbers come from
 
@@ -64,10 +70,11 @@ stayed at 8.
 | Past the cut | Baseline and current | Pass 4's and pass 3's unpaced recordings, rescored with `--no-run` | `8aaae9a` |
 | Pass 5 | Current and next | Five routes, real-time and unpaced | `2b98e17` |
 | Past the cut, pass 5 | Current and next | Pass 5's unpaced recordings, rescored with `--no-run` | `2b98e17` |
+| Clipped runs by sign, pass 5 | Current and next | Pass 5's recordings, read with `clip_signs.py` | `0268d8a` |
 
-All but passes 4 and 5 ran on 2026-10-22. The rescoring plays no game and was done on
-2026-10-23. The bisect's notes aren't in this repository, so its numbers are quoted below and
-named as its own.
+All but passes 4 and 5 ran on 2026-10-22. The rescoring and the split by sign play no game and
+were done on 2026-10-23. The bisect's notes aren't in this repository, so its numbers are
+quoted below and named as its own.
 `tools/block_clicks.py`, `click_diff.py` and `noise_blocks.py` are its prototypes made into
 tools, and pass 3's checks below use them.
 
@@ -429,8 +436,9 @@ Current's unpaced runs scored the same as pass 3's on every route and every row 
 day later and with a newer tool. Next clicked less on every route. Its clicks on a block join
 fell from 35 to 7 against 2.9 by chance. The clicks away from joins fell from 101 to 87.
 This pass doesn't say which of the commits in `audio.md` took them away. The clipped runs went
-up on the race, and next's clamp is why they can't be set against current's (What the numbers
-don't show). The clamp count, which both builds keep the same way, fell from 585 to 572 there.
+up on the race, and next's clamp is why the mixer stage's can't be set against current's
+without the split by sign below. The clamp count, which counts both signs on both builds, fell
+from 585 to 572 there.
 
 Past the cut, rescored with `--no-run` from the same unpaced recordings:
 
@@ -464,7 +472,49 @@ Current's 19 and 16 are the counts the rescoring of pass 3's recordings gave.
 | City Trial, four players | 36.3 | 17.3 |
 
 Each build is one real-time run here. Current's 35.5 clicks a minute sits with its 36.3, 33.1
-and 32.2 in passes 1 to 3. Next's 35 clipped runs in the device stage are all on the race.
+and 32.2 in passes 1 to 3. The device stage's 35 clipped runs at next, none at current, are all
+on the race, and they don't compare across the two runs (below).
+
+The race's device clicks, 93 at current and 29 at next, also come from two different races
+(below). On the other four routes, where neither build had a device clipped run, the device
+clicks fell from 98 to 41. They were 6, 13, 35 and 44 at current and 5, 4, 11 and 21 at next.
+
+`tools/clip_signs.py` splits the clipped runs of the same recordings by sign. The mixer rows
+are the unpaced run's recording cut as the scorecard cuts it. The device rows are the
+real-time run's whole recording.
+
+| Clipped runs, by sign | Runs at +32,767 (samples) | Runs at -32,768 (samples) | Samples at -32,767 | Lowest, highest sample |
+|---|---|---|---|---|
+| Race mixer, 115 s, current | 25 (371) | 0 (0) | 199 | -32,767, 32,767 |
+| Race mixer, 115 s, next | 22 (367) | 6 (197) | 0 | -32,768, 32,767 |
+| Mode select mixer, 170 s, current | 6 (19) | 0 (0) | 15 | -32,767, 32,767 |
+| Mode select mixer, 170 s, next | 6 (19) | 3 (12) | 0 | -32,768, 32,767 |
+| Race device, current | 0 (0) | 0 (0) | 0 | -32,734, 32,564 |
+| Race device, next | 20 (546) | 15 (306) | 0 | -32,768, 32,767 |
+
+In the seconds the scorecard scores, the title, the mode select, City Trial and four players
+have no clipped run at either end, in either stage, on either build. The title's first 91 s have
+4 runs (26 samples) at +32,767 at both builds and none at -32,768.
+
+The mixer stage compares once it's split. Unpaced, both builds play the same race. The runs
+at +32,767 fell slightly, from 25 (371 samples) to 22 (367). Next's other 6 runs (197 samples)
+are at -32,768, where current held 199 samples at -32,767. Next has no sample at -32,767 and
+current has none at -32,768. In the mode select's first 170 s the positive runs are 6 (19) at
+both builds, and next's 3 extra runs (12 samples) are at -32,768, where current held 15 at
+-32,767.
+
+The device stage doesn't compare, for a reason that comes before the clamp. The two real-time
+races went differently. Current's never reached the race's loud stretch. Its device recording
+has no sample at +32,767 or -32,768, and the highest main L peak in its log is 33,396 against
+next's 61,359. The race's frame 6000 dump differs between the two real-time runs, and both
+differ from the two unpaced runs' dumps, which match each other. Current's unpaced race clips
+(25 runs at +32,767, a peak of 64,999 before the clamp), and its device stage clipped 27 (510
+samples), 23 (557) and 14 (454) runs on the race in passes 1 to 3. Pass 5 is the only one of
+current's four real-time races with none, so the rise from none to 35 compares a race that
+clipped with one that didn't. The clamp change is at the negative end, so it can account for
+next's 15 runs at -32,768 and not for its 20 at +32,767. Why current's race went differently
+wasn't checked. It would take another real-time race of each build to say what the engine did
+to the device stage's clipping.
 
 `tools/block_clicks.py` over the real-time runs' mixer recordings finds 13 blocks the DMA
 played twice at current with 2 clicks on them. It finds none at next. gcn-recomp `a87ab06`
@@ -478,8 +528,8 @@ current and 165 at next, with 2 clicks on them at current and none at next.
   a day apart. Pass 4's tool was at `3698f16` and pass 3's at `5ff734e`, which score the same.
   The bisect, cut at passes 1 and 2's lengths rather than the routes' seconds, agrees with
   both, but its notes aren't in this repository.
-- Pass 5 played each build once. Current's unpaced runs matched pass 3's, but the tool didn't
-  play next twice. Next's audio hashes matched across three bench runs at `b97c019`
+- Pass 5 played each build once. Current's unpaced runs scored the same as pass 3's, but the
+  tool didn't play next twice. Next's audio hashes matched across three bench runs at `b97c019`
   (`status.md`).
 - Real-time runs move from pass to pass. The baseline's title route clipped 4,009 samples in the
   mixer stage in one pass and 485 in the other. Current's City Trial made 29.3, 35.3 and 20.7
@@ -509,9 +559,14 @@ current and 165 at next, with 2 clicks on them at current and none at next.
   ring and clamps at -32,768, so clipping there does show in the device stage. The clamp count
   from `[ax] bus` has both signs and counts the mixer only.
 - Next clamps at -32,768 in the mixer (`2b7ae75`) and in command `0E`'s output (`3d4fe9b`), so
-  its negative clipping is in both stages' clipped runs and pass 5's clipped runs don't compare
-  across the builds. Next's clamp count takes the samples below -32,768, where current's takes
-  those below -32,767.
+  its negative clipping is in both stages' clipped runs. That's why the mixer stage's clipped
+  runs don't compare across the builds until they're split by sign (Pass 5). It isn't the first
+  reason the device stage's don't. The two real-time races went differently, and current's never
+  reached the race's loud stretch (Pass 5). Next's clamp count takes the samples below -32,768,
+  where current's takes those below -32,767.
+- Pass 5's device stage is one real-time run of each build, and the race went differently in the
+  two. The race's device clipped runs and device clicks would need another real-time race of
+  each build to compare.
 - Underruns are as of each run's last `[ring] fill` line, which comes every 400 pulls of the
   device.
 - Nobody listened to any of it, and nothing was compared with a real console. One machine, an
@@ -566,6 +621,23 @@ tools/audio_scorecard.py current=/path/to/dragoon-current/build next=build --rou
 tools/audio_scorecard.py current=/path/to/dragoon-current/build next=build --routes menu --margin 150 --no-run
 ```
 
+The split by sign reads the same recordings and plays no game. `clip_signs.py` cuts the mixer
+at `--margin` as the scorecard does, so the second and third commands give the title's 91 s and
+the mode select's 170 s. The `md5` command hashes the race's frame 6000 dump from each real-time
+run and each unpaced run, which is how the dumps were compared. The real-time runs' hashes differ
+from each other, and the two unpaced runs' hashes match.
+
+```sh
+tools/clip_signs.py current=/path/to/dragoon-current/build next=build \
+  --routes title,menu,air-ride-race,city-trial,city-trial-4p
+tools/clip_signs.py current=/path/to/dragoon-current/build next=build --routes title --margin 75
+tools/clip_signs.py current=/path/to/dragoon-current/build next=build --routes menu --margin 150
+md5 /path/to/dragoon-current/build/probe/scorecard-air-ride-race/frame_06000.png \
+  build/probe/scorecard-air-ride-race/frame_06000.png \
+  /path/to/dragoon-current/build/probe/scorecard-unpaced-air-ride-race/frame_06000.png \
+  build/probe/scorecard-unpaced-air-ride-race/frame_06000.png
+```
+
 | | Commit |
 |---|---|
 | Baseline Dragoon | `6b81b6e` |
@@ -580,3 +652,4 @@ tools/audio_scorecard.py current=/path/to/dragoon-current/build next=build --rou
 | The tool, pass 4 | `3698f16` |
 | The tool, past the cut | `8aaae9a` |
 | The tool, pass 5 and its rescoring | `2b98e17` |
+| `clip_signs.py`, the split by sign | `0268d8a` |
