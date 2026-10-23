@@ -34,7 +34,7 @@ from bisect import bisect_left
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from aid_blocks import BLOCK, RATE
+from aid_blocks import BLOCK, RATE, plural
 from audio_clicks import CLICK_RATIO, CONTEXT_MS, MERGE_MS, Recording, analyse, read_raw
 
 WINDOW = RATE * CONTEXT_MS // 1000  # 5 ms either side
@@ -134,7 +134,7 @@ def print_diff(d: Diff, limit: int) -> None:
     print(f"of those one-sided, the other build silent {d.other_silent}, the same edge in both "
           f"{d.same_edge}, B-A stepping at a join {d.join_steps}")
     for c in d.clicks[:limit]:
-        print(f"  {c.at:.3f} s only {c.build}, {c.db:.1f} dB, {c.offset} samples into its block, "
+        print(f"  {c.at:.3f} s only {c.build}, {c.db:.1f} dB, {plural(c.offset, 'sample')} into its block, "
               f"B-A peak {c.diff_peak} and second difference {c.diff_d2}, "
               f"A {'silent' if c.a_silent else 'sounding'}, B {'silent' if c.b_silent else 'sounding'}"
               f"{', B-A steps at a join' if c.join_step else ''}")

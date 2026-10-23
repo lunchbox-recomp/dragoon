@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -146,6 +148,17 @@ class MainTest(unittest.TestCase):
         self.assertIn("clicks   A 0, B 1, only A 0, only B 1", out)
         self.assertIn("the other build silent 1", out)
         self.assertRegex(out, r"0\.500 s only B, .* A silent, B sounding, B-A steps at a join\n")
+
+    def test_an_offset_of_one_sample_reads_in_the_singular(self):
+        for offset, text in ((0, "0 samples into its block"), (1, "1 sample into its block"),
+                             (2, "2 samples into its block")):
+            with self.subTest(offset=offset):
+                click = click_diff.OneSided(0.5, "B", -20.0, offset, 100, 100, True, False, False)
+                shown = click_diff.Diff(1.0, 0, 1, 0, 1, 1.0, 0, 0, 0, [click])
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    click_diff.print_diff(shown, 20)
+                self.assertIn(f"dB, {text}, ", out.getvalue())
 
     def test_json_has_each_click(self):
         _, out, _ = run_main(click_diff.main, str(self.a), str(self.b), "--json")
