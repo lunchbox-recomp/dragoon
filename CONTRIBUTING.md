@@ -26,6 +26,14 @@ python3 tools/check_no_game_data.py
 python3 -m unittest discover -s tools -p 'test_*.py'
 ```
 
+The C++ in `src/` has unit tests too. They need no disc, and the configure downloads GoogleTest the first time.
+
+```sh
+cmake -S . -B build-tests -G Ninja -DDRAGOON_TESTS=ON
+ninja -C build-tests dragoon_tests
+ctest --test-dir build-tests
+```
+
 ## AI
 
 AI help is fine. Say which tools you used in the PR description. Leave AI co-author lines out of commits, since the README's AI section covers the project. Only send what you've run on your own disc.

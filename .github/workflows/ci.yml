@@ -19,6 +19,10 @@ jobs:
       - name: Dependencies
         run: brew install ninja
       - name: Configure without a disc
-        run: cmake -S . -B build-nodisc -G Ninja
+        run: cmake -S . -B build-nodisc -G Ninja -DDRAGOON_TESTS=ON
       - name: Compile the runtime
         run: ninja -C build-nodisc runtime_check
+      - name: Unit tests of src/
+        run: |
+          ninja -C build-nodisc dragoon_tests
+          ctest --test-dir build-nodisc --output-on-failure
