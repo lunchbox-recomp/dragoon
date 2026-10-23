@@ -37,8 +37,8 @@ class Build:
 
 @dataclass
 class Commits:
-    """What a build was made of when its runs played: describe()'s text for the clone and for
-    its gcn-recomp, None outside git."""
+    """What its clone had checked out when the tool started: describe()'s text for the clone and
+    for its gcn-recomp, None outside git."""
     dragoon: str | None
     gcn_recomp: str | None
 
