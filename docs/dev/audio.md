@@ -176,8 +176,11 @@ which has none of this work, and on `b848158`, with `tools/audio_scorecard.py`. 
 scores the mixer stage from unpaced runs and the device stage from real-time ones, and has
 done so for both builds. Over the five routes, 324 s in all, the unpaced mixer stage made 132
 clicks at `caf12a2` and 136 at `b848158`, and its clipped runs fell from 208 to 25. The audio
-work didn't reduce the mixer stage's clicks over those seconds, and on the title and mode
-select the clicks that fell are past them, in the same recordings. What it cut was clipping.
+work didn't reduce the mixer stage's clicks over those seconds. Rescored with
+`audio_scorecard.py --no-run`, the title's first 91 s (`--margin 75`) went from 1,085 clicks to
+19 and the mode select's first 170 s (`--margin 150`) from 118 to 16, so on those two routes the
+clicks that fell are past the scored seconds, in the same recordings. In the scored seconds what
+it cut was clipping.
 
 ## What was done and what is left
 

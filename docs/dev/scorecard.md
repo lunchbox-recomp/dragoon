@@ -15,22 +15,22 @@ scored the baseline the new way.
 
 Unpaced, over the same five routes and 324 s in all, the mixer stage made 132 clicks (24.4 a
 minute) at the baseline in pass 4 and 136 (25.2) at current in pass 3. The audio work didn't
-reduce the mixer stage's clicks over those seconds. What it cut was clipping. The clipped runs
-fell from 208 (2,200 samples) to 25 (371), the highest main L peak before the clamp fell from
+reduce the mixer stage's clicks over those seconds. In the scored seconds what it cut was
+clipping. The clipped runs fell from 208 (2,200 samples) to 25 (371), the highest main L peak before the clamp fell from
 85,094 to 64,999, and the gaps rose from 3 to 8. A bisect on 2026-10-22 ran both builds
 unpaced at passes 1 and 2's lengths, 319.8 s in all. It agrees. It counted 131 clicks (24.6 a
 minute) at `caf12a2` and 135 (25.3) at `b848158`, while the clipped runs fell from 203 to 25 and
 the gaps rose from 3 to 8.
 
 The seconds scored end at each route's last checkpoint plus 15 s, and the unpaced recordings go
-on past them. The clicks did fall there. Scored again with `--no-run` and a longer `--margin`
-(the commands are under Running it again), the title's first 91 s have 1,085 clicks at the
-baseline and 19 at current, against 9 and 10 in the first 31 s. The mode select's first 170 s
-have 118 clicks and 16, with the clipped runs falling from 230 to 6, against 13 and 14 clicks in
-the first 35 s. So the clicks that fell are past the seconds the totals score. Four players was
-scored only to its own 73 s, where it has 43 and 44, so nothing was scored past its cut. The
-race and City Trial weren't scored past their cuts either. The title played to 91 s in real time
-shows the same fall (below).
+on past them. On the title and mode select the clicks did fall there. Scored again with
+`--no-run` and a longer `--margin` (the commands are under Running it again), the title's first
+91 s have 1,085 clicks at the baseline and 19 at current, against 9 and 10 in the first 31 s.
+The mode select's first 170 s have 118 clicks and 16, with the clipped runs falling from 230 to
+6, against 13 and 14 clicks in the first 35 s. So on those two routes the clicks that fell are
+past the seconds the totals score. Four players was scored only to its own 73 s, where it has 43
+and 44, so nothing was scored past its cut. The race and City Trial weren't scored past their
+cuts either. The title played to 91 s in real time shows the same fall (below).
 
 Across the five routes the device stage's clicks a minute fell from 57.9 to 36.3 in pass 1 and
 from 45.1 to 33.1 in pass 2, and pass 3 gave current 32.2. Passes 1 and 2 had the mixer stage's
