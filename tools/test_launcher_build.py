@@ -233,6 +233,15 @@ class GoodRunTest(RecipeTestCase):
                 self.assertEqual(Path(self.record(tool)["cwd"]).resolve(), self.cache.resolve())
         self.assertEqual(self.record("ninja")["argv"], ["-C", str(self.cache / "build"), "dragoon"])
 
+    def test_no_tool_reads_the_launchers_stdin(self):
+        with mock.patch.object(launcher_build.subprocess, "Popen",
+                               wraps=launcher_build.subprocess.Popen) as popen:
+            code, _, _ = self.build()
+        self.assertEqual(code, 0)
+        self.assertGreaterEqual(len(popen.call_args_list), 4)  # cmake, ninja, warm-up, codesign
+        for call in popen.call_args_list:
+            self.assertIs(call.kwargs.get("stdin"), launcher_build.subprocess.DEVNULL, call)
+
     def test_ninja_status_lines_become_compile_progress(self):
         code, events, _ = self.build()
         self.assertEqual(code, 0)
@@ -274,6 +283,9 @@ class GoodRunTest(RecipeTestCase):
         with (game / "Dragoon.app" / "Contents" / "Info.plist").open("rb") as f:
             plist = plistlib.load(f)
         self.assertEqual(plist["CFBundleExecutable"], "dragoon")
+        # Placeholders until the user chooses the bundle ID and the name the Dock shows.
+        self.assertEqual(plist["CFBundleIdentifier"], "io.github.lunchbox-recomp.dragoon.game")
+        self.assertEqual(plist["CFBundleName"], "Dragoon")
         self.assertEqual(plist["CFBundlePackageType"], "APPL")
         self.assertEqual(plist["LSApplicationCategoryType"], "public.app-category.games")
         self.assertEqual(plist["LSMinimumSystemVersion"], "14.0")
@@ -461,17 +473,28 @@ class ArgumentTest(RecipeTestCase):
             return args
 
         cases = {
-            "a relative path": swap("--data", "Application Support/Dragoon"),
-            "a missing tool": swap("--cmake", str(self.tools / "nope")),
-            "a missing disc": swap("--disc", str(self.dir / "nope.iso")),
-            "both disc options": self.argv("--no-disc"),
-            "neither disc option": self.argv(disc=False),
-            "a source with no source-info.json": swap("--source", str(self.tools)),
+            "a relative path": (swap("--data", "Application Support/Dragoon"), "absolute"),
+            "a missing tool": (swap("--cmake", str(self.tools / "nope")), "--cmake"),
+            "a tool that isn't executable": (swap("--ninja", str(self.disc)), "--ninja"),
+            "a missing disc": (swap("--disc", str(self.dir / "nope.iso")), "--disc"),
+            "a disc that is a directory": (swap("--disc", str(self.tools)), "--disc"),
+            "a missing SDL tarball": (swap("--sdl-tarball", str(self.dir / "nope.tar.gz")),
+                                      "--sdl-tarball"),
+            "an SDL tarball that is a directory": (swap("--sdl-tarball", str(self.tools)),
+                                                   "--sdl-tarball"),
+            "a missing SDK": (swap("--sdk", str(self.dir / "nope.sdk")), "--sdk"),
+            "an SDK that is a file": (swap("--sdk", str(self.disc)), "--sdk"),
+            "a source that is a file": (swap("--source", str(self.disc)), "--source"),
+            "both disc options": (self.argv("--no-disc"), "not allowed with"),
+            "neither disc option": (self.argv(disc=False), "required"),
+            "a source with no source-info.json": (swap("--source", str(self.tools)),
+                                                  source_info.NAME),
         }
-        for name, args in cases.items():
+        for name, (args, why) in cases.items():
             with self.subTest(name):
-                code, out, _ = run_main(launcher_build.main, *args)
+                code, out, err = run_main(launcher_build.main, *args)
                 self.assertEqual((code, out), (2, ""))
+                self.assertIn(why, err)
                 self.assertFalse(self.data.exists() or self.cache.exists() or self.log.exists())
                 self.assertFalse(self.records.exists())
 
