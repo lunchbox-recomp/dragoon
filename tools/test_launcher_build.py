@@ -385,6 +385,18 @@ class FailureTest(RecipeTestCase):
         self.assertEqual(self.build("--keep-build")[0], 0)
         self.build_again_at_another_commit()
 
+    def test_a_swap_that_fails_installs_nothing_in_the_saves(self):
+        self.old_game()
+        os.unlink(self.data / "game" / "current")
+        (self.data / "game" / "current").mkdir()  # a directory, which no link can be renamed over
+        before = tree(self.data / "saves")
+        code, events, _ = self.build()
+        self.assertEqual(code, 1)
+        (error,) = self.of(events, "error")
+        self.assertEqual(error["step"], "swap")
+        self.assertEqual(tree(self.data / "saves"), before)  # not even the warmed files
+        self.assertTrue((self.data / "game" / "current").is_dir())
+
     def test_a_tarball_with_the_wrong_hash_stops_before_anything(self):
         make_tarball(self.tarball, [(tar_member("SDL3-3.4.18/other"), b"not the pinned one")])
         code, events, _ = self.build()
