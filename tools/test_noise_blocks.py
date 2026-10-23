@@ -16,6 +16,16 @@ def noise(n: int, amp: int, seed: int) -> list[int]:
     return [r.randint(-amp, amp) for _ in range(n)]
 
 
+def interpolated(x: list[int], rate: int) -> list[int]:
+    """X, sampled at the DMA's rate, linearly interpolated to RATE as the audio ring does."""
+    out = []
+    for k in range((len(x) - 1) * rate // RATE):
+        at = k * RATE / rate
+        i = int(at)
+        out.append(round(x[i] + (at - i) * (x[i + 1] - x[i])))
+    return out
+
+
 def rec(left: list[int], right: list[int]) -> Recording:
     return Recording(RATE, [array("h", left), array("h", right)])
 
@@ -62,6 +72,16 @@ class FindTest(unittest.TestCase):
         # its samples, 159 of them against 160. Only the mean over 159 puts it over the ratio of 1.
         x = tone(160, RATE, freq=RATE / 6)
         self.assertEqual(noise_blocks.find(rec(x, x)).noisy_blocks, 1)
+
+    def test_noise_resampled_to_48_khz_is_flagged_in_far_fewer_blocks(self):
+        # The ring interpolates linearly to the device's 48 kHz, which leaves nothing above
+        # 16 kHz. That takes white noise from a ratio of about 1.41 to about 0.97, so most of
+        # its blocks fall under the 1 that flags them and the rest sit close to it.
+        x = noise(RATE, 30000, 6)
+        self.assertEqual(noise_blocks.find(rec(x, x)).noisy_blocks, 200)
+        y = interpolated(x, 48000)
+        blocks = [array("h", y[k * 240:(k + 1) * 240]) for k in range(len(y) // 240)]
+        self.assertLess(sum(noise_blocks.noisy(b) for b in blocks), len(blocks) / 2)
 
 
 

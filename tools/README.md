@@ -142,7 +142,7 @@ tools/click_diff.py /path/to/old-clone/build/probe/scorecard-unpaced-title/mixer
 
 ## noise_blocks.py
 
-Where do the DMA's blocks turn to loud noise? It weighs each 160-sample block of a `GCN_AIDWAV` recording, setting its high-frequency energy against its total as the RMS of its first difference over its RMS. White noise gives about 1.41, and music and effects give far less. A block is noise-like over 1 on a channel whose peak is over 8,000, and it prints the stretches such blocks form. The game's own bright sounds, a crash for one, make short stretches too, so a stretch is a place to look rather than a fault. It reads the DMA's 32 kHz only, since the ring's resampling to 48 kHz lowers the ratio of any noise in a `GCN_WAV` recording.
+Where do the DMA's blocks turn to loud noise? It weighs each 160-sample block of a `GCN_AIDWAV` recording, setting its high-frequency energy against its total as the RMS of its first difference over its RMS. White noise gives about 1.41, and music and effects give far less. A block is noise-like over 1 on a channel whose peak is over 8,000, and it prints the stretches such blocks form. The game's own bright sounds, a crash for one, make short stretches too, so a stretch is a place to look rather than a fault. It reads the DMA's 32 kHz only. The ring interpolates to 48 kHz for the device, and `test_noise_blocks.py` shows that noise which flags every block at 32 kHz flags far fewer after a linear interpolation to 48 kHz, so a `GCN_WAV` recording isn't a fair input.
 
 ```
 tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw

@@ -12,9 +12,9 @@ bright sound of the game's own, such as a crash, makes a short stretch too. It p
 noise-like blocks and their seconds, then the first N stretches (20 by default) with where
 each starts and ends. --json prints the whole result.
 
-It reads the DMA's 32 kHz only. The ring resamples to 48 kHz for the device, which leaves
-nothing above 16 kHz, so noise there gives a lower ratio and a GCN_WAV recording isn't a fair
-input.
+It reads the DMA's 32 kHz only. The ring interpolates to 48 kHz for the device, which leaves
+nothing above 16 kHz, and noise that flags every block at 32 kHz flags far fewer after a
+linear interpolation to 48 kHz (test_noise_blocks.py). A GCN_WAV recording isn't a fair input.
 
 Exits 0 once it has read the recording, 2 on a bad argument or a file it can't read.
 """
