@@ -114,8 +114,8 @@ needs `--pads=4`.
 | Four-player entry | `city-trial-4p.txt` | 2700 | P1 OK to P4 OK under READY?, each player joined from its own port |
 | Four-player City Trial | `city-trial-4p.txt` | 3480 | Four views, 4:51 left, ports 1 and 3 steering left and 2 and 4 right |
 
-Left alone, the race route finishes three laps in 1:12.60 and reaches the results screen by
-frame 25,800. City Trial with nobody steering drives into the sea and stays there while the
+Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
+frame 25,800. It showed 1:12.60 when this was first written, at gcn-recomp `7d30377`. City Trial with nobody steering drives into the sea and stays there while the
 clock runs. The opening movie, when it isn't skipped, plays to the end and hands over to the
 title and the attract demos.
 
