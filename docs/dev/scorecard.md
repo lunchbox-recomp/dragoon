@@ -4,6 +4,8 @@ What gcn-recomp's audio work changed, measured by program with nobody listening.
 `tools/audio_scorecard.py --routes title,menu,air-ride-race,city-trial,city-trial-4p` plays
 five routes and counts clicks, gaps and clipping before the audio ring and after it. The
 baseline is gcn-recomp `caf12a2`, with none of the audio work. Current is gcn-recomp `b848158`.
+Next is gcn-recomp `b97c019`. The pin is now `e1016b8`, which changes no audio file after
+`b97c019` (under Pass 5).
 
 The tool scores the two stages from different runs. The mixer stage, every block the DMA
 delivered, comes from an unpaced run, whose game time doesn't wait on the host. Each pair of
@@ -11,7 +13,8 @@ unpaced runs compared so far gave the same samples, as How it was measured says.
 stage, what the ring handed the device, comes from a real-time run, since the ring's pace is
 part of what it measures. Passes 1 and 2 on 2026-10-22 scored both stages from real-time runs
 of both builds. Pass 3, the same day, scored current the new way. Pass 4, on 2026-10-23,
-scored the baseline the new way.
+scored the baseline the new way. Pass 5, the same day, scored current and next the new way in
+one run.
 
 Unpaced, over the same five routes and 324 s in all, the mixer stage made 132 clicks (24.4 a
 minute) at the baseline in pass 4 and 136 (25.2) at current in pass 3. The audio work didn't
@@ -37,6 +40,18 @@ from 45.1 to 33.1 in pass 2, and pass 3 gave current 32.2. Passes 1 and 2 had th
 clicks a minute rising from 22.3 to 26.4 and from 24.4 to 30.2. The bisect found that most of
 that rise came from playing in real time.
 
+In pass 5 the clicks fell. Unpaced, over the same 324 s, next's mixer stage made 94 clicks
+(17.4 a minute) to current's 136 (25.2), and every route had fewer. The clicks on a block join
+fell from 35 to 7, where chance gives 4.2 and 2.9. Past the cut they fell too, from 19 to 16 in
+the title's first 91 s and from 16 to 11 in the mode select's first 170 s. In one real-time run
+of each build the device stage's clicks fell from 191 to 70, 35.5 a minute to 13.0. The
+clipped runs didn't fall. The mixer stage's went from 25 (371 samples) to 28 (564),
+all of them on the race, and the device stage's from none to 35 (852). Next clamps at -32,768
+where current clamps at -32,767, so next's negative clipping counts as clipped runs and
+current's doesn't, and the two counts can't be set side by side. The samples the mixer's clamp
+changed, which count both signs on both builds, went from 587 to 574. The mixer stage's gaps
+stayed at 8.
+
 ## Where the numbers come from
 
 | Source | Builds | Runs | Tool |
@@ -47,9 +62,12 @@ that rise came from playing in real time.
 | Pass 3 | Current | Five routes, real-time and unpaced | `5ff734e` |
 | Pass 4 | Baseline | Five routes, real-time and unpaced | `3698f16` |
 | Past the cut | Baseline and current | Pass 4's and pass 3's unpaced recordings, rescored with `--no-run` | `8aaae9a` |
+| Pass 5 | Current and next | Five routes, real-time and unpaced | `2b98e17` |
+| Past the cut, pass 5 | Current and next | Pass 5's unpaced recordings, rescored with `--no-run` | `2b98e17` |
 
-All but pass 4 ran on 2026-10-22. The rescoring plays no game and was done on 2026-10-23. The
-bisect's notes aren't in this repository, so its numbers are quoted below and named as its own.
+All but passes 4 and 5 ran on 2026-10-22. The rescoring plays no game and was done on
+2026-10-23. The bisect's notes aren't in this repository, so its numbers are quoted below and
+named as its own.
 `tools/block_clicks.py`, `click_diff.py` and `noise_blocks.py` are its prototypes made into
 tools, and pass 3's checks below use them.
 
@@ -373,12 +391,96 @@ The clicks come after the five-route run's 31 s. In the baseline's second run, 9
 later than that, the first of them at 41.71 s. 586 of those 970 fell on a block join, where
 chance gives 30.3. In current's second run, 10 of its 22 came after 31 s.
 
+## Pass 5, current against next
+
+Pass 5 ran on 2026-10-23 and took about 22 minutes. One run of the tool played current against
+next, a route at a time across the two builds, so one tool scored both. Current was the
+`dragoon-score` clone's existing build at Dragoon `28fdb9b`, where `ninja -n` had nothing to
+rebuild. Next was this clone built at gcn-recomp `b97c019`. Its runs' `commits.json` names
+Dragoon `d74b5c5`, a commit this branch replaced when the pin moved on to `e1016b8`. That
+commit differed from `2b98e17` only in the submodule pointer, `tests/hashes/` and `docs/`, so
+the tool and the routes were `2b98e17`'s. What `b97c019` changes in the mixer and the AI DMA is
+in `audio.md`. The 21 commits from there to `e1016b8` touch no audio file under `runtime/`, and
+at `e1016b8` `tools/audio_hashes.py check` matched the goldens recorded at `b97c019` on all
+twelve routes.
+
+| Five routes, unpaced | Current | Next |
+|---|---|---|
+| Mixer seconds | 324.00 | 324.00 |
+| Mixer clicks | 136 | 94 |
+| Mixer clicks a minute | 25.2 | 17.4 |
+| Mixer clicks within 2 samples of a block join (by chance) | 35 (4.2) | 7 (2.9) |
+| Mixer gaps | 8 | 8 |
+| Mixer clipped runs (samples) | 25 (371) | 28 (564) |
+| Highest main L peak before the clamp | 64,999 | 63,634 |
+| Samples the clamp changed | 587 | 574 |
+
+Each cell below is current, then next.
+
+| Pass 5, unpaced | Clicks (a minute) | On a block join (by chance) | Gaps | Clipped runs (samples) | Main L peak | Clamped samples |
+|---|---|---|---|---|---|---|
+| Title, 31 s | 10 (19.4), 7 (13.5) | 3 (0.3), 0 (0.2) | 1, 1 | 0 (0), 0 (0) | 33,741, 33,117 | 2, 2 |
+| Mode select, 35 s | 14 (24.0), 9 (15.4) | 4 (0.4), 0 (0.3) | 1, 1 | 0 (0), 0 (0) | 17,628, 17,099 | 0, 0 |
+| Air Ride race, 115 s | 45 (23.5), 28 (14.6) | 13 (1.4), 5 (0.9) | 2, 2 | 25 (371), 28 (564) | 64,999, 63,634 | 585, 572 |
+| City Trial, 70 s | 23 (19.7), 15 (12.9) | 7 (0.7), 1 (0.5) | 2, 2 | 0 (0), 0 (0) | 26,762, 23,117 | 0, 0 |
+| City Trial, four players, 73 s | 44 (36.2), 35 (28.8) | 8 (1.4), 1 (1.1) | 2, 2 | 0 (0), 0 (0) | 28,982, 28,843 | 0, 0 |
+
+Current's unpaced runs scored the same as pass 3's on every route and every row of that table, a
+day later and with a newer tool. Next clicked less on every route. Its clicks on a block join
+fell from 35 to 7 against 2.9 by chance. The clicks away from joins fell from 101 to 87.
+This pass doesn't say which of the commits in `audio.md` took them away. The clipped runs went
+up on the race, and next's clamp is why they can't be set against current's (What the numbers
+don't show). The clamp count, which both builds keep the same way, fell from 585 to 572 there.
+
+Past the cut, rescored with `--no-run` from the same unpaced recordings:
+
+| Past the cut, unpaced | Current | Next |
+|---|---|---|
+| Title, first 91 s, clicks | 19 | 16 |
+| Title, clicks on a block join (by chance) | 5 (0.6) | 2 (0.5) |
+| Title, clipped runs (samples) | 4 (26) | 4 (26) |
+| Mode select, first 170 s, clicks | 16 | 11 |
+| Mode select, clicks on a block join (by chance) | 6 (0.5) | 2 (0.3) |
+| Mode select, clipped runs (samples) | 6 (19) | 9 (31) |
+
+Current's 19 and 16 are the counts the rescoring of pass 3's recordings gave.
+
+| Five routes, real-time | Current | Next |
+|---|---|---|
+| Device seconds | 322.83 | 322.86 |
+| Device clicks | 191 | 70 |
+| Device clicks a minute | 35.5 | 13.0 |
+| Device gaps | 8 | 9 |
+| Device clipped runs (samples) | 0 (0) | 35 (852) |
+| Ring cuts | 0 | 0 |
+| Ring underruns | 0 | 0 |
+
+| Device clicks a minute | Current | Next |
+|---|---|---|
+| Title | 11.7 | 9.7 |
+| Mode select | 22.4 | 6.9 |
+| Air Ride race | 48.6 | 15.2 |
+| City Trial | 30.1 | 9.5 |
+| City Trial, four players | 36.3 | 17.3 |
+
+Each build is one real-time run here. Current's 35.5 clicks a minute sits with its 36.3, 33.1
+and 32.2 in passes 1 to 3. Next's 35 clipped runs in the device stage are all on the race.
+
+`tools/block_clicks.py` over the real-time runs' mixer recordings finds 13 blocks the DMA
+played twice at current with 2 clicks on them. It finds none at next. gcn-recomp `a87ab06`
+keeps a catch-up jump from ending a block the guest hasn't queued after, and its message gives
+that as the cause of such replays. Both builds still caught up on the clock, over 197 blocks at
+current and 165 at next, with 2 clicks on them at current and none at next.
+
 ## What the numbers don't show
 
 - The mixer stage's before and after is one unpaced run of each build, pass 4 and pass 3, made
   a day apart. Pass 4's tool was at `3698f16` and pass 3's at `5ff734e`, which score the same.
   The bisect, cut at passes 1 and 2's lengths rather than the routes' seconds, agrees with
   both, but its notes aren't in this repository.
+- Pass 5 played each build once. Current's unpaced runs matched pass 3's, but the tool didn't
+  play next twice. Next's audio hashes matched across three bench runs at `b97c019`
+  (`status.md`).
 - Real-time runs move from pass to pass. The baseline's title route clipped 4,009 samples in the
   mixer stage in one pass and 485 in the other. Current's City Trial made 29.3, 35.3 and 20.7
   device clicks a minute in passes 1 to 3. Every device stage total moved the same way from
@@ -406,6 +508,10 @@ chance gives 30.3. In current's second run, 10 of its 22 came after 31 s.
   clipping isn't in the device stage's clipped runs either. The music stream is added after the
   ring and clamps at -32,768, so clipping there does show in the device stage. The clamp count
   from `[ax] bus` has both signs and counts the mixer only.
+- Next clamps at -32,768 in the mixer (`2b7ae75`) and in command `0E`'s output (`3d4fe9b`), so
+  its negative clipping is in both stages' clipped runs and pass 5's clipped runs don't compare
+  across the builds. Next's clamp count takes the samples below -32,768, where current's takes
+  those below -32,767.
 - Underruns are as of each run's last `[ring] fill` line, which comes every 400 pulls of the
   device.
 - Nobody listened to any of it, and nothing was compared with a real console. One machine, an
@@ -446,14 +552,31 @@ the first route plays, prints them and leaves them in each run's `commits.json`,
 the real-time run and `build/probe/scorecard-unpaced-ROUTE/` for the unpaced one, and are never
 committed. With `--no-run`, a build with no unpaced run shows its mixer stage as not recorded.
 
+Pass 5 ran the other way round, from this clone built at the later engine, with current in a
+second clone. Playing a build again moves that clone's earlier recordings to the Trash, which
+is where pass 3's went. The second line rescores pass 5's recordings, and so do the last two
+with their margins.
+
+```sh
+tools/audio_scorecard.py current=/path/to/dragoon-current/build next=build \
+  --routes title,menu,air-ride-race,city-trial,city-trial-4p
+tools/audio_scorecard.py current=/path/to/dragoon-current/build next=build \
+  --routes title,menu,air-ride-race,city-trial,city-trial-4p --no-run --json
+tools/audio_scorecard.py current=/path/to/dragoon-current/build next=build --routes title --margin 75 --no-run
+tools/audio_scorecard.py current=/path/to/dragoon-current/build next=build --routes menu --margin 150 --no-run
+```
+
 | | Commit |
 |---|---|
 | Baseline Dragoon | `6b81b6e` |
 | Baseline gcn-recomp | `caf12a2`, upstream `9b0a2fe` plus 13 |
-| Current Dragoon | `788571c` in passes 1 and 2, `5ff734e` in pass 3 |
+| Current Dragoon | `788571c` in passes 1 and 2, `5ff734e` in pass 3, `28fdb9b` in pass 5 |
 | Current gcn-recomp | `b848158` |
+| Next Dragoon | `d74b5c5`, whose `tools/` and `tests/routes/` are `2b98e17`'s |
+| Next gcn-recomp | `b97c019` |
 | The tool, passes 1 and 2 | `43ceba4` |
 | The tool, title at 91 s | `13acaf4`, then `13acaf4-dirty` |
 | The tool, pass 3 | `5ff734e` |
 | The tool, pass 4 | `3698f16` |
 | The tool, past the cut | `8aaae9a` |
+| The tool, pass 5 and its rescoring | `2b98e17` |
