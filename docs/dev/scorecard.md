@@ -331,6 +331,10 @@ chance gives 30.3. In current's second run, 10 of its 22 came after 31 s.
   mixer stage in one pass and 485 in the other. Current's City Trial made 29.3, 35.3 and 20.7
   device clicks a minute in passes 1 to 3. Every device stage total moved the same way from
   baseline to current in passes 1 and 2.
+- Pass 3's real-time runs overlapped a run of the tools' test suite on the same host, and a
+  loaded host is what makes the clock catch up. Its 27 replayed blocks, 308 caught-up blocks,
+  158 mixer clicks and 32.2 device clicks a minute weren't measured on a quiet host. That the 17
+  clicks on replayed blocks all sit at a block's joins doesn't depend on how many were replayed.
 - An unpaced run has no catch-up and no late presses. The mixer stage scores the engine, not
   what a player hears on a host that falls behind. The device stage still has both.
 - The baseline's device stage is what SDL's dummy driver took, not what a sound card would. Over
