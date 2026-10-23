@@ -2,9 +2,10 @@
 
 Nothing here runs anything. sign_and_package.py runs them, or prints them under --dry-run.
 The order is Apple's: sign inside out with the hardened runtime and a secure timestamp and
-never with --deep, make the DMG, sign it, notarize it as the outermost container, staple it
-and verify. An ad hoc run (identity -) leaves out the runtime and the timestamp, as sign_item
-says. The launcher claims no entitlements, so no command passes any.
+never with --deep, verify the signed app, make the DMG, sign it, notarize it as the outermost
+container, staple it and verify the ticket and the assessments. An ad hoc run (identity -)
+leaves out the runtime and the timestamp, as sign_item says. The launcher claims no
+entitlements, so no command passes any.
 """
 from __future__ import annotations
 

@@ -15,7 +15,8 @@ APP is left as it is. The tool signs a copy in DIR, which must be empty or missi
   3  codesign --verify --strict --deep on the signed app, before the DMG is made, so a broken
      signature costs no notarization round trip
   4  hdiutil create -format UDZO makes DIR/Dragoon.dmg from dmg-root, tried up to three times
-     since it sometimes fails with Resource busy, and codesign --timestamp -i signs it
+     since it sometimes fails with Resource busy, and codesign -i signs it, with --timestamp
+     or, ad hoc, --timestamp=none
   5  with the Team API key, notarytool submit --wait, which is cut off after --notary-timeout
      minutes (30 unless given), then stapler staple on the DMG
   6  a notarized DMG gets stapler validate and the spctl assessments for an app and for a
