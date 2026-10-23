@@ -1,23 +1,43 @@
 # Audio scorecard
 
 What gcn-recomp's audio work changed, measured by program with nobody listening.
-`tools/audio_scorecard.py` played the five routes `tests/hashes/manifest.txt` held then on two builds
-and counted clicks, gaps and clipping before and after the audio ring. The baseline is gcn-recomp
-`caf12a2`, with none of the audio work. Current is gcn-recomp `b848158`. Each pair ran twice on
-2026-10-22, and each cell below gives the first pass, then the second.
+`tools/audio_scorecard.py --routes title,menu,air-ride-race,city-trial,city-trial-4p` plays
+five routes and counts clicks, gaps and clipping before the audio ring and after it. The
+baseline is gcn-recomp `caf12a2`, with none of the audio work. Current is gcn-recomp `b848158`.
 
-On the title route played to 91 s, the clicks in the DMA's blocks fell from 1,097 to 22 in the
-first pass and from 979 to 22 in the second. Across the five routes at their usual length, the
-device stage's clicks a minute fell from 57.9 to 36.3 and from 45.1 to 33.1, and the mixer
-stage's clipped samples from 5,942 to 378 and from 2,206 to 415. The mixer stage's clicks a
-minute over the five routes rose, from 22.3 to 26.4 and from 24.4 to 30.2. Its gaps and its
-clicks on block joins rose too.
+The tool scores the two stages from different runs. The mixer stage, every block the DMA
+delivered, comes from an unpaced run, which gives the same samples every time. The device
+stage, what the ring handed the device, comes from a real-time run, since the ring's pace is
+part of what it measures. Passes 1 and 2 on 2026-10-22 scored both stages from real-time runs
+of both builds. Pass 3, the same day, scored current the new way. No pass of the tool has an
+unpaced run of the baseline.
+
+Across the five routes the device stage's clicks a minute fell from 57.9 to 36.3 in pass 1 and
+from 45.1 to 33.1 in pass 2, and pass 3 gave current 32.2. Unpaced, current's mixer stage made
+136 clicks over 324 s in pass 3, 25.2 a minute. A bisect on 2026-10-22 ran both builds unpaced
+at passes 1 and 2's lengths, 319.8 s in all. It counted 131 clicks (24.6 a minute) at `caf12a2`
+and 135 (25.3) at `b848158`, while the clipped runs fell from 203 to 25 and the gaps rose from 3
+to 8. Passes 1 and 2 had the mixer stage's clicks a minute rising from 22.3 to 26.4 and from
+24.4 to 30.2. The bisect found that most of that rise came from playing in real time.
+
+## Where the numbers come from
+
+| Source | Builds | Runs | Tool |
+|---|---|---|---|
+| Passes 1 and 2 | Baseline and current | Five routes, real-time | `43ceba4` |
+| The title at 91 s, two passes | Baseline and current | The title, real-time | `13acaf4` |
+| A bisect on 2026-10-22 | `caf12a2`, `b848158` and six audio commits between | Five routes unpaced at passes 1 and 2's lengths, and three more real-time menu runs a build | Prototypes |
+| Pass 3 | Current | Five routes, real-time and unpaced | `e9d2928` |
+
+All of them ran on 2026-10-22. The bisect's notes aren't in this repository, so its numbers
+are quoted below and named as its own. `tools/block_clicks.py`, `click_diff.py` and
+`noise_blocks.py` are its prototypes made into tools, and pass 3's checks below use them.
 
 ## The two builds
 
 | | Baseline | Current |
 |---|---|---|
-| Dragoon | `6b81b6e` | `788571c`, run from the `scorecard` branch, whose commits add only the tool and docs |
+| Dragoon | `6b81b6e` | `788571c` in passes 1 and 2, `e9d2928` in pass 3 |
 | gcn-recomp | `caf12a2` | `b848158` |
 | PB mixer control word | 2001 layout | Later layout for this game's ucode (`07F88145`) |
 | Compressor, command `12` | Skipped | Runs |
@@ -26,6 +46,9 @@ clicks on block joins rose too.
 | Pace under SDL's dummy driver | The driver's own | The runtime pulls the sound on 48 kHz deadlines |
 | `[ring]` lines | Underruns | Underruns, cuts and each cut's output frame |
 | `[ax] bus` lines, with the samples the clamp changed | None | Every 400 lists |
+
+Current's Dragoon commits after `788571c` change only `tools/` and `docs/`, so all three passes
+played the same game code.
 
 `git -C gcn-recomp log --oneline 9b0a2fe..caf12a2` lists the 13 commits the baseline adds to
 upstream `9b0a2fe`. They're two runtime fixes, controller and input support, the SDL3 frontend
@@ -62,20 +85,29 @@ are gamepad ports and line wrapping.
 
 ## How it was measured
 
-Each pass was one run of the tool from this clone, with the baseline clone's build directory
-as `base`.
+Passes 1 and 2 were each one run of the tool from this clone, with the baseline clone's build
+directory as `base`. Pass 3 played current alone, because the baseline clone had moved on to
+other commits.
 
 ```sh
 tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --json
+tools/audio_scorecard.py current=build --json
 ```
 
-It plays a route on the baseline, then on current, then moves to the next route. Each run goes
-through its own clone's `tools/probe.sh` in a hidden window with SDL's dummy audio driver,
-`--real-time` and `GCN_AXSTATS=1`, and both builds play this clone's route files. A run lasts
-the route's last checkpoint at 60 frames a second plus 15 s. That's 31 s for the title, 35 s
-for mode select, 115 s for the race, 70 s for City Trial and 73 s for four players. Every run
-starts from a blank memory card and an empty shader cache, and every run reached its last
-checkpoint. A pass took 675 s the first time and 674 s the second.
+The tool plays a route on each build in turn, then moves to the next route. Each run goes
+through its own clone's `tools/probe.sh` in a hidden window with SDL's dummy audio driver and
+`GCN_AXSTATS=1`, and every build plays this clone's route files. A run lasts the route's last
+checkpoint at 60 frames a second plus 15 s. That's 31 s for the title, 35 s for mode select,
+115 s for the race, 70 s for City Trial and 73 s for four players. Every run starts from a blank
+memory card and an empty shader cache, and every run reached its last checkpoint.
+
+In passes 1 and 2 the tool played each route once a build with `--real-time` and scored both
+stages from that run. A pass took 675 s the first time and 674 s the second. Since `e9d2928` it
+plays each route twice a build. The first run is real-time as before. The second is unpaced
+and records only the mixer stage, for the same wall seconds. An unpaced run gets well ahead of
+the route in that time, and in pass 3 each one recorded 4.8 to 15.9 times its route's seconds.
+The tool cuts the recording to the route's seconds and refuses one that falls short. Pass 3
+took about 11.5 minutes.
 
 The mixer stage is `GCN_AIDWAV`, every block the DMA delivered before the ring, at 32 kHz.
 The device stage is `GCN_WAV`, what went to the device at 48 kHz, ring included. The tool
@@ -84,16 +116,79 @@ sample whose second difference is over 8 times the RMS second difference of the 
 side, and at least 128. A gap is 5 ms or more of digital silence on every channel straight
 after sound. A clipped run is two or more samples at 32,767 or -32,768 on one channel.
 
-The log gives the rest. `[ax] frames` lines carry the highest main L magnitude before the output
-clamp, and `[ax] bus` lines the L and R samples the clamp changed. The baseline prints the
-first and not the second. Its `[ring]` lines carry underruns but no cuts, so the baseline's
-cuts aren't counted anywhere below.
+A `--real-time` run's clock jumps to catch up wherever the host falls behind (gcn-recomp
+`docs/diagnostics.md`, The clock). While it catches up, the DMA plays some blocks twice and
+presses can land after dropped frames, as the bisect found, so two real-time runs of a route
+needn't make the same sound. An unpaced run's guest clock doesn't wait on the host. The bisect
+found two unpaced title runs at `caf12a2` gave identical recordings over 120 s. In pass 3,
+`click_diff.py` found current's five unpaced recordings the same as the bisect's `b848158`
+ones, sample for sample, over 1,250 s in all.
 
-## Totals
+The log gives the rest. The highest main L magnitude before the output clamp comes from
+`[ax] frames` lines and the L and R samples the clamp changed from `[ax] bus` lines, both from
+the unpaced run and within its cut. The ring's cuts and underruns come from the real-time run's
+`[ring]` lines. The baseline prints `[ax] frames` lines but no `[ax] bus` lines. Its `[ring]`
+lines carry underruns but no cuts, so the baseline's cuts aren't counted anywhere below.
 
-All five routes together. Clicks a minute is over the summed seconds.
+## The mixer stage, unpaced
 
-| Five routes | Baseline, pass 1 | Baseline, pass 2 | Current, pass 1 | Current, pass 2 |
+Pass 3, current only. Clicks a minute is over the summed seconds.
+
+| Five routes, unpaced | Current, pass 3 |
+|---|---|
+| Mixer seconds | 324.00 |
+| Mixer clicks | 136 |
+| Mixer clicks a minute | 25.2 |
+| Mixer clicks within 2 samples of a block join (by chance) | 35 (4.2) |
+| Mixer gaps | 8 |
+| Mixer clipped runs (samples) | 25 (371) |
+| Highest main L peak before the clamp | 64,999 |
+| Samples the clamp changed | 587 |
+
+| Pass 3, unpaced | Clicks (a minute) | On a block join (by chance) | Gaps | Clipped runs (samples) | Main L peak | Clamped samples |
+|---|---|---|---|---|---|---|
+| Title, 31 s | 10 (19.4) | 3 (0.3) | 1 | 0 (0) | 33,741 | 2 |
+| Mode select, 35 s | 14 (24.0) | 4 (0.4) | 1 | 0 (0) | 17,628 | 0 |
+| Air Ride race, 115 s | 45 (23.5) | 13 (1.4) | 2 | 25 (371) | 64,999 | 585 |
+| City Trial, 70 s | 23 (19.7) | 7 (0.7) | 2 | 0 (0) | 26,762 | 0 |
+| City Trial, four players, 73 s | 44 (36.2) | 8 (1.4) | 2 | 0 (0) | 28,982 | 0 |
+
+The bisect's unpaced runs, at passes 1 and 2's lengths, 319.8 s in all. The last column says
+how each build's mix compared with the row above it.
+
+| gcn-recomp | Clicks (a minute) | On joins | Gaps | Clipped runs | Mix |
+|---|---|---|---|---|---|
+| `caf12a2` | 131 (24.6) | 34 | 3 | 203 | |
+| `8fabc65`, `6616d55` | 131 (24.6) | 34 | 3 | 203 | Identical |
+| `3bde515` (layouts) | 130 (24.4) | 34 | 3 | 211 | Changed |
+| `bf31b7b` (compressor) | 130 (24.4) | 34 | 3 | 25 | Changed |
+| `fd1f6a8` (source type 2) | 135 (25.3) | 34 | 8 | 25 | Changed |
+| `b839cf6`, `b848158` | 135 (25.3) | 34 | 8 | 25 | Same as `fd1f6a8` |
+| `b848158`, `GCN_AX_LAYOUT=2001` | 136 (25.5) | 34 | 8 | 29 | |
+
+Pass 3 agrees with the bisect. Cut to 30.176, 34.176, 114.08, 69.184 and 72.16 s, current's
+unpaced recordings have 10, 14, 45, 23 and 43 clicks, 135 in all. At the routes' own seconds
+four players has 44, which makes pass 3's 136.
+
+The bisect traced what the work changed in the mixer stage.
+
+- The compressor, `bf31b7b`, took the clipped runs from 211 to 25.
+- The work adds 4 clicks and 5 gaps, all from `fd1f6a8` and all in the intro stream. From
+  6.3 s to 15.74 s two type 2 voices play a stereo stream that was digital silence before
+  `fd1f6a8`. Its click at 10.139 s is in the music itself, not on a join. Its gap at 15.740 s
+  is the game stopping the stream at the frame 900 press, which steps straight to zero.
+- The game's AX library depops stopped voices. `fn_803EDBA4`, called from `SortVoices`, sums PB
+  words 41 to 49 into nine accumulators that the setup command fades out. `b848158` never
+  writes those words. gcn-recomp `e6ce0a5` (PR #11) does, and its author found that no hash
+  moved, because command `07` replaces the main buses after setup, in the fork and in Dolphin.
+  So the stop still steps to zero. Whether the console's `07` replaces the buses or adds to
+  them is open.
+
+## Why the real-time mixer clicks rose
+
+Passes 1 and 2 scored the mixer stage from their real-time runs.
+
+| Five routes, real-time mixer stage | Baseline, pass 1 | Baseline, pass 2 | Current, pass 1 | Current, pass 2 |
 |---|---|---|---|---|
 | Mixer seconds | 319.78 | 319.87 | 319.87 | 319.87 |
 | Mixer clicks | 119 | 130 | 141 | 161 |
@@ -101,59 +196,87 @@ All five routes together. Clicks a minute is over the summed seconds.
 | Mixer clicks within 2 samples of a block join (by chance) | 35 (3.7) | 42 (4.1) | 43 (4.4) | 52 (5.0) |
 | Mixer gaps | 3 | 4 | 9 | 9 |
 | Mixer clipped runs (samples) | 525 (5,942) | 207 (2,206) | 34 (378) | 31 (415) |
-| Device seconds | 296.45 | 296.80 | 322.60 | 322.56 |
-| Device clicks | 286 | 223 | 195 | 178 |
-| Device clicks a minute | 57.9 | 45.1 | 36.3 | 33.1 |
-| Device gaps | 2 | 4 | 9 | 9 |
-| Device clipped runs (samples) | 475 (7,984) | 190 (2,977) | 27 (510) | 27 (573) |
-| Ring cuts | Not logged | Not logged | 0 | 0 |
-| Ring underruns | 0 | 0 | 0 | 0 |
 | Highest main L peak before the clamp | 82,740 | 86,191 | 66,056 | 63,229 |
 | Samples the clamp changed | Not logged | Not logged | 633 | 657 |
 
-## Route by route
-
-Each cell is the first pass, then the second.
-
-| Clicks a minute | Mixer, baseline | Mixer, current | Device, baseline | Device, current |
-|---|---|---|---|---|
-| Title | 20.0, 17.9 | 23.9, 23.9 | 23.3, 14.8 | 21.5, 19.5 |
-| Mode select | 26.3, 22.8 | 28.1, 29.8 | 46.9, 43.2 | 27.6, 19.0 |
-| Air Ride race | 20.5, 25.2 | 24.7, 28.4 | 73.0, 50.6 | 40.3, 32.4 |
-| City Trial | 19.9, 18.2 | 23.4, 27.8 | 53.3, 46.8 | 29.3, 35.3 |
-| City Trial, four players | 26.6, 32.4 | 32.4, 38.2 | 58.4, 48.5 | 47.0, 44.6 |
-
-| Mixer clicks within 2 samples of a block join (by chance) | Baseline | Current |
+| Real-time mixer clicks a minute, pass 1, then pass 2 | Baseline | Current |
 |---|---|---|
-| Title | 3 of 10 (0.3), 3 of 9 (0.3) | 5 of 12 (0.4), 5 of 12 (0.4) |
-| Mode select | 6 of 15 (0.5), 4 of 13 (0.4) | 6 of 16 (0.5), 5 of 17 (0.5) |
-| Air Ride race | 11 of 39 (1.2), 18 of 48 (1.5) | 17 of 47 (1.5), 18 of 54 (1.7) |
-| City Trial | 8 of 23 (0.7), 7 of 21 (0.7) | 9 of 27 (0.8), 14 of 32 (1.0) |
-| City Trial, four players | 7 of 32 (1.0), 10 of 39 (1.2) | 6 of 39 (1.2), 10 of 46 (1.4) |
+| Title | 20.0, 17.9 | 23.9, 23.9 |
+| Mode select | 26.3, 22.8 | 28.1, 29.8 |
+| Air Ride race | 20.5, 25.2 | 24.7, 28.4 |
+| City Trial | 19.9, 18.2 | 23.4, 27.8 |
+| City Trial, four players | 26.6, 32.4 | 32.4, 38.2 |
 
-| Clipped runs (samples) | Mixer, baseline | Mixer, current | Device, baseline | Device, current |
+Current clicked more on every route in both passes. Unpaced, the bisect found the work took
+the clicks only from 131 to 135. It found current's real-time runs made 26 more clicks than its
+unpaced ones while the baseline's made one fewer, which matches pass 2's 161 and 130 against 135
+and 131. It put the 26 down to four things.
+
+- 7 clicks (2 in the baseline), all on joins, sit on blocks the DMA played twice while the clock
+  caught up. The code that replays them is unchanged since upstream. Three more real-time menu
+  runs a build had 2, 0 and 6 such clicks in current against 0, 0 and 6 in the baseline.
+- 6 clicks are two extra menu confirms, from presses landing after dropped frames.
+- In one real-time menu run the music became full-scale noise, independent on each channel,
+  from 17.59 s to the end. That's pass 2's mode select peak of 32,768. It didn't come back in 3
+  more runs a build.
+- The rest are the game's own sounds shifted in time.
+
+Pass 3 checked this with the new tools. Its real-time recordings of the mixer stage have 158
+clicks over 319.81 s, where its unpaced ones have 135 over the bisect's 319.78 s. Of those 158,
+`block_clicks.py` puts 17 on the 27 blocks the DMA replayed, where chance gives 0.1. Each of
+them sits at one of its block's joins. It puts 17 on the 308 blocks played while the clock
+caught up, where chance gives 0.9, though some of those are the game's own, such as the clicks
+at about 2.33 s that the unpaced runs have too. 21 clicks sit on blocks of either kind, since
+some blocks are both. The unpaced runs replay no block and catch none up. On the bisect's three
+real-time menu runs of current, `block_clicks.py` counts 2, 0 and 6 clicks on replays, as the
+bisect did.
+
+`noise_blocks.py` finds 44 noise-like blocks in pass 3's real-time recordings of the mixer
+stage, in stretches of one block up to 18 (the race from 71.340 s to 71.605 s). The unpaced runs
+have them too. In the race's first 115 s the unpaced run has 49 in 11 stretches, the longest from
+71.285 s to 71.615 s. In mode select's first 35 s it has 4 single blocks, the first at 18.175 s,
+where the real-time run has its one at 18.200 s. So short stretches like these come with the
+game's own sounds, and pass 3 had no stretch like the bisect's full-scale noise.
+
+## The device stage, real-time
+
+All five routes together. Clicks a minute is over the summed seconds.
+
+| Five routes, real-time | Baseline, pass 1 | Baseline, pass 2 | Current, pass 1 | Current, pass 2 | Current, pass 3 |
+|---|---|---|---|---|---|
+| Device seconds | 296.45 | 296.80 | 322.60 | 322.56 | 322.58 |
+| Device clicks | 286 | 223 | 195 | 178 | 173 |
+| Device clicks a minute | 57.9 | 45.1 | 36.3 | 33.1 | 32.2 |
+| Device gaps | 2 | 4 | 9 | 9 | 11 |
+| Device clipped runs (samples) | 475 (7,984) | 190 (2,977) | 27 (510) | 27 (573) | 14 (454) |
+| Ring cuts | Not logged | Not logged | 0 | 0 | 0 |
+| Ring underruns | 0 | 0 | 0 | 0 | 0 |
+
+Each baseline cell is pass 1, then pass 2. Each current cell is passes 1, 2 and 3 in order.
+
+| Device clicks a minute | Baseline | Current |
+|---|---|---|
+| Title | 23.3, 14.8 | 21.5, 19.5, 15.6 |
+| Mode select | 46.9, 43.2 | 27.6, 19.0, 24.2 |
+| Air Ride race | 73.0, 50.6 | 40.3, 32.4, 37.1 |
+| City Trial | 53.3, 46.8 | 29.3, 35.3, 20.7 |
+| City Trial, four players | 58.4, 48.5 | 47.0, 44.6, 46.2 |
+
+| Device clipped runs (samples) | Baseline | Current |
+|---|---|---|
+| Title | 325 (5,379), 52 (626) | 0 (0), 4 (16), 0 (0) |
+| Mode select | 0 (0), 0 (0) | 0 (0), 0 (0), 0 (0) |
+| Air Ride race | 140 (2,482), 132 (2,272) | 27 (510), 23 (557), 14 (454) |
+| City Trial | 0 (0), 0 (0) | 0 (0), 0 (0), 0 (0) |
+| City Trial, four players | 10 (123), 6 (79) | 0 (0), 0 (0), 0 (0) |
+
+| Device gaps and seconds | Gaps, baseline | Gaps, current | Seconds, baseline | Seconds, current |
 |---|---|---|---|---|
-| Title | 355 (4,009), 59 (485) | 0 (0), 4 (14) | 325 (5,379), 52 (626) | 0 (0), 4 (16) |
-| Mode select | 0 (0), 0 (0) | 0 (0), 0 (0) | 0 (0), 0 (0) | 0 (0), 0 (0) |
-| Air Ride race | 160 (1,840), 142 (1,662) | 34 (378), 27 (401) | 140 (2,482), 132 (2,272) | 27 (510), 23 (557) |
-| City Trial | 0 (0), 0 (0) | 0 (0), 0 (0) | 0 (0), 0 (0) | 0 (0), 0 (0) |
-| City Trial, four players | 10 (93), 6 (59) | 0 (0), 0 (0) | 10 (123), 6 (79) | 0 (0), 0 (0) |
-
-| Level | Highest main L peak, baseline | Highest main L peak, current | Samples the clamp changed, current |
-|---|---|---|---|
-| Title | 69,288, 55,039 | 33,047, 36,320 | 3, 21 |
-| Mode select | 17,628, 17,628 | 15,832, 32,768 | 0, 4 |
-| Air Ride race | 82,740, 86,191 | 66,056, 63,229 | 627, 632 |
-| City Trial | 27,116, 28,540 | 31,781, 30,571 | 3, 0 |
-| City Trial, four players | 45,935, 42,418 | 29,234, 28,982 | 0, 0 |
-
-| Gaps and seconds | Mixer gaps, baseline | Mixer gaps, current | Device gaps, baseline | Device gaps, current | Device seconds, baseline | Device seconds, current |
-|---|---|---|---|---|---|---|
-| Title | 0, 0 | 1, 1 | 0, 0 | 1, 1 | 28.37, 28.33 | 30.69, 30.72 |
-| Mode select | 0, 0 | 2, 1 | 0, 0 | 2, 1 | 31.97, 31.98 | 34.72, 34.71 |
-| Air Ride race | 1, 1 | 2, 3 | 0, 1 | 2, 3 | 105.17, 105.49 | 114.72, 114.72 |
-| City Trial | 1, 1 | 2, 2 | 1, 1 | 2, 2 | 64.18, 64.15 | 69.73, 69.72 |
-| City Trial, four players | 1, 2 | 2, 2 | 1, 2 | 2, 2 | 66.75, 66.85 | 72.75, 72.69 |
+| Title | 0, 0 | 1, 1, 1 | 28.37, 28.33 | 30.69, 30.72, 30.68 |
+| Mode select | 0, 0 | 2, 1, 2 | 31.97, 31.98 | 34.72, 34.71, 34.73 |
+| Air Ride race | 0, 1 | 2, 3, 2 | 105.17, 105.49 | 114.72, 114.72, 114.72 |
+| City Trial | 1, 1 | 2, 2, 3 | 64.18, 64.15 | 69.73, 69.72, 69.71 |
+| City Trial, four players | 1, 2 | 2, 2, 3 | 66.75, 66.85 | 72.75, 72.69, 72.75 |
 
 Neither build had an underrun in any run, and current made no ring cut in any run.
 
@@ -161,12 +284,13 @@ Neither build had an underrun in any run, and current made no ring cut in any ru
 
 `status.md`'s source type 2 counts come from 90-second title runs, and the five-route pass
 plays the title for 31 s. `--routes title --margin 75` plays the same route for 91 s. It ran twice on each
-build, with the tool at `13acaf4`. The second pass printed `13acaf4-dirty`, because
+build, with the tool at `13acaf4`, before the tool scored the mixer stage unpaced, so both
+stages here are real-time. The second pass printed `13acaf4-dirty`, because
 `docs/dev/audio.md` had been edited after the first pass and wasn't committed until this doc.
 No file under `tools/` differs between `13acaf4` and that commit, and rescoring the second
 pass's recordings from a clean tree gives the same numbers.
 
-| Title route, 91 s | Baseline | Current |
+| Title route, 91 s, real-time | Baseline | Current |
 |---|---|---|
 | Mixer seconds | 90.21, 90.18 | 90.21, 90.21 |
 | Mixer clicks | 1,097, 979 | 22, 22 |
@@ -188,32 +312,25 @@ The clicks come after the five-route run's 31 s. In the baseline's second run, 9
 later than that, the first of them at 41.71 s. 586 of those 970 fell on a block join, where
 chance gives 30.3. In current's second run, 10 of its 22 came after 31 s.
 
-## What got worse, and what moved
-
-The mixer stage clicks more often in current, on every route in both passes. Its gaps went from
-3 and 4 to 9 and 9, and its clicks on a block join from 35 and 42 to 43 and 52, where chance gives
-3.7 to 5.0. Many clicks come at the same times in both builds. In the second pass's race runs both
-have three within 15 ms of 2.33 s, where the route's first A press plays. Both have a run between
-57.98 s and 59.74 s, 13 in the baseline and 14 in current. Current also has a group of three at
-22.55 s and another at 27.57 s, the same sizes as the A press's, which the baseline doesn't. Why
-current has more wasn't looked into.
-
-The passes move. The baseline's title route clipped 4,009 samples in the mixer stage in one pass
-and 485 in the other, and its race made 128 device clicks in one and 89 in the other. A
-`--real-time` run's clock jumps to catch up wherever the host falls behind (gcn-recomp
-`docs/diagnostics.md`, The clock), so two runs of a route needn't make the same sound. Every
-click, gap, clipping and peak total moved the same way from baseline to current in both passes.
-
 ## What the numbers don't show
 
+- No pass of the tool has an unpaced baseline run. The mixer stage's before and after comes
+  from the bisect's prototypes, cut at passes 1 and 2's lengths rather than the routes' seconds.
+- Real-time runs move from pass to pass. The baseline's title route clipped 4,009 samples in the
+  mixer stage in one pass and 485 in the other. Current's City Trial made 29.3, 35.3 and 20.7
+  device clicks a minute in passes 1 to 3. Every device stage total moved the same way from
+  baseline to current in passes 1 and 2.
+- An unpaced run has no catch-up and no late presses. The mixer stage scores the engine, not
+  what a player hears on a host that falls behind. The device stage still has both.
 - The baseline's device stage is what SDL's dummy driver took, not what a sound card would. Over
   the five routes it took 296.45 s and 296.80 s of sound while the DMA delivered 319.78 s and
   319.87 s, 92.7% and 92.8%. It had no underruns. It doesn't log its ring's cuts, so its log
-  doesn't say where the rest went. Its device stage had 167 and 93 more clicks than its mixer
-  stage. Current's had 54 and 17 more, with no cuts.
-- Current's device stage is 2.73 s and 2.69 s longer than its mixer stage over the five routes.
-  That includes the silence the device plays from when it opens until the ring first holds its
-  cushion.
+  doesn't say where the rest went. In passes 1 and 2 its device stage had 167 and 93 more clicks
+  than its real-time mixer stage. Current's had 54 and 17 more, with no cuts.
+- A device stage's seconds include the silence the device plays from when it opens until the
+  ring first holds its cushion.
+- The peak and the clamp count come from `[ax]` lines, which come every 400 command lists, 2 s
+  of sound. Up to the last 2 s before the cut isn't in them.
 - A click here is any sharp edge, the game's own sounds included. The counts say where to look,
   not what a listener hears.
 - `audio_clicks.py` counts a clipped run at 32,767 or -32,768. The mixer's clamp stops at
@@ -242,14 +359,16 @@ tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes
 A later engine goes in a clone of its own and gets a label of its own, as in
 `next=/path/to/that/build`. The tool reads each clone's Dragoon and gcn-recomp commits before
 the first route plays, prints them and leaves them in each run's `commits.json`, which
-`--no-run` reads back. The recordings stay in each clone's `build/probe/scorecard-ROUTE/` and
-are never committed.
+`--no-run` reads back. The recordings stay in each clone's `build/probe/scorecard-ROUTE/` for
+the real-time run and `build/probe/scorecard-unpaced-ROUTE/` for the unpaced one, and are never
+committed. With `--no-run`, a build with no unpaced run shows its mixer stage as not recorded.
 
 | | Commit |
 |---|---|
 | Baseline Dragoon | `6b81b6e` |
 | Baseline gcn-recomp | `caf12a2`, upstream `9b0a2fe` plus 13 |
-| Current Dragoon | `788571c` |
+| Current Dragoon | `788571c` in passes 1 and 2, `e9d2928` in pass 3 |
 | Current gcn-recomp | `b848158` |
-| The tool, five routes | `43ceba4` |
+| The tool, passes 1 and 2 | `43ceba4` |
 | The tool, title at 91 s | `13acaf4`, then `13acaf4-dirty` |
+| The tool, pass 3 | `e9d2928` |
