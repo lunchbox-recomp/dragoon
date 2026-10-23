@@ -247,7 +247,7 @@ Does the launcher ship anything game-derived? The disc never reaches CI, so noth
 
 | Check | What fails |
 |---|---|
-| paths | A file, link or empty directory outside the source snapshot that `launcher/bundle-manifest.txt` doesn't list. Anywhere, a path that `check_no_game_data.py` flags or that a build leaves behind (`gen/`, `rels/`, `inputs/`, `main.dol`, `CMakeCache.txt`, `build.ninja`, `memcard_*`, `.shader-warmup`) |
+| paths | A file, link or empty directory outside the source snapshot that `launcher/bundle-manifest.txt` doesn't list. Anywhere, a path that `check_no_game_data.py` flags or that a build leaves behind (`gen/`, `rels/`, `inputs/`, `main.dol`, `CMakeCache.txt`, `build.ninja`, `memcard_*`, `.shader-warmup`, in any letter case) |
 | executables | A file that starts with a Mach-O magic at a path the manifest doesn't list for one, such as a built `dragoon` |
 | content | The GameCube disc magic at offset 0x1C, a `CISO` header, or the disc ID anywhere outside the snapshot |
 | source | A snapshot that differs from `export_source.py`'s output for the commit, file by file by SHA-256. A dev tree's `rom/game.iso` link or empty `build/` shows up here |

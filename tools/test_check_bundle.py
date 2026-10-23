@@ -216,6 +216,9 @@ class PlantedFileTest(BundleTestCase):
     def test_what_the_build_leaves_behind_fails_anywhere(self):
         names = ["gen/f0.c", "rels/r0.rel", "main.dol", "CMakeCache.txt", "build.ninja",
                  "memcard_a", ".shader-warmup", "inputs/p1.txt"]
+        # An app on a volume that ignores case builds these the same as the names above.
+        names += ["Gen/f0.c", "RELS/x", "Main.DOL", "cmakecache.txt", "Build.ninja", "MemCard_a",
+                  ".Shader-Warmup", "Inputs/p1.txt"]
         for where in (LICENSES, "Contents/Resources/cmake/share/cmake-4.4/", SNAP + "gcn-recomp/"):
             for name in names:
                 with self.subTest(where=where, name=name):
@@ -225,7 +228,7 @@ class PlantedFileTest(BundleTestCase):
                     self.assertIn(f"game data: {where}{name}", out)
                     os.unlink(path)
                     for parent in path.parents:
-                        if parent.name in ("gen", "rels", "inputs"):
+                        if parent.name.lower() in ("gen", "rels", "inputs"):
                             os.rmdir(parent)
 
     def test_a_dev_trees_disc_link_and_empty_build_directory(self):

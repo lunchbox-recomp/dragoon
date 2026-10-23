@@ -8,7 +8,8 @@ PATH is a .app or a .dmg. A DMG is attached read-only (hdiutil attach -readonly 
   1  paths        outside the source snapshot every file, link and empty directory is on the
                   manifest (launcher/bundle-manifest.txt). Nothing anywhere matches
                   check_no_game_data.is_game_data or is a build's own output (gen/, rels/,
-                  inputs/, main.dol, CMakeCache.txt, build.ninja, memcard_*, .shader-warmup)
+                  inputs/, main.dol, CMakeCache.txt, build.ninja, memcard_*, .shader-warmup,
+                  in any letter case)
   2  executables  every file that starts with a Mach-O magic is at a path the manifest lists
   3  content      no file has the GameCube disc magic at offset 0x1C or starts with CISO, and
                   the disc ID appears only inside the source snapshot

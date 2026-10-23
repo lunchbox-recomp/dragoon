@@ -22,9 +22,10 @@ DISC_MAGIC = bytes.fromhex("c2339f3d")
 DISC_MAGIC_AT = 0x1C
 CISO = b"CISO"
 HEAD = DISC_MAGIC_AT + len(DISC_MAGIC)
-# What a build leaves behind, beside what check_no_game_data.is_game_data knows.
+# What a build leaves behind, beside what check_no_game_data.is_game_data knows. All lowercase,
+# since the app may sit on a volume that ignores case and a build would find these by any spelling.
 BUILD_DIRS = frozenset(("gen", "rels", "inputs"))
-BUILD_FILES = frozenset(("main.dol", "CMakeCache.txt", "build.ninja", ".shader-warmup"))
+BUILD_FILES = frozenset(("main.dol", "cmakecache.txt", "build.ninja", ".shader-warmup"))
 
 
 class Finding(NamedTuple):
@@ -37,7 +38,8 @@ class Finding(NamedTuple):
 
 
 def is_build_output(path: str) -> bool:
-    parts = PurePosixPath(path).parts
+    """Is PATH a name a build leaves behind, in any letter case?"""
+    parts = PurePosixPath(path.lower()).parts
     return (bool(BUILD_DIRS.intersection(parts[:-1])) or parts[-1] in BUILD_FILES
             or parts[-1].startswith("memcard_"))
 
