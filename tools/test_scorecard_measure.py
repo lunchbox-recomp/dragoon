@@ -126,9 +126,12 @@ class MeasureTest(unittest.TestCase):
     def test_only_the_cut_of_the_unpaced_recording_is_read(self):
         x = tone(96000, 32000)  # 3 s recorded and 1 s scored
         self.mixer.write_bytes(pcm(x, x))
-        with mock.patch.object(scorecard_measure, "read_raw", wraps=scorecard_measure.read_raw) as read:
+        # The mock knows read_raw's signature, so the check holds however the call spells its
+        # arguments.
+        with mock.patch.object(scorecard_measure, "read_raw", autospec=True,
+                               side_effect=scorecard_measure.read_raw) as read:
             self.assertAlmostEqual(self.measure(1.0).mixer.seconds, 1.0)
-        read.assert_called_once_with(self.mixer, 32000, 32000)
+        read.assert_called_once_with(self.mixer, 32000, frames=32000)
 
     def test_an_unpaced_recording_shorter_than_the_cut_is_refused(self):
         x = tone(16000, 32000)
