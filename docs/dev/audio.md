@@ -173,9 +173,10 @@ pair the game refills every list fell behind its refills and jumped at each join
 
 [`scorecard.md`](scorecard.md) measures the five routes at both stages on gcn-recomp `caf12a2`,
 which has none of this work, and on `b848158`, with `tools/audio_scorecard.py`. The tool
-scores the mixer stage from unpaced runs and the device stage from real-time ones, but it has
-only scored `b848158` that way. The mixer stage of `caf12a2` was scored in real time by the
-tool, and unpaced only by a bisect that `scorecard.md` quotes.
+scores the mixer stage from unpaced runs and the device stage from real-time ones, and has
+done so for both builds. Over the five routes, 324 s in all, the unpaced mixer stage made 132
+clicks at `caf12a2` and 136 at `b848158`, and its clipped runs fell from 208 to 25. The audio
+work didn't reduce the mixer stage's clicks over those seconds. What it cut was clipping.
 
 ## What was done and what is left
 
