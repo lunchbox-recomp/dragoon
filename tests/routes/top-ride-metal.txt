@@ -1,0 +1,8 @@
+# Blank memory card to a Top Ride race on Metal, one player and three CPUs.
+# top-ride-grass.txt with 2300 DOWN: Light, 2400 RIGHT: Water, 2500 RIGHT: Metal, before
+# 2600 A picks the course.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:DOWN:5,1400:A:5,1700:A:5,2000:A:5,
+2300:DOWN:5,2400:RIGHT:5,2500:RIGHT:5,
+2600:A:5,2900:A:5,3200:START:5
