@@ -172,8 +172,10 @@ pair the game refills every list fell behind its refills and jumped at each join
 `status.md`.
 
 [`scorecard.md`](scorecard.md) measures the five routes at both stages on gcn-recomp `caf12a2`,
-which has none of this work, and on `b848158`, with `tools/audio_scorecard.py`. It scores the
-mixer stage from unpaced runs and the device stage from real-time ones.
+which has none of this work, and on `b848158`, with `tools/audio_scorecard.py`. The tool
+scores the mixer stage from unpaced runs and the device stage from real-time ones, but it has
+only scored `b848158` that way. The mixer stage of `caf12a2` was scored in real time by the
+tool, and unpaced only by a bisect that `scorecard.md` quotes.
 
 ## What was done and what is left
 
