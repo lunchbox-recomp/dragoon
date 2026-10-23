@@ -122,7 +122,7 @@ The device stage is the real-time run's `GCN_WAV`, which is what went to the dev
 
 Each stage gets clicks a minute, gaps and clipped runs as audio_clicks.py counts them. An older build that doesn't print a log value reads `not logged`, and a missing recording reads `not recorded`. When `--no-run` finds no unpaced run, as for runs made before the scorecard played one, the mixer stage and its log values read `not recorded`. `--no-run` cuts the mixer stage at `--margin`, as a run would. A table per route prints as the route finishes, then the totals, where clicks a minute is over the summed seconds. `--json` prints it all at the end, with each clone's commit and its gcn-recomp commit. The tool reads those two before the first route plays and leaves them in each run's `commits.json`. `--no-run` prints what its runs recorded, or `not recorded` for a run made before that file existed. When a build's runs recorded different commits, it joins them with `and` (`a1b2c3d and e4f5a6b`), in the header and in the JSON. It only reports, so it never exits 1.
 
-scorecard_runs.py plays a route on a build and scorecard_measure.py scores a run's files. Neither has a command line.
+scorecard_runs.py plays a route on a build and scorecard_measure.py scores a route's two runs. Neither has a command line.
 
 ## block_clicks.py
 

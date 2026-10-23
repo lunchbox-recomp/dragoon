@@ -44,7 +44,7 @@ JSON at the end.
 
 Exits 0 once every route is measured. It only reports, so it never exits 1. Exits 2 on a bad
 argument, a build directory its probe.sh won't run, a run that fails or doesn't reach its last
-checkpoint, or a recording it can't read.
+checkpoint, a recording it can't read or a recording shorter than the cut.
 """
 from __future__ import annotations
 

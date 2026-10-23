@@ -101,7 +101,7 @@ def cut(rec: Recording, seconds: float, path: Path) -> Recording:
 
 def measure(runs: Runs, mixer_seconds: float) -> Score:
     """The device stage and the ring from the real-time run, the mixer stage from the first
-    MIXER_SECONDS of the unpaced run's blocks."""
+    mixer_seconds of the unpaced run's blocks."""
     text = runs.paced.log.read_text(errors="replace")
     rg = ring(text)
     device = runs.paced.device
