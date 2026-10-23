@@ -21,7 +21,7 @@ from scorecard_runs import Runs
 RING_FILL = re.compile(r"^\[ring\] fill=\d+ avg=\S+ trim=\S+ underruns=(\d+)(?: cuts=(\d+))?$", re.M)
 RING_CUT = re.compile(r"^\[ring\] cut \d+ frames at output frame (\d+)$", re.M)
 AX_PEAK = re.compile(r"^\[ax\] frames=(\d+) voices\(running, last frame\)=\d+ peak=(\d+) out=[0-9A-F]+$", re.M)
-AX_CLAMP = re.compile(r"^\[ax\] bus list=(\d+) .* clipped=(\d+)$", re.M)
+AX_CLAMP = re.compile(r"^\[ax\] bus list=(\d+) .* clipped=(\d+)(?:\s|$)", re.M)
 
 
 @dataclass

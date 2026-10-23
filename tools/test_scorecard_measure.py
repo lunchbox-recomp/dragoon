@@ -58,6 +58,11 @@ class LogTest(unittest.TestCase):
     def test_the_clamp_count_sums_every_bus_line(self):
         self.assertEqual(scorecard_measure.clamped(CURRENT_LOG, 1200), 27)
 
+    def test_a_field_after_the_clamp_count_doesnt_hide_it(self):
+        # The next engine ends its bus lines with "clipped=N depop=M".
+        log = CURRENT_LOG.replace("clipped=22", "clipped=22 depop=3").replace("clipped=5", "clipped=5 depop=0")
+        self.assertEqual(scorecard_measure.clamped(log, 1200), 27)
+
     def test_a_build_with_no_bus_lines_logs_no_clamp_count(self):
         self.assertIsNone(scorecard_measure.clamped(BASE_LOG, 1200))
 
