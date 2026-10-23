@@ -1,0 +1,6 @@
+# AX output hashes for the city-trial-stadium-4p route: list count, then the running FNV-1a over every output block
+# the mixer has written since boot, as GCN_AXSTATS=1 prints it. They hold for unpaced runs only:
+# tools/probe.sh --bench, the way tools/audio_hashes.py runs them. Paced runs make catch-up jumps.
+# Rows carry no frame number, because lists per presented frame isn't constant.
+56000 6B04B29DCCF8CD7E
+68000 333D660C61CFBE60
