@@ -73,6 +73,11 @@ if FAIL:
 """
 WARM = """
 saves = sys.argv[sys.argv.index("--saves") + 1]
+# Like the real tool, do nothing when the stamp the player's last warm-up left is current.
+stamp = os.path.join(saves, ".shader-warmup")
+if os.path.exists(stamp) and open(stamp).read() == "current stamp\\n":
+    print("shader cache is current, nothing to do")
+    sys.exit(0)
 print("title: 1860 frames, 0.1 s", flush=True)
 if FAIL:
     print("warm_shaders.py failed on purpose", file=sys.stderr)
@@ -292,6 +297,17 @@ class GoodRunTest(RecipeTestCase):
         self.assertEqual(self.of(events, "progress", "warmup"), [
             {"event": "progress", "step": "warmup", "done": 1, "total": 2},
             {"event": "progress", "step": "warmup", "done": 2, "total": 2}])
+
+    def test_the_players_stamp_reaches_the_warmup_so_a_current_cache_is_skipped(self):
+        self.old_game()
+        write_file(self.data / "saves", ".shader-warmup", "current stamp\n")
+        before = tree(self.data / "saves")
+        code, events, _ = self.build()
+        self.assertEqual(code, 0)
+        self.assertEqual(len(self.records_of("warm_shaders")), 1)
+        self.assertEqual(self.of(events, "progress", "warmup"), [])  # no pass ran
+        self.assertEqual(tree(self.data / "saves"), before)
+        self.assertNotEqual(self.current(), OLD)
 
     def test_no_warmup_skips_it_and_installs_nothing(self):
         self.old_game()
