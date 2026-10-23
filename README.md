@@ -11,7 +11,7 @@ Tested on one Mac, an M4 Max on macOS 26.
 | Part | State |
 |---|---|
 | Title and menus | Work. The panel on the right of the mode select stays plain gray |
-| Air Ride | A full race runs on Fantasy Meadows. Other courses haven't been checked |
+| Air Ride | All eight courses a blank card can pick race past the countdown. Nebula Belt is locked on a blank card |
 | City Trial | Runs with one player, or four in split screen at full speed. An effect the tested routes don't reach can stutter the first time it shows up |
 | Stadium | Not reached yet |
 | Top Ride | Not tried |
