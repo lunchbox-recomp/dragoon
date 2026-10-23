@@ -30,3 +30,5 @@ analysis/out/
 __pycache__/
 # Each player's own controller settings
 /controls.txt
+# The launcher's SwiftPM builds
+launcher/.build/
