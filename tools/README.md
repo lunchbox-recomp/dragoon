@@ -51,7 +51,7 @@ tools/framediff.py build/probe/before build/probe/after --tolerance 3 --budget 0
 
 ## shader_cache.py
 
-How many shaders does a cache or key list hold, and how many are new? It reads `saves/shaders.bin` (magic `WRSC`) and key lists (magic `GCSK`). The key size comes from the format word, and a magic or key size it doesn't know is refused. `count` prints the format, the record count and the distinct key count, and says how many trailing bytes it ignored (a record a kill cut off). `diff` prints how many distinct keys in NEW aren't in OLD and their share of NEW, and refuses two files in different formats. It counts and never lists keys.
+How many shaders does a cache or key list hold, and how many are new? It reads `saves/shaders.bin` (magic `WRSC`) and key lists (magic `GCSK`). The key size comes from the format word, and a magic or key size it doesn't know is refused. `count` prints the format and how many records and distinct keys the file holds. For a cache it also prints the distinct programs, which are the distinct `src_hash` values, since two keys can generate one source. It says how many trailing bytes it ignored, which is a record a kill cut off. `diff` prints how many distinct keys in NEW aren't in OLD and their share of NEW, and refuses two files in different formats. It counts and never lists keys.
 
 ```
 tools/shader_cache.py count build/probe/demo/saves/shaders.bin
@@ -174,8 +174,11 @@ Will a player's first session stall on shader compiles? It plays the game once s
 
 The cache is copied over `saves/shaders.bin` only once every pass has succeeded, and it only gains keys. No other file in `saves/` is touched, so the player's memory card stays as it is. A failed pass exits 1 and leaves `saves/` as it was. `saves/.shader-warmup` holds the gcn-recomp commit and a SHA-1 each of the manifest (with the route files' text) and of warm_shaders.py. If all three match, the next run does nothing. A relink doesn't replay the game, but an edited route or tool does. A checkout asks git for the gcn-recomp commit. A source snapshot has no history, so it takes the commit from its `source-info.json`. A copy with neither exits 2. `--force` plays it anyway. A pass that outlasts twice its length at 60 fps plus 30 s is killed and counts as failed.
 
+`--report DIR` keeps each pass's output as `NAME.log` and the cache it left as `NAME.bin` in DIR, and prints `report.txt`. A row says how many programs the game built from the cache before its first frame and how long that took. It also gives the keys and programs the pass added that the starting cache and the passes before it lacked, and the cache's size after it. With `GCN_FRAMETIME=1` in the environment it gives the frame the pass built its last program in.
+
 ```
 tools/warm_shaders.py --force
+env GCN_FRAMETIME=1 tools/warm_shaders.py --force --saves build/probe/warm/saves --report build/probe/warm/report
 tools/shader_cache.py count saves/shaders.bin
 ```
 

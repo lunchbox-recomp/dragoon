@@ -79,6 +79,25 @@ class ShaderCacheTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("records 2", out)
         self.assertIn("distinct 2", out)
+        self.assertNotIn("programs", out)
+
+    def test_programs_are_the_distinct_source_hashes(self):
+        # Two keys that generate the same source are two keys and one program.
+        data = bytearray(cache_bytes([key(1), key(2), key(3)]))
+        struct.pack_into("<Q", data, CACHE_HEADER + record_size(0) + KEY_SIZE, 0xDEF)
+        struct.pack_into("<Q", data, CACHE_HEADER + 2 * record_size(0) + KEY_SIZE, 0xDEF)
+        path = self.write("c.bin", bytes(data))
+        loaded = shader_cache.load(path)
+        self.assertEqual(loaded.hashes, [0xABC, 0xDEF, 0xDEF])
+        self.assertEqual(loaded.programs, 2)
+        _, out, _ = run_main(shader_cache.main, "count", str(path))
+        self.assertIn("distinct 3  programs 2", out)
+
+    def test_cache_records_come_whole_with_the_header(self):
+        data = cache_bytes([key(1), key(2)], binary=b"\xaa\xbb")
+        loaded = shader_cache.load(self.write("c.bin", data))
+        self.assertEqual(loaded.header, data[:CACHE_HEADER])
+        self.assertEqual(b"".join(loaded.records), data[CACHE_HEADER:])
 
     def test_truncated_last_record_is_skipped_and_reported(self):
         full = cache_bytes([key(1), key(2)], binary=b"\xee" * 10)

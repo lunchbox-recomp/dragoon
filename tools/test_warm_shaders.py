@@ -1,6 +1,7 @@
 import json
 import os
 import stat
+import struct
 import sys
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import routes
+import shader_cache
 import source_info
 import warm_shaders
 from testutil import GIT_ENV, commit, run_main, write_file
@@ -33,6 +35,38 @@ if os.environ.get("FAKE_SLEEP_ON") and os.environ["FAKE_SLEEP_ON"] in line:
 if os.environ.get("FAKE_FAIL_ON") and os.environ["FAKE_FAIL_ON"] in line:
     sys.exit(1)
 """
+
+
+# A game that keeps a real cache: the keys FAKE_KEYS lists for this pass's --exit-after (JSON,
+# frames to key numbers) are appended unless the cache holds them, one 8-byte key, an 8-byte
+# source hash that is the same number, and no binary, as the game on macOS writes. It prints
+# the line the game prints once it has built what the cache held.
+FAKE_CACHE_GAME = f"""#!{sys.executable}
+import json, os, struct, sys
+os.makedirs("saves", exist_ok=True)
+path = "saves/shaders.bin"
+if not os.path.exists(path):
+    with open(path, "wb") as f:
+        f.write(struct.pack("<IIQ", 0x43535257, 3 << 16 | 8, 0xD00D))
+data = open(path, "rb").read()
+held = [data[o:o + 8] for o in range(16, len(data), 24)]
+if held:
+    print(f"[shaders] {{len(held)}} programs from cache (0 from binaries, {{len(held)}} compiled, 0 of them from the game's key list) in 12 ms")
+frames = [a for a in sys.argv if a.startswith("--exit-after=")][0].split("=")[1]
+with open(path, "ab") as f:
+    for n in json.loads(os.environ["FAKE_KEYS"])[frames]:
+        key = bytes([n]) * 8
+        if key not in held:
+            f.write(key + key + struct.pack("<II", 0, 0))
+            print(f"[shaders] compiled program {{n}} in 1.0 ms")
+            print(f"[rt] f{{500 + n}} render   1.00ms")
+"""
+
+
+def shader_cache_bytes(keys: list[int]) -> bytes:
+    """A cache the fake cache game would have written: the keys, each 8 bytes of its number."""
+    return struct.pack("<IIQ", 0x43535257, 3 << 16 | 8, 0xD00D) + b"".join(
+        bytes([n]) * 16 + struct.pack("<II", 0, 0) for n in keys)
 
 
 class WarmTestCase(unittest.TestCase):
@@ -86,6 +120,22 @@ class PassesTest(unittest.TestCase):
         self.assertEqual([p.exit_after for p in ps], [TITLE_FRAMES, FOUR_FRAMES])
         self.assertEqual([p.pads for p in ps], [1, 4])
         self.assertEqual(ps[0].route_file, routes.ROUTES / "title.txt")
+
+
+class LastCompileFrameTest(unittest.TestCase):
+    def test_a_program_belongs_to_the_next_render_line(self):
+        log = ("[ft] f1 guest 356.11ms  fe   0.07ms\n"
+               "[shaders] compiled program 1 in 1.5 ms\n"
+               "[shaders] compiled program 2 in 1.9 ms\n"
+               "[rt] f2 render   4.60ms (tex  0.11 vbo  0.01 copies  0.01)  applies    4  programs 2\n"
+               "[rt] f3 render   0.12ms (tex  0.00 vbo  0.01 copies  0.01)  applies    4  programs 2\n"
+               "[shaders] compiled program 3 in 2.0 ms\n"
+               "[rt] f4 render   2.82ms (tex  0.22 vbo  0.01 copies  0.02)  applies   84  programs 3\n"
+               "[rt] f5 render   0.12ms (tex  0.00 vbo  0.01 copies  0.01)  applies    4  programs 3\n")
+        self.assertEqual(warm_shaders.last_compile_frame(log), 4)
+
+    def test_a_log_without_frame_timing_is_frame_0(self):
+        self.assertEqual(warm_shaders.last_compile_frame("[shaders] 70 programs from cache in 107 ms\n"), 0)
 
 
 class EngineRevTest(unittest.TestCase):
@@ -312,6 +362,52 @@ class WarmTest(WarmTestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("shaders.bin", err)
         self.assertFalse(self.saves.exists())
+
+
+class ReportTest(WarmTestCase):
+    def setUp(self):
+        super().setUp()
+        write_file(self.dir, "fake_game", FAKE_CACHE_GAME)
+        keys = {str(TITLE_FRAMES): [1, 2], str(FOUR_FRAMES): [2, 3, 4]}
+        patch = mock.patch.dict(os.environ, {"FAKE_KEYS": json.dumps(keys)})
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.report = self.dir / "report"
+
+    def rows(self) -> list[list[str]]:
+        text = (self.report / "report.txt").read_text()
+        return [line.split() for line in text.splitlines()[1:]]
+
+    def test_each_pass_adds_the_keys_and_programs_no_earlier_pass_had(self):
+        code, out, _ = self.warm("--report", str(self.report))
+        self.assertEqual(code, 0)
+        title, four = self.rows()
+        # name, frames, s, boot programs, boot ms, +keys, +programs, keys, last frame built in
+        self.assertEqual([title[0], title[1], *title[3:]],
+                         ["title", str(TITLE_FRAMES), "0", "0", "2", "2", "2", "502"])
+        self.assertEqual([four[0], four[1], *four[3:]],
+                         ["city-trial-4p", str(FOUR_FRAMES), "2", "12", "2", "2", "4", "504"])
+        self.assertIn("city-trial-4p", out.splitlines()[-2])
+
+    def test_keys_the_players_cache_held_are_not_new(self):
+        self.saves.mkdir()
+        write_file(self.saves, "shaders.bin", shader_cache_bytes([1]))
+        self.assertEqual(self.warm("--report", str(self.report))[0], 0)
+        title, four = self.rows()
+        self.assertEqual([title[3], title[5], title[7]], ["1", "1", "2"])
+        self.assertEqual([four[5], four[7]], ["2", "4"])
+
+    def test_each_pass_keeps_its_output_and_its_cache(self):
+        self.assertEqual(self.warm("--report", str(self.report))[0], 0)
+        self.assertEqual(sorted(p.name for p in self.report.iterdir()),
+                         ["city-trial-4p.bin", "city-trial-4p.log", "report.txt", "title.bin", "title.log"])
+        self.assertEqual(len(shader_cache.load(self.report / "title.bin").keys), 2)
+        self.assertEqual(len(shader_cache.load(self.report / "city-trial-4p.bin").keys), 4)
+        self.assertIn("2 programs from cache", (self.report / "city-trial-4p.log").read_text())
+
+    def test_without_the_flag_nothing_is_kept(self):
+        self.assertEqual(self.warm()[0], 0)
+        self.assertFalse(self.report.exists())
 
 
 if __name__ == "__main__":

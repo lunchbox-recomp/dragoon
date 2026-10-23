@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Warm the player's shader cache by playing the game once, hidden and silent.
 
-Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--force]
+Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--force] [--report DIR]
 
 Runs the game in a scratch directory, one pass per route in tests/hashes/manifest.txt, each
 from a blank memory card as a fresh install is. (A route that finds the card an earlier
@@ -14,7 +14,9 @@ git, or from source-info.json in a source snapshot), a SHA-1 of the manifest wit
 files' text and a SHA-1 of this script. If all three
 match and shaders.bin exists, the run is skipped. A pass that outlasts twice its real-time
 length plus 30 s is killed and fails. --force runs anyway. --game and --saves default to
-build/dragoon and saves under the repository, wherever the tool is run from.
+build/dragoon and saves under the repository, wherever the tool is run from. --report DIR
+keeps each pass's output and the cache it left in DIR, and prints a table of what each pass
+added (see Report).
 
 Prints one line per pass and a closing line with the cache's size. A failed pass prints
 the game's last output to stderr.
@@ -37,7 +39,10 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
+import frametime
+import shader_cache
 import source_info
 from routes import MANIFEST, Route, parse_manifest, route_file
 
@@ -49,6 +54,8 @@ TAIL_LINES = 15
 ROUTE_TAIL_FRAMES = 900  # past the last frame a route must reach, to build what follows it
 # The line each finished pass prints, which the launcher's build counts as progress.
 PASS_LINE = re.compile(r"\S+: \d+ frames, \d+\.\d s")
+# What the game prints once it has built the programs the cache held, before its first frame.
+BOOT_LINE = re.compile(r"\[shaders\] (\d+) programs from cache .* in (\d+) ms")
 
 
 @dataclass
@@ -133,6 +140,11 @@ class PassFailed(Exception):
     pass
 
 
+def last_compile_frame(log: str) -> int:
+    """The frame the game built its last program in, 0 for none or without GCN_FRAMETIME=1."""
+    return max((n for n, f in frametime.parse(log.splitlines()).items() if f.compiles), default=0)
+
+
 def run_pass(game: Path, p: Pass, scratch: Path) -> None:
     env = {k: v for k, v in os.environ.items() if k != "GCN_INPUT"}
     env["SDL_AUDIO_DRIVER"] = "dummy"
@@ -152,21 +164,77 @@ def run_pass(game: Path, p: Pass, scratch: Path) -> None:
         raise PassFailed(f"{p.name}: the game exited {code}\n{tail}")
 
 
-def warm(game: Path, saves: Path, plan: list[Pass]) -> None:
+class Report:
+    """What each pass did to the cache, kept in a directory for measuring the warm-up.
+
+    Per pass, NAME.log is the game's output and NAME.bin the cache as the pass left it.
+    report.txt holds one row per pass: the programs the game built from the cache before its
+    first frame and how long that took, and the keys and programs (distinct generated
+    sources) the pass added that the starting cache and the passes before it lacked. Run
+    under GCN_FRAMETIME=1, the last column is the frame the pass built its last program in,
+    which is the frame it had to reach; without it that column is 0.
+    """
+
+    HEADER = (f"{'pass':<28}{'frames':>7}{'s':>7}{'boot':>6}{'boot ms':>8}{'+keys':>6}{'+progs':>7}"
+              f"{'keys':>6}{'last':>7}")
+
+    def __init__(self, directory: Path, start: Path):
+        self.dir = directory
+        directory.mkdir(parents=True, exist_ok=True)
+        self.keys: set[bytes] = set()
+        self.programs: set[int] = set()
+        self.rows = [self.HEADER]
+        if start.exists():
+            self.absorb(shader_cache.load(start))
+
+    def absorb(self, k: shader_cache.KeyFile) -> tuple[int, int]:
+        """Take K's keys and programs in; how many of each were new."""
+        keys, programs = set(k.keys) - self.keys, set(k.hashes) - self.programs
+        self.keys |= keys
+        self.programs |= programs
+        return len(keys), len(programs)
+
+    def after_pass(self, p: Pass, seconds: float, scratch: Path) -> None:
+        log = (scratch / "stdout.txt").read_text(errors="replace")
+        (self.dir / f"{p.name}.log").write_text(log)
+        loaded = BOOT_LINE.search(log)
+        boot, boot_ms = (int(loaded[1]), int(loaded[2])) if loaded else (0, 0)
+        cache = scratch / "saves" / CACHE
+        new_keys = new_programs = 0
+        if cache.exists():
+            shutil.copyfile(cache, self.dir / f"{p.name}.bin")
+            new_keys, new_programs = self.absorb(shader_cache.load(cache))
+        last = last_compile_frame(log)
+        self.rows.append(f"{p.name:<28}{p.exit_after:>7}{seconds:>7.1f}{boot:>6}{boot_ms:>8}"
+                         f"{new_keys:>6}{new_programs:>7}{len(self.keys):>6}{last:>7}")
+
+    def write(self) -> str:
+        text = "\n".join(self.rows) + "\n"
+        (self.dir / "report.txt").write_text(text)
+        return text
+
+
+def warm(game: Path, saves: Path, plan: list[Pass], report: Optional[Path] = None) -> None:
     with tempfile.TemporaryDirectory(prefix="dragoon-warmup-") as d:
         scratch = Path(d)
         (scratch / "saves").mkdir()
         cache = scratch / "saves" / CACHE
         if (saves / CACHE).exists():
             shutil.copyfile(saves / CACHE, cache)
+        kept = Report(report, cache) if report else None
         for p in plan:
             for card in (scratch / "saves").glob(CARD_GLOB):
                 card.unlink()
             start = time.monotonic()
             run_pass(game, p, scratch)
-            print(f"{p.name}: {p.exit_after} frames, {time.monotonic() - start:.1f} s", flush=True)
+            seconds = time.monotonic() - start
+            print(f"{p.name}: {p.exit_after} frames, {seconds:.1f} s", flush=True)
+            if kept:
+                kept.after_pass(p, seconds, scratch)
         if not cache.exists():
             raise PassFailed(f"the game wrote no {CACHE}")
+        if kept:
+            print(kept.write(), end="")
         install(cache, saves / CACHE)
 
 
@@ -176,6 +244,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--game", type=Path, default=ROOT / "build" / "dragoon")
     ap.add_argument("--saves", type=Path, default=ROOT / "saves")
     ap.add_argument("--force", action="store_true", help="run even if the stamp is current")
+    ap.add_argument("--report", type=Path, metavar="DIR",
+                    help="keep each pass's output and cache in DIR, with a table of what each added")
     args = ap.parse_args(argv)
     try:
         if not args.game.is_file():
@@ -192,7 +262,7 @@ def main(argv: list[str]) -> int:
             return 0
         start = time.monotonic()
         try:
-            warm(args.game.resolve(), args.saves, plan)
+            warm(args.game.resolve(), args.saves, plan, args.report)
         except PassFailed as e:
             print(f"shader warm-up failed, {args.saves} left as it was: {e}\n"
                   "(configure with -DDRAGOON_WARMUP=OFF to skip the warm-up)", file=sys.stderr)

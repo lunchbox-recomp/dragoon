@@ -4,8 +4,8 @@
 Usage: shader_cache.py count FILE
        shader_cache.py diff OLD NEW
 
-count prints the file's version, key size, record count, distinct key count and the
-trailing bytes it ignored. diff prints how many distinct keys in NEW are not in OLD, and
+count prints the file's version, key size, record count, distinct key count, a cache's
+distinct program count (its distinct src_hash values) and the trailing bytes it ignored. diff prints how many distinct keys in NEW are not in OLD, and
 their share of NEW's distinct keys; the two files must have the same format word.
 Little-endian throughout. Both files open with u32 magic and u32 format word, where
 format = kShaderKeyVersion << 16 | sizeof(ShaderKey) (gcn-recomp/runtime/gx/shadergen.h:70).
@@ -38,7 +38,7 @@ from __future__ import annotations
 import argparse
 import struct
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 CACHE_MAGIC = 0x43535257  # "WRSC"
@@ -54,6 +54,9 @@ class KeyFile:
     format_word: int
     keys: list[bytes]
     ignored: int
+    header: bytes = b""
+    records: list[bytes] = field(default_factory=list)  # each whole record, a cache's only
+    hashes: list[int] = field(default_factory=list)  # each record's src_hash, a cache's only
 
     @property
     def version(self) -> int:
@@ -62,6 +65,11 @@ class KeyFile:
     @property
     def key_size(self) -> int:
         return self.format_word & 0xFFFF
+
+    @property
+    def programs(self) -> int:
+        """Distinct generated sources, which is what the driver compiles."""
+        return len(set(self.hashes))
 
 
 def load(path: Path) -> KeyFile:
@@ -78,6 +86,8 @@ def load(path: Path) -> KeyFile:
     if size == 0:
         raise ValueError(f"{path}: format word {word:08x} has key size 0")
     keys: list[bytes] = []
+    records: list[bytes] = []
+    hashes: list[int] = []
     o = header
     while o + size + tail <= len(data):
         nxt = o + size + tail
@@ -86,15 +96,19 @@ def load(path: Path) -> KeyFile:
         if nxt > len(data):
             break
         keys.append(data[o:o + size])
+        if tail:
+            records.append(data[o:nxt])
+            hashes.append(struct.unpack_from("<Q", data, o + size)[0])
         o = nxt
-    return KeyFile(magic, word, keys, len(data) - o)
+    return KeyFile(magic, word, keys, len(data) - o, data[:header], records, hashes)
 
 
 def count(path: Path) -> None:
     k = load(path)
     kind = "shader cache" if k.magic == CACHE_MAGIC else "key list"
+    programs = f"  programs {k.programs}" if k.hashes else ""
     print(f"{path}: {kind}  version {k.version}  key size {k.key_size}  records {len(k.keys)}"
-          f"  distinct {len(set(k.keys))}  ignored {k.ignored} trailing bytes")
+          f"  distinct {len(set(k.keys))}{programs}  ignored {k.ignored} trailing bytes")
 
 
 def diff(old_path: Path, new_path: Path) -> None:
