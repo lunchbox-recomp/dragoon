@@ -412,6 +412,13 @@ class FailureTest(SignTestCase):
         self.assertEqual(self.calls()[-1]["argv"][:2], ["notarytool", "submit"])
         self.assertIn("SUB-123", err)
 
+    def test_an_accepted_status_from_a_notarytool_that_exited_1_still_stops(self):
+        self.switch("notarytool exits 1")
+        code, _, err = self.run_tool()
+        self.assertEqual(code, 1)
+        self.assertEqual(self.calls()[-1]["argv"][:2], ["notarytool", "submit"])  # never stapled
+        self.assertIn("SUB-123", err)
+
     def test_notarytool_failing_without_an_id_says_so(self):
         self.switch("no json")
         code, _, err = self.run_tool()
