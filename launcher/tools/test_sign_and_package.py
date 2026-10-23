@@ -558,6 +558,10 @@ class RefusalTest(SignTestCase):
                 self.assertEqual(code, 2)
                 self.assertIn("all three", err.getvalue())
 
+    def test_an_ad_hoc_identity_with_a_notary_key(self):
+        self.assert_refused("ad hoc", identity="-")
+        self.assert_refused("ad hoc", "--dry-run", identity="-")
+
     def test_a_notary_timeout_that_is_not_above_zero(self):
         for bad in ("0", "-5", "nan", "inf"):
             with self.subTest(bad):

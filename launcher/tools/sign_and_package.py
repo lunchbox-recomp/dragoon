@@ -25,7 +25,8 @@ server wants an Apple identity and the internet, and the runtime's library valid
 stop an ad hoc launcher loading an ad hoc Sparkle, since neither has a team ID. A Developer ID
 run passes -o runtime and --timestamp, which notarization requires, and its pieces share a
 team ID. Without the three --notary-* options the tool stops after step 4 and says the DMG
-isn't notarized. The key file is only named to notarytool, never read or printed. --dry-run
+isn't notarized. Apple rejects an ad hoc signature, so --identity - with a notary option is
+refused. The key file is only named to notarytool, never read or printed. --dry-run
 prints every command and runs none. DIR can't be inside APP, where ditto would copy the app
 into itself.
 
@@ -170,7 +171,10 @@ def bad_argument(a: argparse.Namespace) -> Optional[str]:
     if any(given) and not all(given):
         return ("--notary-key, --notary-key-id and --notary-issuer go together. "
                 "Give all three or none")
-    if not 0 < a.notary_timeout < float("inf"):
+    if any(given) and a.identity == sign_plan.AD_HOC:
+        return ("--identity - signs ad hoc, which Apple rejects, so it can't go with the "
+                "--notary-* options. Give a Developer ID identity or no notary key")
+    if not 0 <a.notary_timeout < float("inf"):
         return f"--notary-timeout {a.notary_timeout:g} isn't a number of minutes above 0"
     try:
         sign_plan.check_app(a.app)
