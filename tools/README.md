@@ -24,7 +24,7 @@ After the NAME and seconds come an input script or a route file from `tests/rout
 tools/probe.sh demo 20 tests/routes/title.txt 60 GCN_FRAMETIME=1
 ```
 
-That prints the run's directory as an absolute path, then a frame count (140 on an M4 Max). It exits 2 when the game isn't built. Run it again with a different NAME to get a second run to compare.
+That prints the run's directory as an absolute path, then a frame count (140 on an M4 Max). It exits 2 when the game isn't built. Run it again with a different NAME to get a second run to compare. Runs pile up in `build/probe/`, and prune_runs.py clears the old ones.
 
 ## frametime.py
 
@@ -181,6 +181,21 @@ tools/warm_shaders.py --force
 env GCN_FRAMETIME=1 tools/warm_shaders.py --force --jobs 4 --saves build/probe/warm/saves --report build/probe/warm/report
 tools/shader_cache.py count saves/shaders.bin
 ```
+
+## prune_runs.py
+
+Which runs in `build/probe/` are old enough to clear? probe.sh and the hash tools leave a directory per run, and their frames and recordings filled a disk once. Agents can't `rm`, so nothing else cleans them up. For each CLONE it looks at the direct children of `CLONE/build/probe/` and lists the ones with nothing newer than `--hours` (24 unless you give it). A child's age is the newest mtime of it and of anything under it, so a fresh file deep inside an old run keeps the run. A file's age is its own mtime.
+
+Without `--delete` it prints what would go, a line each with its size and age, then the total. With `--delete` it removes those and prints the same lines and the space freed. A size is the files' lengths, not the blocks they take.
+
+```
+tools/prune_runs.py /path/to/clone
+tools/prune_runs.py --hours 6 --delete /path/to/clone /path/to/old-clone
+```
+
+Names listed in `build/probe/keep`, one a line, stay. Blank lines and lines that start with `#` are skipped, and `keep` itself is never touched. Links are never followed. A symlinked child is removed as a link and its target stays, and the age walk doesn't go through links.
+
+A CLONE is refused when it isn't a directory, when its `build/probe` isn't `CLONE/build/probe` once links are resolved (a link to elsewhere, say) or when its `keep` isn't a readable plain file. Nothing is removed from any CLONE then, and it exits 2. A CLONE with no `build/probe` is skipped with a note on stderr. A child it can't read or remove is named on stderr and the rest still go. That exits 1, and a child that failed to remove counts as nothing freed. Otherwise it exits 0.
 
 ## routes.py
 
