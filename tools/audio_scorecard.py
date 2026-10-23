@@ -8,30 +8,39 @@ Usage: audio_scorecard.py LABEL=BUILD_DIR [LABEL=BUILD_DIR ...] [--routes R,R] [
 BUILD_DIR is a Dragoon clone's build/ directory, and LABEL names it in the tables. Every route
 in tests/hashes/manifest.txt (or the ones --routes names) plays on each build, a route at a
 time across the builds, through that clone's own tools/probe.sh: a hidden window, SDL's dummy
-audio driver, --real-time, GCN_AXSTATS=1, and the route file and manifest settings from this
-clone. A run lasts the route's last checkpoint at 60 frames a second plus --margin seconds (15
-by default), and dumps that one frame to show it got there. It goes to
-<clone>/build/probe/scorecard-ROUTE/, and an earlier
-run there is moved to the Trash first, so the game starts from a blank memory card and an empty
-shader cache. --no-run measures the runs already there instead.
+audio driver, GCN_AXSTATS=1, and the route file and manifest settings from this clone. Each
+route plays twice on a build, once --real-time and once unpaced. Each run lasts the route's
+last checkpoint at 60 frames a second plus --margin seconds (15 by default) of wall-clock time,
+and dumps that one frame to show it got there. They go to <clone>/build/probe/scorecard-ROUTE/
+and scorecard-unpaced-ROUTE/, and an earlier run there is moved to the Trash first, so the game
+starts from a blank memory card and an empty shader cache. --no-run measures the runs already
+there instead.
 
 The tool reads each clone's Dragoon and gcn-recomp commits (with -dirty when tracked files have
 changed) before the first route plays, and leaves them in each run's commits.json. --no-run
 prints the commits its runs recorded, or "not recorded" for a run made before the file existed.
 
-Each run is measured at two stages with audio_clicks.py's functions.
+The two stages are measured with audio_clicks.py's functions, each from the run that suits it.
 
-  mixer   GCN_AIDWAV, the DMA's blocks before the ring (raw, 32 kHz). Clicks a minute, the
-          clicks within 2 samples of a 160-sample block join beside the count chance gives,
-          gaps and clipped runs.
-  device  GCN_WAV, what went to the device, ring included (48 kHz). Clicks a minute, gaps and
-          clipped runs, and the clicks within 2 samples of a ring cut when the build logs cuts.
+  mixer   The unpaced run's GCN_AIDWAV, the DMA's blocks before the ring (raw, 32 kHz), cut
+          to the route's last checkpoint plus --margin seconds. Unpaced, the game's time
+          doesn't follow the host's, so two runs of one build give the same blocks. A
+          real-time run's clock catches up when the host falls behind, and then the DMA plays
+          a block twice, presses land on other frames and sounds move, so its blocks differ
+          from run to run. Clicks a minute, the clicks within 2 samples of a 160-sample block
+          join beside the count chance gives, gaps and clipped runs. The run's log gives the
+          highest main L peak before the output clamp and the samples the clamp changed, from
+          the [ax] lines within the cut. A recording shorter than the cut exits 2.
+  device  The real-time run's GCN_WAV, what went to the device, ring included (48 kHz).
+          Clicks a minute, gaps and clipped runs, and the clicks within 2 samples of a ring cut
+          when the build logs cuts. Its log gives the ring's cuts and underruns.
 
-From the log come the ring's cuts and underruns, the highest main L peak before the output
-clamp and the samples the clamp changed, each where the build prints it ("not logged" where
-it doesn't). A stage whose recording is missing reads "not recorded". It prints a table per
-route as the route finishes, then the totals: counts and seconds summed, clicks a minute over
-the summed seconds, the highest peak. --json prints the whole result as JSON at the end.
+Each log value reads "not logged" where the build doesn't print it. A stage whose recording is
+missing reads "not recorded", and so does the whole mixer stage, its log values included, when
+--no-run finds no unpaced run. --no-run cuts the mixer stage at --margin as a run would. It
+prints a table per route as the route finishes, then the totals: counts and seconds summed,
+clicks a minute over the summed seconds, the highest peak. --json prints the whole result as
+JSON at the end.
 
 Exits 0 once every route is measured. It only reports, so it never exits 1. Exits 2 on a bad
 argument, a build directory its probe.sh won't run, a run that fails or doesn't reach its last
@@ -48,7 +57,7 @@ from pathlib import Path
 
 from routes import MANIFEST, Route, select_routes
 from scorecard_measure import Score, Stage, measure, total
-from scorecard_runs import MARGIN_S, Build, Commits, Run, check_build, finished, play, read_commits, seconds
+from scorecard_runs import MARGIN_S, Build, Commits, Runs, check_build, last_runs, play, read_commits, seconds
 
 NOT_LOGGED, NOT_RECORDED = "not logged", "not recorded"
 
@@ -82,12 +91,13 @@ def agree(values: list[str | None]) -> str | None:
     return distinct[0] if len(distinct) == 1 else " and ".join(map(str, distinct))
 
 
-def commits_of(build: Build, runs: list[Run] | None) -> Commits:
+def commits_of(build: Build, runs: list[Runs] | None) -> Commits:
     """What the build's RUNS were made of when they're already there (--no-run), else what its
     clone has checked out now, which the tool reads before any route plays."""
     if runs is None:
         return Commits(describe(build.clone), describe(build.clone / "gcn-recomp"))
-    found = [read_commits(run) or Commits(NOT_RECORDED, NOT_RECORDED) for run in runs]
+    each = [run for r in runs for run in (r.paced, r.unpaced) if run is not None]
+    found = [read_commits(run) or Commits(NOT_RECORDED, NOT_RECORDED) for run in each]
     return Commits(agree([c.dragoon for c in found]), agree([c.gcn_recomp for c in found]))
 
 
@@ -113,12 +123,12 @@ def rows(score: Score) -> list[tuple[str, str]]:
     return [
         *stage_rows("mixer", m),
         ("mixer clicks on a block join", NOT_RECORDED if m is None else near(m.on_joins, m.joins_by_chance)),
+        ("main L peak before the clamp", NOT_RECORDED if m is None else count(score.peak)),
+        ("samples the clamp changed", NOT_RECORDED if m is None else count(score.clamped)),
         *stage_rows("device", d),
         ("device clicks on a ring cut", NOT_RECORDED if d is None else near(d.on_cuts, d.cuts_by_chance)),
         ("ring cuts", count(score.cuts)),
         ("ring underruns", count(score.underruns)),
-        ("main L peak before the clamp", count(score.peak)),
-        ("samples the clamp changed", count(score.clamped)),
     ]
 
 
@@ -165,7 +175,7 @@ def main(argv: list[str]) -> int:
             check_build(b)
         routes = select_routes([n for n in args.routes.split(",") if n], MANIFEST)
         labels = [b.label for b in builds]
-        found = {b.label: [finished(b, r) for r in routes] for b in builds} if args.no_run else None
+        found = {b.label: [last_runs(b, r) for r in routes] for b in builds} if args.no_run else None
         commits = {b.label: commits_of(b, None if found is None else found[b.label]) for b in builds}
         if not args.json:
             for b in builds:
@@ -175,8 +185,8 @@ def main(argv: list[str]) -> int:
         scores: dict[str, list[Score]] = {b.label: [] for b in builds}
         for i, route in enumerate(routes):
             for b in builds:
-                run = found[b.label][i] if found is not None else play(b, route, args.margin, commits=commits[b.label])
-                scores[b.label].append(measure(run.log, run.mixer, run.device))
+                runs = found[b.label][i] if found is not None else play(b, route, args.margin, commits=commits[b.label])
+                scores[b.label].append(measure(runs, seconds(route, args.margin)))
             if not args.json:
                 print(table(route_title(route, None if args.no_run else args.margin), labels,
                             [scores[label][-1] for label in labels]), flush=True)

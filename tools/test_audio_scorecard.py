@@ -8,7 +8,7 @@ from unittest import mock
 
 import audio_scorecard
 from scorecard_measure import Score, Stage
-from scorecard_runs import Build, Commits, Run
+from scorecard_runs import Build, Commits, Run, Runs
 from testutil import run_main, write_file
 
 MANIFEST = "title 20 60 60,960\nmenu 20 60 1200\n"
@@ -55,13 +55,22 @@ class TableTest(unittest.TestCase):
 
     def test_what_a_build_doesnt_log_or_record_says_so(self):
         old = score(10, cuts=None, clamped=None)
-        old.mixer = None
         text = audio_scorecard.table("title", ["old"], [old])
         self.assertRegex(text, r"ring cuts +not logged")
         self.assertRegex(text, r"device clicks on a ring cut +not logged")
         self.assertRegex(text, r"samples the clamp changed +not logged")
+        old.mixer = None
+        text = audio_scorecard.table("title", ["old"], [old])
         self.assertRegex(text, r"mixer clicks a minute +not recorded")
         self.assertRegex(text, r"mixer clicks on a block join +not recorded")
+
+    def test_with_no_mixer_stage_its_log_values_are_not_recorded_either(self):
+        old = score(10)
+        old.mixer = None
+        text = audio_scorecard.table("title", ["old"], [old])
+        self.assertRegex(text, r"main L peak before the clamp +not recorded")
+        self.assertRegex(text, r"samples the clamp changed +not recorded")
+        self.assertRegex(text, r"ring cuts +0")
 
 
 class MainTest(unittest.TestCase):
@@ -75,24 +84,29 @@ class MainTest(unittest.TestCase):
         self.scores = {("base", "title"): score(10), ("now", "title"): score(2),
                        ("base", "menu"): score(20, 90), ("now", "menu"): score(1, 90)}
 
+        self.unpaced = True  # whether the fake --no-run finds an unpaced run
+        self.cuts = []  # the mixer seconds each measure was given
+
         def run(build, route, *margin, **kwargs):
             self.order.append((build.label, route.name))
             self.events.append(f"run {build.label} {route.name}")
-            return Run(self.dir / build.label / route.name)
+            unpaced = Run(self.dir / build.label / f"unpaced-{route.name}")
+            return Runs(Run(self.dir / build.label / route.name), unpaced if self.unpaced else None)
 
         def describe(path):
             self.events.append(f"describe {path.name}")
             return path.name
 
-        def measured(log, mixer, device):
-            return self.scores[(log.parent.parent.name, log.parent.name)]
+        def measured(runs, seconds):
+            self.cuts.append(seconds)
+            return self.scores[(runs.paced.log.parent.parent.name, runs.paced.log.parent.name)]
 
         self.play = mock.Mock(side_effect=run)
         self.finished = mock.Mock(side_effect=run)
         for patch in (mock.patch.object(audio_scorecard, "MANIFEST", manifest),
                       mock.patch.object(audio_scorecard, "check_build"),
                       mock.patch.object(audio_scorecard, "play", self.play),
-                      mock.patch.object(audio_scorecard, "finished", self.finished),
+                      mock.patch.object(audio_scorecard, "last_runs", self.finished),
                       mock.patch.object(audio_scorecard, "measure", side_effect=measured),
                       mock.patch.object(audio_scorecard, "describe", side_effect=describe)):
             patch.start()
@@ -141,10 +155,32 @@ class MainTest(unittest.TestCase):
         directory.mkdir(parents=True)
         write_file(directory, "commits.json", json.dumps(asdict(commits)))
 
-    def test_no_run_prints_the_commits_the_runs_recorded_not_the_clones_now(self):
+    def test_each_route_is_measured_over_its_last_checkpoint_plus_the_margin(self):
+        self.main()
+        self.assertEqual(self.cuts, [31, 31, 35, 35])
+        self.cuts.clear()
+        self.main("--no-run", "--margin", "75")
+        self.assertEqual(self.cuts, [91, 91, 95, 95])
+
+    def test_no_run_reads_the_commits_of_both_runs(self):
         for route in ("title", "menu"):
             self.record("base", route, Commits("6b81b6e", "caf12a2"))
-            self.record("now", route, Commits("788571c-dirty", "b848158"))
+            self.record("base", f"unpaced-{route}", Commits("6b81b6e", "8fabc65"))
+        _, out, _ = self.main("--no-run")
+        self.assertIn("base: /a/build, Dragoon 6b81b6e, gcn-recomp caf12a2 and 8fabc65\n", out)
+
+    def test_no_run_without_unpaced_runs_reads_the_real_time_runs_commits(self):
+        self.unpaced = False
+        for route in ("title", "menu"):
+            self.record("base", route, Commits("6b81b6e", "caf12a2"))
+        _, out, _ = self.main("--no-run")
+        self.assertIn("base: /a/build, Dragoon 6b81b6e, gcn-recomp caf12a2\n", out)
+
+    def test_no_run_prints_the_commits_the_runs_recorded_not_the_clones_now(self):
+        for route in ("title", "menu"):
+            for run in (route, f"unpaced-{route}"):
+                self.record("base", run, Commits("6b81b6e", "caf12a2"))
+                self.record("now", run, Commits("788571c-dirty", "b848158"))
         _, out, _ = self.main("--no-run")
         self.assertIn("base: /a/build, Dragoon 6b81b6e, gcn-recomp caf12a2\n", out)
         self.assertIn("now: /b/build, Dragoon 788571c-dirty, gcn-recomp b848158\n", out)
@@ -158,6 +194,7 @@ class MainTest(unittest.TestCase):
         self.assertIn("base: /a/build, Dragoon not recorded, gcn-recomp not recorded\n", out)
 
     def test_no_run_gives_every_commit_when_the_runs_differ(self):
+        self.unpaced = False
         self.record("base", "title", Commits("6b81b6e", "caf12a2"))
         self.record("base", "menu", Commits("6b81b6e", "8fabc65"))
         _, out, _ = self.main("--no-run")

@@ -1,10 +1,11 @@
-"""What one scorecard run's recordings and log say, scored with audio_clicks.py's functions.
+"""What a route's two scorecard runs say, scored with audio_clicks.py's functions.
 
-The mixer stage is the DMA's blocks before the audio ring (GCN_AIDWAV, raw 32 kHz stereo),
-with the clicks within 2 samples of a 160-sample block join counted. The device stage is what
-went to the device (GCN_WAV), with the clicks within 2 samples of a ring cut counted when the
-build logs its cuts. The log gives the ring's cuts and underruns, the highest main L peak
-before the output clamp and the samples the clamp changed, when the build prints them. A
+The mixer stage is the unpaced run's DMA blocks before the audio ring (GCN_AIDWAV, raw 32 kHz
+stereo), cut to the route's seconds, with the clicks within 2 samples of a 160-sample block
+join counted. Its log gives the highest main L peak before the output clamp and the samples
+the clamp changed, from the [ax] lines whose list count is within the cut. The device stage is
+the real-time run's GCN_WAV, what went to the device, with the clicks within 2 samples of a
+ring cut counted when the build logs its cuts. Its log gives the ring's cuts and underruns. A
 value the build doesn't record or print is None.
 """
 from __future__ import annotations
@@ -13,15 +14,16 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from audio_clicks import Report, analyse, read_raw, read_wav
+from audio_clicks import Recording, Report, analyse, read_raw, read_wav
+from scorecard_runs import Runs
 
 MIXER_RATE = 32000
-BLOCK = 160  # samples in one of the DMA's 5 ms blocks
+BLOCK = 160  # samples in one of the DMA's 5 ms blocks, and in one AX command list's output
 
 RING_FILL = re.compile(r"^\[ring\] fill=\d+ avg=\S+ trim=\S+ underruns=(\d+)(?: cuts=(\d+))?$", re.M)
 RING_CUT = re.compile(r"^\[ring\] cut \d+ frames at output frame (\d+)$", re.M)
-AX_PEAK = re.compile(r"^\[ax\] frames=\d+ voices\(running, last frame\)=\d+ peak=(\d+) out=[0-9A-F]+$", re.M)
-AX_CLAMP = re.compile(r"^\[ax\] bus list=\d+ .* clipped=(\d+)$", re.M)
+AX_PEAK = re.compile(r"^\[ax\] frames=(\d+) voices\(running, last frame\)=\d+ peak=(\d+) out=[0-9A-F]+$", re.M)
+AX_CLAMP = re.compile(r"^\[ax\] bus list=(\d+) .* clipped=(\d+)$", re.M)
 
 
 @dataclass
@@ -78,23 +80,44 @@ def ring(log: str) -> Ring:
     return Ring(int(fills[-1][0]) if fills else None, cuts if logs_cuts else None)
 
 
-def peak(log: str) -> int | None:
-    found = [int(p) for p in AX_PEAK.findall(log)]
+def peak(log: str, lists: int) -> int | None:
+    """The highest peak the [ax] frames lines give up to LISTS command lists."""
+    found = [int(p) for n, p in AX_PEAK.findall(log) if int(n) <= lists]
     return max(found) if found else None
 
 
-def clamped(log: str) -> int | None:
-    found = [int(c) for c in AX_CLAMP.findall(log)]
+def clamped(log: str, lists: int) -> int | None:
+    """The clamp counts of the [ax] bus lines up to LISTS command lists, summed."""
+    found = [int(c) for n, c in AX_CLAMP.findall(log) if int(n) <= lists]
     return sum(found) if found else None
 
 
-def measure(log: Path, mixer: Path, device: Path) -> Score:
-    text = log.read_text(errors="replace")
+def cut(rec: Recording, seconds: float, path: Path) -> Recording:
+    """The first SECONDS of the recording, refused if it's shorter."""
+    frames = round(seconds * rec.rate)
+    if rec.frames < frames:
+        raise ValueError(f"{path}: {rec.frames / rec.rate:.2f} s recorded, short of the {seconds:g} s "
+                         f"the mixer stage scores")
+    return Recording(rec.rate, [ch[:frames] for ch in rec.channels])
+
+
+def measure(runs: Runs, mixer_seconds: float) -> Score:
+    """The device stage and the ring from the real-time run, the mixer stage from the first
+    MIXER_SECONDS of the unpaced run's blocks."""
+    text = runs.paced.log.read_text(errors="replace")
     rg = ring(text)
-    mixer_stage = stage(analyse(read_raw(mixer, MIXER_RATE), 0, period=BLOCK)) if mixer.exists() else None
+    device = runs.paced.device
     device_stage = stage(analyse(read_wav(device), 0, marks=rg.cut_frames)) if device.exists() else None
+    mixer_stage = mixer_peak = mixer_clamped = None
+    if runs.unpaced is not None:
+        mixer, lists = runs.unpaced.mixer, round(mixer_seconds * MIXER_RATE) // BLOCK
+        unpaced_text = runs.unpaced.log.read_text(errors="replace")
+        mixer_peak, mixer_clamped = peak(unpaced_text, lists), clamped(unpaced_text, lists)
+        if mixer.exists():
+            rec = cut(read_raw(mixer, MIXER_RATE), mixer_seconds, mixer)
+            mixer_stage = stage(analyse(rec, 0, period=BLOCK))
     return Score(mixer_stage, device_stage, None if rg.cut_frames is None else len(rg.cut_frames),
-                 rg.underruns, peak(text), clamped(text))
+                 rg.underruns, mixer_peak, mixer_clamped)
 
 
 def _sum(values: list) -> int | float | None:

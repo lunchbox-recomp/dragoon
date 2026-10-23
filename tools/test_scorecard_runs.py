@@ -32,6 +32,7 @@ class Clone(unittest.TestCase):
         executable(self.clone / "build", "dragoon")
         self.build = Build("base", self.clone / "build")
         self.out = self.clone / "build" / "probe" / "scorecard-air-ride-race"
+        self.unpaced = self.clone / "build" / "probe" / "scorecard-unpaced-air-ride-race"
 
 
 class CheckBuildTest(Clone):
@@ -83,6 +84,17 @@ class ProbeArgsTest(Clone):
         self.assertEqual(scorecard_runs.probe_args(self.build, RACE)[3],
                          str(Path(scorecard_runs.__file__).resolve().parents[1] / "tests" / "routes" / "air-ride-race.txt"))
 
+    def test_an_unpaced_run_plays_as_long_and_records_only_the_dmas_blocks(self):
+        self.assertEqual(scorecard_runs.probe_args(self.build, RACE, unpaced=True), [
+            str(self.clone / "tools" / "probe.sh"), "scorecard-unpaced-air-ride-race", "115",
+            str(routes.route_file("air-ride-race")), "6000", "GCN_DUMP_RANGE=6000",
+            f"GCN_AIDWAV={self.unpaced / 'mixer.raw'}", "GCN_AXSTATS=1", "--pads=4"])
+
+
+def frame_at(directory: Path, frame: int) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    write_file(directory, f"frame_{frame:05d}.png", b"")
+
 
 class PlayTest(Clone):
     def play(self, run: mock.Mock, *margin: int) -> mock.Mock:
@@ -94,41 +106,52 @@ class PlayTest(Clone):
             self.result = scorecard_runs.play(self.build, RACE, *margin, commits=COMMITS)
         return trash
 
-    def reaches(self, frame: int = 6000):
-        def run(*args, **kwargs):
-            self.out.mkdir(parents=True, exist_ok=True)
-            write_file(self.out, f"frame_{frame:05d}.png", b"")
+    def reaches(self, frame: int = 6000, unpaced_frame: int = 6000):
+        def run(args, **kwargs):
+            unpaced = args[1].startswith("scorecard-unpaced-")
+            frame_at(self.unpaced if unpaced else self.out, unpaced_frame if unpaced else frame)
         return mock.Mock(side_effect=run)
 
     def test_runs_the_clones_probe_from_the_clone_with_sdls_dummy_audio_driver(self):
         run = self.reaches()
         self.play(run)
-        self.assertEqual(run.call_args.args[0], scorecard_runs.probe_args(self.build, RACE))
-        self.assertEqual(run.call_args.kwargs["cwd"], self.clone)
-        self.assertEqual(run.call_args.kwargs["env"]["SDL_AUDIO_DRIVER"], "dummy")
-        self.assertTrue(run.call_args.kwargs["check"])
+        for call in run.call_args_list:
+            self.assertEqual(call.kwargs["cwd"], self.clone)
+            self.assertEqual(call.kwargs["env"]["SDL_AUDIO_DRIVER"], "dummy")
+            self.assertTrue(call.kwargs["check"])
 
-    def test_plays_for_the_margin_it_is_given(self):
+    def test_plays_in_real_time_then_unpaced(self):
+        run = self.reaches()
+        self.play(run)
+        self.assertEqual([c.args[0] for c in run.call_args_list],
+                         [scorecard_runs.probe_args(self.build, RACE),
+                          scorecard_runs.probe_args(self.build, RACE, unpaced=True)])
+
+    def test_plays_both_for_the_margin_it_is_given(self):
         run = self.reaches()
         self.play(run, 60)
-        self.assertEqual(run.call_args.args[0], scorecard_runs.probe_args(self.build, RACE, 60))
+        self.assertEqual([c.args[0][2] for c in run.call_args_list], ["160", "160"])
 
-    def test_returns_the_runs_files(self):
+    def test_returns_both_runs_files(self):
         self.play(self.reaches())
-        self.assertEqual((self.result.mixer, self.result.device, self.result.log),
+        paced, unpaced = self.result.paced, self.result.unpaced
+        self.assertEqual((paced.mixer, paced.device, paced.log),
                          (self.out / "mixer.raw", self.out / "device.wav", self.out / "stdout.txt"))
+        self.assertEqual((unpaced.mixer, unpaced.log), (self.unpaced / "mixer.raw", self.unpaced / "stdout.txt"))
 
-    def test_leaves_the_commits_it_was_given_in_the_runs_directory(self):
+    def test_leaves_the_commits_it_was_given_in_each_runs_directory(self):
         self.play(self.reaches())
-        self.assertEqual(json.loads((self.out / "commits.json").read_text()),
-                         {"dragoon": "6b81b6e-dirty", "gcn_recomp": "caf12a2"})
-        self.assertEqual(scorecard_runs.read_commits(self.result), COMMITS)
+        for directory in (self.out, self.unpaced):
+            self.assertEqual(json.loads((directory / "commits.json").read_text()),
+                             {"dragoon": "6b81b6e-dirty", "gcn_recomp": "caf12a2"})
+        self.assertEqual(scorecard_runs.read_commits(self.result.unpaced), COMMITS)
 
-    def test_trashes_an_earlier_run_before_playing_so_the_card_is_blank(self):
+    def test_trashes_each_earlier_run_before_playing_so_the_card_is_blank(self):
         self.out.mkdir(parents=True)
+        self.unpaced.mkdir(parents=True)
         trash = self.play(self.reaches())
-        trash.assert_called_once_with(self.out)
-        self.assertEqual([name for name, _, _ in self.calls.mock_calls], ["trash", "run"])
+        self.assertEqual(trash.call_args_list, [mock.call(self.out), mock.call(self.unpaced)])
+        self.assertEqual([name for name, _, _ in self.calls.mock_calls], ["trash", "run", "trash", "run"])
 
     def test_trashes_nothing_when_there_is_no_earlier_run(self):
         self.play(self.reaches()).assert_not_called()
@@ -138,20 +161,52 @@ class PlayTest(Clone):
         with self.assertRaisesRegex(ValueError, "base air-ride-race: probe.sh exited 2"):
             self.play(run)
 
+    def test_a_failed_unpaced_probe_says_so(self):
+        def run(args, **kwargs):
+            if args[1].startswith("scorecard-unpaced-"):
+                raise subprocess.CalledProcessError(2, "probe")
+            frame_at(self.out, 6000)
+        with self.assertRaisesRegex(ValueError, "base air-ride-race unpaced: probe.sh exited 2"):
+            self.play(mock.Mock(side_effect=run))
+
     def test_a_run_that_stops_short_of_the_last_checkpoint_is_refused(self):
-        with self.assertRaisesRegex(ValueError, "base air-ride-race: .* reached frame 6000"):
+        with self.assertRaisesRegex(ValueError, "base air-ride-race: .*scorecard-air-ride-race reached frame 6000"):
             self.play(self.reaches(4200))
+        with self.assertRaisesRegex(ValueError, "base air-ride-race: .*scorecard-unpaced-air-ride-race reached"):
+            self.play(self.reaches(6000, 4200))
 
 
 class FinishedTest(Clone):
     def test_an_earlier_run_that_reached_the_last_checkpoint_is_measured(self):
-        self.out.mkdir(parents=True)
-        write_file(self.out, "frame_06000.png", b"")
+        frame_at(self.out, 6000)
         self.assertEqual(scorecard_runs.finished(self.build, RACE).directory, self.out)
 
     def test_no_earlier_run_is_refused(self):
         with self.assertRaisesRegex(ValueError, "no run in .*scorecard-air-ride-race reached frame 6000"):
             scorecard_runs.finished(self.build, RACE)
+
+
+class LastRunsTest(Clone):
+    def test_both_runs_when_both_reached_the_last_checkpoint(self):
+        frame_at(self.out, 6000)
+        frame_at(self.unpaced, 6000)
+        got = scorecard_runs.last_runs(self.build, RACE)
+        self.assertEqual((got.paced.directory, got.unpaced.directory), (self.out, self.unpaced))
+
+    def test_a_build_with_no_unpaced_run_has_none(self):
+        frame_at(self.out, 6000)
+        self.assertIsNone(scorecard_runs.last_runs(self.build, RACE).unpaced)
+
+    def test_an_unpaced_run_that_stopped_short_is_refused(self):
+        frame_at(self.out, 6000)
+        frame_at(self.unpaced, 4200)
+        with self.assertRaisesRegex(ValueError, "scorecard-unpaced-air-ride-race reached frame 6000"):
+            scorecard_runs.last_runs(self.build, RACE)
+
+    def test_no_real_time_run_is_refused_whatever_the_unpaced_one(self):
+        frame_at(self.unpaced, 6000)
+        with self.assertRaisesRegex(ValueError, "scorecard-air-ride-race reached frame 6000"):
+            scorecard_runs.last_runs(self.build, RACE)
 
 
 class ReadCommitsTest(Clone):

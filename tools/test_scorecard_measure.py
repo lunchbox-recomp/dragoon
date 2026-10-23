@@ -8,6 +8,7 @@ from pathlib import Path
 
 import scorecard_measure
 from scorecard_measure import Score, Stage, measure, total
+from scorecard_runs import Run, Runs
 from testutil import write_file
 
 BASE_LOG = """\
@@ -81,41 +82,88 @@ class LogTest(unittest.TestCase):
         self.assertIsNone(got.cut_frames)
 
     def test_peak_is_the_highest_main_l_peak(self):
-        self.assertEqual(scorecard_measure.peak(BASE_LOG), 35461)
-        self.assertIsNone(scorecard_measure.peak("[ring] fill=1 avg=1 trim=+0.000% underruns=0\n"))
+        self.assertEqual(scorecard_measure.peak(BASE_LOG, 1200), 35461)
+        self.assertIsNone(scorecard_measure.peak("[ring] fill=1 avg=1 trim=+0.000% underruns=0\n", 1200))
 
     def test_the_clamp_count_sums_every_bus_line(self):
-        self.assertEqual(scorecard_measure.clamped(CURRENT_LOG), 27)
+        self.assertEqual(scorecard_measure.clamped(CURRENT_LOG, 1200), 27)
 
     def test_a_build_with_no_bus_lines_logs_no_clamp_count(self):
-        self.assertIsNone(scorecard_measure.clamped(BASE_LOG))
+        self.assertIsNone(scorecard_measure.clamped(BASE_LOG, 1200))
+
+    def test_lines_past_the_list_count_are_left_out(self):
+        self.assertEqual(scorecard_measure.peak(BASE_LOG, 799), 0)
+        self.assertEqual(scorecard_measure.peak(BASE_LOG, 800), 35461)
+        self.assertEqual(scorecard_measure.clamped(CURRENT_LOG, 800), 22)
+        self.assertIsNone(scorecard_measure.clamped(CURRENT_LOG, 399))
 
 
 class MeasureTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = Path(tmp.name) / "scorecard-title"
+        self.unpaced_dir = Path(tmp.name) / "scorecard-unpaced-title"
+        self.dir.mkdir()
+        self.unpaced_dir.mkdir()
         self.log = write_file(self.dir, "stdout.txt", CURRENT_LOG)
-        self.mixer = self.dir / "mixer.raw"
+        write_file(self.unpaced_dir, "stdout.txt", CURRENT_LOG.replace("clipped=22", "clipped=40"))
+        self.mixer = self.unpaced_dir / "mixer.raw"
         self.device = self.dir / "device.wav"
+        self.runs = Runs(Run(self.dir), Run(self.unpaced_dir))
+
+    def measure(self, seconds: float = 1.0) -> Score:
+        return measure(self.runs, seconds)
 
     def test_mixer_clicks_on_a_block_join_are_counted_apart_from_the_rest(self):
         # One splice on the join at 20 blocks and one half a block off a join.
         x = spliced(tone(64000, 32000), 20 * 160, 100 * 160 + 80)
         self.mixer.write_bytes(pcm(x, x))
-        got = measure(self.log, self.mixer, self.device).mixer
+        got = self.measure().mixer
         self.assertEqual(got.clicks, 2)
         self.assertEqual(got.on_joins, 1)
         self.assertAlmostEqual(got.joins_by_chance, 2 * 5 / 160)
-        self.assertAlmostEqual(got.seconds, len(x) / 32000)
-        self.assertAlmostEqual(got.per_minute, 2 * 60 / (len(x) / 32000))
+        self.assertAlmostEqual(got.seconds, 1.0)
+        self.assertAlmostEqual(got.per_minute, 2 * 60)
         self.assertIsNone(got.on_cuts)
+
+    def test_the_mixer_stage_is_the_unpaced_runs_cut_to_the_seconds_given(self):
+        # The real-time run's blocks splice, and the unpaced run's splice only past 0.5 s.
+        early = spliced(tone(32000, 32000), 4000)
+        write_file(self.dir, "mixer.raw", pcm(early, early))
+        x = spliced(tone(32000, 32000), 20000)
+        self.mixer.write_bytes(pcm(x, x))
+        self.assertEqual(self.measure(0.5).mixer.clicks, 0)
+        self.assertAlmostEqual(self.measure(0.5).mixer.seconds, 0.5)
+        self.assertEqual(self.measure(0.9).mixer.clicks, 1)
+
+    def test_an_unpaced_recording_shorter_than_the_cut_is_refused(self):
+        x = tone(16000, 32000)
+        self.mixer.write_bytes(pcm(x, x))
+        with self.assertRaisesRegex(ValueError, r"mixer.raw: 0.50 s recorded, short of the 1 s the mixer stage"):
+            self.measure()
+
+    def test_peak_and_clamp_come_from_the_unpaced_log_within_the_cut(self):
+        # With no recording only the log is read. A second is 200 lists, and the real-time
+        # run's log has a clamp count of 22 where the unpaced run's has 40.
+        for seconds, want in ((6.0, (35461, 45)), (4.0, (35461, 40)), (2.0, (0, 0)), (1.0, (None, None))):
+            with self.subTest(seconds=seconds):
+                score = self.measure(seconds)
+                self.assertEqual((score.peak, score.clamped), want)
+
+    def test_no_unpaced_run_leaves_the_mixer_stage_and_its_log_values_out(self):
+        self.runs.unpaced = None
+        x = spliced(tone(96000, 48000), 30000)
+        write_wav(self.device, x, x)
+        score = self.measure()
+        self.assertIsNone(score.mixer)
+        self.assertEqual((score.peak, score.clamped), (None, None))
+        self.assertEqual((score.device.clicks, score.underruns, score.cuts), (1, 2, 1))
 
     def test_device_clicks_on_a_logged_cut_are_counted(self):
         x = spliced(tone(96000, 48000), 30000, 70000)
         write_wav(self.device, x, x)
-        score = measure(self.log, self.mixer, self.device)
+        score = self.measure()
         self.assertEqual(score.device.clicks, 2)
         self.assertEqual(score.device.on_cuts, 1)
         self.assertAlmostEqual(score.device.cuts_by_chance, 2 * 5 / len(x))
@@ -130,7 +178,7 @@ class MeasureTest(unittest.TestCase):
                    CURRENT_LOG.replace(one_cut, one_cut + "[ring] cut 3200 frames at output frame 30002\n"))
         x = spliced(tone(96000, 48000), 30000)
         write_wav(self.device, x, x)
-        score = measure(self.log, self.mixer, self.device)
+        score = self.measure()
         self.assertEqual(score.cuts, 2)
         self.assertEqual(score.device.clicks, 1)
         self.assertEqual(score.device.on_cuts, 1)
@@ -140,37 +188,37 @@ class MeasureTest(unittest.TestCase):
         write_file(self.dir, "stdout.txt", BASE_LOG)
         x = spliced(tone(96000, 48000), 30000)
         write_wav(self.device, x, x)
-        score = measure(self.log, self.mixer, self.device)
+        score = self.measure()
         self.assertEqual(score.device.clicks, 1)
         self.assertIsNone(score.device.on_cuts)
         self.assertIsNone(score.cuts)
         self.assertEqual(score.underruns, 3)
-        self.assertIsNone(score.clamped)
+
+    def test_the_ring_comes_from_the_real_time_log_alone(self):
+        write_file(self.unpaced_dir, "stdout.txt", BASE_LOG)
+        score = self.measure()
+        self.assertEqual((score.underruns, score.cuts), (2, 1))
 
     def test_gaps_and_clipped_runs_are_counted(self):
         x = tone(48000, 48000) + [0] * 480 + tone(48000, 48000, amp=1000)
         x[70000:70003] = [32767] * 3
         write_wav(self.device, x, x)
-        got = measure(self.log, self.mixer, self.device).device
+        got = self.measure().device
         self.assertEqual(got.gaps, 1)
         self.assertEqual(got.clipped_runs, 2)  # one on each channel
         self.assertEqual(got.clipped_samples, 6)
 
-    def test_the_log_gives_peak_and_clamp(self):
-        score = measure(self.log, self.mixer, self.device)
-        self.assertEqual((score.peak, score.clamped, score.underruns), (35461, 27, 2))
-
     def test_a_missing_recording_is_a_stage_not_recorded(self):
         x = tone(32000, 32000)
         self.mixer.write_bytes(pcm(x, x))
-        score = measure(self.log, self.mixer, self.device)
+        score = self.measure()
         self.assertIsNotNone(score.mixer)
         self.assertIsNone(score.device)
 
     def test_an_empty_recording_is_an_error(self):
         self.mixer.write_bytes(b"")
         with self.assertRaisesRegex(ValueError, "no samples"):
-            measure(self.log, self.mixer, self.device)
+            self.measure()
 
 
 def stage(seconds: float, clicks: int, **kw) -> Stage:
