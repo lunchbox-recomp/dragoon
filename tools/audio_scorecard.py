@@ -24,7 +24,7 @@ The two stages are measured with audio_clicks.py's functions, each from the run 
 
   mixer   The unpaced run's GCN_AIDWAV, the DMA's blocks before the ring (raw, 32 kHz), cut
           to the route's last checkpoint plus --margin seconds. Unpaced, the game's time
-          doesn't follow the host's, so two runs of one build give the same blocks. A
+          doesn't follow the host's, so two runs of one build should give the same blocks. A
           real-time run's clock catches up when the host falls behind, and then the DMA plays
           a block twice, presses land on other frames and sounds move, so its blocks differ
           from run to run. Clicks a minute, the clicks within 2 samples of a 160-sample block

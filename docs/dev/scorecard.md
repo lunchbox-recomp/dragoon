@@ -6,7 +6,8 @@ five routes and counts clicks, gaps and clipping before the audio ring and after
 baseline is gcn-recomp `caf12a2`, with none of the audio work. Current is gcn-recomp `b848158`.
 
 The tool scores the two stages from different runs. The mixer stage, every block the DMA
-delivered, comes from an unpaced run, which gives the same samples every time. The device
+delivered, comes from an unpaced run, whose game time doesn't wait on the host. Each pair of
+unpaced runs compared so far gave the same samples, as How it was measured says. The device
 stage, what the ring handed the device, comes from a real-time run, since the ring's pace is
 part of what it measures. Passes 1 and 2 on 2026-10-22 scored both stages from real-time runs
 of both builds. Pass 3, the same day, scored current the new way. No pass of the tool has an

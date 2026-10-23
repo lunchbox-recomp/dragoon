@@ -1,7 +1,7 @@
 """How the audio scorecard plays a route on a build: two probe.sh runs. The unpaced one records
-the DMA's blocks (GCN_AIDWAV) for the mixer stage, and two unpaced runs of one build give the
-same blocks. The --real-time one records what went to the device (GCN_WAV) for the device stage,
-and the DMA's blocks again for tools that look at its catch-up. Both log GCN_AXSTATS."""
+the DMA's blocks (GCN_AIDWAV) for the mixer stage, and two unpaced runs of one build should give
+the same blocks. The --real-time one records what went to the device (GCN_WAV) for the device
+stage, and the DMA's blocks again for tools that look at its catch-up. Both log GCN_AXSTATS."""
 from __future__ import annotations
 
 import json
