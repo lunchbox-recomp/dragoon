@@ -240,8 +240,10 @@ tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes
 ```
 
 A later engine goes in a clone of its own and gets a label of its own, as in
-`next=/path/to/that/build`. The tool prints each clone's Dragoon and gcn-recomp commits. The
-recordings stay in each clone's `build/probe/scorecard-ROUTE/` and are never committed.
+`next=/path/to/that/build`. The tool reads each clone's Dragoon and gcn-recomp commits before
+the first route plays, prints them and leaves them in each run's `commits.json`, which
+`--no-run` reads back. The recordings stay in each clone's `build/probe/scorecard-ROUTE/` and
+are never committed.
 
 | | Commit |
 |---|---|
