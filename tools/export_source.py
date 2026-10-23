@@ -117,11 +117,16 @@ def changes(repo: Path, *extra: str) -> None:
 
 
 def archive(repo: Path, commit: str, dest: Path) -> None:
-    tar = subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", commit],
-                         capture_output=True, check=True).stdout
-    dest.mkdir(exist_ok=True)
-    subprocess.run([TAR, "-x", "-f", "-", "-C", str(dest)], input=tar, capture_output=True,
-                   check=True)
+    """Extract COMMIT of REPO into DEST. Raises ValueError with git's or tar's own message."""
+    try:
+        tar = subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", commit],
+                             capture_output=True, check=True).stdout
+        dest.mkdir(exist_ok=True)
+        subprocess.run([TAR, "-x", "-f", "-", "-C", str(dest)], input=tar, capture_output=True,
+                       check=True)
+    except subprocess.CalledProcessError as e:
+        raise ValueError(f"{' '.join(e.cmd)} failed: "
+                         f"{e.stderr.decode(errors='replace').strip()}") from None
 
 
 def clear(out: Path, remove: bool) -> None:

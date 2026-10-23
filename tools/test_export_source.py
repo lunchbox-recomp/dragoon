@@ -1,6 +1,7 @@
 import hashlib
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,6 +21,15 @@ gcn_add_game(
   DOL_SHA1 {SHA1}
   SYMBOLS ${{CMAKE_SOURCE_DIR}}/analysis/symbols.txt
   FPS 60)
+"""
+# Extracts like the system tar the first time it runs and fails the second, as a full disk does.
+FAKE_TAR = """#!{python}
+import os, subprocess, sys
+if os.path.exists({marker!r}):
+    print("tar: No space left on device", file=sys.stderr)
+    sys.exit(1)
+open({marker!r}, "w").close()
+sys.exit(subprocess.run([{tar!r}, *sys.argv[1:]]).returncode)
 """
 
 
@@ -138,19 +148,36 @@ class RefusalTest(ExportTestCase):
         self.assert_refused("gcn_add_game")
 
     def export_failing_on_the_engine(self) -> tuple[int, str, str]:
-        """Export with the second git archive, the engine's, failing as a full disk would."""
-        real, calls = export_source.archive, []
-
-        def archive(repo: Path, commit: str, dest: Path) -> None:
-            calls.append(dest)
-            if len(calls) == 2:
-                raise subprocess.CalledProcessError(1, "tar", stderr=b"No space left on device")
-            real(repo, commit, dest)
-
-        with mock.patch.object(export_source, "archive", archive):
+        """Export with the second tar, the engine's, failing as a full disk would."""
+        marker = self.dir / "first tar ran"
+        fake = write_file(self.dir, "fake tar", FAKE_TAR.format(
+            python=sys.executable, tar=export_source.TAR, marker=str(marker)))
+        fake.chmod(0o755)
+        with mock.patch.object(export_source, "TAR", str(fake)):
             result = self.export()
-        self.assertEqual(len(calls), 2)  # the first tree was written by then
+        self.assertTrue(marker.exists())  # the first tree was written by then
         return result
+
+    def test_a_failing_tar_says_why(self):
+        code, out, err = self.export_failing_on_the_engine()
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("tar: No space left on device", err)
+        self.assertNotIn("non-zero exit status", err)
+
+    def test_a_failing_git_archive_says_why(self):
+        real = subprocess.run
+
+        def run(cmd, *args, **kwargs):
+            if cmd[3:4] == ["archive"] and Path(cmd[2]).name == "gcn-recomp":
+                raise subprocess.CalledProcessError(128, cmd, stderr=b"fatal: not a tree object\n")
+            return real(cmd, *args, **kwargs)
+
+        with mock.patch.object(export_source.subprocess, "run", run):
+            code, out, err = self.export()
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("fatal: not a tree object", err)
+        self.assertNotIn("non-zero exit status", err)
+        self.assertFalse(self.out.exists())
 
     def test_a_failure_part_way_leaves_no_out_and_the_next_run_works(self):
         self.assertEqual(self.export_failing_on_the_engine()[0], 2)
