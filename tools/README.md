@@ -49,6 +49,22 @@ framediff takes a tolerance. frame_hashes is an exact check against committed go
 tools/framediff.py build/probe/before build/probe/after --tolerance 3 --budget 0.001
 ```
 
+## drawlog.py
+
+Which cameras does a frame draw through, and what aspect does each hold? It reads a run's `stdout.txt`. The draws come from `GCN_DRAWLOG=N` with `GCN_DRAWLOG_VERBOSE=1`, and the cameras and the render callbacks that use them come from `DRAGOON_CENSUS=1`.
+
+`cameras` prints one line per projection and viewport the frame draws through, in draw order, with its aspect (or orthographic frame), the viewport's aspect over the projection's and the draw count. The census cameras that match follow, with their stored aspect, the callbacks that set them and the ones that drew through them, by name with `--symbols analysis/symbols.txt`. `--frame N` reads only frame N's census. Cameras that drew nothing come last.
+
+`aspects` lists each perspective camera's stored aspect from one frame to another, with the frames it held it. It exits 1 when one changed within its viewport, which is how a widening that compounds frame on frame would show.
+
+```
+tools/probe.sh race 25 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
+tools/drawlog.py cameras build/probe/race/stdout.txt --frame 4200 --symbols analysis/symbols.txt
+tools/drawlog.py aspects build/probe/race/stdout.txt --from 3600 --to 4199
+```
+
+It exits 2 when the log lacks the lines a command needs, naming the setting that makes them.
+
 ## shader_cache.py
 
 How many shaders does a cache or key list hold, and how many are new? It reads `saves/shaders.bin` (magic `WRSC`) and key lists (magic `GCSK`). The key size comes from the format word, and a magic or key size it doesn't know is refused. `count` prints the format, the record count and the distinct key count, and says how many trailing bytes it ignored (a record a kill cut off). `diff` prints how many distinct keys in NEW aren't in OLD and their share of NEW, and refuses two files in different formats. It counts and never lists keys.
