@@ -151,23 +151,34 @@ route. The course select's setup (`fn_8003C114` in the generated C, its call at 
 0x8003C21C) puts a locked entry in that slot unless `fn_8000C0E0(8)` says course 8 is open. In
 the wowjinxy/KAR decomp that function asks
 `ClearChecker_CheckUnlocked(0, 0x22)` (`src/kar/gm/gmautodemo.c:2902`), the Air Ride
-checklist reward whose clear kind is 0 (`src/kar/gm/gmclearchecker.c:77`).
+checklist reward whose clear kind is 0 (`src/kar/gm/gmclearchecker.c:77`). In LAN play
+(`kar_shadow__near_8007b650` in `lbnet.c`) it tests bit 0x22 of a bit array at 0x805359D8 +
+0xD50 instead (`kar_gmglobal__near_80007e34`, `gmautodemo.c:2899-2900`).
 
 Clear kind 0 is marked once a running total reaches 100 (`kar_gmclearchecker__near_8004ac34`,
-`src/kar/gm/gmclearchecker_8004a648.c:346`). The total is a saved count plus one per-player
-count for the race in progress, kept at 0x80536240 (`fn_8000B1EC`, `gmautodemo.c:2326`). The
-attract demo skips course 8 on the same check (`gmautodemo.c:4141`).
+`src/kar/gm/gmclearchecker_8004a648.c:346`). That total is the value at 0x80536834
+(`clearchecker_total_0`) plus a lap count for each racer slot in the race in progress, kept at
+0x80536240 (`fn_8000B1EC`, `gmautodemo.c:2326`). The decomp adds the counts of every slot whose
+kind is 0, plus kind 1 when the race mode is 1 (`gmclearchecker_8004a648.c:334`). Whether the
+value at 0x80536834 reaches the memory card wasn't checked. The attract demo skips course 8 on the
+same check (`gmautodemo.c:4141`).
 
 RAM dumps taken with `GCN_RAM_DUMP_AT` show what's counted. On the race route each racer's
-count went up by one as it finished a lap, and the saved total at 0x80536834 went from 0 before
-the race to 3 after it. Celestial Valley's route ended with every count at 2 and the saved
-total at 2.
+count went up by one as it finished a lap, and the running total at 0x80536834 went from 0
+before the race to 3 after it. Celestial Valley's route ended with every count at 2 and the
+running total at 2. On these one-player routes only Kirby's laps counted, not the CPUs'. Other
+players at the console likely count too, since the decomp adds up the racers of one kind. A race
+with a second player wasn't run.
 
-Only Kirby's laps count toward the total, so a blank card needs 100 Air Ride laps before the box
-is marked. Reaching 100 sets bit 0 of the box's flags (`gmclearchecker.c:211`), while the course
-select's check reads bit 3 (`gmclearchecker.c:162`). The code that sets bit 3 isn't decompiled, so
-whether the course opens at once or after the checklist screen shows the new box wasn't
-traced.
+A blank card needs 100 Air Ride laps before the box is marked. Reaching 100 sets bit 0 of the
+box's flags (`gmclearchecker.c:211`), while the course select's check reads bit 3
+(`gmclearchecker.c:162`). The code that sets bit 3 isn't decompiled. The only store of it found
+in the generated C is in the checklist screen's refresh,
+`kar_mnclearchecker_refresh_grid_tile_models` (`fn_8017DF5C`, `build/gen/recomp_041.c:1367-1373`,
+the store at 0x8017E008). It sets bit 3 only for a box whose flags already have bit 1 or 2
+(`& 0x6`), so the course most likely opens once that screen shows the box. The search covered
+only the functions that call the save getter (`fn_800076A0`), and the course wasn't opened in a
+run.
 
 The race runs at about 500 frames a second in the hidden window with `--fast`, 8 times the
 game's 60. That's 9,600 frames between frames 3600 and 13,200 in 19.3 s of wall time, with
