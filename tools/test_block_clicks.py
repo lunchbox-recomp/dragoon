@@ -139,6 +139,16 @@ class PlaceTest(unittest.TestCase):
         got = block_clicks.place(self.write(x, "1003 160 21223426 1 00571E00 1\n"))
         self.assertEqual((got.clicks, self.counts(got)["caught up"][:2]), (1, (1, 1)))
 
+    def test_a_click_just_before_the_first_block_is_placed_on_the_first_block(self):
+        # The first block starts at 1003 and the click is at 1001, so it falls in no block's
+        # own samples. It's placed on the first block, 2 samples before it, whatever the last
+        # block is.
+        x = tone(3200, RATE)
+        x[1002] += 6000
+        log = "1003 160 21223426 1 00571E00 1\n1163 160 21425926 0 00572080 1\n"
+        got = block_clicks.place(self.write(x, log))
+        self.assertEqual([p.offset for p in got.placed], [-2])
+
 
 class MainTest(unittest.TestCase):
     def setUp(self):
