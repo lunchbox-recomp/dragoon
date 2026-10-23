@@ -14,6 +14,7 @@ the rest is joined into one script.
 | `air-ride-race.txt` | An Air Ride race on Fantasy Meadows, past the countdown | 4200 |
 | `city-trial.txt` | City Trial, one player, the clock running | 3300 |
 | `city-trial-4p.txt` | City Trial, four players on ports 1 to 4, each steering its own way | 3480 |
+| `city-trial-2p.txt` | City Trial, two players on ports 1 and 2, in two views | 3480 |
 
 Run one with `tools/probe.sh`, which takes a route file in place of a script.
 
@@ -33,7 +34,8 @@ A route gives byte-identical frames from run to run on the same build, because g
 applies each press where the game reads the controller, at the frame the game has reached.
 Frames 4200 and 6000 of `air-ride-race.txt` matched across three runs in a row. Frames 3300
 and 4500 of `city-trial.txt` matched across two runs nine minutes apart, and frames 2700 and
-3300 of `city-trial-4p.txt` across two runs.
+3300 of `city-trial-4p.txt` across two runs. Frame 3480 of `city-trial-2p.txt` matched across
+two runs in a row.
 
 Before gcn-recomp fda6926 they didn't. Each press landed wherever the game was when the
 frontend's loop next looked, and two runs of `city-trial.txt` showed 4:54:10 and 4:54:11

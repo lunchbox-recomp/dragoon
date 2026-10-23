@@ -1,0 +1,11 @@
+# Blank memory card to City Trial with two players, on ports 1 and 2. Run with --pads=2.
+# city-trial-4p.txt with only ports 1 and 2 pressing. 2100 A on ports 1 and 2: both join.
+# 2400 A on ports 1 and 2: both OK. 2700 START: the city, in two views.
+# 3400: port 1 steers left and port 2 right for two seconds.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:DOWN:5,1400:DOWN:5,1500:A:5,1800:A:5,
+2100:A:5,2/2100:A:5,
+2400:A:5,2/2400:A:5,
+2700:START:5,
+3400:SL:120,2/3400:SR:120
