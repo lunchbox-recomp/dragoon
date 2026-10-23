@@ -1,0 +1,18 @@
+# Blank memory card through City Trial to its stadium and the stadium's results, one player
+# and three CPUs, with the clock cut to three minutes and the stadium fixed to Drag Race.
+# menu.txt, then 1300 DOWN, 1400 DOWN: City Trial. 1500 A: into it. 1800 DOWN, 1900 DOWN,
+# 2000 DOWN: Game Settings. 2100 A: into it. 2400 LEFT, 2500 LEFT: Time from 5 min to 3.
+# 2600 DOWN, 2700 DOWN: Stadium. 2800 RIGHT: Shuffle to Drag Race. 2900 B: back, keeping
+# the settings. 3100 UP, 3200 UP, 3300 UP: Start Game. 3400 A: into it. 3700 A: skip the
+# mode's movie. 4000 A: player 1 joins. 4300 START: the city. The clock runs out at frame
+# 15600 and the machine stats wait for A. 16200 A: past them. 16500 A: past the card that
+# names the stadium. Drag Race 3 runs from frame 16700, and its results wait for START from
+# frame 20400.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:DOWN:5,1400:DOWN:5,1500:A:5,
+1800:DOWN:5,1900:DOWN:5,2000:DOWN:5,2100:A:5,
+2400:LEFT:5,2500:LEFT:5,2600:DOWN:5,2700:DOWN:5,2800:RIGHT:5,2900:B:5,
+3100:UP:5,3200:UP:5,3300:UP:5,3400:A:5,
+3700:A:5,4000:A:5,4300:START:5,
+16200:A:5,16500:A:5
