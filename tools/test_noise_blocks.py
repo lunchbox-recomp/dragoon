@@ -74,7 +74,7 @@ class FindTest(unittest.TestCase):
         self.assertEqual(noise_blocks.find(rec(x, x)).noisy_blocks, 1)
 
     def test_noise_resampled_to_48_khz_is_flagged_in_far_fewer_blocks(self):
-        # The ring interpolates linearly to the device's 48 kHz, which leaves nothing above
+        # The ring interpolates linearly to the device's 48 kHz, which leaves little above
         # 16 kHz. That takes white noise from a ratio of about 1.41 to about 0.97, so most of
         # its blocks fall under the 1 that flags them and the rest sit close to it.
         x = noise(RATE, 30000, 6)
