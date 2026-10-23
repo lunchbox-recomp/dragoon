@@ -19,7 +19,10 @@ the host falls behind, and an unpaced run's never does. --list N prints the firs
 marked block (default 20), each with its offset in its block and the kinds it's on. --json
 prints the whole result.
 
-Exits 0 once it has read both files, 2 on a bad argument or a file it can't read.
+Exits 0 once it has read both files, 2 on a bad argument, a file it can't read or a block log
+whose last block ends more than a second from the recording's end, which can't be that
+recording's log. A killed run cuts the recording and its log at a 4096-byte boundary each, and
+that leaves the two ends a fraction of a second apart.
 """
 from __future__ import annotations
 
@@ -34,6 +37,7 @@ from aid_blocks import RATE, Block, log_path, plural, read_blocks
 from audio_clicks import JOIN_SLACK, analyse, read_raw
 
 KINDS = ("replayed", "caught up")
+LOG_SLACK = RATE  # samples a log's end may be from its recording's. 4096 bytes of log is up to 150 blocks
 
 
 @dataclass
@@ -94,6 +98,10 @@ def place(path: Path) -> Result:
     blocks = read_blocks(log_path(path))
     if not blocks:
         raise ValueError(f"{log_path(path)}: no blocks")
+    ends = blocks[-1].start + blocks[-1].length
+    if abs(ends - rec.frames) > LOG_SLACK:
+        raise ValueError(f"{log_path(path)}: its last block ends at {ends / RATE:.2f} s and {path} is "
+                         f"{rec.frames / RATE:.2f} s, so it isn't this recording's log")
     report = analyse(rec, 0)
     clicks = [round(c.at * RATE) for c in report.clicks]
     kinds = marked(blocks)

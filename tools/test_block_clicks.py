@@ -84,6 +84,24 @@ class PlaceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "mixer.raw.txt: no blocks"):
             block_clicks.place(self.write(x, ""))
 
+    def test_a_log_that_ends_far_from_the_recording_isnt_its_log(self):
+        x, _ = dma(400)  # 2 s
+        two_blocks = "0 160 21223426 0 00571E00 1\n160 160 21425926 0 00572080 1\n"
+        with self.assertRaisesRegex(ValueError, r"mixer\.raw\.txt: its last block ends at 0\.01 s and "
+                                                r".*mixer\.raw is 2\.00 s, so it isn't this recording's log"):
+            block_clicks.place(self.write(x, two_blocks))
+
+    def test_a_log_may_end_up_to_a_second_either_side_of_the_recording(self):
+        x, _ = dma(400)  # 64,000 samples
+        for ends, ok in ((32000, True), (31999, False), (96000, True), (96001, False)):
+            with self.subTest(ends=ends):
+                path = self.write(x, f"{ends - BLOCK} {BLOCK} 21223426 0 00571E00 1\n")
+                if ok:
+                    self.assertEqual(block_clicks.place(path).blocks, 1)
+                else:
+                    with self.assertRaisesRegex(ValueError, "isn't this recording's log"):
+                        block_clicks.place(path)
+
 
 class MainTest(unittest.TestCase):
     def setUp(self):
@@ -119,6 +137,14 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(len(err.splitlines()), 1)
         self.assertIn("mixer.raw.txt", err)
+
+    def test_a_log_from_another_run_exits_2_with_one_line(self):
+        write_file(self.dir, "mixer.raw.txt", "0 160 21223426 0 00571E00 1\n")
+        x, _ = dma(400)
+        self.path = write_file(self.dir, "mixer.raw", pcm(x, x))
+        code, out, err = run_main(block_clicks.main, str(self.path))
+        self.assertEqual((code, out, len(err.splitlines())), (2, "", 1))
+        self.assertIn("isn't this recording's log", err)
 
     def test_a_negative_list_exits_2(self):
         code, _, _ = run_main(block_clicks.main, str(self.path), "--list", "-1")

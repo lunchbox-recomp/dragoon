@@ -126,7 +126,7 @@ scorecard_runs.py plays a route on a build and scorecard_measure.py scores a rou
 
 ## block_clicks.py
 
-Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivered catching up? It reads a `GCN_AIDWAV` recording and the block log gcn-recomp writes beside it (`<file>.txt`). A replayed block has the same address as the block before, because the guest hadn't queued the next buffer. A caught-up block came while the clock caught up with the host, which only a `--real-time` run does. For each kind and for the two together it prints the blocks, the clicks in them or within 2 samples of either end, and the count chance would put there.
+Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivered catching up? It reads a `GCN_AIDWAV` recording and the block log gcn-recomp writes beside it (`<file>.txt`). A replayed block has the same address as the block before, because the guest hadn't queued the next buffer. A caught-up block came while the clock caught up with the host, which only a `--real-time` run does. For each kind and for the two together it prints the blocks, the clicks in them or within 2 samples of either end, and the count chance would put there. A block log whose last block ends more than a second from the recording's end can't be that recording's, and stops it with exit 2.
 
 ```
 tools/block_clicks.py build/probe/scorecard-menu/mixer.raw
