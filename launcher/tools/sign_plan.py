@@ -31,6 +31,8 @@ TOOLS = ("cmake", "ninja")  # bare executables in Contents/MacOS, signed with an
 # How long notarytool may wait unless --notary-timeout says otherwise. Apple finishes 98 percent
 # of submissions within 15 minutes.
 NOTARY_MINUTES = 30
+# The most --notary-timeout takes. subprocess.run raises OverflowError for a much longer wait.
+NOTARY_MAX_MINUTES = 24 * 60
 
 
 class Notary(NamedTuple):

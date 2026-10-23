@@ -18,7 +18,7 @@ APP is left as it is. The tool signs a copy in DIR, which must be empty or missi
      since it sometimes fails with Resource busy, and codesign -i signs it, with --timestamp
      or, ad hoc, --timestamp=none
   5  with the Team API key, notarytool submit --wait, which is cut off after --notary-timeout
-     minutes (30 unless given), then stapler staple on the DMG
+     minutes (30 unless given, a day at most), then stapler staple on the DMG
   6  a notarized DMG gets stapler validate and the spctl assessments for an app and for a
      disk image
 --identity - signs ad hoc, with --timestamp=none and without -o runtime. Apple's timestamp
@@ -175,8 +175,9 @@ def bad_argument(a: argparse.Namespace) -> Optional[str]:
     if any(given) and a.identity == sign_plan.AD_HOC:
         return ("--identity - signs ad hoc, which Apple rejects, so it can't go with the "
                 "--notary-* options. Give a Developer ID identity or no notary key")
-    if not 0 < a.notary_timeout < float("inf"):
-        return f"--notary-timeout {a.notary_timeout:g} isn't a number of minutes above 0"
+    if not 0 < a.notary_timeout <= sign_plan.NOTARY_MAX_MINUTES:
+        return (f"--notary-timeout {a.notary_timeout:g} isn't between 0 and "
+                f"{sign_plan.NOTARY_MAX_MINUTES} minutes")
     try:
         sign_plan.check_app(a.app)
     except ValueError as e:

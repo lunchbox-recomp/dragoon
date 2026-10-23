@@ -562,10 +562,16 @@ class RefusalTest(SignTestCase):
         self.assert_refused("ad hoc", identity="-")
         self.assert_refused("ad hoc", "--dry-run", identity="-")
 
-    def test_a_notary_timeout_that_is_not_above_zero(self):
-        for bad in ("0", "-5", "nan", "inf"):
+    def test_a_notary_timeout_outside_zero_to_a_day(self):
+        # subprocess.run raises OverflowError for 36000 minutes and for 1e300, once notarytool runs
+        for bad in ("0", "-5", "nan", "inf", "1441", "36000", "1e300"):
             with self.subTest(bad):
                 self.assert_refused("--notary-timeout", f"--notary-timeout={bad}")
+
+    def test_a_day_is_the_longest_notary_timeout(self):
+        code, _, _ = self.run_tool("--dry-run", "--notary-timeout", "1440")
+        self.assertEqual(code, 0)
+        self.assert_refused("between 0 and 1440 minutes", "--dry-run", "--notary-timeout", "1440.5")
 
     def test_a_notary_key_file_that_is_not_there(self):
         self.key.unlink()
