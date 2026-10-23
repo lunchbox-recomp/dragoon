@@ -5,6 +5,7 @@ import contextlib
 import io
 import os
 import subprocess
+import sys
 import tarfile
 from pathlib import Path
 from typing import Callable
@@ -38,6 +39,47 @@ def write_file(directory: Path, name: str, data: bytes | str) -> Path:
         path.write_text(data)
     else:
         path.write_bytes(data)
+    return path
+
+
+# A stand-in for hdiutil that mounts nothing real. "attach" copies <dmg>.contents into the
+# -mountpoint and "detach" empties it, and each call's arguments go to the records file. A file
+# named "attach fails" beside the script makes attach fail, "busy" makes detach fail until it's
+# given -force and "detach fails" makes it fail always.
+FAKE_HDIUTIL = r"""#!@PYTHON@
+import json, os, shutil, sys
+here = os.path.dirname(os.path.abspath(__file__))
+args = sys.argv[1:]
+with open(@RECORDS@, "a") as f:
+    f.write(json.dumps(args) + "\n")
+if args[0] == "attach":
+    if os.path.exists(os.path.join(here, "attach fails")):
+        print("hdiutil: attach failed - Resource temporarily unavailable", file=sys.stderr)
+        sys.exit(1)
+    mount = args[args.index("-mountpoint") + 1]
+    assert os.path.isdir(mount) and not os.listdir(mount), mount
+    shutil.copytree(args[-1] + ".contents", mount, symlinks=True, dirs_exist_ok=True)
+elif args[0] == "detach":
+    stuck = os.path.exists(os.path.join(here, "busy")) and "-force" not in args
+    if stuck or os.path.exists(os.path.join(here, "detach fails")):
+        print("hdiutil: couldn't unmount - Resource busy", file=sys.stderr)
+        sys.exit(16)
+    mount = args[-1]
+    for name in os.listdir(mount):
+        path = os.path.join(mount, name)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.unlink(path)
+"""
+
+
+def fake_hdiutil(directory: Path, records: Path) -> Path:
+    """Write the FAKE_HDIUTIL script into DIRECTORY, recording each call as a JSON line in
+    RECORDS."""
+    text = FAKE_HDIUTIL.replace("@PYTHON@", sys.executable).replace("@RECORDS@", repr(str(records)))
+    path = write_file(directory, "hdiutil", text)
+    path.chmod(0o755)
     return path
 
 
