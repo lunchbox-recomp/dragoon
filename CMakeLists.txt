@@ -18,7 +18,7 @@ gcn_add_game(
   SYMBOLS ${CMAKE_SOURCE_DIR}/analysis/symbols.txt
   TABLES ${CMAKE_SOURCE_DIR}/recomp
   FPS 60
-  SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp)
+  SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp ${CMAKE_SOURCE_DIR}/src/cameras.cpp)
 
 # The unit tests of src/'s pure parts, run by ctest. Off by default, since they download
 # GoogleTest's source release, checked by its SHA-256. They need no disc.
@@ -34,7 +34,8 @@ if(DRAGOON_TESTS)
   FetchContent_MakeAvailable(googletest)
   enable_testing()
   include(GoogleTest)
-  add_executable(dragoon_tests ${CMAKE_SOURCE_DIR}/tests/src/test_census.cpp)
+  add_executable(dragoon_tests ${CMAKE_SOURCE_DIR}/tests/src/test_census.cpp
+                               ${CMAKE_SOURCE_DIR}/tests/src/test_cameras.cpp)
   set_target_properties(dragoon_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
   target_include_directories(dragoon_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
   target_link_libraries(dragoon_tests PRIVATE GTest::gtest_main)
