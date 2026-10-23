@@ -53,8 +53,10 @@ so pass 3 ran the code that `5ff734e` holds.
 | `[ring]` lines | Underruns | Underruns, cuts and each cut's output frame |
 | `[ax] bus` lines, with the samples the clamp changed | None | Every 400 lists |
 
-Current's Dragoon commits after `788571c` change only `tools/` and `docs/`, so all three passes
-played the same game code.
+Pass 3's build differed from `788571c` only in `tools/` and `docs/`, so all three passes
+played the same game code. `5ff734e` itself differs from `788571c` in more places. It adds
+seven course routes with their hashes and changes text in `README.md` and a message in
+`CMakeLists.txt`. None of it touches the game code.
 
 `git -C gcn-recomp log --oneline 9b0a2fe..caf12a2` lists the 13 commits the baseline adds to
 upstream `9b0a2fe`. They're two runtime fixes, controller and input support, the SDL3 frontend
