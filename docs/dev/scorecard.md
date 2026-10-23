@@ -285,12 +285,13 @@ Neither build had an underrun in any run, and current made no ring cut in any ru
 ## The title route at 91 s
 
 `status.md`'s source type 2 counts come from 90-second title runs, and the five-route pass
-plays the title for 31 s. `--routes title --margin 75` plays the same route for 91 s. It ran twice on each
-build, with the tool at `13acaf4`, before the tool scored the mixer stage unpaced, so both
-stages here are real-time. The second pass printed `13acaf4-dirty`, because
-`docs/dev/audio.md` had been edited after the first pass and wasn't committed until this doc.
-No file under `tools/` differs between `13acaf4` and that commit, and rescoring the second
-pass's recordings from a clean tree gives the same numbers.
+plays the title for 31 s. `--routes title --margin 75` plays the same route for 91 s. It ran
+twice on each build, with the tool at `13acaf4`, before the tool scored the mixer stage
+unpaced, so both stages here are real-time. The second pass printed `13acaf4-dirty`, because
+`docs/dev/audio.md` had been edited after the first pass and wasn't committed until `9d87d96`,
+the commit that added this doc. No file under `tools/` differs between `13acaf4` and
+`9d87d96`, and rescoring the second pass's recordings from a clean tree gives the same
+numbers.
 
 | Title route, 91 s, real-time | Baseline | Current |
 |---|---|---|
