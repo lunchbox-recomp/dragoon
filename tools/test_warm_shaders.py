@@ -4,6 +4,7 @@ import stat
 import struct
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -20,30 +21,21 @@ TITLE_FRAMES = 960 + warm_shaders.ROUTE_TAIL_FRAMES
 FOUR_FRAMES = 3480 + warm_shaders.ROUTE_TAIL_FRAMES
 TITLE_EXIT = f"--exit-after={TITLE_FRAMES}"
 FOUR_EXIT = f"--exit-after={FOUR_FRAMES}"
+# The game. It logs how it was run to FAKE_LOG, leaves a memory card behind as the real one
+# does, and keeps a real cache: the keys FAKE_KEYS lists for this pass's --exit-after (JSON,
+# frames to key numbers) go in unless the cache holds them, each an 8-byte key, an 8-byte source
+# hash that is the same number and no binary, as on macOS. It prints the lines the real game
+# prints once it has built what the cache held and under GCN_FRAMETIME=1 for each program built
+# in play. FAKE_SLEEP_ON and FAKE_FAIL_ON name the runs (by a part of the line logged) that hang
+# or exit 1, and FAKE_MEET makes each wait until another run has started too.
 FAKE_GAME = f"""#!{sys.executable}
-import os, sys
+import json, os, struct, sys, time
 os.makedirs("saves", exist_ok=True)
+frames = [a for a in sys.argv if a.startswith("--exit-after=")][0].split("=")[1]
 line = " ".join(sys.argv[1:]) + " SDL=" + os.environ.get("SDL_AUDIO_DRIVER", "") + " INPUT=" + os.environ.get("GCN_INPUT", "-")
 line += " CARD=" + str(os.path.exists("saves/memcard_a.raw"))
-with open("saves/shaders.bin", "ab") as f:
-    f.write((line + "\\n").encode())
-with open("saves/memcard_a.raw", "wb") as f:
-    f.write(b"scratch card")
-if os.environ.get("FAKE_SLEEP_ON") and os.environ["FAKE_SLEEP_ON"] in line:
-    import time
-    time.sleep(30)
-if os.environ.get("FAKE_FAIL_ON") and os.environ["FAKE_FAIL_ON"] in line:
-    sys.exit(1)
-"""
-
-
-# A game that keeps a real cache: the keys FAKE_KEYS lists for this pass's --exit-after (JSON,
-# frames to key numbers) are appended unless the cache holds them, one 8-byte key, an 8-byte
-# source hash that is the same number, and no binary, as the game on macOS writes. It prints
-# the line the game prints once it has built what the cache held.
-FAKE_CACHE_GAME = f"""#!{sys.executable}
-import json, os, struct, sys
-os.makedirs("saves", exist_ok=True)
+with open(os.environ["FAKE_LOG"], "a") as f:
+    f.write(line + "\\n")
 path = "saves/shaders.bin"
 if not os.path.exists(path):
     with open(path, "wb") as f:
@@ -52,21 +44,38 @@ data = open(path, "rb").read()
 held = [data[o:o + 8] for o in range(16, len(data), 24)]
 if held:
     print(f"[shaders] {{len(held)}} programs from cache (0 from binaries, {{len(held)}} compiled, 0 of them from the game's key list) in 12 ms")
-frames = [a for a in sys.argv if a.startswith("--exit-after=")][0].split("=")[1]
 with open(path, "ab") as f:
-    for n in json.loads(os.environ["FAKE_KEYS"])[frames]:
+    for n in json.loads(os.environ["FAKE_KEYS"]).get(frames, []):
         key = bytes([n]) * 8
         if key not in held:
             f.write(key + key + struct.pack("<II", 0, 0))
             print(f"[shaders] compiled program {{n}} in 1.0 ms")
             print(f"[rt] f{{500 + n}} render   1.00ms")
+with open("saves/memcard_a.raw", "wb") as f:
+    f.write(b"scratch card")
+if os.environ.get("FAKE_MEET"):
+    open(os.path.join(os.environ["FAKE_MEET"], frames), "w").close()
+    for _ in range(100):
+        if len(os.listdir(os.environ["FAKE_MEET"])) > 1:
+            break
+        time.sleep(0.1)
+    else:
+        sys.exit(3)
+if os.environ.get("FAKE_SLEEP_ON") and os.environ["FAKE_SLEEP_ON"] in line:
+    time.sleep(30)
+if os.environ.get("FAKE_FAIL_ON") and os.environ["FAKE_FAIL_ON"] in line:
+    sys.exit(1)
 """
 
 
-def shader_cache_bytes(keys: list[int]) -> bytes:
-    """A cache the fake cache game would have written: the keys, each 8 bytes of its number."""
+def fake_key(n: int) -> bytes:
+    return bytes([n]) * 8
+
+
+def fake_cache(keys: list[int]) -> bytes:
+    """A cache the fake game would have written: the keys, no binaries."""
     return struct.pack("<IIQ", 0x43535257, 3 << 16 | 8, 0xD00D) + b"".join(
-        bytes([n]) * 16 + struct.pack("<II", 0, 0) for n in keys)
+        fake_key(n) * 2 + struct.pack("<II", 0, 0) for n in keys)
 
 
 class WarmTestCase(unittest.TestCase):
@@ -84,21 +93,29 @@ class WarmTestCase(unittest.TestCase):
         write_file(self.routes, "title.txt", "# comment\n120:A:5, 300:A:5\n")
         write_file(self.routes, "city-trial-4p.txt", "2/900:A:10\n")
         self.saves = self.dir / "saves"
+        self.log = self.dir / "games.log"
         self.rev = "rev1"
         self.tool = "tool1"
+        keys = {str(TITLE_FRAMES): [1], str(FOUR_FRAMES): [2]}
         for patch in (mock.patch.object(warm_shaders, "tool_sha", lambda: self.tool),
+                      mock.patch.object(warm_shaders, "JOBS", 1),  # runs in the plan's order
                       mock.patch.object(warm_shaders, "MANIFEST", self.manifest),
                       mock.patch.object(routes, "ROUTES", self.routes),
                       mock.patch.object(warm_shaders, "engine_rev", lambda: self.rev),
-                      mock.patch.dict(os.environ, {"GCN_INPUT": "999:B:1"})):
+                      mock.patch.dict(os.environ, {"GCN_INPUT": "999:B:1", "FAKE_LOG": str(self.log),
+                                                   "FAKE_KEYS": json.dumps(keys)})):
             patch.start()
             self.addCleanup(patch.stop)
 
     def warm(self, *extra: str) -> tuple[int, str, str]:
         return run_main(warm_shaders.main, "--game", str(self.game), "--saves", str(self.saves), *extra)
 
-    def cache_lines(self) -> list[str]:
-        return (self.saves / "shaders.bin").read_text().splitlines()
+    def game_lines(self) -> list[str]:
+        """How the game was run, once per run, in the order the runs began."""
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def cache_keys(self, saves: Path | None = None) -> list[bytes]:
+        return shader_cache.load((saves or self.saves) / "shaders.bin").keys
 
     def snapshot(self) -> dict[str, bytes]:
         if not self.saves.exists():
@@ -180,18 +197,18 @@ class EngineRevTest(unittest.TestCase):
 class WarmTest(WarmTestCase):
     def test_seeded_cache_is_a_prefix_of_the_installed_one(self):
         self.saves.mkdir()
-        old = b"WRSC old keys\n"
+        old = fake_cache([9])
         write_file(self.saves, "shaders.bin", old)
         code, _, _ = self.warm()
         self.assertEqual(code, 0)
         new = (self.saves / "shaders.bin").read_bytes()
         self.assertTrue(new.startswith(old))
-        self.assertEqual(len(self.cache_lines()), 1 + 2)  # the old line, then one per pass
+        self.assertEqual(self.cache_keys(), [fake_key(9), fake_key(1), fake_key(2)])  # then each pass's
 
     def test_blank_start_installs_every_pass(self):
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
-        self.assertEqual(len(self.cache_lines()), 2)
+        self.assertEqual(self.cache_keys(), [fake_key(1), fake_key(2)])
         self.assertIn("2 passes", out)
 
     def test_each_pass_prints_one_pass_line(self):
@@ -213,7 +230,7 @@ class WarmTest(WarmTestCase):
 
     def test_children_are_hidden_fast_silent_and_run_in_scratch(self):
         self.assertEqual(self.warm()[0], 0)
-        title, four = self.cache_lines()
+        title, four = self.game_lines()
         for line in (title, four):
             for flag in ("--hidden", "--fast", "--no-input-log"):
                 self.assertIn(flag, line.split())
@@ -248,18 +265,18 @@ class WarmTest(WarmTestCase):
 
     def test_stamp_skips_a_second_run_unless_forced(self):
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 2)
+        self.assertEqual(len(self.game_lines()), 2)
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
         self.assertIn("current", out)
-        self.assertEqual(len(self.cache_lines()), 2)
+        self.assertEqual(len(self.game_lines()), 2)
         self.assertEqual(self.warm("--force")[0], 0)
-        self.assertEqual(len(self.cache_lines()), 4)
+        self.assertEqual(len(self.game_lines()), 4)
 
     def warm_until_current(self) -> None:
         """Warm once, then check a second run is skipped as current."""
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 2)
+        self.assertEqual(len(self.game_lines()), 2)
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
         self.assertIn("current", out)
@@ -268,21 +285,21 @@ class WarmTest(WarmTestCase):
         self.warm_until_current()
         self.rev = "rev2"
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 4)
+        self.assertEqual(len(self.game_lines()), 4)
 
     def test_new_manifest_runs_again(self):
         self.warm_until_current()
         write_file(self.dir, "manifest.txt", MANIFEST + "menu 20 60 1200\n")
         write_file(self.routes, "menu.txt", "1:A:1\n")
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 2 + 3)
+        self.assertEqual(len(self.game_lines()), 2 + 3)
 
     def test_edited_route_file_runs_again(self):
         self.warm_until_current()
         write_file(self.routes, "title.txt", "# comment\n120:A:5, 300:A:5, 500:B:5\n")
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 4)
-        self.assertIn("INPUT=120:A:5,300:A:5,500:B:5", self.cache_lines()[2].split())
+        self.assertEqual(len(self.game_lines()), 4)
+        self.assertIn("INPUT=120:A:5,300:A:5,500:B:5", self.game_lines()[2].split())
 
     def test_comment_only_edit_to_a_route_file_stays_current(self):
         self.warm_until_current()
@@ -295,7 +312,7 @@ class WarmTest(WarmTestCase):
         self.warm_until_current()
         self.tool = "tool2"
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 4)
+        self.assertEqual(len(self.game_lines()), 4)
 
     def test_empty_gcn_recomp_directory_exits_2_with_the_hint(self):
         (self.dir / "gcn-recomp").mkdir()
@@ -320,13 +337,13 @@ class WarmTest(WarmTestCase):
         with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": TITLE_EXIT}):
             self.warm()
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual(len(self.cache_lines()), 2)
+        self.assertEqual(len(self.cache_keys()), 2)
 
     def test_every_pass_starts_from_a_blank_card(self):
         # The fake leaves a card behind, as the game does; a route that found it would take
         # the "load" menus instead of the "make a new file" ones the manifest's routes assume.
         self.assertEqual(self.warm()[0], 0)
-        self.assertEqual([l.split()[-1] for l in self.cache_lines()], ["CARD=False", "CARD=False"])
+        self.assertEqual([l.split()[-1] for l in self.game_lines()], ["CARD=False", "CARD=False"])
 
     def test_deleted_cache_warms_again_despite_a_current_stamp(self):
         self.assertEqual(self.warm()[0], 0)
@@ -334,7 +351,7 @@ class WarmTest(WarmTestCase):
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
         self.assertNotIn("current", out)
-        self.assertEqual(len(self.cache_lines()), 2)
+        self.assertEqual(len(self.cache_keys()), 2)
 
     def test_hung_game_is_killed_and_fails_the_pass(self):
         self.saves.mkdir()
@@ -364,10 +381,78 @@ class WarmTest(WarmTestCase):
         self.assertFalse(self.saves.exists())
 
 
+class ParallelTest(WarmTestCase):
+    def test_passes_play_at_once_when_asked_to(self):
+        meet = self.dir / "meet"
+        meet.mkdir()
+        # Each run waits for the other to start, which only passes that overlap can do.
+        with mock.patch.dict(os.environ, {"FAKE_MEET": str(meet)}):
+            code, _, err = self.warm("--jobs", "2")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.cache_keys(), [fake_key(1), fake_key(2)])
+
+    def test_the_cache_is_the_same_however_many_play_at_once(self):
+        other = self.dir / "other-saves"
+        self.saves.mkdir()
+        write_file(self.saves, "shaders.bin", fake_cache([9, 2]))
+        other.mkdir()
+        write_file(other, "shaders.bin", fake_cache([9, 2]))
+        self.assertEqual(self.warm("--jobs", "1")[0], 0)
+        code, _, _ = run_main(warm_shaders.main, "--game", str(self.game), "--saves", str(other),
+                              "--jobs", "2")
+        self.assertEqual(code, 0)
+        self.assertEqual((other / "shaders.bin").read_bytes(), (self.saves / "shaders.bin").read_bytes())
+        self.assertEqual(self.cache_keys(), [fake_key(9), fake_key(2), fake_key(1)])
+
+    def test_a_third_of_the_cores_play_at_once_from_1_to_6(self):
+        self.assertEqual([warm_shaders.default_jobs(n) for n in (None, 1, 2, 3, 8, 16, 18, 64)],
+                         [1, 1, 1, 1, 2, 5, 6, 6])
+
+    def test_one_job_plays_the_plans_order_and_more_start_the_longest_first(self):
+        plan = warm_shaders.passes(routes.parse_manifest(MANIFEST))
+        self.assertEqual(warm_shaders.start_order(plan, 1), [0, 1])
+        self.assertEqual(warm_shaders.start_order(plan, 2), [1, 0])
+        self.assertEqual(self.warm("--jobs", "1")[0], 0)
+        self.assertIn(TITLE_EXIT, self.game_lines()[0].split())
+
+    def test_a_failing_pass_stops_the_ones_still_playing(self):
+        self.saves.mkdir()
+        write_file(self.saves, "shaders.bin", b"old\n")
+        before = self.snapshot()
+        started = time.monotonic()
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": FOUR_EXIT, "FAKE_SLEEP_ON": TITLE_EXIT}):
+            code, _, err = self.warm("--jobs", "2")
+        self.assertEqual(code, 1)
+        self.assertIn("city-trial-4p", err)
+        self.assertLess(time.monotonic() - started, 20)  # not the 30 s the sleeper sleeps
+        self.assertEqual(self.snapshot(), before)
+
+    def test_no_pass_starts_after_one_has_failed(self):
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": TITLE_EXIT}):
+            code, _, _ = self.warm("--jobs", "1")
+        self.assertEqual(code, 1)
+        self.assertEqual(len(self.game_lines()), 1)
+
+    def test_caches_that_cant_be_joined_fail_the_warm_up_and_leave_saves_alone(self):
+        self.saves.mkdir()
+        write_file(self.saves, "shaders.bin", fake_cache([9]))
+        before = self.snapshot()
+        with mock.patch.object(shader_cache, "merge", side_effect=ValueError("headers differ")):
+            code, _, err = self.warm()
+        self.assertEqual(code, 1)
+        self.assertIn("headers differ", err)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_fewer_than_one_job_is_refused(self):
+        code, _, err = self.warm("--jobs", "0")
+        self.assertEqual(code, 2)
+        self.assertIn("--jobs", err)
+        self.assertFalse(self.saves.exists())
+
+
 class ReportTest(WarmTestCase):
     def setUp(self):
         super().setUp()
-        write_file(self.dir, "fake_game", FAKE_CACHE_GAME)
         keys = {str(TITLE_FRAMES): [1, 2], str(FOUR_FRAMES): [2, 3, 4]}
         patch = mock.patch.dict(os.environ, {"FAKE_KEYS": json.dumps(keys)})
         patch.start()
@@ -382,28 +467,28 @@ class ReportTest(WarmTestCase):
         code, out, _ = self.warm("--report", str(self.report))
         self.assertEqual(code, 0)
         title, four = self.rows()
-        # name, frames, s, boot programs, boot ms, +keys, +programs, keys, last frame built in
+        # name, frames, s, boot programs, boot ms, own, +keys, +programs, keys, last frame built in
         self.assertEqual([title[0], title[1], *title[3:]],
-                         ["title", str(TITLE_FRAMES), "0", "0", "2", "2", "2", "502"])
+                         ["title", str(TITLE_FRAMES), "0", "0", "2", "2", "2", "2", "502"])
         self.assertEqual([four[0], four[1], *four[3:]],
-                         ["city-trial-4p", str(FOUR_FRAMES), "2", "12", "2", "2", "4", "504"])
+                         ["city-trial-4p", str(FOUR_FRAMES), "0", "0", "3", "2", "2", "4", "504"])
         self.assertIn("city-trial-4p", out.splitlines()[-2])
 
-    def test_keys_the_players_cache_held_are_not_new(self):
+    def test_keys_the_players_cache_held_are_not_new_or_the_pass_s_own(self):
         self.saves.mkdir()
-        write_file(self.saves, "shaders.bin", shader_cache_bytes([1]))
+        write_file(self.saves, "shaders.bin", fake_cache([1]))
         self.assertEqual(self.warm("--report", str(self.report))[0], 0)
         title, four = self.rows()
-        self.assertEqual([title[3], title[5], title[7]], ["1", "1", "2"])
-        self.assertEqual([four[5], four[7]], ["2", "4"])
+        self.assertEqual([title[3], title[4], title[5], title[6], title[8]], ["1", "12", "1", "1", "2"])
+        self.assertEqual([four[5], four[6], four[8]], ["3", "2", "4"])
 
     def test_each_pass_keeps_its_output_and_its_cache(self):
-        self.assertEqual(self.warm("--report", str(self.report))[0], 0)
+        self.assertEqual(self.warm("--report", str(self.report), "--jobs", "2")[0], 0)
         self.assertEqual(sorted(p.name for p in self.report.iterdir()),
                          ["city-trial-4p.bin", "city-trial-4p.log", "report.txt", "title.bin", "title.log"])
         self.assertEqual(len(shader_cache.load(self.report / "title.bin").keys), 2)
-        self.assertEqual(len(shader_cache.load(self.report / "city-trial-4p.bin").keys), 4)
-        self.assertIn("2 programs from cache", (self.report / "city-trial-4p.log").read_text())
+        self.assertEqual(len(shader_cache.load(self.report / "city-trial-4p.bin").keys), 3)
+        self.assertIn("compiled program 4", (self.report / "city-trial-4p.log").read_text())
 
     def test_without_the_flag_nothing_is_kept(self):
         self.assertEqual(self.warm()[0], 0)

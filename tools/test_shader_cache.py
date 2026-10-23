@@ -63,6 +63,38 @@ class ShaderCacheTest(unittest.TestCase):
         k = b"\x07" * 12
         self.assertEqual(self.keys("c.bin", cache_bytes([k], fmt=9 << 16 | 12)), [k])
 
+    def loaded(self, name: str, data: bytes) -> shader_cache.KeyFile:
+        return shader_cache.load(self.write(name, data))
+
+    def test_merge_keeps_the_first_file_whole_and_adds_each_new_key_once_in_order(self):
+        a = self.loaded("a.bin", cache_bytes([key(1), key(2)], binary=b"\x0a"))
+        b = self.loaded("b.bin", cache_bytes([key(2), key(3), key(4)], binary=b"\x0b\x0b"))
+        c = self.loaded("c.bin", cache_bytes([key(4), key(5), key(3)]))
+        merged = shader_cache.merge([a, b, c])
+        self.assertEqual(merged, a.header + b"".join(a.records) + b.records[1] + b.records[2] + c.records[1])
+        self.assertEqual(shader_cache.load(self.write("m.bin", merged)).keys,
+                         [key(1), key(2), key(3), key(4), key(5)])
+
+    def test_merging_one_file_gives_it_back(self):
+        data = cache_bytes([key(1), key(2)], binary=b"\xaa")
+        self.assertEqual(shader_cache.merge([self.loaded("a.bin", data)]), data)
+
+    def test_merge_drops_a_cut_off_record(self):
+        data = cache_bytes([key(1), key(2)], binary=b"\xaa" * 10)
+        merged = shader_cache.merge([self.loaded("a.bin", data[:-3])])
+        self.assertEqual(merged, data[:CACHE_HEADER + record_size(10)])
+
+    def test_merge_refuses_other_headers_and_key_lists(self):
+        a = self.loaded("a.bin", cache_bytes([key(1)]))
+        other_format = self.loaded("b.bin", cache_bytes([key(1)], fmt=4 << 16 | 8))
+        records = cache_bytes([key(1)])[CACHE_HEADER:]
+        other_driver = self.loaded("c.bin", struct.pack("<IIQ", CACHE_MAGIC, FORMAT, 1) + records)
+        key_list = self.loaded("k.bin", list_bytes([key(1)]))
+        for name, files in (("format", [a, other_format]), ("driver", [other_driver, a]),
+                            ("key list", [a, key_list]), ("none", [])):
+            with self.subTest(name), self.assertRaises(ValueError):
+                shader_cache.merge(files)
+
     def test_count_cache(self):
         path = self.write("c.bin", cache_bytes([key(1), key(2), key(1)], binary=b"xy"))
         code, out, _ = run_main(shader_cache.main, "count", str(path))

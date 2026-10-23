@@ -103,6 +103,27 @@ def load(path: Path) -> KeyFile:
     return KeyFile(magic, word, keys, len(data) - o, data[:header], records, hashes)
 
 
+def merge(files: list[KeyFile]) -> bytes:
+    """A cache holding every key of FILES: the first one's header, then each record whose key
+    nothing before it held, in file order.
+
+    The header names the format and the driver whose binaries the records carry, so caches
+    whose headers differ are refused rather than mixed.
+    """
+    if not files or any(f.magic != CACHE_MAGIC for f in files):
+        raise ValueError("only shader caches can be merged, and at least one")
+    if any(f.header != files[0].header for f in files):
+        raise ValueError("the caches' headers differ (another format or driver)")
+    seen: set[bytes] = set()
+    out = [files[0].header]
+    for f in files:
+        for k, r in zip(f.keys, f.records):
+            if k not in seen:
+                seen.add(k)
+                out.append(r)
+    return b"".join(out)
+
+
 def count(path: Path) -> None:
     k = load(path)
     kind = "shader cache" if k.magic == CACHE_MAGIC else "key list"
