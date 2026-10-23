@@ -142,10 +142,10 @@ tools/click_diff.py /path/to/old-clone/build/probe/scorecard-unpaced-title/mixer
 
 ## noise_blocks.py
 
-Where does a recording turn to loud noise? It weighs each 5 ms block's high-frequency energy against its total, as the RMS of its first difference over its RMS. White noise gives about 1.41, and music and effects give far less. A block is noise-like over 1 on a channel whose peak is over 8,000, and it prints the stretches such blocks form. It reads a WAV, or raw audio with `--raw RATE`, as audio_clicks.py does.
+Where do the DMA's blocks turn to loud noise? It weighs each 160-sample block of a `GCN_AIDWAV` recording, setting its high-frequency energy against its total as the RMS of its first difference over its RMS. White noise gives about 1.41, and music and effects give far less. A block is noise-like over 1 on a channel whose peak is over 8,000, and it prints the stretches such blocks form. The game's own bright sounds, a crash for one, make short stretches too, so a stretch is a place to look rather than a fault. It reads the DMA's 32 kHz only, since the ring's resampling to 48 kHz lowers the ratio of any noise in a `GCN_WAV` recording.
 
 ```
-tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw --raw 32000
+tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw
 ```
 
 ## warm_shaders.py
@@ -169,7 +169,7 @@ What happens to a probe run and its directory? It holds `trash`, which moves a d
 
 ## aid_blocks.py
 
-What does `GCN_AIDWAV` write? It holds the DMA's rate, its 160-sample block and the reader for the block log beside each recording, for block_clicks.py, click_diff.py and scorecard_measure.py. It has no command line.
+What does `GCN_AIDWAV` write? It holds the DMA's rate, its 160-sample block and the reader for the block log beside each recording, for block_clicks.py, click_diff.py, noise_blocks.py and scorecard_measure.py. It has no command line.
 
 ## check_no_game_data.py
 

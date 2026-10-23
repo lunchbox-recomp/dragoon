@@ -7,9 +7,8 @@ from pathlib import Path
 
 import noise_blocks
 from audio_clicks import Recording
-from testutil import pcm, run_main, tone, write_file, write_wav
-
-RATE = 32000
+from aid_blocks import RATE
+from testutil import pcm, run_main, tone, write_file
 
 
 def noise(n: int, amp: int, seed: int) -> list[int]:
@@ -66,30 +65,43 @@ class MainTest(unittest.TestCase):
         self.left = tone(RATE // 2, RATE) + noise(RATE // 2, 32767, 1)
         self.right = tone(RATE, RATE)
 
-    def test_reads_raw_with_raw_and_prints_the_stretches(self):
+    def test_reads_a_dma_recording_and_prints_the_stretches(self):
         path = write_file(self.dir, "mixer.raw", pcm(self.left, self.right))
-        code, out, _ = run_main(noise_blocks.main, str(path), "--raw", "32000")
+        code, out, _ = run_main(noise_blocks.main, str(path))
         self.assertEqual(code, 0)
-        self.assertIn("200 blocks of 5 ms, 100 noise-like (0.50 s) in 1 stretches", out)
+        self.assertIn("1.00 s, 200 blocks, 100 noise-like (0.50 s) in 1 stretches", out)
         self.assertIn("0.500 s to 1.000 s, 100 blocks", out)
 
-    def test_reads_a_wav_in_5_ms_blocks_of_its_own_rate(self):
-        path = write_wav(self.dir / "device.wav", self.left, self.right, rate=RATE)
+    def test_list_caps_the_stretches_printed(self):
+        burst = noise(160, 30000, 5)
+        x = list(tone(RATE, RATE, amp=1000))
+        for at in (0, 50, 100):
+            x[at * 160:(at + 1) * 160] = burst
+        path = write_file(self.dir, "mixer.raw", pcm(x, x))
+        _, out, _ = run_main(noise_blocks.main, str(path), "--list", "1")
+        self.assertIn("0.000 s to 0.005 s, 1 blocks", out)
+        self.assertNotIn("0.250 s", out)
+        self.assertIn("and 2 more", out)
+
+    def test_json_prints_the_whole_result(self):
+        path = write_file(self.dir, "mixer.raw", pcm(self.left, self.right))
         _, out, _ = run_main(noise_blocks.main, str(path), "--json")
-        self.assertEqual(json.loads(out)["noisy_blocks"], 100)
+        got = json.loads(out)
+        self.assertEqual((got["blocks"], got["noisy_blocks"]), (200, 100))
+        self.assertEqual(got["stretches"], [{"start": 0.5, "end": 1.0, "blocks": 100}])
 
-    def test_a_file_that_isnt_a_wav_exits_2(self):
-        path = write_file(self.dir, "mixer.raw", pcm(self.left, self.right))
-        code, _, err = run_main(noise_blocks.main, str(path))
-        self.assertEqual(code, 2)
-        self.assertEqual(len(err.splitlines()), 1)
-
-    def test_bad_numbers_exit_2(self):
-        path = write_file(self.dir, "mixer.raw", pcm(self.left, self.right))
-        for bad in (["--raw", "0"], ["--list", "-1"]):
-            with self.subTest(bad=bad):
-                code, _, _ = run_main(noise_blocks.main, str(path), *bad)
+    def test_a_file_it_cant_read_exits_2(self):
+        for name, data in (("missing.raw", None), ("empty.raw", b"")):
+            with self.subTest(name=name):
+                path = self.dir / name if data is None else write_file(self.dir, name, data)
+                code, _, err = run_main(noise_blocks.main, str(path))
                 self.assertEqual(code, 2)
+                self.assertEqual(len(err.splitlines()), 1)
+
+    def test_a_negative_list_exits_2(self):
+        path = write_file(self.dir, "mixer.raw", pcm(self.left, self.right))
+        code, _, _ = run_main(noise_blocks.main, str(path), "--list", "-1")
+        self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":

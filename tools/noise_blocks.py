@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""Where does a recording turn to loud noise?
+"""Where do the DMA's blocks turn to loud noise?
 
-Usage: noise_blocks.py FILE [--raw RATE] [--list N] [--json]
+Usage: noise_blocks.py FILE [--list N] [--json]
 
-FILE is a 16-bit PCM WAV, or with --raw RATE raw 16-bit little-endian stereo at RATE Hz, as
-audio_clicks.py reads them. It splits the recording into 5 ms blocks (the DMA's 160 samples at
-32 kHz) and weighs each block's high-frequency energy against its total, as the RMS of its
-first difference over its RMS, on each channel. White noise gives about 1.41, and music and
-effects give far less, since their energy sits low. A block is noise-like when that's over 1
-on some channel whose peak in the block is over 8,000. Noise-like blocks that start 100 ms
-apart or less are one stretch. It prints the noise-like blocks and their seconds, then the first N stretches
-(20 by default) with where each starts and ends. --json prints the whole result.
+FILE is a GCN_AIDWAV recording (aid_blocks.py). It weighs each 160-sample block's
+high-frequency energy against its total, as the RMS of its first difference over its RMS, on
+each channel. White noise gives about 1.41, and music and effects give far less, since their
+energy sits low. A block is noise-like when that's over 1 on some channel whose peak in the
+block is over 8,000. Noise-like blocks that start 100 ms apart or less are one stretch. A
+bright sound of the game's own, such as a crash, makes a short stretch too. It prints the
+noise-like blocks and their seconds, then the first N stretches (20 by default) with where
+each starts and ends. --json prints the whole result.
+
+It reads the DMA's 32 kHz only. The ring resamples to 48 kHz for the device, which leaves
+nothing above 16 kHz, so noise there gives a lower ratio and a GCN_WAV recording isn't a fair
+input.
 
 Exits 0 once it has read the recording, 2 on a bad argument or a file it can't read.
 """
@@ -24,12 +28,12 @@ from array import array
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from audio_clicks import Recording, read_raw, read_wav
+from aid_blocks import BLOCK, RATE
+from audio_clicks import Recording, read_raw
 
-BLOCK_MS = 5
 NOISE_RATIO = 1.0   # RMS first difference over RMS above which a block is noise-like
 NOISE_PEAK = 8000   # the peak a noise-like block must pass, so quiet hiss doesn't count
-JOIN_MS = 100       # noise-like blocks closer than this are one stretch
+JOIN_BLOCKS = 20    # noise-like blocks this close (100 ms) are one stretch
 
 
 @dataclass
@@ -59,33 +63,28 @@ def noisy(x: array) -> bool:
 
 def noisy_blocks(rec: Recording) -> list[int]:
     """The indices of the whole blocks that are noise-like on some channel."""
-    size = rec.rate * BLOCK_MS // 1000
-    return [k for k in range(rec.frames // size)
-            if any(noisy(ch[k * size:(k + 1) * size]) for ch in rec.channels)]
+    return [k for k in range(rec.frames // BLOCK)
+            if any(noisy(ch[k * BLOCK:(k + 1) * BLOCK]) for ch in rec.channels)]
 
 
-def stretches(found: list[int], size: int, rate: int) -> list[Stretch]:
-    within = max(1, rate * JOIN_MS // 1000 // size)
+def stretches(found: list[int]) -> list[Stretch]:
     runs: list[list[int]] = []
     for k in found:
-        if runs and k - runs[-1][-1] <= within:
+        if runs and k - runs[-1][-1] <= JOIN_BLOCKS:
             runs[-1].append(k)
         else:
             runs.append([k])
-    return [Stretch(r[0] * size / rate, (r[-1] + 1) * size / rate, len(r)) for r in runs]
+    return [Stretch(r[0] * BLOCK / RATE, (r[-1] + 1) * BLOCK / RATE, len(r)) for r in runs]
 
 
 def find(rec: Recording) -> Noise:
-    size = rec.rate * BLOCK_MS // 1000
-    if size < 2:
-        raise ValueError(f"{rec.rate} Hz gives blocks of {size} samples, too few to weigh")
     found = noisy_blocks(rec)
-    return Noise(rec.frames / rec.rate, rec.frames // size, len(found), len(found) * size / rec.rate,
-                 stretches(found, size, rec.rate))
+    return Noise(rec.frames / RATE, rec.frames // BLOCK, len(found), len(found) * BLOCK / RATE,
+                 stretches(found))
 
 
 def print_noise(path: Path, n: Noise, limit: int) -> None:
-    print(f"{path}: {n.seconds:.2f} s, {n.blocks} blocks of {BLOCK_MS} ms, {n.noisy_blocks} noise-like "
+    print(f"{path}: {n.seconds:.2f} s, {n.blocks} blocks, {n.noisy_blocks} noise-like "
           f"({n.noisy_seconds:.2f} s) in {len(n.stretches)} stretches")
     for s in n.stretches[:limit]:
         print(f"  {s.start:.3f} s to {s.end:.3f} s, {s.blocks} blocks")
@@ -96,17 +95,13 @@ def print_noise(path: Path, n: Noise, limit: int) -> None:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file", type=Path)
-    ap.add_argument("--raw", type=int, default=None, metavar="RATE")
     ap.add_argument("--list", type=int, default=20)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    if args.raw is not None and args.raw < 1:
-        ap.error("--raw RATE must be at least 1")
     if args.list < 0:
         ap.error("--list can't be negative")
     try:
-        rec = read_raw(args.file, args.raw) if args.raw is not None else read_wav(args.file)
-        result = find(rec)
+        result = find(read_raw(args.file, RATE))
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
         return 2
