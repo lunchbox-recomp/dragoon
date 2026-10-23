@@ -164,19 +164,31 @@ class RefusalTest(ExportTestCase):
         self.assertIn("tar: No space left on device", err)
         self.assertNotIn("non-zero exit status", err)
 
-    def test_a_failing_git_archive_says_why(self):
+    def export_with_git_archive_failing(self, returncode: int, stderr: bytes
+                                        ) -> tuple[int, str, str]:
+        """Export with the engine's git archive failing the way a run of git can."""
         real = subprocess.run
 
         def run(cmd, *args, **kwargs):
             if cmd[3:4] == ["archive"] and Path(cmd[2]).name == "gcn-recomp":
-                raise subprocess.CalledProcessError(128, cmd, stderr=b"fatal: not a tree object\n")
+                raise subprocess.CalledProcessError(returncode, cmd, stderr=stderr)
             return real(cmd, *args, **kwargs)
 
         with mock.patch.object(export_source.subprocess, "run", run):
-            code, out, err = self.export()
+            return self.export()
+
+    def test_a_failing_git_archive_says_why(self):
+        code, out, err = self.export_with_git_archive_failing(128, b"fatal: not a tree object\n")
         self.assertEqual((code, out), (2, ""))
         self.assertIn("fatal: not a tree object", err)
         self.assertNotIn("non-zero exit status", err)
+        self.assertFalse(self.out.exists())
+
+    def test_a_failing_git_archive_that_prints_nothing_gives_its_exit_status(self):
+        code, out, err = self.export_with_git_archive_failing(-9, b"")  # killed by a signal
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("gcn-recomp archive --format=tar", err)
+        self.assertTrue(err.rstrip().endswith("failed: exit -9"), err)
         self.assertFalse(self.out.exists())
 
     def test_a_failure_part_way_leaves_no_out_and_the_next_run_works(self):

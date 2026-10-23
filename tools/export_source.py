@@ -125,8 +125,8 @@ def archive(repo: Path, commit: str, dest: Path) -> None:
         subprocess.run([TAR, "-x", "-f", "-", "-C", str(dest)], input=tar, capture_output=True,
                        check=True)
     except subprocess.CalledProcessError as e:
-        raise ValueError(f"{' '.join(e.cmd)} failed: "
-                         f"{e.stderr.decode(errors='replace').strip()}") from None
+        why = e.stderr.decode(errors="replace").strip() or f"exit {e.returncode}"
+        raise ValueError(f"{' '.join(e.cmd)} failed: {why}") from None
 
 
 def clear(out: Path, remove: bool) -> None:
@@ -179,7 +179,7 @@ def main(argv: list[str]) -> int:
     args = ap.parse_args(argv)
     try:
         info = export(args.repo.resolve(), args.out)
-    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+    except (OSError, ValueError) as e:
         print(f"export_source.py: {e}", file=sys.stderr)
         return 2
     count = len(manifest(args.out))
