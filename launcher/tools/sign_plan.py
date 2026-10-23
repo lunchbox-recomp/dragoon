@@ -1,0 +1,122 @@
+"""The commands that sign, package and notarize Dragoon.app, as argument lists in order.
+
+Nothing here runs anything. sign_and_package.py runs them, or prints them under --dry-run.
+The order is Apple's: sign inside out with the hardened runtime and a secure timestamp and
+never with --deep, make the DMG, sign it, notarize it as the outermost container, staple it
+and verify. The launcher claims no entitlements, so no command passes any.
+"""
+from __future__ import annotations
+
+import plistlib
+from pathlib import Path
+from typing import NamedTuple
+
+CODESIGN = "/usr/bin/codesign"
+DITTO = "/usr/bin/ditto"
+HDIUTIL = "/usr/bin/hdiutil"
+LN = "/bin/ln"
+SPCTL = "/usr/sbin/spctl"
+XCRUN = "/usr/bin/xcrun"
+
+APP = "Dragoon.app"  # in the DMG, whatever the input is called
+DMG = "Dragoon.dmg"
+STAGING = "dmg-root"  # what hdiutil packs: the app and an Applications link
+VOLUME = "Dragoon"
+SPARKLE = "Contents/Frameworks/Sparkle.framework"
+TOOLS = ("cmake", "ninja")  # bare executables in Contents/MacOS, signed with an identifier
+
+
+class Notary(NamedTuple):
+    key: Path
+    key_id: str
+    issuer: str
+
+    def flags(self) -> list[str]:
+        return ["--key", str(self.key), "--key-id", self.key_id, "--issuer", self.issuer]
+
+
+def bundle_identifier(app: Path) -> str:
+    """The app's CFBundleIdentifier. Raises ValueError when it can't be read."""
+    plist = app / "Contents" / "Info.plist"
+    try:
+        with plist.open("rb") as f:
+            identifier = plistlib.load(f).get("CFBundleIdentifier")
+    except (OSError, ValueError) as e:
+        raise ValueError(f"can't read {plist}: {e}") from None
+    if not isinstance(identifier, str) or not identifier:
+        raise ValueError(f"{plist} has no CFBundleIdentifier")
+    return identifier
+
+
+def check_app(app: Path) -> None:
+    """Raise ValueError unless APP is an app this plan can sign."""
+    if not app.is_dir():
+        raise ValueError(f"{app} isn't a directory")
+    bundle_identifier(app)
+    for tool in TOOLS:
+        if not (app / "Contents" / "MacOS" / tool).is_file():
+            raise ValueError(f"{app} has no Contents/MacOS/{tool}")
+
+
+def sign_item(identity: str, path: Path, identifier: str = "") -> list[str]:
+    """Sign a piece of the app. -f replaces the signature a vendor or lipo left."""
+    cmd = [CODESIGN, "-f", "-s", identity, "-o", "runtime", "--timestamp"]
+    return cmd + (["-i", identifier] if identifier else []) + [str(path)]
+
+
+def sign_app(source: Path, app: Path, identity: str) -> list[list[str]]:
+    """Sign the copy at APP inside out. MacOS/cmake and MacOS/ninja go first, then Sparkle's
+    pieces in Sparkle's order without its XPC services, which a launcher that isn't
+    sandboxed doesn't ship, then the app. SOURCE is the input, where Sparkle is looked for."""
+    identifier = bundle_identifier(source)
+    steps = [sign_item(identity, app / "Contents" / "MacOS" / tool, f"{identifier}.{tool}")
+             for tool in TOOLS]
+    if (source / SPARKLE).is_dir():
+        framework = app / SPARKLE
+        current = (source / SPARKLE / "Versions" / "Current").resolve().name  # B in Sparkle 2
+        version = framework / "Versions" / current
+        steps += [sign_item(identity, version / "Autoupdate"),
+                  sign_item(identity, version / "Updater.app"), sign_item(identity, framework)]
+    return steps + [sign_item(identity, app)]
+
+
+def copy_app(source: Path, app: Path) -> list[str]:
+    return [DITTO, str(source), str(app)]
+
+
+def applications_link(staging: Path) -> list[str]:
+    return [LN, "-s", "/Applications", str(staging / "Applications")]
+
+
+def make_dmg(staging: Path, dmg: Path) -> list[str]:
+    return [HDIUTIL, "create", "-format", "UDZO", "-volname", VOLUME, "-srcfolder", str(staging),
+            str(dmg)]
+
+
+def sign_dmg(identity: str, dmg: Path, identifier: str) -> list[str]:
+    return [CODESIGN, "-s", identity, "--timestamp", "-i", f"{identifier}.dmg", str(dmg)]
+
+
+def notarize(dmg: Path, notary: Notary) -> list[str]:
+    return [XCRUN, "notarytool", "submit", str(dmg), *notary.flags(), "--wait", "--output-format",
+            "json"]
+
+
+def notary_log(submission: str, notary: Notary) -> list[str]:
+    return [XCRUN, "notarytool", "log", submission, *notary.flags()]
+
+
+def staple(dmg: Path) -> list[str]:
+    return [XCRUN, "stapler", "staple", str(dmg)]
+
+
+def verify(app: Path, dmg: Path, notarized: bool) -> list[list[str]]:
+    """The signature on the app, then for a notarized DMG its ticket and the assessments Apple
+    gives for an app and for a disk image."""
+    steps = [[CODESIGN, "--verify", "--strict", "--deep", str(app)]]
+    if notarized:
+        steps += [[XCRUN, "stapler", "validate", str(dmg)],
+                  [SPCTL, "--assess", "--type", "execute", "-vv", str(app)],
+                  [SPCTL, "--assess", "--type", "open", "--context", "context:primary-signature",
+                   "-vv", str(dmg)]]
+    return steps
