@@ -30,8 +30,8 @@ def log_path(recording: Path) -> Path:
 
 
 def read_blocks(path: Path) -> list[Block]:
-    """The blocks in a block log. A line without all six fields is skipped, since a run that's
-    killed can leave its last line cut short."""
+    """The blocks in a block log. A line without exactly six fields is skipped, since a run
+    that's killed can leave its last line cut short."""
     blocks = []
     for n, line in enumerate(path.read_text().splitlines(), 1):
         fields = line.split()

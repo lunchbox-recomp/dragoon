@@ -53,8 +53,16 @@ class FindTest(unittest.TestCase):
         self.assertEqual([(s.start, s.end, s.blocks) for s in got.stretches], [(0.0, 0.105, 2), (0.205, 0.21, 1)])
 
     def test_a_partial_last_block_is_left_out(self):
-        x = tone(RATE + 100, RATE)
-        self.assertEqual(noise_blocks.find(rec(x, x)).blocks, 200)
+        x = tone(RATE, RATE) + noise(100, 30000, 7)
+        got = noise_blocks.find(rec(x, x))
+        self.assertEqual((got.blocks, got.noisy_blocks), (200, 0))
+
+    def test_the_ratio_divides_by_the_blocks_159_differences(self):
+        # A sine with a period of 6 samples has as much energy in its first differences as in
+        # its samples, 159 of them against 160. Only the mean over 159 puts it over the ratio of 1.
+        x = tone(160, RATE, freq=RATE / 6)
+        self.assertEqual(noise_blocks.find(rec(x, x)).noisy_blocks, 1)
+
 
 
 class MainTest(unittest.TestCase):

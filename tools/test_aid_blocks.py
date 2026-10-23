@@ -28,6 +28,10 @@ class ReadBlocksTest(unittest.TestCase):
         path = write_file(self.dir, "aid.raw.txt", LOG + "480 160 21830926 0 0057")
         self.assertEqual(len(aid_blocks.read_blocks(path)), 3)
 
+    def test_a_line_with_more_than_six_fields_is_skipped_too(self):
+        path = write_file(self.dir, "aid.raw.txt", LOG + "480 160 21830926 0 00571E00 1 1\n")
+        self.assertEqual(len(aid_blocks.read_blocks(path)), 3)
+
     def test_a_line_that_isnt_numbers_is_refused_by_line(self):
         path = write_file(self.dir, "aid.raw.txt", LOG + "a 160 1 0 00571E00 1\n")
         with self.assertRaisesRegex(ValueError, r"aid.raw.txt:4: 'a 160 1 0 00571E00 1' isn't a block line"):
