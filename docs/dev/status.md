@@ -10,12 +10,15 @@ pacing and the twelve-route warm-up were measured on a build of Dragoon `788571c
 gcn-recomp `b848158` with the seven course routes added. All twelve frame-hash routes and all
 twelve audio-hash routes pass at `fe0c0bf`. At gcn-recomp `b97c019` eleven routes' frames and
 all twelve routes' audio changed, and both sets of goldens were recorded again there. The pin
-is now `e1016b8`, where every route matched them (under gcn-recomp `e1016b8` below). The Top
-Ride, stadium and memory card findings are from Dragoon `788571c` at gcn-recomp `b848158`.
+is now `e1016b8`, where all twelve matched them. The goldens of the nine Top Ride and stadium
+routes were recorded at `e1016b8` on Dragoon `4f25003`, and all twenty-one routes' frames and
+audio match there (under gcn-recomp `e1016b8` below). The Top Ride and stadium pacing numbers
+are from Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen findings
+were checked again at `e1016b8` on `4f25003`.
 
 | Feature | Status | Note |
 |---|---|---|
-| Boot and memory card | Works, but stereo or mono isn't kept | A blank card gets the game's prompt by frame 60, and the save file is made. The game writes the card again after each title screen and when its Sound screen closes, and what it wrote comes back on the next launch. The music and effects balance moved in one run sat where it was left in the next. Stereo or mono doesn't come back, because the game keeps it in the console's SRAM, which gcn-recomp starts afresh at every launch (table under Memory card) |
+| Boot and memory card | Works | A blank card gets the game's prompt by frame 60, and the save file is made. The game writes the card again after each title screen and when its Sound screen closes, and what it wrote comes back on the next launch. In one pair of runs the Sound screen's Mono and the music and effects balance both sat where the first run left them. Mono is kept in the console's SRAM, which gcn-recomp has saved in `saves/sram.raw` since `2bf7308`. At `b848158` it started afresh at every launch and Mono didn't come back (table under Memory card) |
 | Opening movie | Plays | Then the title and the attract demos, races and mode movies |
 | Title screen | Works | `tests/routes/title.txt` |
 | Mode select | Works | `tests/routes/menu.txt`. Since gcn-recomp `b97c019` the preview window at its right shows a race, where it was a plain gray box (under gcn-recomp `e1016b8`) |
@@ -127,7 +130,8 @@ need `--pads=4`.
 | Four-player entry | `city-trial-4p.txt` | 2700 | P1 OK to P4 OK under READY?, each player joined from its own port |
 | Four-player City Trial | `city-trial-4p.txt` | 3480 | Four views, 4:51 left, ports 1 and 3 steering left and 2 and 4 right |
 | Three-minute City Trial | `city-trial-stadium.txt` | 4800 | The city, 2:55 left. The entry screen before it read "Time: 3 min [Drag Race]" |
-| Time up | `city-trial-stadium.txt` | 15600 | `TIME!` at 0:00:00. Each player's machine stats follow and wait for A. The screen behind them draws black (see Stats screen) |
+| Time up | `city-trial-stadium.txt` | 15600 | `TIME!` at 0:00:00, with Kirby seen from behind and the speedometer at the lower right. Each player's machine stats follow and wait for A |
+| Machine stats | `city-trial-stadium.txt` | 15900 | Four quarters on a dim green background, each a list from Boost to HP beside a machine. P1 is at the top left with every value 0 and the other three are marked CPU. PRESS A sits in the middle (see Stats screen) |
 | Drag Race 3 | `city-trial-stadium.txt` | 17100 | Under way, 0:06 on the clock, P1 fourth behind three CPUs |
 | Stadium results | `city-trial-stadium.txt` | 20400 | P1 fourth in 0:50.87 behind CPUs on 0:35.83, 0:47.36 and 0:47.62, waiting for START |
 | Four-player stadium | `city-trial-stadium-4p.txt` | 17100 | Drag Race 3 in four views, 0:06 on the clock |
@@ -243,15 +247,16 @@ to 2.0 ms. The render frame that first drew with it took 41.57 ms on Fantasy Mea
 
 ## Memory card
 
-Three runs under one probe NAME, so each launch found the card the last one left. Each had
-`--log=exi`, which logs every card command. The page writes (`memcard cmd F2`) were counted
-between the presses around them. The card's SHA-1 changed after each run.
+Three runs at gcn-recomp `e1016b8` under one probe NAME, so each launch found the card the
+last one left. Each had `--log=exi`, which logs every card command. The page writes
+(`memcard cmd F2`) were counted between the scripted presses in the log. Runs 2 and 3 dumped
+a frame every 50 and run 1 dumped none.
 
 | Run | Presses | Card writes | What the frames show |
 |---|---|---|---|
-| 1 | `tests/routes/title.txt` on a blank card | 1,024 pages, the new save file | The title |
-| 2 | Options, Sound, Mono, the balance moved two steps toward Effects, then B twice | 448 pages between START at the title and frame 700, then 320 after B left the Sound screen | Mono picked and the balance moved |
-| 3 | Options, Sound and no change | 448 pages between START at the title and frame 700 | The balance where run 2 left it, and Stereo |
+| 1 | `tests/routes/title.txt` on a blank card | 1,024 pages, the new save file | Nothing was dumped |
+| 2 | Options, Sound, Mono, the balance moved toward Effects, then B twice | 448 pages between START at the title and frame 700, then 320 after the first B left the Sound screen | Frame 1400 shows Stereo picked. Frame 1650 shows Mono picked, and frame 1950 shows Mono with the balance marker right of center |
+| 3 | Options, Sound and no change | 448 pages between START at the title and frame 700, none after | Frame 1400 shows Mono picked and the balance marker right of center, where run 2's frame 1950 had it |
 
 With a save on the card the game skips the card prompts and starts the opening movie at once,
 so these presses come earlier than a route's. Runs 2 and 3 began
@@ -261,34 +266,40 @@ so these presses come earlier than a route's. Runs 2 and 3 began
 Stereo or mono goes through the SDK. The Sound screen (the call at 800AEB78 in
 `kar_smsoundtest__near_800aeb20`) calls `HSD_SynthSetSoundMode`, whose call at 80448534 is
 `OSSetSoundMode`, and that writes bit 2 of SRAM byte 0x13. At boot `HSD_SynthInit` reads it
-back with `OSGetSoundMode` at 8044EA84. A console keeps SRAM on a battery. gcn-recomp's
-`sram_init` (`runtime/hw/exi.cpp`) sets byte 0x13 to 0x2C, stereo, at every launch and never
-saves it, so Mono lasts only until the game closes.
+back with `OSGetSoundMode` at 8044EA84. A console keeps SRAM on a battery. Since gcn-recomp
+`2bf7308` the runtime keeps it in `saves/sram.raw` and loads it at boot (`runtime/hw/sram.cpp`).
+The blank card's run 1 left no such file. After run 2 it was there at 64 bytes with byte 0x13
+reading 0x28, and run 3 didn't write it again. At `b848158` `sram_init` (`runtime/hw/exi.cpp`)
+set byte 0x13 to 0x2C, stereo, at every launch and never saved it, so Mono lasted only until
+the game closed.
 
-City Trial's Game Settings didn't come back either, because the game doesn't write them
-when its menus close. In one pair of runs the second showed 5 min and Shuffle after the
-first set 3 min and Drag Race. A third run that made the same change with `--log=exi`
-logged no card writes after it, as every write came before frame 700. Whether the game
-saves them after a match wasn't checked.
+At `b848158` City Trial's Game Settings didn't come back either, because the game doesn't
+write them when its menus close. In one pair of runs the second showed 5 min and Shuffle
+after the first set 3 min and Drag Race. A third run that made the same change with
+`--log=exi` logged no card writes after it, as every write came before frame 700. Whether
+the game saves them after a match wasn't checked, and none of this was run again at
+`e1016b8`.
 
 ## Stats screen
 
-When City Trial's clock runs out, each player's machine stats come up on a screen that draws
-black here. The draw log of frame
-15,900 in `city-trial-stadium.txt` (`GCN_DRAWLOG=15900 GCN_DRAWLOG_VERBOSE=1`) shows why.
-Draws 0 to 7 are a green background and draws 8 to 99 are the four machines with their riders,
-one camera to a quarter of the screen. Draw 100 covers the screen with colour updates off and
-alpha updates on (blend register `007012`). Draw 101 covers it again with blend `0050D9`, a
-source factor of zero and a destination factor of DSTALPHA, while the pixel engine's format is
-RGB8_Z24 (`pecntrl=000040`), which has no alpha. Draw 102 is the dimming quad.
+When City Trial's clock runs out, each player's machine stats come up and wait for A. At
+gcn-recomp `b848158` that screen drew black. At `e1016b8` it doesn't. Frames 15,900 and 16,200
+of `city-trial-stadium.txt`, looked at in a run at `e1016b8`, each show the four quarters
+described under How far it gets, with a stat list and a machine in each on a dim green
+background and PRESS A in the middle. The machines sit in different poses in the two frames. Against the
+hashes recorded for the route at `b848158`, four of its 68 frames differ at `e1016b8`. Two are
+15,900 and 16,200. The others are 1,200 and 1,500, which the EFB copy fix moved (under
+gcn-recomp `e1016b8` below). In `city-trial-stadium-4p.txt` the same four of 70 differ. The
+four-player stats frames weren't looked at.
 
-The GL renderer (`runtime/gx/render_gl.cpp` in gcn-recomp `b848158`) turns GX's DSTALPHA into
-`GL_DST_ALPHA` from its `kBlendDst` table whatever the format. For RGB8 it masks alpha writes
-(`has_alpha` from `bp[0x43] & 7`), so draw 101 multiplies the frame by an alpha the game never
-set, and the frame comes out black. Dolphin's `RenderState.cpp` (GPL, read and not copied) reads DSTALPHA as one and
-INVDSTALPHA as zero when the format has no alpha, which makes draw 101 a no-op. Run again with `GCN_DRAW_SKIP=101-101`, the frame shows the dimmed green view with all four
-machines. The mode select's gray panel is something else, as none of its draws at frame 1,300
-use a destination alpha factor.
+The draw log of frame 15,900 (`GCN_DRAWLOG=15900 GCN_DRAWLOG_VERBOSE=1`) at `e1016b8` still
+lists draw 100 with blend register `007012` and draw 101 with `0050D9`, both under
+`pecntrl=000040`, and draw 102 with `00F4A9`. The format in `pecntrl=000040` is RGB8_Z24, which
+has no alpha. gcn-recomp's message for `1b77560` calls draw 101 a full-screen ZERO, DSTALPHA
+pass. The renderer used to hand GL `GL_DST_ALPHA` for it whatever the format, and the frame
+came out black. Since `1b77560`, `blend_factors` in `runtime/gx/blend.h` reads DSTALPHA as one
+and INVDSTALPHA as zero when `efb_has_alpha` says the format has none, and `render_gl.cpp` calls
+it (line 2285 at `e1016b8`), so draw 101 no longer blacks the frame out.
 
 ## Four players
 
@@ -509,7 +520,7 @@ What a player's first session looks like after the warm-up, against the bars set
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys | Fail |
 | Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019` | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
@@ -579,6 +590,20 @@ hash` line that the first and third audio runs both printed was the same.
 write fix in `216fe38` and window sizing, and none touches the audio files there. Built at
 `e1016b8`, the game ran both checks against the goldens recorded at `b97c019`, and every route
 matched, all 739 frames and all 24 audio rows.
+
+The seven Top Ride routes and the two stadium routes came onto that pin afterward, and their
+goldens were recorded at `e1016b8` on Dragoon `4f25003`. Frames use each route's seconds and
+dump interval in `tests/hashes/manifest.txt`. Audio rows are at lists 12,000 and 16,000 for
+Top Ride and 56,000 and 68,000 for the stadium routes. After each `record`, two `check` runs of
+the nine matched every frame (558) and every audio row (18), so two runs at one build agreed.
+Then `tools/frame_hashes.py check` and `tools/audio_hashes.py check` over all twenty-one routes
+matched too, 1,297 frames and 42 audio rows, so the twelve goldens recorded at `b97c019` still
+hold. The frame check took 10 min 43 s and the audio check 10 min 41 s.
+
+The nine routes' goldens at `b848158` aren't in this branch. Against them, every audio row of
+the nine differs at `e1016b8`, all 18. Each Top Ride route's frames differ at 7 of 60, the
+ones at 1,020 to 1,380, and each stadium route's at 4 (the stats frames above and frames 1,200
+and 1,500). Frame 1,200 hashes to `ba0a9f9b` on all nine, as it does on the menu route.
 
 ## Fixes on the way
 
