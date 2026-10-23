@@ -423,14 +423,29 @@ class FailureTest(SignTestCase):
 
     def test_a_notarization_that_never_finishes_is_cut_off_and_says_how_to_look(self):
         self.switch("notarytool hangs")
-        with mock.patch.object(sign_plan, "NOTARY_SECONDS", 1):
-            code, _, err = self.run_tool()
+        code, _, err = self.run_tool("--notary-timeout", "0.02")  # 1.2 s
         self.assertEqual(code, 1)
-        self.assertIn("didn't finish in 1 s", err)
+        self.assertIn("didn't finish in 0.02 min", err)
         history = shlex.join([self.fakes["xcrun"], "notarytool", "history", "--key", str(self.key),
                               "--key-id", KEY_ID, "--issuer", ISSUER])
         self.assertIn(history, err)
         self.assertEqual(self.calls()[-1]["argv"][:2], ["notarytool", "submit"])  # never stapled
+
+    def test_the_notarization_cut_off_is_30_minutes_unless_given(self):
+        defaults = sign_and_package.parse_args(["--app", "a", "--identity", "-", "--out", "o"])
+        self.assertEqual(defaults.notary_timeout, 30)
+        self.assertEqual(self.notarytool_timeout("default out"), 30 * 60)
+        self.assertEqual(self.notarytool_timeout("given out", "--notary-timeout", "45"), 45 * 60)
+
+    def notarytool_timeout(self, out: str, *extra: str) -> float:
+        """The seconds a run's notarytool submit was given, with its output in OUT."""
+        self.out = self.dir / out
+        with mock.patch.object(sign_and_package.subprocess, "run",
+                               wraps=sign_and_package.subprocess.run) as run:
+            code, _, _ = self.run_tool(*extra)
+        self.assertEqual(code, 0)
+        (submit,) = [c for c in run.call_args_list if c.args[0][1:3] == ["notarytool", "submit"]]
+        return submit.kwargs["timeout"]
 
     def test_a_rejected_notarization_stops_and_says_how_to_see_why(self):
         self.switch("invalid", "notarytool exits 1")
@@ -542,6 +557,11 @@ class RefusalTest(SignTestCase):
                     code = sign_and_package.main(argv)
                 self.assertEqual(code, 2)
                 self.assertIn("all three", err.getvalue())
+
+    def test_a_notary_timeout_that_is_not_above_zero(self):
+        for bad in ("0", "-5", "nan", "inf"):
+            with self.subTest(bad):
+                self.assert_refused("--notary-timeout", f"--notary-timeout={bad}")
 
     def test_a_notary_key_file_that_is_not_there(self):
         self.key.unlink()

@@ -27,7 +27,9 @@ STAGING = "dmg-root"  # what hdiutil packs: the app and an Applications link
 VOLUME = "Dragoon"
 SPARKLE = "Contents/Frameworks/Sparkle.framework"
 TOOLS = ("cmake", "ninja")  # bare executables in Contents/MacOS, signed with an identifier
-NOTARY_SECONDS = 1800  # Apple finishes 98 percent of submissions within 15 minutes
+# How long notarytool may wait unless --notary-timeout says otherwise. Apple finishes 98 percent
+# of submissions within 15 minutes.
+NOTARY_MINUTES = 30
 
 
 class Notary(NamedTuple):

@@ -2,7 +2,8 @@
 """Sign Dragoon.app, put it in a DMG, sign that and notarize it.
 
 Usage: sign_and_package.py --app APP --identity NAME --out DIR
-           [--notary-key FILE --notary-key-id ID --notary-issuer ID] [--dry-run]
+           [--notary-key FILE --notary-key-id ID --notary-issuer ID] [--notary-timeout MINUTES]
+           [--dry-run]
 
 APP is left as it is. The tool signs a copy in DIR, which must be empty or missing:
   1  ditto copies APP to DIR/dmg-root/Dragoon.app, beside an Applications link to /Applications
@@ -15,8 +16,8 @@ APP is left as it is. The tool signs a copy in DIR, which must be empty or missi
      signature costs no notarization round trip
   4  hdiutil create -format UDZO makes DIR/Dragoon.dmg from dmg-root, tried up to three times
      since it sometimes fails with Resource busy, and codesign --timestamp -i signs it
-  5  with the Team API key, notarytool submit --wait, which is cut off after 30 minutes, then
-     stapler staple on the DMG
+  5  with the Team API key, notarytool submit --wait, which is cut off after --notary-timeout
+     minutes (30 unless given), then stapler staple on the DMG
   6  a notarized DMG gets stapler validate and the spctl assessments for an app and for a
      disk image
 --identity - signs ad hoc, with --timestamp=none and without -o runtime. Apple's timestamp
@@ -31,7 +32,8 @@ into itself.
 Every command is printed with a "+ " as it runs, and the DMG's path is the last line of a
 finished run. A rejected notarization prints the submission ID and the notarytool log command
 that shows why. One that outlasts the cut-off prints the notarytool history command that finds
-the submission.
+the submission. A re-run needs an empty DIR and uploads again, so give a slow submission a longer
+--notary-timeout instead.
 
 Exits 0 when the DMG is made, 1 when a command failed or Apple rejected the notarization and 2
 on a bad argument.
@@ -102,15 +104,14 @@ def parse_notary(text: str) -> tuple[str, str]:
     return str(data.get("id", "")), str(data.get("status", ""))
 
 
-def submit(runner: Runner, dmg: Path, notary: Notary) -> None:
-    """Notarize DMG and wait, for NOTARY_SECONDS at most. Raises StepFailed unless Apple accepts it."""
+def submit(runner: Runner, dmg: Path, notary: Notary, minutes: float) -> None:
+    """Notarize DMG and wait, for MINUTES at most. Raises StepFailed unless Apple accepts it."""
     try:
-        done = runner.run(sign_plan.notarize(dmg, notary), capture=True,
-                          timeout=sign_plan.NOTARY_SECONDS)
+        done = runner.run(sign_plan.notarize(dmg, notary), capture=True, timeout=minutes * 60)
     except subprocess.TimeoutExpired:
         history = shlex.join(sign_plan.notary_history(notary))
-        raise StepFailed(f"notarytool didn't finish in {sign_plan.NOTARY_SECONDS} s. Apple may "
-                         f"still be working on it, so run {history} to find the submission") from None
+        raise StepFailed(f"notarytool didn't finish in {minutes:g} min. Apple may still be "
+                         f"working on it, so run {history} to find the submission") from None
     if done is None:
         return
     print(done.stdout, end="", flush=True)
@@ -139,7 +140,7 @@ def package(a: argparse.Namespace, runner: Runner, notary: Optional[Notary]) -> 
     runner.step(sign_plan.make_dmg(staging, dmg), tries=DMG_TRIES)
     runner.step(sign_plan.sign_dmg(a.identity, dmg, identifier))
     if notary:
-        submit(runner, dmg, notary)
+        submit(runner, dmg, notary, a.notary_timeout)
         runner.step(sign_plan.staple(dmg))
         for cmd in sign_plan.verify_notarized(app, dmg):
             runner.step(cmd)
@@ -156,6 +157,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--notary-key", type=Path, help="the Team API key (.p8)")
     ap.add_argument("--notary-key-id")
     ap.add_argument("--notary-issuer")
+    ap.add_argument("--notary-timeout", type=float, default=sign_plan.NOTARY_MINUTES,
+                    metavar="MINUTES", help="how long to wait for Apple (default %(default)g)")
     ap.add_argument("--dry-run", action="store_true", help="print every command and run none")
     a = ap.parse_args(argv)
     a.app, a.out = Path(os.path.abspath(a.app)), Path(os.path.abspath(a.out))
@@ -167,6 +170,8 @@ def bad_argument(a: argparse.Namespace) -> Optional[str]:
     if any(given) and not all(given):
         return ("--notary-key, --notary-key-id and --notary-issuer go together. "
                 "Give all three or none")
+    if not 0 < a.notary_timeout < float("inf"):
+        return f"--notary-timeout {a.notary_timeout:g} isn't a number of minutes above 0"
     try:
         sign_plan.check_app(a.app)
     except ValueError as e:
