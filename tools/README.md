@@ -202,8 +202,9 @@ It writes nothing and exits 2 when:
 - a tracked file in either repository has uncommitted changes. Untracked files don't count, since `git archive` leaves them out anyway
 - gcn-recomp is checked out at another commit than HEAD pins, or isn't checked out
 - OUT isn't empty
+- git or tar fails while writing, which leaves OUT missing or empty again
 
-`--repo` names a checkout other than the one holding the tool. A missing OUT is made.
+`--repo` names a checkout other than the one holding the tool. A missing OUT is made. git comes from `PATH` and tar is `/usr/bin/tar`.
 
 ## launcher_build.py
 

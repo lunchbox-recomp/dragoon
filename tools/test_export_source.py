@@ -1,5 +1,6 @@
 import hashlib
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -91,6 +92,14 @@ class ExportTest(ExportTestCase):
         self.assertEqual(self.export()[0], 0)
         self.assertIn("CMakeLists.txt", self.files())
 
+    def test_the_systems_tar_extracts_whatever_else_is_on_the_path(self):
+        other = self.dir / "other bin"  # where a GNU tar from Homebrew would be
+        other.mkdir()
+        write_file(other, "tar", "#!/bin/sh\nexit 1\n").chmod(0o755)
+        with mock.patch.dict(os.environ, {"PATH": f"{other}:{os.environ['PATH']}"}):
+            self.assertEqual(self.export()[0], 0)
+        self.assertIn("CMakeLists.txt", self.files())
+
 
 class RefusalTest(ExportTestCase):
     def assert_refused(self, why: str) -> None:
@@ -127,6 +136,33 @@ class RefusalTest(ExportTestCase):
     def test_a_cmakelists_without_the_disc(self):
         commit(self.repo, {"CMakeLists.txt": "add_subdirectory(gcn-recomp)\n"})
         self.assert_refused("gcn_add_game")
+
+    def export_failing_on_the_engine(self) -> tuple[int, str, str]:
+        """Export with the second git archive, the engine's, failing as a full disk would."""
+        real, calls = export_source.archive, []
+
+        def archive(repo: Path, commit: str, dest: Path) -> None:
+            calls.append(dest)
+            if len(calls) == 2:
+                raise subprocess.CalledProcessError(1, "tar", stderr=b"No space left on device")
+            real(repo, commit, dest)
+
+        with mock.patch.object(export_source, "archive", archive):
+            result = self.export()
+        self.assertEqual(len(calls), 2)  # the first tree was written by then
+        return result
+
+    def test_a_failure_part_way_leaves_no_out_and_the_next_run_works(self):
+        self.assertEqual(self.export_failing_on_the_engine()[0], 2)
+        self.assertFalse(self.out.exists())
+        self.assertEqual(self.export()[0], 0)
+        self.assertIn("gcn-recomp/CMakeLists.txt", self.files())
+
+    def test_a_failure_part_way_empties_an_out_that_was_there(self):
+        self.out.mkdir()
+        self.assertEqual(self.export_failing_on_the_engine()[0], 2)
+        self.assertEqual(os.listdir(self.out), [])
+        self.assertEqual(self.export()[0], 0)
 
 
 class GameIdsTest(unittest.TestCase):

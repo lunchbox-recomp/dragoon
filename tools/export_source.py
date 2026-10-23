@@ -9,11 +9,13 @@ such as rom/game.iso, build/ and saves/, never reach it. It adds two files:
   source-info.json     the two commits as dragoon and gcn-recomp, plus disc_id and dol_sha1
                        from the gcn_add_game call in CMakeLists.txt
   source-manifest.txt  one "<sha256>  <path>" line per other file, sorted by path
---repo names the Dragoon checkout, by default the one holding this tool.
+--repo names the Dragoon checkout, by default the one holding this tool. git comes from PATH
+and tar is /usr/bin/tar.
 
 Exits 0 when the snapshot is written. Exits 2, having written nothing, when a tracked file
 in either repository has uncommitted changes, when gcn-recomp is checked out at another
-commit than HEAD pins or not at all, when OUT isn't empty, or when git fails.
+commit than HEAD pins or not at all, when OUT isn't empty, or when git or tar fails. A failure
+while writing leaves OUT as it was, missing or empty.
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ import argparse
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +31,7 @@ from pathlib import Path
 import source_info
 
 ROOT = Path(__file__).resolve().parents[1]
+TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extract differently
 MANIFEST = "source-manifest.txt"
 ENGINE = "gcn-recomp"
 _MANIFEST_LINE = re.compile(r"([0-9a-f]{64})  (.+)")
@@ -116,8 +120,20 @@ def archive(repo: Path, commit: str, dest: Path) -> None:
     tar = subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", commit],
                          capture_output=True, check=True).stdout
     dest.mkdir(exist_ok=True)
-    subprocess.run(["tar", "-x", "-f", "-", "-C", str(dest)], input=tar, capture_output=True,
+    subprocess.run([TAR, "-x", "-f", "-", "-C", str(dest)], input=tar, capture_output=True,
                    check=True)
+
+
+def clear(out: Path, remove: bool) -> None:
+    """Empty OUT, a snapshot that didn't get finished, and remove it too when REMOVE."""
+    if remove:
+        shutil.rmtree(out, ignore_errors=True)
+        return
+    for entry in out.iterdir():
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            entry.unlink()
 
 
 def export(repo: Path, out: Path) -> dict[str, str]:
@@ -137,11 +153,16 @@ def export(repo: Path, out: Path) -> dict[str, str]:
     disc_id, dol_sha1 = game_ids(git(repo, "show", "HEAD:CMakeLists.txt"))
     info = {"dragoon": head, "gcn-recomp": pin, "disc_id": disc_id, "dol_sha1": dol_sha1}
 
+    made = not out.exists()
     out.mkdir(parents=True, exist_ok=True)
-    archive(repo, head, out)
-    archive(engine, pin, out / ENGINE)
-    source_info.write(out / source_info.NAME, info)
-    (out / MANIFEST).write_text(format_manifest(manifest(out)))
+    try:
+        archive(repo, head, out)
+        archive(engine, pin, out / ENGINE)
+        source_info.write(out / source_info.NAME, info)
+        (out / MANIFEST).write_text(format_manifest(manifest(out)))
+    except BaseException:  # a full disk, say, or ^C, which mustn't leave OUT half written
+        clear(out, remove=made)
+        raise
     return info
 
 
