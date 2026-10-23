@@ -1,0 +1,49 @@
+# What Dragoon.app may hold besides its source snapshot. tools/check_bundle.py reads this.
+# The format is described at the top of tools/bundle_manifest.py. A path that no line allows
+# is a finding, so a new file in the app starts as a line here, reviewed on its own.
+
+# The snapshot from export_source.py. check_bundle.py compares it with a fresh export instead
+# of listing it here.
+source Contents/Resources/source
+
+# The download is 60 MB at most (the player target in the launcher plan).
+budget dmg 60000000
+# PLACEHOLDER. L5 hasn't measured the dev app yet. This is a guess from the sizes in the
+# research (CMake's binary and modules about 36 MB, SDL's tarball 15.7 MB, the snapshot,
+# Sparkle and the launcher about 12 MB) plus a quarter. Replace it with the dev app's size
+# plus a quarter once L5 has measured it. Keep it under 101 MB so the generated C alone breaks it.
+budget app 80000000
+
+# The launcher and the two tools it runs. The layout is L5's.
+macho Contents/MacOS/Dragoon
+macho Contents/MacOS/cmake
+macho Contents/MacOS/ninja
+file Contents/Info.plist
+# Made by codesign when L16 signs the app.
+file Contents/_CodeSignature/CodeResources
+
+# CMake finds its modules at ../share/cmake-4.4 from where it was started, so the launcher
+# runs it through this link to the copy in Contents/MacOS.
+link Contents/Resources/cmake/bin/cmake ../../../MacOS/cmake
+dir Contents/Resources/cmake/share/cmake-4.4/
+
+file Contents/Resources/third_party/SDL3-3.4.18.tar.gz
+dir Contents/Resources/licenses/
+
+# Sparkle (L14). Laid out as Sparkle 2.9.1 ships, read from an installed copy. L14 pins the
+# release and checks this against it. The XPC services are left out because make_app.py removes
+# them from a launcher that isn't sandboxed.
+dir Contents/Frameworks/Sparkle.framework/
+macho Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle
+macho Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate
+macho Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater
+link Contents/Frameworks/Sparkle.framework/Versions/Current B
+link Contents/Frameworks/Sparkle.framework/Sparkle Versions/Current/Sparkle
+link Contents/Frameworks/Sparkle.framework/Autoupdate Versions/Current/Autoupdate
+link Contents/Frameworks/Sparkle.framework/Updater.app Versions/Current/Updater.app
+link Contents/Frameworks/Sparkle.framework/Resources Versions/Current/Resources
+link Contents/Frameworks/Sparkle.framework/Headers Versions/Current/Headers
+link Contents/Frameworks/Sparkle.framework/PrivateHeaders Versions/Current/PrivateHeaders
+link Contents/Frameworks/Sparkle.framework/Modules Versions/Current/Modules
+
+# libusb (L15) gets its dylib lines when L15 picks where the copy goes.

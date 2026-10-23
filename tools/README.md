@@ -241,6 +241,44 @@ A first build on an M4 Max took 112 s, with 24 s to configure, 33 s to compile (
 
 Where does SDL's source come from when nothing downloads? gcn-recomp's `CMakeLists.txt` pins SDL's release tarball by URL and SHA-256 in its `sdl3` `FetchContent_Declare`. sdl_source.py reads that pin, so the hash has one home. Its extraction checks every member before it writes anything, and refuses absolute paths, `..` and anything but plain files and directories, since the tools' Python 3.9 has no tarfile filter. It has no command line.
 
+## check_bundle.py
+
+Does the launcher ship anything game-derived? The disc never reaches CI, so nothing can compare bytes with the game. check_bundle.py looks for the shapes game data takes in `Dragoon.app`, or in a DMG that it attaches read-only and detaches again. Run it before anything is signed.
+
+| Check | What fails |
+|---|---|
+| paths | A file, link or empty directory outside the source snapshot that `launcher/bundle-manifest.txt` doesn't list. Anywhere, a path that `check_no_game_data.py` flags or that a build leaves behind (`gen/`, `rels/`, `inputs/`, `main.dol`, `CMakeCache.txt`, `build.ninja`, `memcard_*`, `.shader-warmup`) |
+| executables | A file that starts with a Mach-O magic at a path the manifest doesn't list for one, such as a built `dragoon` |
+| content | The GameCube disc magic at offset 0x1C, a `CISO` header, or the disc ID anywhere outside the snapshot |
+| source | A snapshot that differs from `export_source.py`'s output for the commit, file by file by SHA-256. A dev tree's `rom/game.iso` link or empty `build/` shows up here |
+| size | An app or a DMG over its budget in the manifest |
+| DMG | Anything besides `Dragoon.app` and an `Applications` link to `/Applications` |
+
+```
+tools/check_bundle.py launcher/dist/Dragoon.app --commit SHA
+tools/check_bundle.py launcher/dist/Dragoon.dmg --commit SHA
+```
+
+It prints one `kind: path (detail)` line per finding and nothing when the bundle is clean. Paths are relative to the app. It exits 0 when clean, 1 with findings and 2 when it couldn't check. A checkout that isn't at `--commit`, a manifest it can't read and a DMG that won't attach all exit 2. `--repo` names the Dragoon checkout the reference snapshot is exported from. It defaults to the one holding the tool. `--manifest` names another manifest.
+
+A path that no manifest line allows is a finding, so a new file in the app starts as a line in the manifest. The app's budget in the manifest is a placeholder until the dev app has been measured.
+
+## bundle_manifest.py
+
+What may the app hold? It reads `launcher/bundle-manifest.txt`. That file names the source snapshot's directory and the two size budgets. It also lists what's allowed outside the snapshot, as plain files, directory prefixes, Mach-O executables and symlinks with their targets. The format is at the top of the module. It has no command line.
+
+## bundle_checks.py
+
+What does each check look at? bundle_checks.py holds the six checks above as functions that return findings, and the `Finding` they print as. It has no command line.
+
+## bundle_tree.py
+
+What does an app tree hold? It lists the regular files with their sizes, the symlinks with their targets, the empty directories and any odd entries such as pipes, and never follows a link. It has no command line.
+
+## bundle_dmg.py
+
+How does check_bundle.py look inside a DMG? It attaches the image with `hdiutil attach -readonly -nobrowse -mountpoint` at a fresh temporary directory and always detaches it, forcing the detach if the volume is busy. The tests fake hdiutil. It has no command line.
+
 ## The engine's own tools
 
 Two tools in `gcn-recomp/tools/` matter when debugging here.
