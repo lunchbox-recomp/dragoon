@@ -45,6 +45,37 @@ class TotalsTest(unittest.TestCase):
         self.assertNotIn("frames", t)
 
 
+class LabelsTest(unittest.TestCase):
+    def labels(self, *paths: str) -> list[str]:
+        return ax_stats.labels([Path(p) for p in paths])
+
+    def test_a_stdout_is_named_by_its_directory_and_another_file_by_its_name(self):
+        self.assertEqual(self.labels("/a/audio-title/stdout.txt", "/a/notes.txt"), ["audio-title", "notes.txt"])
+
+    def test_runs_of_one_name_each_take_the_shortest_trailing_path_no_other_shares(self):
+        got = self.labels("/x/clone-a/build/probe/audio-title/stdout.txt",
+                          "/x/clone-b/build/probe/audio-title/stdout.txt",
+                          "/x/clone-a/build/probe/audio-menu/stdout.txt")
+        self.assertEqual(got, ["clone-a/build/probe/audio-title", "clone-b/build/probe/audio-title", "audio-menu"])
+
+    def test_paths_that_differ_sooner_get_shorter_labels(self):
+        got = self.labels("/p/a/run/stdout.txt", "/q/a/run/stdout.txt", "/p/b/run/stdout.txt")
+        self.assertEqual(got, ["p/a/run", "q/a/run", "b/run"])
+
+    def test_a_label_never_runs_past_the_root(self):
+        self.assertEqual(self.labels("/run/stdout.txt", "/x/run/stdout.txt"), ["/run", "x/run"])
+
+    def test_a_relative_path_is_named_from_where_it_points(self):
+        self.assertEqual(self.labels("stdout.txt"), [Path.cwd().name])
+        self.assertEqual(self.labels("one/../other/stdout.txt"), ["other"])
+
+    def test_the_same_file_twice_is_an_error_however_it_is_spelled(self):
+        with self.assertRaisesRegex(ValueError, "/a/run/stdout.txt: given twice"):
+            self.labels("/a/run/stdout.txt", "/a/run/stdout.txt")
+        with self.assertRaisesRegex(ValueError, "given twice"):
+            self.labels("/a/run/stdout.txt", "/a/other/../run/stdout.txt")
+
+
 class MainTest(unittest.TestCase):
     def test_a_column_per_run_and_a_total(self):
         with tempfile.TemporaryDirectory() as d:
@@ -62,6 +93,33 @@ class MainTest(unittest.TestCase):
         self.assertEqual(rows["voice_ms"], ["10", "20", "30"])
         self.assertEqual(rows["main_l"], ["500", "700", "700"])
         self.assertEqual(rows["depop"], ["1", "2", "3"])
+
+    def test_runs_in_directories_of_one_name_each_get_a_column(self):
+        with tempfile.TemporaryDirectory() as d:
+            paths = []
+            for clone, name, window in (("clone-a", "audio-title", (10, 6, 500, 1)),
+                                        ("clone-b", "audio-title", (20, 8, 700, 2)),
+                                        ("clone-a", "audio-menu", (30, 1, 900, 4))):
+                run = Path(d, clone, name)
+                run.mkdir(parents=True)
+                paths.append(str(write_file(run, "stdout.txt", run_text(window))))
+            code, out, err = run_main(ax_stats.main, *paths)
+        self.assertEqual((code, err), (0, ""))
+        lines = out.splitlines()
+        self.assertEqual(lines[0].split(), ["clone-a/audio-title", "clone-b/audio-title", "audio-menu", "total"])
+        rows = {line.split()[0]: line.split()[1:] for line in lines[1:]}
+        self.assertEqual(rows["voice_ms"], ["10", "20", "30", "60"])
+        self.assertEqual(rows["depop"], ["1", "2", "4", "7"])
+
+    def test_the_same_file_twice_exits_2_before_anything_prints(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = Path(d, "audio-title")
+            run.mkdir()
+            path = write_file(run, "stdout.txt", run_text((10, 6, 500, 1)))
+            again = Path(d, "elsewhere", "..", "audio-title", "stdout.txt")
+            code, out, err = run_main(ax_stats.main, str(path), str(again))
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("elsewhere/../audio-title/stdout.txt: given twice", err)
 
     def test_until_past_no_window_and_a_bad_until_exit_2(self):
         with tempfile.TemporaryDirectory() as d:

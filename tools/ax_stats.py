@@ -10,10 +10,15 @@ the largest window instead. src0_coef=a/b/c/d splits into src0_coef0 to src0_coe
 mixer's top eight values are left out. --until stops at the window ending at that list
 count, so unpaced runs that got different distances in the same time cover the same lists.
 A file with no such lines exits 2.
+
+A column is named by its run's directory (for a stdout.txt) or the file's name. Where two
+files would get the same name, such as two clones' audio-title runs, each takes the shortest
+trailing path that no other file shares. The same file given twice exits 2.
 """
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -55,9 +60,30 @@ def table(columns: dict[str, dict[str, int]]) -> str:
                      for line in lines)
 
 
-def label(path: Path) -> str:
-    """A stdout.txt is named by its run's directory."""
-    return path.parent.name if path.name == "stdout.txt" else path.name
+def parts(path: Path) -> tuple[str, ...]:
+    """A stdout.txt is named by its run's directory, any other file by itself, as the
+    components of an absolute path."""
+    full = Path(os.path.abspath(path))
+    return (full.parent if full.name == "stdout.txt" else full).parts
+
+
+def labels(paths: list[Path]) -> list[str]:
+    """Each file's label is its run's directory name, or with more of the path in front of it
+    where another file would get the same one: the shortest trailing path that no other file
+    shares. The same file twice is an error, since it would have one label."""
+    named: list[tuple[str, ...]] = []
+    for path in paths:
+        name = parts(path)
+        if name in named:
+            raise ValueError(f"{path}: given twice")
+        named.append(name)
+    out = []
+    for i, name in enumerate(named):
+        k = 1
+        while k < len(name) and any(other[-k:] == name[-k:] for j, other in enumerate(named) if j != i):
+            k += 1
+        out.append(str(Path(*name[-k:])))
+    return out
 
 
 def main(argv: list[str]) -> int:
@@ -67,8 +93,13 @@ def main(argv: list[str]) -> int:
     args = ap.parse_args(argv)
     if args.until is not None and args.until <= 0:
         ap.error("--until is a list count, over 0")
+    try:
+        names = labels(args.files)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
     columns: dict[str, dict[str, int]] = {}
-    for path in args.files:
+    for path, name in zip(args.files, names):
         try:
             counts = totals(path.read_text(errors="replace"), args.until)
         except OSError as e:
@@ -77,7 +108,7 @@ def main(argv: list[str]) -> int:
         if not counts["windows"]:
             print(f"{path}: no [ax] pb lines up to that list; was it run with GCN_AXSTATS=1?", file=sys.stderr)
             return 2
-        columns[label(path)] = counts
+        columns[name] = counts
     print(table(columns))
     return 0
 
