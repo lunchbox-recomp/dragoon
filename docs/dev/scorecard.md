@@ -161,7 +161,10 @@ Neither build had an underrun in any run, and current made no ring cut in any ru
 
 `status.md`'s source type 2 counts come from 90-second title runs, and the five-route pass
 plays the title for 31 s. `--routes title --margin 75` plays the same route for 91 s. It ran twice on each
-build, with the tool at `13acaf4`.
+build, with the tool at `13acaf4`. The second pass printed `13acaf4-dirty`, because
+`docs/dev/audio.md` had been edited after the first pass and wasn't committed until this doc.
+No file under `tools/` differs between `13acaf4` and that commit, and rescoring the second
+pass's recordings from a clean tree gives the same numbers.
 
 | Title route, 91 s | Baseline | Current |
 |---|---|---|
@@ -247,4 +250,4 @@ recordings stay in each clone's `build/probe/scorecard-ROUTE/` and are never com
 | Current Dragoon | `788571c` |
 | Current gcn-recomp | `b848158` |
 | The tool, five routes | `43ceba4` |
-| The tool, title at 91 s | `13acaf4` |
+| The tool, title at 91 s | `13acaf4`, then `13acaf4-dirty` |
