@@ -64,6 +64,16 @@ class LogTest(unittest.TestCase):
         log = CURRENT_LOG.replace("clipped=22", "clipped=22 depop=3").replace("clipped=5", "clipped=5 depop=0")
         self.assertEqual(scorecard_measure.clamped(log, 1200), 27)
 
+    def test_a_count_with_something_stuck_to_it_isnt_counted(self):
+        # "2x" and "2.5" aren't counts, so their lines are left out and not read as 2.
+        for stuck in ("2x", "2.5"):
+            with self.subTest(stuck):
+                log = CURRENT_LOG.replace("clipped=22", f"clipped={stuck}")
+                self.assertEqual(scorecard_measure.clamped(log, 1200), 5)
+
+    def test_a_last_bus_line_with_no_newline_is_counted(self):
+        self.assertEqual(scorecard_measure.clamped(CURRENT_LOG.rstrip("\n"), 1200), 27)
+
     def test_a_build_with_no_bus_lines_logs_no_clamp_count(self):
         self.assertIsNone(scorecard_measure.clamped(BASE_LOG, 1200))
 
