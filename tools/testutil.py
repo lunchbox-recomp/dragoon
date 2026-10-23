@@ -80,7 +80,8 @@ def write_wav(path: Path, left: list[int], right: list[int], rate: int = 48000) 
 # -mountpoint and "detach" empties it, and each call's arguments go to the records file. A file
 # named "attach fails" beside the script makes attach fail, "busy" makes detach fail until it's
 # given -force and "detach fails" makes it fail always. "attach hangs" makes attach and
-# "detach hangs" makes a detach without -force run for a minute, which a timeout cuts short.
+# "detach hangs" makes a detach without -force run for a minute, which a timeout cuts short, and
+# "force hangs" does the same to a detach with -force.
 FAKE_HDIUTIL = r"""#!@PYTHON@
 import json, os, shutil, sys, time
 here = os.path.dirname(os.path.abspath(__file__))
@@ -99,7 +100,9 @@ if args[0] == "attach":
 elif args[0] == "detach":
     if os.path.exists(os.path.join(here, "detach hangs")) and "-force" not in args:
         time.sleep(60)
-    stuck = os.path.exists(os.path.join(here, "busy")) and "-force" not in args
+    if os.path.exists(os.path.join(here, "force hangs")) and "-force" in args:
+        time.sleep(60)
+    stuck =os.path.exists(os.path.join(here, "busy")) and "-force" not in args
     if stuck or os.path.exists(os.path.join(here, "detach fails")):
         print("hdiutil: couldn't unmount - Resource busy", file=sys.stderr)
         sys.exit(16)

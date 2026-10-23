@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -77,6 +78,30 @@ class MountedTest(unittest.TestCase):
                 pass
         self.assertEqual(self.calls()[1:], [["detach", str(mount)], ["detach", "-force", str(mount)]])
         self.assertFalse(mount.exists())
+
+    def test_a_forced_detach_that_hangs_is_an_error(self):
+        write_file(self.tools, "busy", "")
+        write_file(self.tools, "force hangs", "")
+        with mock.patch.object(tempfile, "tempdir", str(self.dir)):
+            with mock.patch.object(bundle_dmg, "DETACH_SECONDS", 1):
+                with self.assertRaisesRegex(bundle_dmg.DmgError, "detach didn't finish in 1 s"):
+                    with bundle_dmg.mounted(self.dmg):
+                        pass
+        attach, detach, forced = self.calls()
+        mount = attach[attach.index("-mountpoint") + 1]
+        self.assertEqual([detach, forced], [["detach", mount], ["detach", "-force", mount]])
+
+    def test_the_forced_detach_after_a_hung_attach_is_cut_short_too(self):
+        write_file(self.tools, "attach hangs", "")
+        write_file(self.tools, "force hangs", "")
+        started = time.monotonic()
+        with mock.patch.object(bundle_dmg, "ATTACH_SECONDS", 1):
+            with mock.patch.object(bundle_dmg, "DETACH_SECONDS", 1):
+                with self.assertRaisesRegex(bundle_dmg.DmgError, "attach didn't finish in 1 s"):
+                    with bundle_dmg.mounted(self.dmg):
+                        self.fail("the body ran")
+        self.assertEqual([c[:2] for c in self.calls()], [["attach", "-readonly"], ["detach", "-force"]])
+        self.assertLess(time.monotonic() - started, 30)  # the fake hangs for 60 s
 
     def test_a_failed_attach_is_an_error_naming_hdiutil_and_leaves_nothing(self):
         write_file(self.tools, "attach fails", "")
