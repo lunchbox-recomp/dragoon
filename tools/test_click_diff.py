@@ -132,6 +132,24 @@ class DescribeTest(unittest.TestCase):
                 self.assertEqual(click_diff.steps_at([0] * 10 + [step] * 10, 10), stepping)
 
 
+    def test_a_step_is_judged_against_the_wobble_on_both_sides_of_it(self):
+        # The step is 500. Against silence that's a step. Against 100 samples of wobble, 200 a
+        # sample, on either side it isn't, so neither side of the 5 ms window may be left out.
+        j = 500
+        flat = [0] * j + [500] * j
+        self.assertTrue(click_diff.steps_at(flat, j))
+        left, right = list(flat), list(flat)
+        for k in range(j - 100, j):
+            left[k] = 100 if k % 2 else -100
+        left[j:] = [left[j - 1] + 500] * j
+        for k in range(j + 1, j + 101):
+            right[k] = 500 + (100 if k % 2 else -100)
+        for side, d in (("left", left), ("right", right)):
+            with self.subTest(side):
+                self.assertEqual(d[j] - d[j - 1], 500)
+                self.assertFalse(click_diff.steps_at(d, j))
+
+
 class MainTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
