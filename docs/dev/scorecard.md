@@ -27,9 +27,10 @@ on past them. The clicks did fall there. Scored again with `--no-run` and a long
 (the commands are under Running it again), the title's first 91 s have 1,085 clicks at the
 baseline and 19 at current, against 9 and 10 in the first 31 s. The mode select's first 170 s
 have 118 clicks and 16, with the clipped runs falling from 230 to 6, against 13 and 14 clicks in
-the first 35 s. So the clicks that fell are past the seconds the totals score. Four players has
-43 and 44 at its own 73 s, and the race and City Trial weren't scored past their cuts. The title
-played to 91 s in real time shows the same fall (below).
+the first 35 s. So the clicks that fell are past the seconds the totals score. Four players was
+scored only to its own 73 s, where it has 43 and 44, so nothing was scored past its cut. The
+race and City Trial weren't scored past their cuts either. The title played to 91 s in real time
+shows the same fall (below).
 
 Across the five routes the device stage's clicks a minute fell from 57.9 to 36.3 in pass 1 and
 from 45.1 to 33.1 in pass 2, and pass 3 gave current 32.2. Passes 1 and 2 had the mixer stage's
@@ -424,17 +425,16 @@ tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build \
 tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes title --margin 75
 ```
 
-The numbers past the cut in the summary come from these three commands, run on the unpaced
+The numbers past the cut in the summary come from these two commands, run on the unpaced
 recordings of pass 4 and pass 3. They play no game.
 
 ```sh
 tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes title --margin 75 --no-run
 tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes menu --margin 150 --no-run
-tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build --routes city-trial-4p --margin 15 --no-run
 ```
 
 With `--no-run` the margin picks how much of each unpaced recording the mixer stage scores. That's
-91 s for the title, 170 s for the mode select and 73 s for four players. Read the mixer rows.
+91 s for the title and 170 s for the mode select. Read the mixer rows.
 The device rows come from the real-time run, which the margin doesn't cut. A margin that
 reaches past a recording exits 2. At `--routes title --margin 400` the tool said the baseline's
 recording held 203.01 s, short of the 416 s asked for.
