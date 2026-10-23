@@ -469,6 +469,20 @@ class DmgTest(BundleTestCase):
         os.symlink("/Applications/Dragoon.app", self.contents / APP)
         self.assert_dmg_findings("missing from the DMG: Dragoon.app")
 
+    def test_a_dmg_that_will_not_detach_still_reports_its_findings(self):
+        self.plant("Contents/Resources/dragoon", MACHO, app=self.contents / APP)
+        write_file(self.tools, "detach fails", "")
+        code, out, err = self.check(self.dmg)
+        self.assertEqual(code, 1)
+        self.assertIn("executable not on the manifest: Contents/Resources/dragoon", out)
+        self.assertIn("couldn't detach", err)
+
+    def test_a_clean_dmg_that_will_not_detach_exits_2(self):
+        write_file(self.tools, "detach fails", "")
+        code, out, err = self.check(self.dmg)
+        self.assertEqual((code, out), (2, []))
+        self.assertIn("couldn't detach", err)
+
     def test_a_dmg_that_will_not_attach_exits_2(self):
         write_file(self.tools, "attach fails", "")
         code, out, err = self.check(self.dmg)

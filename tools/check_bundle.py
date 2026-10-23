@@ -23,7 +23,8 @@ nothing when the bundle is clean. --repo is the Dragoon checkout and --manifest 
 by default the ones beside this tool.
 
 Exits 0 when the bundle is clean, 1 when it has findings and 2 when it couldn't check: a bad
-argument, a manifest it can't read, a checkout that isn't at SHA, or a DMG that won't attach.
+argument, a manifest it can't read, a checkout that isn't at SHA, or a DMG that won't attach
+or detach. A detach that fails after the checks found something still exits 1 with the findings.
 """
 from __future__ import annotations
 
@@ -65,12 +66,19 @@ def check(args: argparse.Namespace) -> list[bundle_checks.Finding]:
         disc_id = reference_snapshot(args.repo.resolve(), args.commit, reference)["disc_id"]
         if kind == ".app":
             return bundle_checks.check_app(path, manifest, reference, disc_id)
-        with bundle_dmg.mounted(path) as mount:
-            found = bundle_checks.check_dmg(mount, path, manifest)
-            app = mount / bundle_checks.APP_NAME
-            if app.is_dir() and not app.is_symlink():
-                found += bundle_checks.check_app(app, manifest, reference, disc_id)
-            return found
+        found: list[bundle_checks.Finding] = []
+        try:
+            with bundle_dmg.mounted(path) as mount:
+                found += bundle_checks.check_dmg(mount, path, manifest)
+                app = mount / bundle_checks.APP_NAME
+                if app.is_dir() and not app.is_symlink():
+                    found += bundle_checks.check_app(app, manifest, reference, disc_id)
+        except bundle_dmg.DmgError as e:
+            if not found:
+                raise
+            # The detach failed after the checks ran. The findings still say what's wrong.
+            print(f"check_bundle.py: {e}", file=sys.stderr)
+        return found
 
 
 def main(argv: list[str]) -> int:

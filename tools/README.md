@@ -278,7 +278,7 @@ What does an app tree hold? It lists the regular files with their sizes, the sym
 
 ## bundle_dmg.py
 
-How does check_bundle.py look inside a DMG? It attaches the image with `hdiutil attach -readonly -nobrowse -mountpoint` at a fresh temporary directory and always detaches it, forcing the detach if the volume is busy. The tests fake hdiutil. It has no command line.
+How does check_bundle.py look inside a DMG? It attaches the image with `hdiutil attach -readonly -nobrowse -mountpoint` at a fresh temporary directory and always detaches it, forcing the detach if the volume is busy or the plain one hangs. An attach gets two minutes and a detach one, so a stuck hdiutil can't hold a CI job until its own timeout. A detach that fails after the checks ran still prints their findings, with the error on stderr. The tests fake hdiutil. It has no command line.
 
 ## sign_and_package.py
 

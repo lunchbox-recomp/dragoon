@@ -79,14 +79,17 @@ def write_wav(path: Path, left: list[int], right: list[int], rate: int = 48000) 
 # A stand-in for hdiutil that mounts nothing real. "attach" copies <dmg>.contents into the
 # -mountpoint and "detach" empties it, and each call's arguments go to the records file. A file
 # named "attach fails" beside the script makes attach fail, "busy" makes detach fail until it's
-# given -force and "detach fails" makes it fail always.
+# given -force and "detach fails" makes it fail always. "attach hangs" makes attach and
+# "detach hangs" makes a detach without -force run for a minute, which a timeout cuts short.
 FAKE_HDIUTIL = r"""#!@PYTHON@
-import json, os, shutil, sys
+import json, os, shutil, sys, time
 here = os.path.dirname(os.path.abspath(__file__))
 args = sys.argv[1:]
 with open(@RECORDS@, "a") as f:
     f.write(json.dumps(args) + "\n")
 if args[0] == "attach":
+    if os.path.exists(os.path.join(here, "attach hangs")):
+        time.sleep(60)
     if os.path.exists(os.path.join(here, "attach fails")):
         print("hdiutil: attach failed - Resource temporarily unavailable", file=sys.stderr)
         sys.exit(1)
@@ -94,6 +97,8 @@ if args[0] == "attach":
     assert os.path.isdir(mount) and not os.listdir(mount), mount
     shutil.copytree(args[-1] + ".contents", mount, symlinks=True, dirs_exist_ok=True)
 elif args[0] == "detach":
+    if os.path.exists(os.path.join(here, "detach hangs")) and "-force" not in args:
+        time.sleep(60)
     stuck = os.path.exists(os.path.join(here, "busy")) and "-force" not in args
     if stuck or os.path.exists(os.path.join(here, "detach fails")):
         print("hdiutil: couldn't unmount - Resource busy", file=sys.stderr)

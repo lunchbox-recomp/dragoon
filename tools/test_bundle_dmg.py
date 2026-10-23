@@ -60,6 +60,24 @@ class MountedTest(unittest.TestCase):
             with bundle_dmg.mounted(self.dmg):
                 pass
 
+    def test_an_attach_that_hangs_is_an_error_and_gets_a_forced_detach(self):
+        write_file(self.tools, "attach hangs", "")
+        with mock.patch.object(bundle_dmg, "ATTACH_SECONDS", 1):
+            with self.assertRaisesRegex(bundle_dmg.DmgError, "attach didn't finish in 1 s"):
+                with bundle_dmg.mounted(self.dmg):
+                    self.fail("the body ran")
+        attach, detach = self.calls()  # it may have mounted before it hung
+        self.assertEqual(attach[0], "attach")
+        self.assertEqual(detach, ["detach", "-force", attach[attach.index("-mountpoint") + 1]])
+
+    def test_a_detach_that_hangs_is_forced(self):
+        write_file(self.tools, "detach hangs", "")
+        with mock.patch.object(bundle_dmg, "DETACH_SECONDS", 1):
+            with bundle_dmg.mounted(self.dmg) as mount:
+                pass
+        self.assertEqual(self.calls()[1:], [["detach", str(mount)], ["detach", "-force", str(mount)]])
+        self.assertFalse(mount.exists())
+
     def test_a_failed_attach_is_an_error_naming_hdiutil_and_leaves_nothing(self):
         write_file(self.tools, "attach fails", "")
         with mock.patch.object(tempfile, "tempdir", str(self.dir)):
