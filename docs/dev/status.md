@@ -14,7 +14,8 @@ is now `e1016b8`, where all twelve matched them. The goldens of the nine Top Rid
 routes were recorded at `e1016b8` on Dragoon `1a88f62`, and all twenty-one routes' frames and
 audio match there (under gcn-recomp `e1016b8` below). The Top Ride and stadium pacing numbers
 are from Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen findings
-were checked again at `e1016b8` on `1a88f62`.
+were checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed at
+`2e6e6f8` and `0059fce` on gcn-recomp `e1016b8` (under Player targets).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -521,7 +522,7 @@ What a player's first session looks like after the warm-up, against the bars set
 | Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five to the frames those runs reached (6,900 on the race), worst render frame 11.1 ms. Run to 130 s, the race had one at frame 7110, 41.57 ms, with a compile | Fail |
 | Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five to the end of those runs. 1 on the race at frame 7110, past the warm-up's 6,900, and 1 each on Frozen Hillside (5752), Beanstalk Park (5648) and Machine Passage (6007), past 5,100 | Fail |
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
-| Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys | Fail |
+| Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys. 252.8 s for all twenty-one routes' 318 keys, one pass at a time. 67.7 s and 68.9 s for the same 318 keys, five passes at a time (Dragoon `0059fce`, table below) | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
 | Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there | Pass |
 
@@ -546,6 +547,82 @@ The 47.1 s and 120.5 s are later warm-ups at Dragoon `788571c` and gcn-recomp `b
 at five routes and then at twelve. Other copies of Dragoon were running the game on the same
 machine that afternoon, so neither is an idle machine's time. Each of the seven new passes
 played 5,100 frames in 9.4 to 11.2 s.
+
+The warm-up now plays all twenty-one manifest routes, nine more than the 120.5 s one. It
+took 252.8 s at Dragoon `2e6e6f8`, and 252.7 s and 253.2 s on the tree that became `c621106`,
+which only added `warm_shaders.py --report`. All three are `tools/warm_shaders.py --force`
+from an empty cache at gcn-recomp `e1016b8`, one pass at a time in the manifest's order, on an
+M4 Max with no other run of the game going. They left byte-identical caches of 318 keys and
+254 programs (distinct generated sources, so 64 keys share a program). This table is the
+252.7 s run's, except the last column, which is from the 253.2 s run, made with
+`GCN_FRAMETIME=1`. `+keys` and `+programs` are what the pass added to the cache the passes
+before it left.
+
+| Pass | Frames | s | Boot ms | +keys | +programs | Keys | Last new frame |
+|---|---|---|---|---|---|---|---|
+| title | 1,860 | 3.6 | 0 | 71 | 59 | 71 | 1,768 |
+| menu | 2,100 | 6.1 | 107 | 6 | 5 | 77 | 1,012 |
+| air-ride-race | 6,900 | 12.1 | 116 | 70 | 59 | 147 | 6,662 |
+| city-trial | 4,200 | 9.3 | 225 | 33 | 31 | 180 | 2,950 |
+| city-trial-4p | 4,380 | 11.6 | 274 | 11 | 11 | 191 | 2,865 |
+| air-ride-celestial-valley | 5,100 | 8.9 | 296 | 1 | 1 | 192 | 4,359 |
+| air-ride-sky-sands | 5,100 | 9.1 | 294 | 2 | 2 | 194 | 3,174 |
+| air-ride-frozen-hillside | 5,100 | 8.7 | 296 | 7 | 7 | 201 | 3,223 |
+| air-ride-magma-flows | 5,100 | 9.2 | 310 | 7 | 7 | 208 | 4,947 |
+| air-ride-beanstalk-park | 5,100 | 8.6 | 320 | 2 | 2 | 210 | 3,219 |
+| air-ride-machine-passage | 5,100 | 8.6 | 327 | 6 | 5 | 216 | 3,164 |
+| air-ride-checker-knights | 5,100 | 9.2 | 335 | 6 | 5 | 222 | 4,985 |
+| top-ride-grass | 4,500 | 8.1 | 343 | 30 | 16 | 252 | 4,368 |
+| top-ride-sand | 4,500 | 9.4 | 391 | 11 | 8 | 263 | 4,498 |
+| top-ride-sky | 4,500 | 8.6 | 407 | 13 | 8 | 276 | 3,733 |
+| top-ride-fire | 4,500 | 8.4 | 426 | 7 | 4 | 283 | 3,645 |
+| top-ride-light | 4,500 | 8.5 | 442 | 2 | 1 | 285 | 3,434 |
+| top-ride-water | 4,500 | 8.5 | 451 | 6 | 5 | 291 | 4,356 |
+| top-ride-metal | 4,500 | 8.6 | 456 | 5 | 4 | 296 | 3,968 |
+| city-trial-stadium | 21,300 | 38.4 | 455 | 15 | 9 | 311 | 18,395 |
+| city-trial-stadium-4p | 21,900 | 49.2 | 480 | 7 | 5 | 318 | 18,449 |
+
+Where the 252.7 s went, from the same runs:
+
+| Part | Time | Share |
+|---|---|---|
+| Playing 129,840 frames, and starting the game 21 times | 245.4 s | 97.1% |
+| Building every program the cache holds at each of 20 starts (macOS GL keeps no binaries, so these are compiles) | 6.8 s | 2.7% |
+| The 318 programs compiled in play, 2.8 ms at most each | 0.6 s | 0.2% |
+
+A pass of 5,100 frames took 8.6 to 9.2 s whether it added one key or seven, so compiling
+isn't the cost. The guest thread sets the frame time. On the stadium route the interval
+between presents averaged 1.79 ms and the renderer's issue time 0.35 ms, and on the four-player
+stadium 2.22 and 0.68 ms (`frametime.py`). The first five routes took 42.7 s for 191 keys.
+The other sixteen took 210.0 s for 127, 87.6 s of it for the two stadium routes' 22.
+
+No pass can be dropped. In the manifest's order every pass adds at least one key, and the
+fewest, Celestial Valley, adds one. Cutting each pass at its last new frame would play 107,174
+of the 129,840 frames, 17% fewer, which comes to about 209 s at the measured 514 frames a
+second. That figure is arithmetic and wasn't run. At over twice the bar, it wasn't built.
+
+Each pass has a scratch directory and a cache of its own, and the caches are merged afterwards,
+each key once, in the manifest's order, so passes can play at once. The 4, 6 and 8 runs are the
+tree that became `0059fce`, which differs from it only in how it picks the default number of
+passes. They set `GCN_FRAMETIME=1` and `--report`. The 5 runs are `0059fce` with its default,
+a third of this machine's 16 cores.
+
+| Passes at once | Time | Stadium four-player pass |
+|---|---|---|
+| 1 | 249.5 s | 49.3 s |
+| 4 | 77.9 s | 60.0 s |
+| 5 | 68.9 s and 67.7 s | 65.3 s and 64.1 s |
+| 6 | 67.1 s | 66.7 s |
+| 8 | 71.4 s | 71.0 s |
+
+The slowest pass sets the time, and it slows as more play at once. Every one of these caches
+holds the same 318 keys and 254 programs. `shader_cache.py diff` finds no key in the new cache
+that the 252.8 s one lacks, or the other way round. The 1, 4, 6 and 8 caches are byte for byte
+the same. The 252.8 s cache lists its keys in another order, because there each pass started
+from the last one's cache and the game rewrites its cache in its own table's order at every
+start. The 249.5 s row is `0059fce` with `--jobs 1`, which also gives each pass a cache of its
+own, and it came in a little under the 252.8 s that built each on the last. A 5-at-a-time run started from the warm
+cache (67.3 s, 318 keys, same size) added no key on any of the 21 routes.
 
 The 362 to 387 ms boots are from the Air Ride pacing runs above, which also went past the frames
 the warm-up plays and compiled one program each on four courses. On Fantasy Meadows that
