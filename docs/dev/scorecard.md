@@ -337,9 +337,10 @@ chance gives 30.3. In current's second run, 10 of its 22 came after 31 s.
   not what a listener hears.
 - `audio_clicks.py` counts a clipped run at 32,767 or -32,768. The mixer's clamp stops at
   -32,767, so the mixer stage's negative clipping isn't in its clipped runs. The device stage
-  plays those samples through the ring, which never makes one larger, so its clipped runs miss
-  negative clipping too. Only the music mix clamps at -32,768. The clamp count from `[ax] bus`
-  has both signs.
+  plays those samples through the ring, which never makes one larger, so the mixer's negative
+  clipping isn't in the device stage's clipped runs either. The music stream is added after the
+  ring and clamps at -32,768, so clipping there does show in the device stage. The clamp count
+  from `[ax] bus` has both signs and counts the mixer only.
 - Underruns are as of each run's last `[ring] fill` line, which comes every 400 pulls of the
   device.
 - Nobody listened to any of it, and nothing was compared with a real console. One machine, an
