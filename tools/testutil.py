@@ -102,7 +102,7 @@ elif args[0] == "detach":
         time.sleep(60)
     if os.path.exists(os.path.join(here, "force hangs")) and "-force" in args:
         time.sleep(60)
-    stuck =os.path.exists(os.path.join(here, "busy")) and "-force" not in args
+    stuck = os.path.exists(os.path.join(here, "busy")) and "-force" not in args
     if stuck or os.path.exists(os.path.join(here, "detach fails")):
         print("hdiutil: couldn't unmount - Resource busy", file=sys.stderr)
         sys.exit(16)

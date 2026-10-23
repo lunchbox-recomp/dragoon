@@ -175,7 +175,7 @@ def bad_argument(a: argparse.Namespace) -> Optional[str]:
     if any(given) and a.identity == sign_plan.AD_HOC:
         return ("--identity - signs ad hoc, which Apple rejects, so it can't go with the "
                 "--notary-* options. Give a Developer ID identity or no notary key")
-    if not 0 <a.notary_timeout < float("inf"):
+    if not 0 < a.notary_timeout < float("inf"):
         return f"--notary-timeout {a.notary_timeout:g} isn't a number of minutes above 0"
     try:
         sign_plan.check_app(a.app)
