@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import contextlib
 import io
+import math
+import sys
+import wave
+from array import array
 from pathlib import Path
 from typing import Callable
 
@@ -24,4 +28,35 @@ def write_file(directory: Path, name: str, data: bytes | str) -> Path:
         path.write_text(data)
     else:
         path.write_bytes(data)
+    return path
+
+
+def tone(n: int, rate: int, freq: float = 440, amp: float = 20000) -> list[int]:
+    """N samples of a sine at RATE Hz."""
+    return [round(amp * math.sin(2 * math.pi * freq * i / rate)) for i in range(n)]
+
+
+def spliced(x: list[int], *cuts: int, skip: int = 37) -> list[int]:
+    """X with SKIP samples thrown away at each index in CUTS (indices into the result)."""
+    out = list(x)
+    for at in cuts:
+        out = out[:at] + out[at + skip:]
+    return out
+
+
+def pcm(left: list[int], right: list[int]) -> bytes:
+    """Two channels as raw 16-bit little-endian stereo, the way GCN_AIDWAV writes them."""
+    data = array("h", [v for f in zip(left, right) for v in f])
+    if sys.byteorder == "big":
+        data.byteswap()
+    return data.tobytes()
+
+
+def write_wav(path: Path, left: list[int], right: list[int], rate: int = 48000) -> Path:
+    """Two channels as a 16-bit stereo WAV, the way GCN_WAV writes them."""
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm(left, right))
     return path

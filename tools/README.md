@@ -12,7 +12,7 @@ Every tool takes `--help`, which prints its usage and what it reads. Results go 
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py and audio_scorecard.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py and block_clicks.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -118,11 +118,19 @@ Each run lasts the route's last checkpoint at 60 frames a second plus 15 s of wa
 
 The mixer stage is the unpaced run's `GCN_AIDWAV`, the DMA's blocks before the audio ring, cut to the route's last checkpoint plus the margin and read with audio_clicks.py's `--raw 32000 --period 160`. An unpaced run's game time doesn't follow the host's, so two unpaced runs of one build give the same blocks byte for byte. A real-time run's clock catches up when the host falls behind, the DMA then plays a block twice, presses land on other frames and sounds move. So a real-time run's blocks say as much about the host's timing as about the build. An unpaced run gets more of the game's time than the cut in its wall-clock seconds, and a recording shorter than the cut stops the tool with exit 2. The unpaced run's log gives the highest `[ax] frames` peak (main L before the output clamp) and the sum of the `[ax] bus` lines' `clipped`, from the lines whose list count is within the cut. A list is a 160-sample block.
 
-The device stage is the real-time run's `GCN_WAV`, which is what went to the device. That run's log gives the ring's cuts and underruns. The device stage also counts the clicks within 2 samples of a `[ring] cut` line's output frame, when the build logs cuts. Underruns are the last `[ring] fill` line's, which comes every 400 pulls of the device. The real-time run records `GCN_AIDWAV` too, with its block log, which shows where the DMA caught up.
+The device stage is the real-time run's `GCN_WAV`, which is what went to the device. That run's log gives the ring's cuts and underruns. The device stage also counts the clicks within 2 samples of a `[ring] cut` line's output frame, when the build logs cuts. Underruns are the last `[ring] fill` line's, which comes every 400 pulls of the device. The real-time run records `GCN_AIDWAV` too, for block_clicks.py.
 
 Each stage gets clicks a minute, gaps and clipped runs as audio_clicks.py counts them. An older build that doesn't print a log value reads `not logged`, and a missing recording reads `not recorded`. When `--no-run` finds no unpaced run, as for runs made before the scorecard played one, the mixer stage and its log values read `not recorded`. `--no-run` cuts the mixer stage at `--margin`, as a run would. A table per route prints as the route finishes, then the totals, where clicks a minute is over the summed seconds. `--json` prints it all at the end, with each clone's commit and its gcn-recomp commit. The tool reads those two before the first route plays and leaves them in each run's `commits.json`. `--no-run` prints what its runs recorded, or `not recorded` for a run made before that file existed. It only reports, so it never exits 1.
 
 scorecard_runs.py plays a route on a build and scorecard_measure.py scores a run's files. Neither has a command line.
+
+## block_clicks.py
+
+Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivered catching up? It reads a `GCN_AIDWAV` recording and the block log gcn-recomp writes beside it (`<file>.txt`). A replayed block has the same address as the block before, because the guest hadn't queued the next buffer. A caught-up block came while the clock caught up with the host, which only a `--real-time` run does. For each kind and for the two together it prints the blocks, the clicks in them or within 2 samples of either end, and the count chance would put there.
+
+```
+tools/block_clicks.py build/probe/scorecard-menu/mixer.raw
+```
 
 ## warm_shaders.py
 
@@ -142,6 +150,10 @@ Which routes does the repository play? `tests/hashes/manifest.txt` lists them, a
 ## probe_dirs.py
 
 What happens to a probe run and its directory? It holds `trash`, which moves a directory from `build/probe/` into `~/.Trash` under a time-stamped name, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error. frame_hashes.py, audio_hashes.py and the scorecard use both. It has no command line.
+
+## aid_blocks.py
+
+What does `GCN_AIDWAV` write? It holds the DMA's rate, its 160-sample block and the reader for the block log beside each recording, for block_clicks.py and scorecard_measure.py. It has no command line.
 
 ## check_no_game_data.py
 

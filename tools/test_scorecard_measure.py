@@ -1,15 +1,11 @@
-import math
-import sys
 import tempfile
 import unittest
-import wave
-from array import array
 from pathlib import Path
 
 import scorecard_measure
 from scorecard_measure import Score, Stage, measure, total
 from scorecard_runs import Run, Runs
-from testutil import write_file
+from testutil import pcm, spliced, tone, write_file, write_wav
 
 BASE_LOG = """\
 [ax] frames=400 voices(running, last frame)=0 peak=0 out=80571E00
@@ -28,34 +24,6 @@ CURRENT_LOG = """\
 [ring] fill=3262 avg=3175 trim=-0.008% underruns=2 cuts=1
 [ax] bus list=1200 main_l=1 main_r=1 main_s=0 auxa_l=0 auxa_r=0 auxa_s=0 auxb_l=0 auxb_r=0 auxb_s=0 clipped=5
 """
-
-
-def tone(n: int, rate: int, freq: float = 440, amp: float = 20000) -> list[int]:
-    return [round(amp * math.sin(2 * math.pi * freq * i / rate)) for i in range(n)]
-
-
-def spliced(x: list[int], *cuts: int, skip: int = 37) -> list[int]:
-    """X with SKIP samples thrown away at each index in CUTS (indices into the result)."""
-    out = list(x)
-    for at in cuts:
-        out = out[:at] + out[at + skip:]
-    return out
-
-
-def pcm(left: list[int], right: list[int]) -> bytes:
-    data = array("h", [v for f in zip(left, right) for v in f])
-    if sys.byteorder == "big":
-        data.byteswap()
-    return data.tobytes()
-
-
-def write_wav(path: Path, left: list[int], right: list[int], rate: int = 48000) -> Path:
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(2)
-        w.setsampwidth(2)
-        w.setframerate(rate)
-        w.writeframes(pcm(left, right))
-    return path
 
 
 class LogTest(unittest.TestCase):

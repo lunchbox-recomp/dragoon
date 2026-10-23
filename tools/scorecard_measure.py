@@ -14,11 +14,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from aid_blocks import BLOCK, RATE
 from audio_clicks import Recording, Report, analyse, read_raw, read_wav
 from scorecard_runs import Runs
-
-MIXER_RATE = 32000
-BLOCK = 160  # samples in one of the DMA's 5 ms blocks, and in one AX command list's output
 
 RING_FILL = re.compile(r"^\[ring\] fill=\d+ avg=\S+ trim=\S+ underruns=(\d+)(?: cuts=(\d+))?$", re.M)
 RING_CUT = re.compile(r"^\[ring\] cut \d+ frames at output frame (\d+)$", re.M)
@@ -110,11 +108,11 @@ def measure(runs: Runs, mixer_seconds: float) -> Score:
     device_stage = stage(analyse(read_wav(device), 0, marks=rg.cut_frames)) if device.exists() else None
     mixer_stage = mixer_peak = mixer_clamped = None
     if runs.unpaced is not None:
-        mixer, lists = runs.unpaced.mixer, round(mixer_seconds * MIXER_RATE) // BLOCK
+        mixer, lists = runs.unpaced.mixer, round(mixer_seconds * RATE) // BLOCK
         unpaced_text = runs.unpaced.log.read_text(errors="replace")
         mixer_peak, mixer_clamped = peak(unpaced_text, lists), clamped(unpaced_text, lists)
         if mixer.exists():
-            rec = cut(read_raw(mixer, MIXER_RATE), mixer_seconds, mixer)
+            rec = cut(read_raw(mixer, RATE), mixer_seconds, mixer)
             mixer_stage = stage(analyse(rec, 0, period=BLOCK))
     return Score(mixer_stage, device_stage, None if rg.cut_frames is None else len(rg.cut_frames),
                  rg.underruns, mixer_peak, mixer_clamped)
