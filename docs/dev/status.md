@@ -522,7 +522,7 @@ What a player's first session looks like after the warm-up, against the bars set
 | Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five to the frames those runs reached (6,900 on the race), worst render frame 11.1 ms. Run to 130 s, the race had one at frame 7110, 41.57 ms, with a compile | Fail |
 | Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five to the end of those runs. 1 on the race at frame 7110, past the warm-up's 6,900, and 1 each on Frozen Hillside (5752), Beanstalk Park (5648) and Machine Passage (6007), past 5,100 | Fail |
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
-| Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys. 252.8 s for all twenty-one routes' 318 keys, one pass at a time. 67.7 s and 68.9 s for the same 318 keys, five passes at a time (Dragoon `0059fce`, table below) | Pass |
+| Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys. 252.8 s for all twenty-one routes' 318 keys, one pass at a time. 67.7 s and 68.9 s on an M4 Max for the same 318 keys, five passes at a time (Dragoon `0059fce`, table below) | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
 | Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there | Pass |
 
@@ -556,7 +556,10 @@ M4 Max with no other run of the game going. They left byte-identical caches of 3
 254 programs (distinct generated sources, so 64 keys share a program). This table is the
 252.7 s run's, except the last column, which is from the 253.2 s run, made with
 `GCN_FRAMETIME=1`. `+keys` and `+programs` are what the pass added to the cache the passes
-before it left.
+before it left. The last column is the last frame at which a pass compiled a key the passes
+before it hadn't. `--report` now starts every pass from the starting cache, so its last column
+is a pass's last compile of any key (City Trial 3,165 and the four-player stadium 20,604 with
+four passes at once) and can't reproduce this one.
 
 | Pass | Frames | s | Boot ms | +keys | +programs | Keys | Last new frame |
 |---|---|---|---|---|---|---|---|
@@ -582,7 +585,8 @@ before it left.
 | city-trial-stadium | 21,300 | 38.4 | 455 | 15 | 9 | 311 | 18,395 |
 | city-trial-stadium-4p | 21,900 | 49.2 | 480 | 7 | 5 | 318 | 18,449 |
 
-Where the 252.7 s went, from the same runs:
+Where the 252.7 s went, one pass at a time. The cache-load row is this run's. Passes that start
+from a blank cache load none, as the 0 ms boot column of the at-once runs shows.
 
 | Part | Time | Share |
 |---|---|---|
@@ -607,22 +611,27 @@ tree that became `0059fce`, which differs from it only in how it picks the defau
 passes. They set `GCN_FRAMETIME=1` and `--report`. The 5 runs are `0059fce` with its default,
 a third of this machine's 16 cores.
 
-| Passes at once | Time | Stadium four-player pass |
-|---|---|---|
-| 1 | 249.5 s | 49.3 s |
-| 4 | 77.9 s | 60.0 s |
-| 5 | 68.9 s and 67.7 s | 65.3 s and 64.1 s |
-| 6 | 67.1 s | 66.7 s |
-| 8 | 71.4 s | 71.0 s |
+| Passes at once | Time | The 21 pass times added up | Stadium four-player pass |
+|---|---|---|---|
+| 1 | 249.5 s | 249.0 s | 49.3 s |
+| 4 | 77.9 s | 302.6 s | 60.0 s |
+| 5 | 68.9 s and 67.7 s | 328.5 s and 323.0 s | 65.3 s and 64.1 s |
+| 6 | 67.1 s | 352.5 s | 66.7 s |
+| 8 | 71.4 s | 417.1 s | 71.0 s |
 
-The slowest pass sets the time, and it slows as more play at once. Every one of these caches
-holds the same 318 keys and 254 programs. `shader_cache.py diff` finds no key in the new cache
-that the 252.8 s one lacks, or the other way round. The 1, 4, 6 and 8 caches are byte for byte
-the same. The 252.8 s cache lists its keys in another order, because there each pass started
-from the last one's cache and the game rewrites its cache in its own table's order at every
-start. The 249.5 s row is `0059fce` with `--jobs 1`, which also gives each pass a cache of its
-own, and it came in a little under the 252.8 s that built each on the last. A 5-at-a-time run started from the warm
-cache (67.3 s, 318 keys, same size) added no key on any of the 21 routes.
+Each pass slows as more play at once, so the machine doesn't scale with the number of
+passes. At 4 and 5 the workers were busy to the end, since 302.6 s over 4 is 75.7 s of the
+77.9 s and 328.5 s over 5 is 65.7 s of the 68.9 s. Those times are throughput, not one pass.
+At 6 and 8 the four-player stadium pass finished last, 66.7 s of 67.1 s and 71.0 s of 71.4 s.
+
+Every one of these caches holds the same 318 keys and 254 programs. `shader_cache.py diff`
+finds no key in the new cache that the 252.8 s one lacks, or the other way round. The 1, 4, 5, 6
+and 8 caches are byte for byte the same. The 252.8 s cache lists its keys in another order,
+because there each pass started from the last one's cache and the game rewrites its cache in
+its own table's order at every start. The 249.5 s row is `0059fce` with `--jobs 1`, which also
+gives each pass a cache of its own, and it came in a little under the 252.8 s that built each
+on the last. A 5-at-a-time run started from the warm cache (67.3 s, 318 keys, same size) added
+no key on any of the 21 routes.
 
 The 362 to 387 ms boots are from the Air Ride pacing runs above, which also went past the frames
 the warm-up plays and compiled one program each on four courses. On Fantasy Meadows that
