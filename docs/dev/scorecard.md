@@ -192,9 +192,9 @@ The bisect traced what the work changed in the mixer stage.
 - The game's AX library depops stopped voices. `fn_803EDBA4`, called from `SortVoices`, sums PB
   words 41 to 49 into nine accumulators that the setup command fades out. `b848158` never
   writes those words. gcn-recomp `e6ce0a5` (PR #11) does, and its author found that no hash
-  moved, because command `07` replaces the main buses after setup, in the fork and in Dolphin.
-  So the stop still steps to zero. Whether the console's `07` replaces the buses or adds to
-  them is open.
+  moved, because in stereo mode command `07` replaces the main buses after setup, as the fork
+  has it. So the stop still steps to zero. Whether the console's `07` replaces the buses or
+  adds to them is open.
 
 ## Why the real-time mixer clicks rose
 
