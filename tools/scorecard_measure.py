@@ -90,13 +90,15 @@ def clamped(log: str, lists: int) -> int | None:
     return sum(found) if found else None
 
 
-def cut(rec: Recording, seconds: float, path: Path) -> Recording:
-    """The first SECONDS of the recording, refused if it's shorter."""
-    frames = round(seconds * rec.rate)
+def cut(path: Path, seconds: float) -> Recording:
+    """The first SECONDS of the raw recording, refused if it's shorter. An unpaced recording
+    can be hundreds of megabytes, so only that much is read."""
+    frames = round(seconds * RATE)
+    rec = read_raw(path, RATE, frames)
     if rec.frames < frames:
-        raise ValueError(f"{path}: {rec.frames / rec.rate:.2f} s recorded, short of the {seconds:g} s "
+        raise ValueError(f"{path}: {rec.frames / RATE:.2f} s recorded, short of the {seconds:g} s "
                          f"the mixer stage scores")
-    return Recording(rec.rate, [ch[:frames] for ch in rec.channels])
+    return rec
 
 
 def measure(runs: Runs, mixer_seconds: float) -> Score:
@@ -112,8 +114,7 @@ def measure(runs: Runs, mixer_seconds: float) -> Score:
         unpaced_text = runs.unpaced.log.read_text(errors="replace")
         mixer_peak, mixer_clamped = peak(unpaced_text, lists), clamped(unpaced_text, lists)
         if mixer.exists():
-            rec = cut(read_raw(mixer, RATE), mixer_seconds, mixer)
-            mixer_stage = stage(analyse(rec, 0, period=BLOCK))
+            mixer_stage = stage(analyse(cut(mixer, mixer_seconds), 0, period=BLOCK))
     return Score(mixer_stage, device_stage, None if rg.cut_frames is None else len(rg.cut_frames),
                  rg.underruns, mixer_peak, mixer_clamped)
 

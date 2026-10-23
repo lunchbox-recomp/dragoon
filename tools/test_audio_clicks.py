@@ -10,7 +10,7 @@ from pathlib import Path
 
 import audio_clicks
 from audio_clicks import Recording
-from testutil import run_main, write_file
+from testutil import pcm, run_main, write_file
 
 RATE = 48000
 
@@ -212,6 +212,11 @@ class ReadTest(unittest.TestCase):
         path = write_file(self.dir, "aid.raw", bytes([1, 0, 0xFF, 0xFF, 2, 0, 0xFE, 0xFF, 3]))
         got = audio_clicks.read_raw(path, 32000)
         self.assertEqual((got.rate, [list(ch) for ch in got.channels]), (32000, [[1, 2], [-1, -2]]))
+
+    def test_reads_only_the_first_frames_asked_for(self):
+        path = write_file(self.dir, "aid.raw", pcm([1, 2, 3], [-1, -2, -3]))
+        self.assertEqual([list(ch) for ch in audio_clicks.read_raw(path, 32000, 2).channels], [[1, 2], [-1, -2]])
+        self.assertEqual(audio_clicks.read_raw(path, 32000, 10).frames, 3)
 
     def test_an_empty_raw_file_is_refused(self):
         path = write_file(self.dir, "aid.raw", b"")

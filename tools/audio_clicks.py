@@ -124,8 +124,11 @@ def read_wav(path: Path) -> Recording:
     return split(path, raw, n, rate)
 
 
-def read_raw(path: Path, rate: int) -> Recording:
-    return split(path, path.read_bytes(), 2, rate)
+def read_raw(path: Path, rate: int, frames: int | None = None) -> Recording:
+    """A raw stereo recording, or only its first FRAMES frames, which is all that's read."""
+    with path.open("rb") as f:
+        raw = f.read() if frames is None else f.read(frames * 4)
+    return split(path, raw, 2, rate)
 
 
 def split(path: Path, raw: bytes, n: int, rate: int) -> Recording:
