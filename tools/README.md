@@ -1,6 +1,6 @@
 # Tools
 
-Each tool answers one question. Start with probe.sh, which makes the runs the others read. Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`.
+Each tool answers one question. Start with probe.sh, which makes the runs the others read. Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`. The launcher's own helpers live in `launcher/tools/` with their tests beside them, so run those with `python3 -m unittest discover -s launcher/tools -p 'test_*.py'` too. Both run under the Command Line Tools' Python 3.9 and under a newer one.
 
 ## Conventions
 
@@ -231,6 +231,22 @@ What does an app tree hold? It lists the regular files with their sizes, the sym
 ## bundle_dmg.py
 
 How does check_bundle.py look inside a DMG? It attaches the image with `hdiutil attach -readonly -nobrowse -mountpoint` at a fresh temporary directory and always detaches it, forcing the detach if the volume is busy. The tests fake hdiutil. It has no command line.
+
+## sign_and_package.py
+
+Can one command sign the launcher, put it in a DMG and notarize it? It lives in `launcher/tools/`, with the commands it runs in `sign_plan.py` beside it. It copies the app to `OUT/dmg-root/Dragoon.app` next to an `Applications` link and signs the copy inside out, so the app you pass stays as it was. Every item gets `codesign -f -s IDENTITY -o runtime --timestamp` and none gets `--deep`. `Contents/MacOS/cmake` and `ninja` go first with `-i` identifiers made from the app's bundle ID. Sparkle's `Autoupdate`, `Updater.app` and framework follow when the app has them, without the XPC services a launcher that isn't sandboxed doesn't ship. The app goes last, and the launcher claims no entitlements.
+
+`hdiutil create -format UDZO` then makes `OUT/Dragoon.dmg` and `codesign --timestamp -i` signs it. With a Team API key, `xcrun notarytool submit --wait` notarizes the DMG and `xcrun stapler staple` staples it. The run ends with `codesign --verify --strict --deep` on the app. A notarized DMG also gets `xcrun stapler validate` and the `spctl` assessments for an app and for a disk image.
+
+```
+launcher/tools/sign_and_package.py --app launcher/dist/Dragoon.app --identity - --out /tmp/dragoon-release
+launcher/tools/sign_and_package.py --app launcher/dist/Dragoon.app --identity "Developer ID Application: NAME (TEAM)" \
+  --out dist --notary-key AuthKey.p8 --notary-key-id KEYID --notary-issuer ISSUER --dry-run
+```
+
+`--identity -` signs ad hoc. With no notary key the run stops after signing and says the DMG isn't notarized. `--dry-run` prints every command and runs none. Each command prints as a `+` line as it runs, and the DMG's path is the last line of a finished run. The key file is only named to notarytool and never read. A rejected notarization stops the run and prints the submission ID with the `notarytool log` command that shows why. It exits 0 when the DMG is made, 1 when a command failed and 2 on a bad argument.
+
+The tests fake codesign, ditto, hdiutil, xcrun and spctl with scripts that record their calls, so they sign nothing.
 
 ## The engine's own tools
 
