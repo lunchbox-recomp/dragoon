@@ -1,7 +1,7 @@
 # Blank memory card to an Air Ride race on Frozen Hillside, one player and three CPUs.
 # air-ride-race.txt with three presses on the course select. 2000, 2050 and 2100 RIGHT:
-# Frozen Hillside, the fourth course on the top row. 2200 A to 3100 START as in
-# air-ride-race.txt.
+# Frozen Hillside, the fourth course on the top row. 2200 A: that course. 2500 A to 3100
+# START as in air-ride-race.txt.
 120:A:5,300:A:5,900:A:5,
 1000:START:5,
 1300:A:5,1600:A:5,1900:A:5,
