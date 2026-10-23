@@ -13,3 +13,12 @@ air-ride-magma-flows       25 60 4200
 air-ride-beanstalk-park    25 60 4200
 air-ride-machine-passage   25 60 4200
 air-ride-checker-knights   25 60 4200
+top-ride-grass 30 60 3600
+top-ride-sand  30 60 3600
+top-ride-sky   30 60 3600
+top-ride-fire  30 60 3600
+top-ride-light 30 60 3600
+top-ride-water 30 60 3600
+top-ride-metal 30 60 3600
+city-trial-stadium    60 300 4800,15600,17100,20400
+city-trial-stadium-4p 70 300 4200,4800,15600,17100,21000 --pads=4
