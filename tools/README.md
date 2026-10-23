@@ -12,7 +12,7 @@ Every tool takes `--help`, which prints its usage and what it reads. Results go 
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py and click_diff.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py and noise_blocks.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -138,6 +138,14 @@ Which clicks does one build's unpaced recording of a route have that another's d
 
 ```
 tools/click_diff.py /path/to/old-clone/build/probe/scorecard-unpaced-title/mixer.raw build/probe/scorecard-unpaced-title/mixer.raw
+```
+
+## noise_blocks.py
+
+Where does a recording turn to loud noise? It weighs each 5 ms block's high-frequency energy against its total, as the RMS of its first difference over its RMS. White noise gives about 1.41, and music and effects give far less. A block is noise-like over 1 on a channel whose peak is over 8,000, and it prints the stretches such blocks form. It reads a WAV, or raw audio with `--raw RATE`, as audio_clicks.py does.
+
+```
+tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw --raw 32000
 ```
 
 ## warm_shaders.py
