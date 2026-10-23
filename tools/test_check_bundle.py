@@ -11,6 +11,7 @@ from unittest import mock
 
 import bundle_checks
 import bundle_dmg
+import bundle_tree
 import check_bundle
 import export_source
 from testutil import GIT_ENV, commit, fake_hdiutil, git, run_main, write_file
@@ -213,6 +214,15 @@ class PlantedFileTest(BundleTestCase):
         self.assertEqual(len(out), 1)
         self.assertRegex(out[0], rf"^over budget: {APP} \(2\d{{4}} bytes, budget 20000\)$")
 
+    def test_a_bundle_exactly_at_its_budget_passes_and_a_byte_more_fails(self):
+        tarball = "Contents/Resources/third_party/SDL3-3.4.18.tar.gz"
+        room = 20000 - sum(bundle_tree.scan(self.app).files.values())  # budget app 20000
+        size = (self.app / tarball).stat().st_size + room
+        self.plant(tarball, bytes(size))
+        self.assertEqual(self.check(), (0, [], ""))
+        self.plant(tarball, bytes(size + 1))
+        self.assert_findings(f"over budget: {APP} (20001 bytes, budget 20000)")
+
     def test_what_the_build_leaves_behind_fails_anywhere(self):
         names = ["gen/f0.c", "rels/r0.rel", "main.dol", "CMakeCache.txt", "build.ninja",
                  "memcard_a", ".shader-warmup", "inputs/p1.txt"]
@@ -357,6 +367,14 @@ class OddEntryTest(BundleTestCase):
         (self.app / "Contents/Resources/build").mkdir()
         self.assert_findings("not on the manifest: Contents/Resources/build/")
 
+    def test_an_empty_snapshot_directory_is_a_missing_source_not_an_unlisted_directory(self):
+        shutil.rmtree(self.app / SNAP)
+        (self.app / SNAP).mkdir()
+        code, out, _ = self.check()
+        self.assertEqual(code, 1)
+        self.assertEqual([line for line in out if line.startswith("not on the manifest")], [])
+        self.assertIn(f"missing from the source: {SNAP}CMakeLists.txt", out)
+
     def test_an_empty_directory_under_a_prefix_is_fine(self):
         (self.app / LICENSES / "empty").mkdir()
         (self.app / "Contents/Resources/cmake/share/cmake-4.4/Empty").mkdir()
@@ -416,6 +434,12 @@ class DmgTest(BundleTestCase):
     def test_a_dmg_over_budget(self):
         write_file(self.dist, "Dragoon.dmg", bytes(41000))
         self.assert_dmg_findings("over budget: Dragoon.dmg (41000 bytes, budget 40000)")
+
+    def test_a_dmg_exactly_at_its_budget_passes_and_a_byte_more_fails(self):
+        write_file(self.dist, "Dragoon.dmg", bytes(40000))
+        self.assertEqual(self.check(self.dmg), (0, [], ""))
+        write_file(self.dist, "Dragoon.dmg", bytes(40001))
+        self.assert_dmg_findings("over budget: Dragoon.dmg (40001 bytes, budget 40000)")
 
     def test_something_besides_the_app_and_the_link(self):
         write_file(self.contents, "README.txt", "read me")
