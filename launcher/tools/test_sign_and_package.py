@@ -184,11 +184,15 @@ class SignTestCase(unittest.TestCase):
     def argvs(self) -> list[list[str]]:
         return [[self.fakes[c["tool"]], *c["argv"]] for c in self.calls()]
 
-    def sign(self, path: Path, identifier: str = "") -> list[str]:
-        cmd = [self.fakes["codesign"], "-f", "-s", IDENTITY, "-o", "runtime", "--timestamp"]
+    def sign(self, path: Path, identifier: str = "", identity: str = IDENTITY) -> list[str]:
+        """The command for an item. A Developer ID signature has the hardened runtime and a
+        secure timestamp. An ad hoc one (identity -) has neither."""
+        cmd = [self.fakes["codesign"], "-f", "-s", identity]
+        cmd += ["--timestamp=none"] if identity == "-" else ["-o", "runtime", "--timestamp"]
         return cmd + (["-i", identifier] if identifier else []) + [str(path)]
 
-    def expected(self, notarize: bool = True, sparkle: bool = True) -> list[list[str]]:
+    def expected(self, notarize: bool = True, sparkle: bool = True,
+                 identity: str = IDENTITY) -> list[list[str]]:
         """Every command in the plan's order. The first two aren't fakes."""
         staged = self.out / "dmg-root"
         app, dmg = staged / APP, self.out / "Dragoon.dmg"
@@ -196,17 +200,19 @@ class SignTestCase(unittest.TestCase):
         commands = [
             [self.fakes["ditto"], str(self.app), str(app)],
             ["/bin/ln", "-s", "/Applications", str(staged / "Applications")],
-            self.sign(app / "Contents/MacOS/cmake", BUNDLE_ID + ".cmake"),
-            self.sign(app / "Contents/MacOS/ninja", BUNDLE_ID + ".ninja"),
+            self.sign(app / "Contents/MacOS/cmake", BUNDLE_ID + ".cmake", identity),
+            self.sign(app / "Contents/MacOS/ninja", BUNDLE_ID + ".ninja", identity),
         ]
         if sparkle:
-            commands += [self.sign(framework / "Versions/B/Autoupdate"),
-                         self.sign(framework / "Versions/B/Updater.app"), self.sign(framework)]
+            commands += [self.sign(framework / "Versions/B/Autoupdate", identity=identity),
+                         self.sign(framework / "Versions/B/Updater.app", identity=identity),
+                         self.sign(framework, identity=identity)]
         commands += [
-            self.sign(app),
+            self.sign(app, identity=identity),
             [self.fakes["hdiutil"], "create", "-format", "UDZO", "-volname", "Dragoon",
              "-srcfolder", str(staged), str(dmg)],
-            [self.fakes["codesign"], "-s", IDENTITY, "--timestamp", "-i", BUNDLE_ID + ".dmg",
+            [self.fakes["codesign"], "-s", identity,
+             "--timestamp=none" if identity == "-" else "--timestamp", "-i", BUNDLE_ID + ".dmg",
              str(dmg)],
         ]
         key = ["--key", str(self.key), "--key-id", KEY_ID, "--issuer", ISSUER]
@@ -316,6 +322,29 @@ class FlagTest(SignTestCase):
         self.assertIn("--wait", submit["argv"])
         self.assertEqual(submit["argv"][submit["argv"].index("--key") + 1], str(self.key))
         self.assertNotIn("PRIVATE KEY", out + err + self.records.read_text())
+
+    def test_an_ad_hoc_run_asks_for_no_timestamp_and_no_hardened_runtime(self):
+        code, out, err = self.run_tool(notary=False, identity="-")
+        self.assertEqual(code, 0)
+        calls = self.signing()
+        self.assertEqual(len(calls), 7)
+        for argv in calls:
+            with self.subTest(argv[-1]):
+                self.assertIn("--timestamp=none", argv)
+                self.assertNotIn("--timestamp", argv)  # the server wants an Apple identity
+                self.assertNotIn("-o", argv)  # library validation would stop an ad hoc Sparkle
+                self.assertNotIn("--deep", argv)
+        want = self.expected(notarize=False, identity="-")
+        self.assertEqual(self.argvs(), [c for c in want if c[0] != "/bin/ln"])
+        self.assertEqual(self.printed(out), want)
+
+    def test_a_developer_id_run_has_the_runtime_and_a_secure_timestamp_on_every_item(self):
+        self.run_tool()
+        for argv in self.signing()[:-1]:  # the DMG is no code, so it has no runtime
+            with self.subTest(argv[-1]):
+                self.assertEqual(argv[argv.index("-o") + 1], "runtime")
+                self.assertIn("--timestamp", argv)
+                self.assertFalse([a for a in argv if a.startswith("--timestamp=")])
 
     def test_ad_hoc_with_no_notary_key_signs_and_makes_the_dmg_only(self):
         code, out, err = self.run_tool(notary=False, identity="-")

@@ -3,7 +3,8 @@
 Nothing here runs anything. sign_and_package.py runs them, or prints them under --dry-run.
 The order is Apple's: sign inside out with the hardened runtime and a secure timestamp and
 never with --deep, make the DMG, sign it, notarize it as the outermost container, staple it
-and verify. The launcher claims no entitlements, so no command passes any.
+and verify. An ad hoc run (identity -) leaves out the runtime and the timestamp, as sign_item
+says. The launcher claims no entitlements, so no command passes any.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ LN = "/bin/ln"
 SPCTL = "/usr/sbin/spctl"
 XCRUN = "/usr/bin/xcrun"
 
+AD_HOC = "-"  # codesign's identity for a signature with no certificate
 APP = "Dragoon.app"  # in the DMG, whatever the input is called
 DMG = "Dragoon.dmg"
 STAGING = "dmg-root"  # what hdiutil packs: the app and an Applications link
@@ -66,9 +68,23 @@ def check_app(app: Path) -> None:
                              "doesn't need them, so take them out before signing")
 
 
+def timestamp_flag(identity: str) -> str:
+    """A Developer ID signature gets Apple's secure timestamp, which notarization requires.
+    An ad hoc one (identity -) asks for none: the timestamp server wants an Apple identity and
+    the internet, and codesign fails the signing when it can't have them."""
+    return "--timestamp=none" if identity == AD_HOC else "--timestamp"
+
+
 def sign_item(identity: str, path: Path, identifier: str = "") -> list[str]:
-    """Sign a piece of the app. -f replaces the signature a vendor or lipo left."""
-    cmd = [CODESIGN, "-f", "-s", identity, "-o", "runtime", "--timestamp"]
+    """Sign a piece of the app. -f replaces the signature a vendor or lipo left.
+
+    A Developer ID signature has the hardened runtime, which notarization requires. Library
+    validation comes with it, and it lets the launcher load Sparkle because both carry our team
+    ID. An ad hoc signature has no team ID, so the same flag would stop an ad hoc launcher
+    loading an ad hoc Sparkle, and dev builds leave the runtime off."""
+    cmd = [CODESIGN, "-f", "-s", identity]
+    cmd += [] if identity == AD_HOC else ["-o", "runtime"]
+    cmd.append(timestamp_flag(identity))
     return cmd + (["-i", identifier] if identifier else []) + [str(path)]
 
 
@@ -102,7 +118,7 @@ def make_dmg(staging: Path, dmg: Path) -> list[str]:
 
 
 def sign_dmg(identity: str, dmg: Path, identifier: str) -> list[str]:
-    return [CODESIGN, "-s", identity, "--timestamp", "-i", f"{identifier}.dmg", str(dmg)]
+    return [CODESIGN, "-s", identity, timestamp_flag(identity), "-i", f"{identifier}.dmg", str(dmg)]
 
 
 def notarize(dmg: Path, notary: Notary) -> list[str]:

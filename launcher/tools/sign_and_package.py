@@ -16,9 +16,13 @@ APP is left as it is. The tool signs a copy in DIR, which must be empty or missi
   4  with the Team API key, notarytool submit --wait, then stapler staple on the DMG
   5  codesign --verify --strict --deep on the app. A notarized DMG also gets stapler validate
      and the spctl assessments for an app and for a disk image
---identity - signs ad hoc. Without the three --notary-* options the tool stops after step 3 and
-step 5's signature check, and says the DMG isn't notarized. The key file is only named to
-notarytool, never read or printed. --dry-run prints every command and runs none.
+--identity - signs ad hoc, with --timestamp=none and without -o runtime. Apple's timestamp
+server wants an Apple identity and the internet, and the runtime's library validation would
+stop an ad hoc launcher loading an ad hoc Sparkle, since neither has a team ID. A Developer ID
+run passes -o runtime and --timestamp, which notarization requires, and its pieces share a
+team ID. Without the three --notary-* options the tool stops after step 3 and step 5's
+signature check, and says the DMG isn't notarized. The key file is only named to notarytool,
+never read or printed. --dry-run prints every command and runs none.
 
 Every command is printed with a "+ " as it runs, and the DMG's path is the last line of a
 finished run. A rejected notarization prints the submission ID and the notarytool log command
