@@ -1,0 +1,57 @@
+import DragoonCore
+import Testing
+
+@Suite struct SystemProcessRunnerTests {
+    let runner = SystemProcessRunner()
+
+    @Test func eachArgumentArrivesWholeWithItsSpaces() async throws {
+        let result = try await runner.run("/usr/bin/printf", ["%s|", "Application Support", "a b c"])
+        #expect(result == ProcessResult(status: 0, stdout: "Application Support|a b c|"))
+    }
+
+    @Test func theEnvironmentIsExactlyTheOneGiven() async throws {
+        let result = try await runner.run("/usr/bin/env", [], environment: ["A": "b c"])
+        #expect(result.stdout == "A=b c\n")
+    }
+
+    @Test func bothPipesDrainSoABigOutputNeverBlocks() async throws {
+        // 2 MiB is 32 times a pipe's buffer, and dd's summary goes to stderr meanwhile.
+        let result = try await runner.run("/bin/dd", ["if=/dev/zero", "bs=65536", "count=32"])
+        #expect(result.status == 0)
+        #expect(result.stdout.utf8.count == 2_097_152)
+        #expect(result.stderr.contains("2097152 bytes"))
+    }
+
+    @Test func aFailureGivesItsStatusAndStderr() async throws {
+        let result = try await runner.run("/bin/ls", ["/no such path"])
+        #expect(result.status == 1)
+        #expect(result.stdout == "")
+        #expect(result.stderr.contains("/no such path"))
+    }
+
+    @Test func aMissingExecutableThrows() async {
+        await #expect(throws: (any Error).self) {
+            try await runner.run("/no/such/tool", [])
+        }
+    }
+}
+
+@Suite struct FakeProcessRunnerTests {
+    @Test func answersFromItsScriptAndRecordsTheCall() async throws {
+        let runner = FakeProcessRunner()
+        runner.respond(to: "/usr/bin/xcode-select", ["-p"],
+                       with: ProcessResult(status: 0, stdout: "/Library/Developer/CommandLineTools\n"))
+        let result = try await runner.run("/usr/bin/xcode-select", ["-p"], environment: ["A": "b"])
+        #expect(result.stdout == "/Library/Developer/CommandLineTools\n")
+        #expect(runner.calls == [.init(executable: "/usr/bin/xcode-select", arguments: ["-p"],
+                                       environment: ["A": "b"])])
+    }
+
+    @Test func aCallOffTheScriptThrowsAndIsStillRecorded() async {
+        let runner = FakeProcessRunner()
+        await #expect(throws: FakeProcessRunner.Unscripted(command: ["/usr/bin/xcrun", "--find", "clang"])) {
+            try await runner.run("/usr/bin/xcrun", ["--find", "clang"])
+        }
+        #expect(runner.calls.map(\.arguments) == [["--find", "clang"]])
+    }
+}
