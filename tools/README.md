@@ -240,7 +240,7 @@ Is anything from a disc tracked by git? It flags tracked paths that look like ga
 
 - Disc images and executables by suffix, `.raw` memory cards and audio recordings, `.wav` recordings and `.bin` shader caches and key lists, wherever they sit.
 - Anything under a top-level `build*/` or `rom/` (except the `rom/` README), and anything under a `saves/` at any depth.
-- Frame dumps (`frame_NNNNN.png`), `stdout.txt` and `panic.txt`, wherever they sit. Other PNG files are fine.
+- Frame dumps (`frame_NNNNN.png` and `output_NNNNN.png`), `stdout.txt` and `panic.txt`, wherever they sit. Other PNG files are fine.
 
 It prints one line per path and exits 1 if it found any, so it can run in CI. It prints nothing when the tree is clean.
 

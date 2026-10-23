@@ -9,7 +9,7 @@ like game data:
     recording, a .wav recording (anywhere, like .raw) or a .bin shader cache or key list
   - anything under a top-level build*/ or rom/ (except rom/README.md), or under a saves/
     at any depth
-  - a frame dump (frame_NNNNN.png), stdout.txt or panic.txt anywhere
+  - a frame dump (frame_NNNNN.png or output_NNNNN.png), stdout.txt or panic.txt anywhere
 Other .png files are fine. The rules mirror .gitignore, so a file added with `git add -f`
 still fails CI. It prints nothing when the tree is clean.
 
@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
-from frame_dumps import FRAME_NAME
+from frame_dumps import FRAME_NAME, OUTPUT_NAME
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_SUFFIXES = (".iso", ".gcm", ".ciso", ".rvz", ".gcz", ".wbfs", ".dol", ".rel", ".gci", ".raw",
@@ -30,10 +30,14 @@ DATA_SUFFIXES = (".iso", ".gcm", ".ciso", ".rvz", ".gcz", ".wbfs", ".dol", ".rel
 LOG_NAMES = ("stdout.txt", "panic.txt")
 
 
+def is_frame_dump(name: str) -> bool:
+    return bool(FRAME_NAME.fullmatch(name) or OUTPUT_NAME.fullmatch(name))
+
+
 def is_game_data(path: str) -> bool:
     parts = PurePosixPath(path).parts
     base = parts[-1]
-    if path.lower().endswith(DATA_SUFFIXES) or base in LOG_NAMES or FRAME_NAME.fullmatch(base):
+    if path.lower().endswith(DATA_SUFFIXES) or base in LOG_NAMES or is_frame_dump(base):
         return True
     if "saves" in parts[:-1]:
         return True
