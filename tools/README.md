@@ -12,7 +12,7 @@ Every tool takes `--help`, which prints its usage and what it reads. Results go 
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py and ax_stats.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py and ax_stats.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -148,10 +148,20 @@ Where do the DMA's blocks turn to loud noise? It weighs each 160-sample block of
 tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw
 ```
 
+## clip_signs.py
+
+Which side of full scale do a build's clipped runs sit on? audio_clicks.py counts a clipped run at 32,767 or at -32,768 as one number. A build whose clamp stops at -32,767 holds its negative clipping at a value that number leaves out, so two builds' counts only compare once they're split by sign. clip_signs.py takes the same `LABEL=BUILD_DIR`, `--routes` and `--margin` as audio_scorecard.py and reads the two recordings it scores from the runs already in each `build/probe/`, so it plays no game. The mixer is the unpaced run's recording cut where the scorecard cuts it. The device is the real-time run's whole recording. For each it prints the clipped runs and their samples at +32,767 and at -32,768, the samples at -32,767 and the lowest and highest sample. For the real-time run it also prints the highest main L peak in its log, which shows whether that run reached a loud stretch.
+
+```
+tools/clip_signs.py current=/path/to/old-clone/build next=build --routes air-ride-race
+tools/clip_signs.py current=/path/to/old-clone/build next=build --routes menu --margin 150
+```
+
+A recording that isn't there reads `not recorded`, and a run that didn't reach its route's last checkpoint exits 2, as does an unpaced recording shorter than the cut.
+
 ## ax_stats.py
 
 What did the game's voices ask the AX mixer for over a run? It reads the `[ax] pb` and `[ax] bus` lines that a run with `GCN_AXSTATS=1` prints every 400 command lists, and prints a row per count with a column per run and a total. Counts are summed over the windows, and the bus peaks take the largest window. `src0_coef=a/b/c/d` becomes four rows, and the mixer's top eight values are left out. The fields are described in `gcn-recomp/docs/diagnostics.md`. `--until N` stops at the window that ends at list N. Two unpaced runs of one route reach different lists in the same time, so it lets them be compared over the same lists. A file with no such lines up to there exits 2, and so does an `--until` of 0 or less.
-
 ```
 tools/audio_hashes.py check
 tools/ax_stats.py build/probe/audio-title/stdout.txt build/probe/audio-air-ride-race/stdout.txt
