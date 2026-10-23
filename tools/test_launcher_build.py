@@ -203,6 +203,10 @@ class RecipeTestCase(unittest.TestCase):
     def current(self) -> str:
         return os.readlink(self.data / "game" / "current")
 
+    def links_left_in_game(self) -> list[str]:
+        """The names of the .current.<pid>.partial links in <data>/game, a swap's temp names."""
+        return sorted(p.name for p in (self.data / "game").glob(".current.*.partial"))
+
 
 class GoodRunTest(RecipeTestCase):
     def test_configure_line_and_environment_exactly(self):
@@ -276,6 +280,13 @@ class GoodRunTest(RecipeTestCase):
         del before["shaders.bin"], before[".shader-warmup"]
         self.assertEqual(after, before)
         self.assertEqual(os.listdir(self.cache), ["build.lock"])  # the intermediates are gone
+
+    def test_links_a_killed_swap_left_are_cleaned_up_at_the_next_swap(self):
+        self.old_game()
+        os.symlink("somewhere", self.data / "game" / ".current.99999.partial")
+        self.assertEqual(self.build()[0], 0)
+        self.assertEqual(self.links_left_in_game(), [])
+        self.assertNotEqual(self.current(), OLD)
 
     def test_the_package_is_an_app_sealed_ad_hoc_with_its_stamp(self):
         self.assertEqual(self.build()[0], 0)
@@ -408,6 +419,7 @@ class FailureTest(RecipeTestCase):
         self.assertEqual(error["step"], "swap")
         self.assertEqual(tree(self.data / "saves"), before)  # not even the warmed files
         self.assertTrue((self.data / "game" / "current").is_dir())
+        self.assertEqual(self.links_left_in_game(), [])  # the one this run made is gone
 
     def test_a_tarball_with_the_wrong_hash_stops_before_anything(self):
         make_tarball(self.tarball, [(tar_member("SDL3-3.4.18/other"), b"not the pinned one")])
@@ -430,6 +442,35 @@ class FailureTest(RecipeTestCase):
         self.assertEqual((error["step"], "SDL3-3.4.18/x" in error["message"]), ("sdl", True))
         self.assertFalse((self.cache / "sdl").exists())
 
+    def test_the_extracted_files_are_the_bytes_that_were_hashed(self):
+        real = launcher_build.sdl_source.extract
+
+        def rewritten_then_extracted(tarball, dest):
+            # Someone replaces the file after its hash was checked.
+            make_tarball(self.tarball, [(tar_member("SDL3-3.4.18/CMakeLists.txt"), b"swapped\n")])
+            real(tarball, dest)
+
+        with mock.patch.object(launcher_build.sdl_source, "extract", rewritten_then_extracted):
+            code, _, _ = self.build("--keep-build")
+        self.assertEqual(code, 0)
+        self.assertEqual((self.cache / "sdl" / "SDL3-3.4.18" / "CMakeLists.txt").read_text(),
+                         "project(SDL3)\n")
+
+    def test_a_failed_package_removes_the_half_made_build(self):
+        self.old_game()
+        write_file(self.dir, "fail codesign", "")
+        code, events, _ = self.build()
+        self.assertEqual((code, [e["step"] for e in self.of(events, "error")]), (1, ["package"]))
+        self.assertEqual(sorted(os.listdir(self.data / "game")), sorted(["current", OLD]))
+
+    def test_a_failure_before_the_first_step_still_names_a_step(self):
+        self.cache.mkdir(parents=True)
+        write_file(self.cache, "warm", "not a directory")  # the leftover cleanup can't remove it
+        code, events, _ = self.build()
+        self.assertEqual(code, 1)
+        (error,) = self.of(events, "error")
+        self.assertEqual(error["step"], "sdl")
+
     def test_a_snapshot_that_doesnt_match_its_manifest_is_refused(self):
         write_file(self.source, "CMakeLists.txt", "project(edited)\n")
         code, events, _ = self.build()
@@ -450,6 +491,20 @@ class LockTest(RecipeTestCase):
         self.assertEqual(code, 3)
         self.assertEqual([(e["event"], e["step"]) for e in events], [("error", "lock")])
         self.assertFalse(self.records.exists())
+        self.assertFalse(self.log.exists())
+
+    def test_the_loser_leaves_the_log_it_was_given_alone(self):
+        """The launcher gives each build its own log, but a developer's second run may name
+        the first one's, which the running build is still writing."""
+        self.log.parent.mkdir(parents=True)
+        self.log.write_text("== configure\n")
+        self.cache.mkdir(parents=True)
+        with (self.cache / "build.lock").open("a") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            code, events, _ = self.build()
+        self.assertEqual(code, 3)
+        self.assertEqual(events[0]["log"], str(self.log))
+        self.assertEqual(self.log.read_text(), "== configure\n")
 
 
 class NoDiscTest(RecipeTestCase):

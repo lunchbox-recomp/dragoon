@@ -1,3 +1,4 @@
+import io
 import tarfile
 import tempfile
 import unittest
@@ -57,6 +58,12 @@ class ExtractTest(unittest.TestCase):
         script = self.dest / "SDL3-3.4.18" / "build-scripts" / "run me.sh"
         self.assertEqual(script.stat().st_mode & 0o777, 0o755)
         self.assertEqual((self.dest / "SDL3-3.4.18" / "CMakeLists.txt").stat().st_mode & 0o777, 0o644)
+
+    def test_extracts_from_an_open_file_as_well_as_from_a_path(self):
+        tarball = make_tarball(self.dir / "SDL3.tar.gz", [
+            (member("SDL3-3.4.18/CMakeLists.txt"), b"project(SDL3)\n")])
+        sdl_source.extract(io.BytesIO(tarball.read_bytes()), self.dest)
+        self.assertEqual((self.dest / "SDL3-3.4.18" / "CMakeLists.txt").read_bytes(), b"project(SDL3)\n")
 
     def test_refuses_members_that_leave_or_arent_plain(self):
         cases = {

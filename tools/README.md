@@ -222,7 +222,7 @@ How does the launcher build the game? launcher_build.py is its recipe, and a dev
 
 The tools run with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and five other variables, listed in `--help`. CMake ignores `/opt/homebrew`, `/usr/local` and `/opt/local`, so Homebrew's Python, SDL or libusb can't reach the build. `FETCHCONTENT_FULLY_DISCONNECTED` makes any download an error.
 
-Before the swap nothing in `<data>` changes but the new `source/<commit>` and `game/<id>`. A failed or killed build leaves the old game current and `saves/` as it was. Earlier builds stay in `<data>/game` for the launcher to delete. A second build while one runs exits 3 at `<cache>/build.lock` without touching anything.
+Before the swap nothing in `<data>` changes but the new `source/<commit>` and `game/<id>`. A rebuild of a commit replaces its `source/<commit>`, which the installed game never reads. A failed or killed build leaves the old game current and `saves/` as it was, and a package step that fails removes its `game/<id>`. Earlier builds stay in `<data>/game` for the launcher to delete. A second build while one runs exits 3 at `<cache>/build.lock` without touching anything, its `--log` included.
 
 ```
 tools/launcher_build.py --source /tmp/dragoon-source --disc "$HOME/Kirby Air Ride (USA).gcm" \
@@ -240,7 +240,7 @@ A first build on an M4 Max took 112 s, with 24 s to configure, 33 s to compile (
 
 ## sdl_source.py
 
-Where does SDL's source come from when nothing downloads? gcn-recomp's `CMakeLists.txt` pins SDL's release tarball by URL and SHA-256 in its `sdl3` `FetchContent_Declare`. sdl_source.py reads that pin, so the hash has one home. Its extraction checks every member before it writes anything, and refuses absolute paths, `..` and anything but plain files and directories, since the tools' Python 3.9 has no tarfile filter. It has no command line.
+Where does SDL's source come from when nothing downloads? gcn-recomp's `CMakeLists.txt` pins SDL's release tarball by URL and SHA-256 in its `sdl3` `FetchContent_Declare`. sdl_source.py reads that pin, so the hash has one home. The launcher reads the tarball once, so what it extracts is what it hashed. Its extraction checks every member before it writes anything, and refuses absolute paths, `..` and anything but plain files and directories, since the tools' Python 3.9 has no tarfile filter. It has no command line.
 
 ## check_bundle.py
 

@@ -20,16 +20,19 @@ build. Nothing downloads. The steps are:
              beside it naming both commits, the SDK and the time
   swap       point <data>/game/current at the new build, then install the warmed cache in
              <data>/saves
-Before the swap nothing in <data> changes but the new source/<commit> and game/<id>.
-Earlier builds stay in <data>/game for the launcher to delete. After a good build the
-intermediates in <cache> are deleted, except build/ and sdl/ under --keep-build.
+Before the swap nothing in <data> changes but the new source/<commit> and game/<id>. A
+rebuild of a commit replaces its source/<commit>, which the installed game never reads, and
+a package step that fails removes its game/<id>. Earlier builds stay in <data>/game for the
+launcher to delete. After a good build the intermediates in <cache> are deleted, except
+build/ and sdl/ under --keep-build.
 
 Prints one JSON object per line on stdout:
   {"event": "step", "step": "configure"}
   {"event": "progress", "step": "compile", "done": 12, "total": 183}
   {"event": "done", "game": "<data>/game/current/Dragoon.app"}   (null under --no-disc)
   {"event": "error", "step": "configure", "message": "...", "log": "<file>"}
---log gets every line every tool prints, with each command and each step's time.
+--log gets every line every tool prints, with each command and each step's time. A build that
+loses the lock doesn't open it.
 
 Exits 0 when the new game is current (under --no-disc, when runtime_check built), 1 when a
 step failed, 2 on a bad argument and 3 when another build holds <cache>/build.lock.
@@ -39,6 +42,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
+import hashlib
+import io
 import itertools
 import json
 import os
@@ -93,8 +98,12 @@ def tool_env() -> dict[str, str]:
             "LANG": "en_US.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "NINJA_STATUS": "[%f/%t] "}
 
 
+def emit(**event: object) -> None:
+    print(json.dumps(event), flush=True)
+
+
 class Build:
-    """The events on stdout, the log and the tools run, for one build."""
+    """The log and the tools run, for one build, and the events its steps print."""
 
     def __init__(self, log: TextIO, log_path: Path):
         self.log = log
@@ -102,21 +111,18 @@ class Build:
         self.step = ""
         self.env = tool_env()
 
-    def emit(self, **event: object) -> None:
-        print(json.dumps(event), flush=True)
-
     def note(self, line: str) -> None:
         self.log.write(line + "\n")
         self.log.flush()
 
     def fail(self, step: str, message: str) -> None:
         self.note(f"== {step} failed: {message}")
-        self.emit(event="error", step=step, message=message, log=str(self.log_path))
+        emit(event="error", step=step, message=message, log=str(self.log_path))
 
     @contextlib.contextmanager
     def stage(self, step: str) -> Iterator[None]:
         self.step = step
-        self.emit(event="step", step=step)
+        emit(event="step", step=step)
         self.note(f"== {step}")
         start = time.monotonic()
         yield
@@ -135,7 +141,7 @@ class Build:
                 self.note(line)
                 counts = progress(line)
                 if counts:
-                    self.emit(event="progress", step=self.step, done=counts[0], total=counts[1])
+                    emit(event="progress", step=self.step, done=counts[0], total=counts[1])
         if p.returncode != 0:
             raise StepFailed(f"{name or Path(cmd[0]).name} exited {p.returncode}")
 
@@ -152,12 +158,13 @@ def remove(path: Path) -> None:
 
 def unpack_sdl(snapshot: Path, tarball: Path, cache: Path) -> Path:
     pin = sdl_source.pin((snapshot / "gcn-recomp" / "CMakeLists.txt").read_text())
-    found = export_source.sha256_file(tarball)
+    data = tarball.read_bytes()  # once, so what is extracted is what was hashed
+    found = hashlib.sha256(data).hexdigest()
     if found != pin.sha256:
         raise StepFailed(f"{tarball} has SHA-256 {found}, but gcn-recomp pins {pin.sha256}")
     dest = cache / "sdl"
     remove(dest)
-    sdl_source.extract(tarball, dest)
+    sdl_source.extract(io.BytesIO(data), dest)
     if not (dest / pin.top).is_dir():
         raise StepFailed(f"{tarball} holds no {pin.top}/")
     return dest / pin.top
@@ -235,26 +242,35 @@ def package(b: Build, a: argparse.Namespace, game: Path, info: dict[str, str]) -
     games = a.data / "game"
     games.mkdir(parents=True, exist_ok=True)
     build = new_build_dir(games, info["dragoon"])
-    contents = build / APP / "Contents"
-    (contents / "MacOS").mkdir(parents=True)
-    shutil.copy2(game, contents / "MacOS" / GAME)
-    with (contents / "Info.plist").open("wb") as f:
-        plistlib.dump(INFO_PLIST, f)
-    b.run([CODESIGN, "--force", "--sign", "-", str(build / APP)], cwd=a.cache)
-    stamp = {"dragoon": info["dragoon"], "gcn-recomp": info["gcn-recomp"], "sdk": str(a.sdk),
-             "built": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-    (build / "stamp.json").write_text(json.dumps(stamp, indent=2, sort_keys=True) + "\n")
+    try:
+        contents = build / APP / "Contents"
+        (contents / "MacOS").mkdir(parents=True)
+        shutil.copy2(game, contents / "MacOS" / GAME)
+        with (contents / "Info.plist").open("wb") as f:
+            plistlib.dump(INFO_PLIST, f)
+        b.run([CODESIGN, "--force", "--sign", "-", str(build / APP)], cwd=a.cache)
+        stamp = {"dragoon": info["dragoon"], "gcn-recomp": info["gcn-recomp"], "sdk": str(a.sdk),
+                 "built": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+        (build / "stamp.json").write_text(json.dumps(stamp, indent=2, sort_keys=True) + "\n")
+    except BaseException:  # no half-made build for the launcher's cleanup to find
+        shutil.rmtree(build, ignore_errors=True)
+        raise
     return build
 
 
 def swap(data: Path, build: Path, warm: Path) -> None:
     """Point <data>/game/current at BUILD in one rename, then install the warmed files."""
-    current = data / "game" / "current"
-    link = current.with_name(f".current.{os.getpid()}{PARTIAL}")
-    if link.is_symlink():
-        link.unlink()
+    games = data / "game"
+    current = games / "current"
+    for leftover in games.glob(f".current.*{PARTIAL}"):  # from a swap that was killed
+        leftover.unlink()
+    link = games / f".current.{os.getpid()}{PARTIAL}"
     os.symlink(build.name, link)
-    os.replace(link, current)
+    try:
+        os.replace(link, current)
+    except BaseException:
+        link.unlink()
+        raise
     for name in WARMED:
         if (warm / name).is_file():
             warm_shaders.install(warm / name, data / "saves" / name)
@@ -263,8 +279,8 @@ def swap(data: Path, build: Path, warm: Path) -> None:
 def build_game(b: Build, a: argparse.Namespace, info: dict[str, str]) -> Optional[Path]:
     """Every step in order. Returns the game's path, or None under --no-disc."""
     warm = a.cache / "warm" / "saves"
-    remove(warm.parent)
     with b.stage("sdl"):
+        remove(warm.parent)  # from a build that was killed, which the swap mustn't install from
         sdl = unpack_sdl(a.source, a.sdl_tarball, a.cache)
     with b.stage("source"):
         source = copy_source(a.source, a.data / "source", info["dragoon"])
@@ -338,22 +354,25 @@ def main(argv: list[str]) -> int:
         print(f"launcher_build.py: {problem}", file=sys.stderr)
         return 2
     a.cache.mkdir(parents=True, exist_ok=True)
-    a.log.parent.mkdir(parents=True, exist_ok=True)
-    with (a.cache / "build.lock").open("a") as lock, a.log.open("a") as log:
-        b = Build(log, a.log)
+    with (a.cache / "build.lock").open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            b.fail("lock", f"another build holds {a.cache / 'build.lock'}")
+            # The log isn't opened yet. The build that holds the lock may be writing to it.
+            emit(event="error", step="lock", log=str(a.log),
+                 message=f"another build holds {a.cache / 'build.lock'}")
             return 3
-        try:
-            game = build_game(b, a, info)
-        except (StepFailed, OSError, ValueError, subprocess.SubprocessError) as e:
-            b.fail(b.step, str(e))
-            return 1
-        for name in ("warm",) + (() if a.keep_build else ("build", "sdl")):
-            shutil.rmtree(a.cache / name, ignore_errors=True)
-        b.emit(event="done", game=str(game) if game else None)
+        a.log.parent.mkdir(parents=True, exist_ok=True)
+        with a.log.open("a") as log:
+            b = Build(log, a.log)
+            try:
+                game = build_game(b, a, info)
+            except (StepFailed, OSError, ValueError, subprocess.SubprocessError) as e:
+                b.fail(b.step, str(e))
+                return 1
+            for name in ("warm",) + (() if a.keep_build else ("build", "sdl")):
+                shutil.rmtree(a.cache / name, ignore_errors=True)
+            emit(event="done", game=str(game) if game else None)
     return 0
 
 

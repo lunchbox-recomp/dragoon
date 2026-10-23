@@ -11,6 +11,7 @@ import shutil
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import BinaryIO
 
 ROOT = Path(__file__).resolve().parents[1]
 _SUFFIX = ".tar.gz"
@@ -46,14 +47,16 @@ def _check(member: tarfile.TarInfo) -> None:
         raise ValueError(f"SDL's tarball has a member that isn't a file or directory: {member.name}")
 
 
-def extract(tarball: Path, dest: Path) -> None:
-    """Extract TARBALL into DEST, which mustn't exist yet.
+def extract(tarball: Path | BinaryIO, dest: Path) -> None:
+    """Extract TARBALL, a path or an open file, into DEST, which mustn't exist yet.
 
     Every member is checked before anything is written. Only regular files and directories
     are allowed, and each must stay inside DEST, or ValueError names the first that doesn't.
     The tools' Python 3.9 has no tarfile extraction filter, so the checks are made here.
     """
-    with tarfile.open(tarball, "r:gz") as tar:
+    opened = (tarfile.open(fileobj=tarball, mode="r:gz") if hasattr(tarball, "read")
+              else tarfile.open(tarball, "r:gz"))
+    with opened as tar:
         members = tar.getmembers()
         for m in members:
             _check(m)
