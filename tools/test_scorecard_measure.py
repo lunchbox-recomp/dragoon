@@ -139,11 +139,11 @@ class MeasureTest(unittest.TestCase):
         self.assertIsNone(score.device.on_joins)
 
     def test_two_cuts_beside_one_click_are_one_click_on_a_cut(self):
-        # Marks 30000 and 30002 are both within 2 samples of the click, so the marks with a click
-        # number 2 and the clicks on a mark number 1. The scorecard counts the clicks.
+        # Marks 29998 and 30000 are both within 2 samples of the click at 29999, so the marks with
+        # a click number 2 and the clicks on a mark number 1. The scorecard counts the clicks.
         one_cut = "[ring] cut 3200 frames at output frame 30000\n"
         write_file(self.dir, "stdout.txt",
-                   CURRENT_LOG.replace(one_cut, one_cut + "[ring] cut 3200 frames at output frame 30002\n"))
+                   CURRENT_LOG.replace(one_cut, "[ring] cut 3200 frames at output frame 29998\n" + one_cut))
         x = spliced(tone(96000, 48000), 30000)
         write_wav(self.device, x, x)
         score = self.measure()
