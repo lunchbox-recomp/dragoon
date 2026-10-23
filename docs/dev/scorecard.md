@@ -207,10 +207,10 @@ unpaced run, and the baseline's wasn't compared with a second one.
 | City Trial, 70 s | 23 (19.7) | 7 (0.7) | 2 | 0 (0) | 26,762 | 0 |
 | City Trial, four players, 73 s | 44 (36.2) | 8 (1.4) | 2 | 0 (0) | 28,982 | 0 |
 
-The bisect's unpaced runs, at passes 1 and 2's lengths, 319.8 s in all. Its first and last
-rows are close to passes 4 and 3, which are cut at the routes' own seconds, so they
-corroborate those runs. The last column says how each build's mix compared with the row above
-it.
+The bisect's unpaced runs, at passes 1 and 2's lengths, 319.8 s in all. Its first row and its
+`b839cf6`, `b848158` row are close to passes 4 and 3, which are cut at the routes' own seconds,
+so they corroborate those runs. The last column says how each build's mix compared with the row
+above it.
 
 | gcn-recomp | Clicks (a minute) | On joins | Gaps | Clipped runs | Mix |
 |---|---|---|---|---|---|
