@@ -10,7 +10,7 @@ endif()
 add_subdirectory(gcn-recomp)
 
 # src/, the C++ the tables' hooks call. SOURCES compiles it into the game targets.
-set(DRAGOON_SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp)
+set(DRAGOON_SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp ${CMAKE_SOURCE_DIR}/src/cameras.cpp)
 
 gcn_add_game(
   NAME dragoon
@@ -44,7 +44,8 @@ if(DRAGOON_TESTS)
   FetchContent_MakeAvailable(googletest)
   enable_testing()
   include(GoogleTest)
-  add_executable(dragoon_tests ${CMAKE_SOURCE_DIR}/tests/src/test_census.cpp)
+  add_executable(dragoon_tests ${CMAKE_SOURCE_DIR}/tests/src/test_census.cpp
+                               ${CMAKE_SOURCE_DIR}/tests/src/test_cameras.cpp)
   set_target_properties(dragoon_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
   target_include_directories(dragoon_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
   target_link_libraries(dragoon_tests PRIVATE GTest::gtest_main)
