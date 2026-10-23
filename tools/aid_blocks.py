@@ -20,6 +20,11 @@ class Block:
     address: str
 
 
+def plural(n: int, one: str, many: str | None = None) -> str:
+    """N and its noun, in the form that agrees with N: "1 block", "2 blocks"."""
+    return f"{n} {one if n == 1 else many or one + 's'}"
+
+
 def log_path(recording: Path) -> Path:
     return recording.with_name(recording.name + ".txt")
 

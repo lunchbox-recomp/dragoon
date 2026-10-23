@@ -30,7 +30,7 @@ from bisect import bisect_right
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from aid_blocks import RATE, Block, log_path, read_blocks
+from aid_blocks import RATE, Block, log_path, plural, read_blocks
 from audio_clicks import JOIN_SLACK, analyse, read_raw
 
 KINDS = ("replayed", "caught up")
@@ -112,11 +112,12 @@ def place(path: Path) -> Result:
 
 
 def print_result(path: Path, r: Result, limit: int) -> None:
-    print(f"{path}: {r.seconds:.2f} s, {r.blocks} blocks, {r.clicks} clicks")
+    print(f"{path}: {r.seconds:.2f} s, {plural(r.blocks, 'block')}, {plural(r.clicks, 'click')}")
     for c in r.counts:
-        print(f"{c.kind:10} {c.blocks} blocks, {c.clicks_on} clicks on them ({c.by_chance:.1f} by chance)")
+        print(f"{c.kind:10} {plural(c.blocks, 'block')}, {plural(c.clicks_on, 'click')} on them "
+              f"({c.by_chance:.1f} by chance)")
     for p in r.placed[:limit]:
-        print(f"  {p.at:.3f} s, {p.db:.1f} dB, {p.offset} samples into its block, {' and '.join(p.kinds)}")
+        print(f"  {p.at:.3f} s, {p.db:.1f} dB, {plural(p.offset, 'sample')} into its block, {' and '.join(p.kinds)}")
     if len(r.placed) > limit:
         print(f"  and {len(r.placed) - limit} more")
 

@@ -69,7 +69,7 @@ class MainTest(unittest.TestCase):
         path = write_file(self.dir, "mixer.raw", pcm(self.left, self.right))
         code, out, _ = run_main(noise_blocks.main, str(path))
         self.assertEqual(code, 0)
-        self.assertIn("1.00 s, 200 blocks, 100 noise-like (0.50 s) in 1 stretches", out)
+        self.assertIn("1.00 s, 200 blocks, 100 noise-like (0.50 s) in 1 stretch\n", out)
         self.assertIn("0.500 s to 1.000 s, 100 blocks", out)
 
     def test_list_caps_the_stretches_printed(self):
@@ -79,7 +79,7 @@ class MainTest(unittest.TestCase):
             x[at * 160:(at + 1) * 160] = burst
         path = write_file(self.dir, "mixer.raw", pcm(x, x))
         _, out, _ = run_main(noise_blocks.main, str(path), "--list", "1")
-        self.assertIn("0.000 s to 0.005 s, 1 blocks", out)
+        self.assertIn("0.000 s to 0.005 s, 1 block\n", out)
         self.assertNotIn("0.250 s", out)
         self.assertIn("and 2 more", out)
 

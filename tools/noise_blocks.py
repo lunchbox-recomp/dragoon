@@ -28,7 +28,7 @@ from array import array
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from aid_blocks import BLOCK, RATE
+from aid_blocks import BLOCK, RATE, plural
 from audio_clicks import Recording, read_raw
 
 NOISE_RATIO = 1.0   # RMS first difference over RMS above which a block is noise-like
@@ -84,10 +84,10 @@ def find(rec: Recording) -> Noise:
 
 
 def print_noise(path: Path, n: Noise, limit: int) -> None:
-    print(f"{path}: {n.seconds:.2f} s, {n.blocks} blocks, {n.noisy_blocks} noise-like "
-          f"({n.noisy_seconds:.2f} s) in {len(n.stretches)} stretches")
+    print(f"{path}: {n.seconds:.2f} s, {plural(n.blocks, 'block')}, {n.noisy_blocks} noise-like "
+          f"({n.noisy_seconds:.2f} s) in {plural(len(n.stretches), 'stretch', 'stretches')}")
     for s in n.stretches[:limit]:
-        print(f"  {s.start:.3f} s to {s.end:.3f} s, {s.blocks} blocks")
+        print(f"  {s.start:.3f} s to {s.end:.3f} s, {plural(s.blocks, 'block')}")
     if len(n.stretches) > limit:
         print(f"  and {len(n.stretches) - limit} more")
 

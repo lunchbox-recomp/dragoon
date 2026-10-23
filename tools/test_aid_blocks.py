@@ -37,5 +37,13 @@ class ReadBlocksTest(unittest.TestCase):
         self.assertEqual(aid_blocks.log_path(Path("/run/mixer.raw")), Path("/run/mixer.raw.txt"))
 
 
+class PluralTest(unittest.TestCase):
+    def test_only_one_is_singular(self):
+        self.assertEqual([aid_blocks.plural(n, "block") for n in (0, 1, 2)], ["0 blocks", "1 block", "2 blocks"])
+
+    def test_an_irregular_plural_can_be_given(self):
+        self.assertEqual([aid_blocks.plural(n, "stretch", "stretches") for n in (1, 2)], ["1 stretch", "2 stretches"])
+
+
 if __name__ == "__main__":
     unittest.main()

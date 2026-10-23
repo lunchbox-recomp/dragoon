@@ -97,9 +97,9 @@ class MainTest(unittest.TestCase):
     def test_prints_each_kind_and_the_clicks_on_them(self):
         code, out, _ = run_main(block_clicks.main, str(self.path))
         self.assertEqual(code, 0)
-        self.assertIn("101 blocks, 1 clicks", out)
-        self.assertRegex(out, r"replayed +1 blocks, 1 clicks on them \(0\.0 by chance\)")
-        self.assertRegex(out, r"caught up +1 blocks, 1 clicks on them")
+        self.assertIn("101 blocks, 1 click\n", out)
+        self.assertRegex(out, r"replayed +1 block, 1 click on them \(0\.0 by chance\)")
+        self.assertRegex(out, r"caught up +1 block, 1 click on them")
         self.assertRegex(out, r"samples into its block, replayed and caught up\n")
 
     def test_list_0_prints_no_clicks(self):
