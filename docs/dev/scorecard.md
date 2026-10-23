@@ -27,17 +27,23 @@ to 8. Passes 1 and 2 had the mixer stage's clicks a minute rising from 22.3 to 2
 | Passes 1 and 2 | Baseline and current | Five routes, real-time | `43ceba4` |
 | The title at 91 s, two passes | Baseline and current | The title, real-time | `13acaf4` |
 | A bisect on 2026-10-22 | `caf12a2`, `b848158` and six audio commits between | Five routes unpaced at passes 1 and 2's lengths, and three more real-time menu runs a build | Prototypes |
-| Pass 3 | Current | Five routes, real-time and unpaced | `e9d2928` |
+| Pass 3 | Current | Five routes, real-time and unpaced | `5ff734e` |
 
 All of them ran on 2026-10-22. The bisect's notes aren't in this repository, so its numbers
 are quoted below and named as its own. `tools/block_clicks.py`, `click_diff.py` and
 `noise_blocks.py` are its prototypes made into tools, and pass 3's checks below use them.
 
+Each run's `commits.json` recorded the clone it played. Passes 1 and 2 recorded `43ceba4`,
+which is `788571c` plus `tools/`. Pass 3 recorded `e9d2928`, which is `788571c` plus `tools/`
+and `docs/`. Pass 3 ran at `e9d2928`, before the branch was moved onto `57b9948`. The moved
+branch holds `5ff734e` in its place. The `tools/` of the two differ only in `tools/README.md`,
+so pass 3 ran the code that `5ff734e` holds.
+
 ## The two builds
 
 | | Baseline | Current |
 |---|---|---|
-| Dragoon | `6b81b6e` | `788571c` in passes 1 and 2, `e9d2928` in pass 3 |
+| Dragoon | `6b81b6e` | `788571c` in passes 1 and 2, `5ff734e` in pass 3 |
 | gcn-recomp | `caf12a2` | `b848158` |
 | PB mixer control word | 2001 layout | Later layout for this game's ucode (`07F88145`) |
 | Compressor, command `12` | Skipped | Runs |
@@ -104,7 +110,7 @@ checkpoint at 60 frames a second plus 15 s. That's 31 s for the title, 35 s for 
 memory card and an empty shader cache, and every run reached its last checkpoint.
 
 In passes 1 and 2 the tool played each route once a build with `--real-time` and scored both
-stages from that run. A pass took 675 s the first time and 674 s the second. Since `e9d2928` it
+stages from that run. A pass took 675 s the first time and 674 s the second. Since `5ff734e` it
 plays each route twice a build. The first run is real-time as before. The second is unpaced
 and records only the mixer stage, for the same wall seconds. An unpaced run gets well ahead of
 the route in that time, and in pass 3 each one recorded 4.8 to 15.9 times its route's seconds.
@@ -372,8 +378,8 @@ committed. With `--no-run`, a build with no unpaced run shows its mixer stage as
 |---|---|
 | Baseline Dragoon | `6b81b6e` |
 | Baseline gcn-recomp | `caf12a2`, upstream `9b0a2fe` plus 13 |
-| Current Dragoon | `788571c` in passes 1 and 2, `e9d2928` in pass 3 |
+| Current Dragoon | `788571c` in passes 1 and 2, `5ff734e` in pass 3 |
 | Current gcn-recomp | `b848158` |
 | The tool, passes 1 and 2 | `43ceba4` |
 | The tool, title at 91 s | `13acaf4`, then `13acaf4-dirty` |
-| The tool, pass 3 | `e9d2928` |
+| The tool, pass 3 | `5ff734e` |
