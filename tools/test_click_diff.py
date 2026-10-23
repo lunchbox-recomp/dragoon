@@ -1,0 +1,119 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import click_diff
+from testutil import pcm, run_main, spliced, tone, write_file
+
+RATE = 32000
+
+
+class DiffTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def diff(self, a: list[int], b: list[int], seconds: float | None = None) -> click_diff.Diff:
+        return click_diff.diff(write_file(self.dir, "a.raw", pcm(a, a)), write_file(self.dir, "b.raw", pcm(b, b)),
+                               seconds)
+
+    def test_the_same_recording_twice_has_no_one_sided_clicks(self):
+        x = spliced(tone(32000, RATE), 9000)
+        got = self.diff(x, x)
+        self.assertEqual((got.a_clicks, got.b_clicks, got.only_a, got.only_b), (1, 1, 0, 0))
+        self.assertEqual(got.same_samples, 1.0)
+
+    def test_a_sound_b_adds_over_as_silence_steps_at_a_join(self):
+        # B starts a stream on the join at block 100 and A stays silent, as fd1f6a8's intro stream did.
+        # A click is reported at its first detection, which is a sample before the step.
+        a = [0] * 32000
+        b = [0] * 16000 + tone(16018, RATE)[18:]
+        got = self.diff(a, b)
+        self.assertEqual((got.a_clicks, got.only_b, got.other_silent, got.join_steps), (0, 1, 1, 1))
+        c = got.clicks[0]
+        self.assertEqual((c.build, c.offset, c.a_silent, c.b_silent, c.join_step), ("B", 159, True, False, True))
+        self.assertGreater(c.diff_peak, 19000)
+        self.assertGreater(c.diff_d2, 0)
+        self.assertEqual(got.same_samples, (16000 + b[16000:].count(0)) / 32000)
+
+    def test_a_sound_that_starts_mid_block_doesnt_step_at_a_join(self):
+        a = [0] * 32000
+        b = [0] * 16080 + tone(15938, RATE)[18:]
+        c = self.diff(a, b).clicks[0]
+        self.assertEqual((c.offset, c.join_step), (79, False))
+
+    def test_a_join_where_b_minus_a_moves_no_more_than_around_it_isnt_a_step(self):
+        # B - A is a quiet tone across the join at 8000 with a tick just after it.
+        b = tone(32000, RATE, amp=1000)
+        b[8003] += 3000
+        got = self.diff([0] * 32000, b)
+        self.assertEqual(got.only_b, 1)
+        self.assertEqual((got.clicks[0].offset // 4, got.clicks[0].join_step), (0, False))
+
+    def test_a_click_only_a_has_is_reported_as_as(self):
+        a = tone(32000, RATE)
+        a[5000] += 6000
+        got = self.diff(a, tone(32000, RATE))
+        self.assertEqual((got.only_a, got.only_b, got.other_silent), (1, 0, 0))
+        c = got.clicks[0]
+        self.assertEqual((c.build, c.a_silent, c.b_silent, c.join_step), ("A", False, False, False))
+        self.assertEqual(c.diff_peak, 6000)
+
+    def test_the_same_edge_in_both_is_one_sided_when_only_whats_around_it_differs(self):
+        # Both builds tick at 8000 out of silence, and B gets loud 3 ms later, so B's tick
+        # doesn't stand out from the 5 ms around it. B - A is silent at the tick itself.
+        a = [0] * 32000
+        a[8000] = 300
+        b = list(a)
+        b[8096:] = tone(32000 - 8096, RATE, freq=3000)
+        got = self.diff(a, b)
+        self.assertEqual((got.only_a, got.same_edge), (1, 1))
+        self.assertEqual(got.clicks[0].diff_d2, 0)
+
+    def test_both_are_cut_to_the_shorter_or_to_the_seconds_given(self):
+        a, b = tone(16000, RATE), spliced(tone(32000, RATE), 24000)
+        self.assertEqual((self.diff(a, b).seconds, self.diff(a, b).b_clicks), (0.5, 0))
+        self.assertEqual(self.diff(b, b, 0.8).b_clicks, 1)
+        with self.assertRaisesRegex(ValueError, r"a.raw: 0.50 s recorded, short of 0.8 s"):
+            self.diff(a, b, 0.8)
+
+
+class MainTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        a = [0] * 32000
+        b = [0] * 16000 + tone(16018, RATE)[18:]
+        self.a = write_file(self.dir, "a.raw", pcm(a, a))
+        self.b = write_file(self.dir, "b.raw", pcm(b, b))
+
+    def test_prints_the_counts_then_each_one_sided_click(self):
+        code, out, _ = run_main(click_diff.main, str(self.a), str(self.b))
+        self.assertEqual(code, 0)
+        self.assertIn("clicks   A 0, B 1, only A 0, only B 1", out)
+        self.assertIn("the other build silent 1", out)
+        self.assertRegex(out, r"0\.500 s only B, .* A silent, B sounding, B-A steps at a join\n")
+
+    def test_json_has_each_click(self):
+        _, out, _ = run_main(click_diff.main, str(self.a), str(self.b), "--json")
+        got = json.loads(out)
+        self.assertEqual(got["clicks"][0]["build"], "B")
+        self.assertTrue(got["clicks"][0]["join_step"])
+
+    def test_a_missing_recording_exits_2_with_one_line(self):
+        code, _, err = run_main(click_diff.main, str(self.a), str(self.dir / "none.raw"))
+        self.assertEqual(code, 2)
+        self.assertEqual(len(err.splitlines()), 1)
+
+    def test_bad_numbers_exit_2(self):
+        for bad in (["--seconds", "0"], ["--list", "-1"]):
+            with self.subTest(bad=bad):
+                code, _, _ = run_main(click_diff.main, str(self.a), str(self.b), *bad)
+                self.assertEqual(code, 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

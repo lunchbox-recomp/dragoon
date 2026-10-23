@@ -12,7 +12,7 @@ Every tool takes `--help`, which prints its usage and what it reads. Results go 
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py and block_clicks.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py and click_diff.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -132,6 +132,14 @@ Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivere
 tools/block_clicks.py build/probe/scorecard-menu/mixer.raw
 ```
 
+## click_diff.py
+
+Which clicks does one build's unpaced recording of a route have that another's doesn't? Unpaced, the two recordings line up sample for sample, so B minus A is what the builds did differently. For each click only one has, it prints the largest B minus A within 5 ms, B minus A's second difference at the click, whether each build is silent there and whether B minus A steps at the nearest block join. A second difference of 0 means both builds have the same edge, and only the sound around it differs. `--seconds S` cuts both to S.
+
+```
+tools/click_diff.py /path/to/old-clone/build/probe/scorecard-unpaced-title/mixer.raw build/probe/scorecard-unpaced-title/mixer.raw
+```
+
 ## warm_shaders.py
 
 Will a player's first session stall on shader compiles? It plays the game once so the cache is already warm. The build runs it as the `dragoon_warmup` target, unless it's configured with `-DDRAGOON_WARMUP=OFF`, has no disc or is a cross build. It runs the game hidden and fast, with SDL's dummy audio driver, in a scratch directory, with one pass per route in `tests/hashes/manifest.txt`. Each pass starts from a blank memory card, as a fresh install does, because a route that finds an earlier pass's card takes other menus and builds other keys. The scratch `shaders.bin` starts as a copy of the player's own and grows pass by pass.
@@ -153,7 +161,7 @@ What happens to a probe run and its directory? It holds `trash`, which moves a d
 
 ## aid_blocks.py
 
-What does `GCN_AIDWAV` write? It holds the DMA's rate, its 160-sample block and the reader for the block log beside each recording, for block_clicks.py and scorecard_measure.py. It has no command line.
+What does `GCN_AIDWAV` write? It holds the DMA's rate, its 160-sample block and the reader for the block log beside each recording, for block_clicks.py, click_diff.py and scorecard_measure.py. It has no command line.
 
 ## check_no_game_data.py
 
