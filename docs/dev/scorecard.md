@@ -1,7 +1,7 @@
 # Audio scorecard
 
 What gcn-recomp's audio work changed, measured by program with nobody listening.
-`tools/audio_scorecard.py` played the five routes in `tests/hashes/manifest.txt` on two builds
+`tools/audio_scorecard.py` played the five routes `tests/hashes/manifest.txt` held then on two builds
 and counted clicks, gaps and clipping before and after the audio ring. The baseline is gcn-recomp
 `caf12a2`, with none of the audio work. Current is gcn-recomp `b848158`. Each pair ran twice on
 2026-10-22, and each cell below gives the first pass, then the second.
