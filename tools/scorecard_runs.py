@@ -123,7 +123,8 @@ def play(build: Build, route: Route, margin: int = MARGIN_S, *, commits: Commits
 
 
 def read_commits(run: Run) -> Commits | None:
-    """What the run was made of, or None for a run made before the tool recorded it."""
+    """What the run's clone had checked out when the tool started, or None for a run made before
+    the tool recorded it."""
     if not run.commits.exists():
         return None
     try:

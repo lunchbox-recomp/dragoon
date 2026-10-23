@@ -92,8 +92,9 @@ def agree(values: list[str | None]) -> str | None:
 
 
 def commits_of(build: Build, runs: list[Runs] | None) -> Commits:
-    """What the build's RUNS were made of when they're already there (--no-run), else what its
-    clone has checked out now, which the tool reads before any route plays."""
+    """What the build's RUNS recorded when they're already there (--no-run), which is what the
+    clone had checked out when the tool started them, else what it has checked out now, which
+    the tool reads before any route plays."""
     if runs is None:
         return Commits(describe(build.clone), describe(build.clone / "gcn-recomp"))
     each = [run for r in runs for run in (r.paced, r.unpaced) if run is not None]
