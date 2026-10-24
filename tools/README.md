@@ -297,6 +297,8 @@ make -f "$KIT/Makefile" -j16 KIT="$KIT" SDK=/Library/Developer/CommandLineTools/
   CC=/Library/Developer/CommandLineTools/usr/bin/clang CXX=/Library/Developer/CommandLineTools/usr/bin/clang++
 ```
 
+A `$`, `"` or `` ` `` in `KIT` or `SDK` stops make with an error, since make or the shell would read it as its own. The launcher passes paths it controls. A new `kit.mk` or kit header rebuilds every object.
+
 A build with a `GAME_ISO` is refused, since its `main.o` would carry the disc's path. So is a build with no deployment target, or one missing any of the three files. gcn-recomp's configure writes the two link files together, and neither when it can't write every library, with a warning saying why. A `game_libs.txt` that names a path is refused too, since a player's Mac may not have it. `ld -r` turns the objects' DWARF into a debug map naming the build's own `.o` files, which a player doesn't have. `--strip-debug` drops that map and `libSDL3.a`'s DWARF. The kit is written under a temporary name and renamed into place, so a failed run leaves no OUT. It exits 1 when ld or strip fails and 2 on a build it can't make a kit from. The tests use objects compiled from one-line C, and compilers that only record their arguments under the real `make`, with the kit, the directory holding `gen/` and the SDK at paths with spaces.
 
 ## sdl_source.py

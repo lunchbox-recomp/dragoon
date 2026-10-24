@@ -228,32 +228,54 @@ class KitMakefileTest(unittest.TestCase):
                          + shlex.split(LIBS))
         self.assertTrue((self.work / "dragoon").exists())
 
+    def built_then_changed(self, changed: Path) -> None:
+        """Build, then date the inputs, the outputs and CHANGED so that only CHANGED is newer
+        than what was built from it. make 3.81 compares whole seconds, so they're far apart."""
+        self.assertEqual(self.make("-j4", f"SDK={SDK}").returncode, 0)
+        self.calls()
+        now = time.time()
+        for age, paths in ((200, [*(self.work / "gen").iterdir(), *self.kit.rglob("*")]),
+                           (100, [self.work / "dragoon", *(self.work / "obj").iterdir()]),
+                           (50, [changed])):
+            for path in paths:
+                os.utime(path, (now - age, now - age))
+
     def test_rebuilds_only_what_changed(self) -> None:
         self.assertEqual(self.make("-j4", f"SDK={SDK}").returncode, 0)
         self.calls()
         self.assertEqual(self.make(f"SDK={SDK}").returncode, 0)
         self.assertEqual(self.calls(), [])
-        # make 3.81 compares whole seconds, so the outputs are dated well before the edit.
-        now = time.time()
-        for age, paths in ((200, [*(self.work / "gen").iterdir(), *self.kit.iterdir()]),
-                           (100, [self.work / "dragoon", *(self.work / "obj").iterdir()]),
-                           (50, [self.work / "gen" / "recomp_001.c"])):
-            for path in paths:
-                os.utime(path, (now - age, now - age))
+        self.built_then_changed(self.work / "gen" / "recomp_001.c")
         self.assertEqual(self.make(f"SDK={SDK}").returncode, 0)
         self.assertEqual([(c["tool"], c["argv"][-1]) for c in self.calls()],
                          [("cc", "obj/recomp_001.o"), ("cxx", "-lpthread")])
 
     def test_relinks_when_the_kits_engine_changes(self) -> None:
-        self.assertEqual(self.make(f"SDK={SDK}").returncode, 0)
-        self.calls()
-        now = time.time()
-        for path in [*(self.work / "gen").iterdir(), *self.kit.iterdir(), *(self.work / "obj").iterdir()]:
-            os.utime(path, (now - 200, now - 200))
-        os.utime(self.work / "dragoon", (now - 100, now - 100))
-        os.utime(self.kit / "engine.o", (now - 50, now - 50))
+        self.built_then_changed(self.kit / "engine.o")
         self.assertEqual(self.make(f"SDK={SDK}").returncode, 0)
         self.assertEqual([c["tool"] for c in self.calls()], ["cxx"])
+
+    def test_a_new_kit_mk_or_header_rebuilds_every_object(self) -> None:
+        for name in ("kit.mk", *(f"include/{h}" for h in engine_kit.HEADERS)):
+            with self.subTest(name):
+                self.built_then_changed(self.kit / name)
+                self.assertEqual(self.make(f"SDK={SDK}").returncode, 0)
+                self.assertEqual(sorted(c["argv"][-1] for c in self.calls() if c["tool"] == "cc"),
+                                 [f"obj/recomp_{s}.o" for s in ("000", "001", "table")])
+
+    def test_make_b_rebuilds_over_the_last_build(self) -> None:
+        self.assertEqual(self.make(f"SDK={SDK}").returncode, 0)
+        done = self.make("-B", f"SDK={SDK}")
+        self.assertEqual(done.returncode, 0, done.stderr)
+
+    def test_refuses_a_kit_or_sdk_path_make_or_the_shell_would_read(self) -> None:
+        for char in ('$', '"', '`'):
+            for args in ([f"KIT={self.kit}{char}x", f"SDK={SDK}"], [f"KIT={self.kit}", f"SDK={SDK}{char}x"]):
+                with self.subTest(args=args):
+                    done = self.make(*args, kit=False)
+                    self.assertNotEqual(done.returncode, 0)
+                    self.assertIn("KIT or SDK holds a $, a \" or a `", done.stderr)
+                    self.assertEqual(self.calls(), [])
 
     def test_needs_a_kit(self) -> None:
         done = self.make(f"SDK={SDK}", kit=False)

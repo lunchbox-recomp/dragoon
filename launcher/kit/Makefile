@@ -6,9 +6,14 @@
 # the libraries come from kit.mk, which tools/engine_kit.py writes from what gcn-recomp's CMake
 # builds the game with.
 # KIT is named on the command line, since make splits the Makefile's own path at its spaces.
-# Make reads KITQ, KIT with each space escaped, and the shell reads "$(KIT)".
+# Make reads KITQ, KIT with each space escaped, and the shell reads "$(KIT)". Make would read a
+# $ in KIT or SDK as its own, and the shell a " or a `, so neither path may hold one.
 ifndef KIT
 $(error KIT isn't set: make -f <kit>/Makefile KIT=<kit> SDK=<path to MacOSX.sdk>)
+endif
+paths := $(value KIT)$(value SDK)
+ifneq ($(findstring $$,$(paths))$(findstring ",$(paths))$(findstring `,$(paths)),)
+$(error KIT or SDK holds a $$, a " or a `, which make or the shell would read as its own)
 endif
 space := $(subst x, ,x)
 KITQ := $(subst $(space),\ ,$(KIT))
@@ -28,5 +33,9 @@ dragoon: $(OBJS) $(KITQ)/engine.o $(KITQ)/libSDL3.a
 obj/%.o: gen/%.c | obj
 	$(CC) $(TARGET) $(GAME_CFLAGS) -I"$(KIT)/include" -Igen -c $< -o $@
 
+# A new kit's flags or headers rebuild every object. This is a rule of its own, since make
+# 3.81 doesn't read an escaped space in a pattern rule's prerequisites.
+$(OBJS): $(KITQ)/kit.mk $(KITQ)/include/recomp.h $(KITQ)/include/compat.h
+
 obj:
-	mkdir $@
+	mkdir -p $@
