@@ -16,11 +16,13 @@ DEST is a new directory outside the repo, and outside the checkout holding this 
 pattern the mutants test, and mutant-N is the Nth mutant's. The last 64 KiB of each run's output
 is beside its copy as a .log file.
 
-When the run ends, whether with a result, a tool error, a crash or ^C, it removes the copies it
-built and keeps the logs, so a kill can still be checked. It removes DEST too if nothing is
-left in it, which is when it stopped before any test ran. It removes only what it made.
---keep keeps the copies as well, for reading a mutant's files or running its tests by hand.
-A copy it can't remove is named on stderr and doesn't change the result.
+When the run ends, whether with a result, a tool error, a crash, ^C, SIGTERM or SIGHUP, it
+removes the copies it built and keeps the logs, so a kill can still be checked. It removes
+DEST too if nothing is left in it, which is when it stopped before any test ran. It removes
+only what it made. --keep keeps the copies as well, for reading a mutant's files or running
+its tests by hand. A copy it can't remove is named on stderr and doesn't change the result.
+SIGTERM and SIGHUP end it with exit 143 and 129, after killing the run in progress as ^C does.
+Only SIGKILL leaves the copies behind, and a run that was going.
 
 Every copy is REV (default HEAD) of the repo that holds this tool, or of --repo, made by
 git archive. The repo's own files are never edited or run, and its uncommitted changes aren't
@@ -75,7 +77,7 @@ import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Optional
+from typing import Callable, Iterator, Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 # The launcher's TOOL_PATH, which test_mutant.py checks. It isn't imported, because that would
@@ -83,6 +85,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extract differently
 TOOL_ERROR = 2
+ENDING = (signal.SIGTERM, signal.SIGHUP)  # the ones that end a run as ^C does
 TAIL = 64 * 1024
 PATTERN = "test_*.py"
 RAN = re.compile(r"^Ran (\d+) tests? in ", re.MULTILINE)  # unittest's summary, on 3.9 and 3.14
@@ -284,6 +287,23 @@ def verdict(code: Optional[int]) -> str:
     return "timeout" if code is None else "survived" if code == 0 else "killed"
 
 
+def exit_on_signal(signum: int, frame: object) -> None:
+    """Unwind as ^C does, so the finally blocks kill the tests' process group and remove the
+    copies, and leave with the status a shell gives a process that signal ended."""
+    raise SystemExit(128 + signum)
+
+
+@contextlib.contextmanager
+def handling(signums: tuple[int, ...], handler: Callable) -> Iterator[None]:
+    """Run the block with HANDLER, or signal.SIG_IGN, for SIGNUMS, and then put the old ones back."""
+    old = [(s, signal.signal(s, handler)) for s in signums]
+    try:
+        yield
+    finally:
+        for s, was in old:
+            signal.signal(s, was)
+
+
 def clean_up(dest: Path, made: list[Path]) -> None:
     """Remove the copies in MADE and then DEST if that leaves it empty. The logs stay, so DEST
     does too unless the run stopped before any test ran. rmtree unlinks a link in a copy and
@@ -317,13 +337,14 @@ def run(args: argparse.Namespace) -> int:
     mutants = load_spec(args.spec)
     tar = archive(repo, args.rev)
 
-    dest.mkdir(parents=True)  # from here on DEST is ours, and so is every copy made in it
-    made: list[Path] = []
-    try:
-        return run_mutants(args, python, dest, mutants, tar, made)
-    finally:
-        if not args.keep:
-            clean_up(dest, made)
+    with handling(ENDING, exit_on_signal):
+        dest.mkdir(parents=True)  # from here on DEST is ours, and so is every copy made in it
+        made: list[Path] = []
+        try:
+            return run_mutants(args, python, dest, mutants, tar, made)
+        finally:
+            if not args.keep:
+                clean_up(dest, made)
 
 
 def run_mutants(args: argparse.Namespace, python: str, dest: Path, mutants: list[Mutant],

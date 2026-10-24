@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -180,6 +181,10 @@ class MutantTestCase(unittest.TestCase):
 
     def read(self, copy: str, name: str = CALC_PATH) -> str:
         return (self.dest / copy / name).read_text()
+
+    def left(self) -> list:
+        """The names in DEST."""
+        return sorted(p.name for p in self.dest.iterdir())
 
     def recording_python(self) -> tuple:
         """(a python that writes its working directory and arguments to a file, a JSON line a
@@ -388,9 +393,6 @@ class CopyTest(MutantTestCase):
 class CleanupTest(MutantTestCase):
     """A run removes the copies it built however it ends, and keeps the logs."""
 
-    def left(self) -> list:
-        return sorted(p.name for p in self.dest.iterdir())
-
     def crash_at_the_first_mutant(self, error: BaseException):
         """Baselines run for real, and the first mutant's run raises ERROR."""
         real = mutant.run_tests
@@ -530,6 +532,54 @@ class CleanupTest(MutantTestCase):
         self.assertIn("Permission denied", err)
         self.assertEqual(err.count("\n"), 1, err)  # mutant-1 was removed without a word
         self.assertEqual(self.left(), ["baseline-1", "baseline-1.log", "mutant-1.log"])
+
+
+class SignalTest(MutantTestCase):
+    """SIGTERM and SIGHUP end a run as ^C does, with a real signal sent to the real tool."""
+
+    def stopped_by(self, signum: int) -> None:
+        pid_file = self.dir / "sleeper pid"
+        hang = spec_mutant("hangs", edit("return a + b", (
+            f"import subprocess; p = subprocess.Popen(['/bin/sleep', '60']); "
+            f"open({str(pid_file)!r}, 'w').write(str(p.pid)); p.wait()")))
+        self.write_spec([hang])
+        proc = subprocess.Popen([sys.executable, "-B", mutant.__file__, str(self.spec_file),
+                                 str(self.dest), "--repo", str(self.repo)],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.addCleanup(proc.kill)
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and not (pid_file.is_file() and pid_file.read_text()):
+            time.sleep(0.05)
+        self.assertTrue(pid_file.is_file() and pid_file.read_text(), "the mutant never started")
+        self.addCleanup(self.kill_quietly, int(pid_file.read_text()))
+        proc.send_signal(signum)
+        out, err = proc.communicate(timeout=30)
+        # The exit status a shell gives a process a signal ended, and nothing said about it.
+        self.assertEqual((proc.returncode, out, err), (128 + signum, "", ""))
+        self.assertEqual(self.left(), ["baseline-1.log"])
+        self.assert_child_gone(pid_file)
+
+    def test_sigterm_removes_the_copies_and_kills_what_the_tests_started(self):
+        self.stopped_by(signal.SIGTERM)
+
+    def test_sighup_removes_the_copies_and_kills_what_the_tests_started(self):
+        self.stopped_by(signal.SIGHUP)
+
+    def test_the_handlers_are_there_only_while_a_run_is(self):
+        wanted = (signal.SIGTERM, signal.SIGHUP)
+        before = [signal.getsignal(s) for s in wanted]
+        during = []
+        real = mutant.run_tests
+
+        def peek(*args):
+            during.append([signal.getsignal(s) for s in wanted])
+            return real(*args)
+
+        self.write_spec([KILLED])
+        with mock.patch.object(mutant, "run_tests", peek):
+            self.assertEqual(self.run_spec()[0], 0)
+        self.assertEqual(during, [[mutant.exit_on_signal] * 2] * 2)  # the baseline and the mutant
+        self.assertEqual([signal.getsignal(s) for s in wanted], before)
 
 
 class PatternTest(MutantTestCase):
