@@ -46,6 +46,7 @@ one-line "mutant:" message on stderr when it couldn't decide, which is any of th
   a bad argument or spec
   an old found other than once
   a file or dir that isn't in the copy, or a link that leads out of it
+  a dir and pattern that match no test file, so a misspelled pattern isn't a survivor
   a DEST that exists or is inside the repo
   a baseline that fails or times out
 A mutant's result never exits 2.
@@ -54,9 +55,11 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import fnmatch
 import json
 import math
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -74,6 +77,7 @@ TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extrac
 TOOL_ERROR = 2
 TAIL = 64 * 1024
 PATTERN = "test_*.py"
+MODULE_NAME = re.compile(r"[_a-z]\w*\.py$", re.IGNORECASE)  # the names unittest discover loads
 
 
 class MutantError(Exception):
@@ -217,6 +221,20 @@ def apply(copy: Path, mutant: Mutant) -> None:
         raise MutantError(f"{mutant.name}: {err}") from err
 
 
+def finds_a_file(start: Path, pattern: str) -> bool:
+    """Whether `unittest discover -s START -p PATTERN` would load a file. It looks at a file
+    whose name is a module's and matches PATTERN, and goes into the directories that have an
+    __init__.py, as discover does, so a pattern discover would use isn't turned away. Python
+    3.9 runs no tests and exits 0 when none is found, which would read as a survivor."""
+    for entry in start.iterdir():
+        if entry.is_file():
+            if MODULE_NAME.match(entry.name) and fnmatch.fnmatch(entry.name, pattern):
+                return True
+        elif (entry / "__init__.py").is_file() and finds_a_file(entry, pattern):
+            return True
+    return False
+
+
 def run_tests(python: str, copy: Path, rel: str, pattern: str, timeout: float,
               log: Path) -> Optional[int]:
     """The exit status of test discovery in COPY/REL for the files PATTERN matches, or None if
@@ -285,6 +303,11 @@ def run(args: argparse.Namespace) -> int:
     for n, m in enumerate(mutants, 1):
         copies.append(extract(tar, dest / f"mutant-{n}"))
         apply(copies[-1], m)
+
+    for d, p, copy in baselines:
+        if not finds_a_file(copy / d, p):
+            raise MutantError(f"no file in {d} matches the pattern {p!r} for unittest discover, "
+                              f"so no test would run")
 
     for n, (d, p, copy) in enumerate(baselines, 1):
         log = dest / f"baseline-{n}.log"

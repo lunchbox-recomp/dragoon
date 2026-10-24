@@ -233,7 +233,7 @@ tools/check_no_game_data.py
 
 Do the tests notice when the code breaks? It changes a copy of a commit, runs a test directory there and reports whether the tests failed. A changed copy is a mutant. It's killed when the tests fail and survives when they pass, and a survivor is a gap in the tests. A spec file holds the changes, so someone checking a new test keeps it in place of a throwaway script. It can live anywhere, and it's worth committing when others should be able to run the same check.
 
-The spec is a JSON list of mutants. Each has a `name` and a `dir` to discover tests in, relative to the repo (`tools` or `launcher/tools`). Its `replace` list holds `{file, old, new}` edits that are applied together, in order. Every `old` has to occur exactly once in its file, so a typo can't make a mutant that changes nothing. `new` may be empty. An optional `pattern` says which test files in `dir` to run. It's what `unittest discover -p` takes and it defaults to `test_*.py`. It matches file names, so it has no `/`.
+The spec is a JSON list of mutants. Each has a `name` and a `dir` to discover tests in, relative to the repo (`tools` or `launcher/tools`). Its `replace` list holds `{file, old, new}` edits that are applied together, in order. Every `old` has to occur exactly once in its file, so a typo can't make a mutant that changes nothing. `new` may be empty. An optional `pattern` says which test files in `dir` to run. It's what `unittest discover -p` takes and it defaults to `test_*.py`. It matches file names, so it has no `/`. A `dir` and `pattern` that match no file discover would load are refused before anything runs, because Python 3.9 passes a run of no tests.
 
 ```json
 [
@@ -272,6 +272,7 @@ It exits 0 when every mutant was killed and 1 when any survived or timed out. It
 - the spec or an argument is bad
 - an `old` isn't found exactly once
 - a file or dir isn't in the copy, or a link would take an edit outside it
+- a `dir` and `pattern` match no test file, so no test would run
 - DEST exists or is inside the repo or the checkout holding the tool
 - a baseline fails or times out
 
