@@ -28,7 +28,7 @@ That prints the run's directory as an absolute path, then a frame count (140 on 
 
 ## frametime.py
 
-How steady is the frame pacing, and what made the slow frames slow? It reads the log of a run made with `GCN_FRAMETIME=1`, prints the guest's and the renderer's mean, standard deviation, p95, p99 and worst times from a given frame on, and lists each frame whose render time went over a limit with its batch shape and the shaders compiled in it. Then it lists each frame whose guest interval went over `--late` (25 ms unless you give it).
+How steady is the frame pacing, and what made the slow frames slow? It reads the log of a run made with `GCN_FRAMETIME=1`, prints the guest's and the renderer's mean, population standard deviation, p95, p99 and worst times from a given frame on, and lists each frame whose render time went over a limit with its batch shape and the shaders compiled in it. Then it lists each frame whose guest interval went over `--late` (25 ms unless you give it).
 
 ```
 tools/probe.sh pace 130 tests/routes/city-trial-4p.txt 100000 --pads=4 --real-time GCN_FRAMETIME=1

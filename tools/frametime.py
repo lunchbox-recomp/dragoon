@@ -127,15 +127,16 @@ def main(argv: list[str]) -> int:
         return 0
     for name, s in stats.items():
         if s["n"]:
-            print(f"{name:6} from {args.start}: n {s['n']}  mean {s['mean']:.2f}  sd {s['sd']:.2f}"
+            print(f"{name:6} from {args.start}: n {s['n']}  mean {s['mean']:.2f}  sd {s['sd']:.3f}"
                   f"  p95 {s['p95']:.2f}  p99 {s['p99']:.2f}  worst {s['worst']:.2f} ms")
     print(f"frames over {args.slow} ms: {len(over)}")
     for n, f in over:
         shaders = f"  {len(f.compiles)} shaders, {sum(f.compiles):.0f} ms" if f.compiles else ""
         print(f"  f{n}  render {f.render_ms:.2f} ms  {f.shape}{shaders}")
-    print(f"guest intervals over {args.late} ms: {len(behind)}")
-    for n, ms in behind:
-        print(f"  f{n}  guest {ms:.2f} ms")
+    if stats["guest"]["n"]:
+        print(f"guest intervals over {args.late} ms: {len(behind)}")
+        for n, ms in behind:
+            print(f"  f{n}  guest {ms:.2f} ms")
     return 0
 
 

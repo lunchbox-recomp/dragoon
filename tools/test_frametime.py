@@ -72,6 +72,12 @@ class StatsTest(unittest.TestCase):
         frames = frametime.parse([ft_line(n, ms) for n, ms in enumerate([15.0, 17.0, 15.0, 17.0])])
         self.assertAlmostEqual(frametime.summary(frames, 0)["guest"]["sd"], 1.0)
 
+    def test_render_and_guest_each_get_their_own_sd(self):
+        frames = frametime.parse([ft_line(0, 15.0), ft_line(1, 17.0), rt_line(1, 2.0), rt_line(2, 6.0)])
+        stats = frametime.summary(frames, 0)
+        self.assertAlmostEqual(stats["guest"]["sd"], 1.0)
+        self.assertAlmostEqual(stats["render"]["sd"], 2.0)
+
     def test_summary_of_nothing(self):
         self.assertEqual(frametime.summary({}, 0), {"guest": {"n": 0}, "render": {"n": 0}})
 
@@ -84,9 +90,9 @@ class StatsTest(unittest.TestCase):
         self.assertEqual([n for n, _ in frametime.slow(frames, 0, 16.7)], [6])
 
     def test_late_returns_guest_intervals_over_the_limit_from_start_in_order(self):
-        frames = frametime.parse([ft_line(1, 40.0), ft_line(8, 30.0), ft_line(3, 25.0), ft_line(5, 25.01),
+        frames = frametime.parse([ft_line(1, 40.0), ft_line(2, 30.0), ft_line(8, 30.0), ft_line(3, 25.0), ft_line(5, 25.01),
                                   ft_line(6, 16.7)])
-        self.assertEqual(frametime.late(frames, 3, 25.0), [(6, 25.01), (9, 30.0)])
+        self.assertEqual(frametime.late(frames, 3, 25.0), [(3, 30.0), (6, 25.01), (9, 30.0)])
 
 
 class MainTest(unittest.TestCase):
@@ -107,17 +113,24 @@ class MainTest(unittest.TestCase):
                                                             ft_line(11, 30.0)]) + "\n")
         code, out, _ = run_main(frametime.main, str(log), "--from", "0", "--late", "20")
         self.assertEqual(code, 0)
-        self.assertIn("mean 20.67  sd 6.65", out)
+        self.assertIn("mean 20.67  sd 6.650", out)
         self.assertIn("guest intervals over 20.0 ms: 1", out)
         self.assertIn("f12  guest 30.00 ms", out)
 
-    def test_json_lists_late_guest_intervals(self):
-        log = write_file(self.dir, "stdout.txt", "\n".join([ft_line(9, 16.0), ft_line(10, 26.0)]) + "\n")
+    def test_json_lists_guest_intervals_over_25_ms_by_default(self):
+        log = write_file(self.dir, "stdout.txt", "\n".join([ft_line(9, 25.0), ft_line(10, 25.01)]) + "\n")
         code, out, _ = run_main(frametime.main, str(log), "--from", "0", "--json")
         self.assertEqual(code, 0)
         result = json.loads(out)
-        self.assertEqual(result["late"], [{"frame": 11, "guest_ms": 26.0}])
-        self.assertAlmostEqual(result["summary"]["guest"]["sd"], 5.0)
+        self.assertEqual(result["late"], [{"frame": 11, "guest_ms": 25.01}])
+        self.assertAlmostEqual(result["summary"]["guest"]["sd"], 0.005)
+
+    def test_a_log_with_no_guest_intervals_prints_no_late_count(self):
+        log = write_file(self.dir, "stdout.txt", rt_line(10, 40.0) + "\n")
+        code, out, _ = run_main(frametime.main, str(log), "--from", "0")
+        self.assertEqual(code, 0)
+        self.assertIn("frames over 16.7 ms: 1", out)
+        self.assertNotIn("guest intervals", out)
 
     def test_missing_log_exits_2_with_one_line_naming_it(self):
         code, _, err = run_main(frametime.main, str(self.dir / "nope.txt"))
