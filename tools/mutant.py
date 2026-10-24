@@ -11,8 +11,8 @@ SPEC is a JSON file holding a list of mutants. A mutant has three fields and may
            exactly once, so a typo can't make a mutant that changes nothing. NEW may be empty.
   pattern  which test files to run, as unittest's -p takes it (default test_*.py). It matches
            file names, so it has no /. test_export_source.py runs that one file.
-DEST is a new directory outside the repo. The copies are built there and kept, and nothing
-is removed. baseline-N is the copy for the Nth dir and pattern the mutants test, and mutant-N
+DEST is a new directory outside the repo, and outside the checkout holding this tool when
+--repo names another. The copies are built there and kept, and nothing is removed. baseline-N is the copy for the Nth dir and pattern the mutants test, and mutant-N
 is the Nth mutant's. The last 64 KiB of each run's output is beside its copy as a .log file.
 
 Every copy is REV (default HEAD) of the repo that holds this tool, or of --repo, made by
@@ -256,9 +256,11 @@ def run(args: argparse.Namespace) -> int:
     if os.path.lexists(args.dest):
         raise MutantError(f"{args.dest} exists: give a new directory")
     dest = args.dest.resolve()
-    # samefile, so a link or another letter case of the repo's path doesn't get past
-    if any(p.exists() and p.samefile(repo) for p in (dest, *dest.parents)):
-        raise MutantError(f"{dest} is inside the repo: the copies go outside it")
+    # samefile, so a link or another letter case of the repo's path doesn't get past. With
+    # --repo, the checkout holding this tool is as much off limits as the repo.
+    for what, root in (("the repo", repo), ("the checkout holding this tool", ROOT)):
+        if any(p.exists() and p.samefile(root) for p in (dest, *dest.parents)):
+            raise MutantError(f"{dest} is inside {what}: the copies go outside it")
     python = os.path.abspath(args.python)  # not resolved, which would lose a venv's link
     if not (os.path.isfile(python) and os.access(python, os.X_OK)):
         raise MutantError(f"{args.python} isn't an executable file")

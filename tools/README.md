@@ -263,14 +263,14 @@ These keep a kill from meaning nothing.
 
 A copy has no `.git` and, since `git archive` leaves submodules out, no gcn-recomp. A test that needs either has to skip itself, as `RealTreeTest` in `test_launcher_build.py` does. `--python FILE` picks the interpreter that runs the tests, and it defaults to the one running the tool.
 
-DEST is a new directory outside the repo, and the tool refuses one that exists or is inside the repo. The copies stay there as `baseline-N` and `mutant-N`, counting from 1 in the order the spec first uses a dir and pattern and lists a mutant. Each has the last 64 KiB of its run's output beside it as a `.log`. A mutant that breaks an import counts as killed too, so read its log before you trust a kill that matters. Nothing is removed, so move DEST to the Trash when you're done.
+DEST is a new directory outside the repo. The tool refuses one that exists or is inside the repo or, with `--repo`, inside the checkout holding the tool. The copies stay there as `baseline-N` and `mutant-N`, counting from 1 in the order the spec first uses a dir and pattern and lists a mutant. Each has the last 64 KiB of its run's output beside it as a `.log`. A mutant that breaks an import counts as killed too, so read its log before you trust a kill that matters. Nothing is removed, so move DEST to the Trash when you're done.
 
 It exits 0 when every mutant was killed and 1 when any survived or timed out. It exits 2, as the other tools do, with one `mutant:` line on stderr when it couldn't decide:
 
 - the spec or an argument is bad
 - an `old` isn't found exactly once
 - a file or dir isn't in the copy, or a link would take an edit outside it
-- DEST exists or is inside the repo
+- DEST exists, or is inside the repo or the checkout holding the tool
 - a baseline fails or times out
 
 A crash in the tool exits 2 as well, so it can't read as a survivor.

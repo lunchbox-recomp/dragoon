@@ -423,6 +423,34 @@ class RefusalTest(MutantTestCase):
         self.assert_tool_error(self.run_tool(KILLED, dest=dest), "inside the repo")
         self.assertFalse((self.repo / "copies").exists())
 
+    def test_a_dest_inside_the_repo_in_another_letter_case(self):
+        if not (self.dir / "THE REPO").exists():
+            self.skipTest("the temp directory is on a case-sensitive volume")
+        dest = self.dir / "THE REPO" / "copies"
+        self.assert_tool_error(self.run_tool(KILLED, dest=dest), "inside the repo")
+        self.assertFalse((self.repo / "copies").exists())
+
+    def test_a_dest_inside_the_repo_by_way_of_the_data_volume(self):
+        data = Path("/System/Volumes/Data") / self.repo.resolve().relative_to("/")
+        if not (data.exists() and data.samefile(self.repo)):
+            self.skipTest("this system has no /System/Volumes/Data spelling of the temp directory")
+        self.assert_tool_error(self.run_tool(KILLED, dest=data / "copies"), "inside the repo")
+        self.assertFalse((self.repo / "copies").exists())
+
+    def test_a_dest_that_is_a_dangling_link(self):
+        target = self.dir / "link target"
+        os.symlink(target, self.dest)
+        self.assert_tool_error(self.run_tool(KILLED), str(self.dest))
+        self.assertFalse(target.exists())
+
+    def test_a_dest_inside_the_checkout_holding_the_tool(self):
+        tool_root = self.dir / "tool checkout"
+        tool_root.mkdir()
+        with mock.patch.object(mutant, "ROOT", tool_root):
+            result = self.run_tool(KILLED, dest=tool_root / "copies")
+        self.assert_tool_error(result, "inside the checkout holding this tool")
+        self.assertEqual(os.listdir(tool_root), [])
+
     def test_the_repo_itself_as_dest_is_a_dest_that_exists(self):
         self.assert_tool_error(self.run_tool(KILLED, dest=self.repo), str(self.repo))
 
