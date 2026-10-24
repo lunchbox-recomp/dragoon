@@ -608,8 +608,8 @@ the real-time run and `build/probe/scorecard-unpaced-ROUTE/` for the unpaced one
 committed. With `--no-run`, a build with no unpaced run shows its mixer stage as not recorded.
 
 Pass 5 ran the other way round, from this clone built at the later engine, with current in a
-second clone. Playing a build again deletes that clone's earlier recordings, and pass 3's went
-to the Trash before it did. The second line rescores pass 5's recordings, and so do the last two
+second clone. Playing a build again deletes that clone's earlier recordings. The tool used to move
+them to the Trash, so pass 3's went there. The second line rescores pass 5's recordings, and so do the last two
 with their margins.
 
 ```sh

@@ -210,7 +210,9 @@ What does a source snapshot hold? Its `source-info.json` names the Dragoon and g
 
 ## probe_dirs.py
 
-What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error. `remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that is itself a link. frame_hashes.py, audio_hashes.py and the scorecard use both. It has no command line.
+What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error.
+
+`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py and the scorecard use both. It has no command line.
 
 ## aid_blocks.py
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 def remove_run(directory: Path) -> None:
     """Delete DIRECTORY and everything in it, so its game data isn't kept. A link inside is
-    unlinked and what it points at stays. A DIRECTORY that is itself a link is a ValueError and
+    unlinked and what it points at stays. A DIRECTORY that's itself a link is a ValueError and
     nothing changes. One that's missing, or a file that can't be deleted, is an OSError."""
     if directory.is_symlink():
         raise ValueError(f"{directory}: is a link, not a probe run's directory")

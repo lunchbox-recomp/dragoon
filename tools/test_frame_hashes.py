@@ -93,6 +93,26 @@ class HashRouteTest(unittest.TestCase):
         self.assertEqual(remove.call_count, 2)
 
 
+    def test_the_real_remove_run_deletes_the_run_before_and_after(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name) / "build" / "probe" / "hashes-title"
+        out.mkdir(parents=True)
+        (out / "old.png").write_bytes(b"old")
+
+        def probe(*args, **kwargs):
+            self.assertFalse(out.exists())
+            out.mkdir()
+            (out / "new.png").write_bytes(b"new")
+
+        with (mock.patch.object(frame_hashes, "ROOT", Path(tmp.name)),
+              mock.patch.object(subprocess, "run", probe),
+              mock.patch.object(frame_hashes, "hash_frames", return_value={60: A})):
+            self.assertEqual(frame_hashes.hash_route(self.route), {60: A})
+        self.assertFalse(out.exists())
+        self.assertTrue(out.parent.is_dir())
+
+
 class MainTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
