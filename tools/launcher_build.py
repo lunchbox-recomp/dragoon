@@ -9,7 +9,8 @@ The launcher runs this, and a developer can run it from a shell. Every path is a
 every tool is the one named, never one found on PATH. The tools get only PATH=/usr/bin:/bin:
 /usr/sbin:/sbin, HOME, TMPDIR, LANG and PYTHONDONTWRITEBYTECODE, so nothing from Homebrew or
 MacPorts reaches the build. Nothing downloads, and the snapshot and the kit are only read.
-The steps are:
+The kit's engine.o and headers have to match the generated C, so its kit.mk has to name the
+gcn-recomp commit the snapshot's source-info.json does. The steps are:
   recompile  in an empty <cache>/build, the snapshot's extract_dol.py takes main.dol from the
              disc, checked against the disc ID and SHA-1 in its source-info.json, and its
              recomp.py writes the game's C to gen/
@@ -33,7 +34,8 @@ Prints one JSON object per line on stdout:
 <data> and <cache> hold after it. A build that loses the lock doesn't open it.
 
 Exits 0 when the new game is current, 1 when a step failed, 2 on a bad argument and 3 when
-another build holds <cache>/build.lock.
+another build holds <cache>/build.lock. A kit of another gcn-recomp commit is a bad argument,
+which prints an error event at step "kit" too.
 """
 from __future__ import annotations
 
@@ -73,6 +75,8 @@ SYMBOLS = "analysis/symbols.txt"
 TABLES = "recomp"
 # The line make prints for each object the kit's Makefile compiles.
 COMPILE_LINE = re.compile(r".* -c gen/[^ ]+\.c -o obj/[^ ]+\.o")
+# The line in kit.mk naming the gcn-recomp commit, as engine_kit.py writes it.
+KIT_COMMIT = re.compile(r"ENGINE_COMMIT := ([0-9a-f]{40})")
 # Until the launcher's own bundle ID is chosen, the game's follows the one that needs no domain.
 INFO_PLIST = {
     "CFBundleExecutable": GAME,
@@ -305,6 +309,22 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
+def kit_problem(kit: Path, engine: str) -> Optional[str]:
+    """Why KIT can't build a snapshot of gcn-recomp commit ENGINE, or None when it can."""
+    mk = kit / "kit.mk"
+    try:
+        lines = mk.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as e:
+        return f"{mk}: can't read it ({e.strerror})"
+    commits = [m[1] for m in map(KIT_COMMIT.fullmatch, lines) if m]
+    if len(commits) != 1:
+        return f"{mk} doesn't name one gcn-recomp commit, as engine_kit.py writes it"
+    if commits[0] != engine:
+        return (f"the kit is from gcn-recomp {commits[0]} and the source snapshot from gcn-recomp"
+                f" {engine}: the kit's engine.o and headers wouldn't match the generated C")
+    return None
+
+
 def bad_argument(a: argparse.Namespace) -> Optional[str]:
     for flag in ("source", "kit", "disc", "data", "cache", "make", "cc", "cxx", "python", "sdk",
                  "log"):
@@ -333,6 +353,12 @@ def main(argv: list[str]) -> int:
             problem = str(e)
     if problem:
         print(f"launcher_build.py: {problem}", file=sys.stderr)
+        return 2
+    mismatch = kit_problem(a.kit, info["gcn-recomp"])
+    if mismatch:
+        # Before the lock, so the log isn't opened, as for a bad argument.
+        emit(event="error", step="kit", message=mismatch, log=str(a.log))
+        print(f"launcher_build.py: {mismatch}", file=sys.stderr)
         return 2
     a.cache.mkdir(parents=True, exist_ok=True)
     with (a.cache / "build.lock").open("a") as lock:

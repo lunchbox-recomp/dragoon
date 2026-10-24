@@ -12,17 +12,20 @@ game besides Apple's Command Line Tools and the recompiler's inputs. OUT gets:
   include/    recomp.h and compat.h, the only runtime headers the generated C includes
   kit.mk      what gcn-recomp's configure wrote to <build>: GAME_CFLAGS from
               game_cflags.txt, LINK_FLAGS from game_ldflags.txt and GAME_LIBS, the
-              frameworks and libraries, from game_libs.txt; and MACOSX_MIN, the build's
-              CMAKE_OSX_DEPLOYMENT_TARGET
+              frameworks and libraries, from game_libs.txt; MACOSX_MIN, the build's
+              CMAKE_OSX_DEPLOYMENT_TARGET; and ENGINE_COMMIT, the gcn-recomp commit in the
+              gcn_engine_sha.h runtime_check was compiled with, which launcher_build.py
+              checks against the source snapshot's
   Makefile    launcher/kit/Makefile, which compiles gen/*.c and links the game
   licenses/   gcn-recomp's, SDL's and that of the hidapi inside SDL
 `ld -r` turns the objects' DWARF into a debug map naming the build's own .o files, which a
 player doesn't have. --strip-debug drops that map and libSDL3.a's DWARF too.
 
 A build with a GAME_ISO is refused, since main.o would carry the disc's path. So is one
-missing any of the three files, and one whose game_libs.txt names a path, which a player's
-Mac may not have. OUT is written under a temporary name and renamed into place, so a failed
-run leaves no OUT.
+missing any of the three files, one whose game_libs.txt names a path, which a player's Mac
+may not have, and one whose gcn_engine_sha.h names no commit or one with changes to tracked
+files. OUT is written under a temporary name and renamed into place, so a failed run leaves
+no OUT.
 
 Exits 0 when the kit is written, 1 when ld or strip failed, and 2 on a bad argument or a build
 it can't make a kit from.
@@ -43,6 +46,10 @@ HEADERS = ("recomp.h", "compat.h")
 OBJECT_LINE = re.compile(r"^build (CMakeFiles/runtime_check\.dir/\S+\.o): ", re.M)
 CACHE_LINE = re.compile(r"([A-Za-z0-9_.+-]+):[A-Z]+=(.*)")
 VERSION = re.compile(r"\d+(\.\d+)*")
+# What gcn-recomp's gcn_engine_sha target writes for runtime_check, and the commit a kit names.
+ENGINE_SHA = Path("gcn_engine_sha") / "gcn_engine_sha.h"
+ENGINE_SHA_LINE = re.compile(r'#define GCN_ENGINE_SHA "([^"]*)"\n')
+COMMIT = re.compile(r"[0-9a-f]{40}")
 CFLAGS_MISSING = "this gcn-recomp doesn't write the game's flags"
 # The configure writes the two link files together, and neither when it can't write every
 # library, with a warning saying why.
@@ -112,6 +119,25 @@ def engine_objects(build: Path) -> list[Path]:
     return objects
 
 
+def engine_commit(build: Path) -> str:
+    """The gcn-recomp commit runtime_check was compiled with, which has to be a clean one."""
+    path = build / ENGINE_SHA
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        raise KitError(f"{path} is missing: build runtime_check, whose gcn_engine_sha target"
+                       " writes it") from None
+    except OSError as e:
+        raise KitError(f"{path}: can't read it ({e.strerror})") from None
+    m = ENGINE_SHA_LINE.fullmatch(text)
+    if not m:
+        raise KitError(f"{path} isn't the line gcn-recomp's engine_sha.cmake writes")
+    if not COMMIT.fullmatch(m[1]):
+        raise KitError(f'{path} names "{m[1]}", not a gcn-recomp commit: build the kit from a gcn-recomp'
+                       " checkout with no changes to tracked files")
+    return m[1]
+
+
 def run(cmd: list[str]) -> None:
     done = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if done.returncode != 0:
@@ -129,6 +155,7 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
     ldflags = build_flags(build, "game_ldflags.txt", LINK_MISSING)
     libs = game_libs(build)
     objects = engine_objects(build)
+    engine = engine_commit(build)
     try:
         engine_src = Path(cache["gcn_recomp_SOURCE_DIR"])
         sdl_src = Path(cache["SDL3_SOURCE_DIR"])
@@ -152,9 +179,9 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
             shutil.copyfile(src, tmp / rel)
         (tmp / "kit.mk").write_text(
             f"# Written by tools/engine_kit.py from {build.name}'s game_cflags.txt, game_ldflags.txt,\n"
-            "# game_libs.txt and CMakeCache.txt. Make a new kit rather than editing it.\n"
+            "# game_libs.txt, CMakeCache.txt and gcn_engine_sha.h. Make a new kit rather than editing it.\n"
             f"GAME_CFLAGS := {flags}\nLINK_FLAGS := {ldflags}\nGAME_LIBS := {libs}\n"
-            f"MACOSX_MIN := {target}\n")
+            f"MACOSX_MIN := {target}\nENGINE_COMMIT := {engine}\n")
         if strip_debug:
             run([str(strip), "-S", str(tmp / "engine.o"), str(tmp / "libSDL3.a")])
         tmp.chmod(0o755)  # mkdtemp made it 0700

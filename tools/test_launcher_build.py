@@ -126,8 +126,9 @@ class RecipeTestCase(unittest.TestCase):
         self.make_snapshot()
         self.kit = resources / "kit"
         (self.kit / "include").mkdir(parents=True)
-        for name in ("Makefile", "kit.mk", "engine.o", "libSDL3.a", "include/recomp.h"):
+        for name in ("Makefile", "engine.o", "libSDL3.a", "include/recomp.h"):
             write_file(self.kit, name, f"a fake {name}\n")
+        self.kit_mk(f"MACOSX_MIN := 14.0\nENGINE_COMMIT := {ENGINE}\n")
         self.data = self.dir / "Application Support" / "Dragoon"
         self.cache = self.dir / "Caches" / "Dragoon"
         self.log = self.dir / "Logs" / "build 1.log"
@@ -141,6 +142,9 @@ class RecipeTestCase(unittest.TestCase):
         path = write_file(directory or self.tools, name or tool, text)
         path.chmod(0o755)
         return path
+
+    def kit_mk(self, text: str) -> None:
+        write_file(self.kit, "kit.mk", "GAME_CFLAGS := -O2\n" + text)
 
     def fail_marker(self, tool: str) -> Path:
         return self.dir / f"fail {tool}"
@@ -509,6 +513,54 @@ class LockTest(RecipeTestCase):
         self.assertEqual(code, 3)
         self.assertEqual(events[0]["log"], str(self.log))
         self.assertEqual(self.log.read_text(), "== recompile\n")
+
+
+class KitTest(RecipeTestCase):
+    """The kit's engine.o and headers come from the gcn-recomp commit its kit.mk names."""
+
+    def setUp(self):
+        super().setUp()
+        self.old_game()
+
+    def refused(self) -> list[dict]:
+        """Runs a build that has to stop at the kit, before anything is touched."""
+        data = tree(self.data)
+        code, events, err = self.build()
+        self.assertEqual(code, 2)
+        self.assertEqual([(e["event"], e["step"], e["log"]) for e in events],
+                         [("error", "kit", str(self.log))])
+        self.assertEqual(tree(self.data), data)
+        self.assertFalse(self.cache.exists() or self.log.exists() or self.records.exists())
+        self.assertIn(events[0]["message"], err)
+        return events
+
+    def test_a_kit_of_the_snapshots_gcn_recomp_builds(self):
+        code, events, _ = self.build()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.of(events, "error"), [])
+
+    def test_a_kit_of_another_gcn_recomp_exits_2_naming_both(self):
+        other = "f" * 40
+        self.kit_mk(f"ENGINE_COMMIT := {other}\n")
+        events = self.refused()
+        self.assertEqual(events[0]["message"],
+                         f"the kit is from gcn-recomp {other} and the source snapshot from gcn-recomp"
+                         f" {ENGINE}: the kit's engine.o and headers wouldn't match the generated C")
+
+    def test_a_kit_naming_no_gcn_recomp_commit_exits_2(self):
+        for name, text in (("no line", "MACOSX_MIN := 14.0\n"), ("an empty one", "ENGINE_COMMIT := \n"),
+                           ("a dirty one", f"ENGINE_COMMIT := {ENGINE}-dirty\n"),
+                           ("two", f"ENGINE_COMMIT := {ENGINE}\nENGINE_COMMIT := {ENGINE}\n")):
+            with self.subTest(name):
+                self.kit_mk(text)
+                events = self.refused()
+                self.assertEqual(events[0]["message"], f"{self.kit / 'kit.mk'} doesn't name one gcn-recomp"
+                                                       " commit, as engine_kit.py writes it")
+
+    def test_a_kit_with_no_kit_mk_exits_2(self):
+        (self.kit / "kit.mk").unlink()
+        events = self.refused()
+        self.assertIn("kit.mk: can't read it (No such file or directory)", events[0]["message"])
 
 
 class ArgumentTest(RecipeTestCase):

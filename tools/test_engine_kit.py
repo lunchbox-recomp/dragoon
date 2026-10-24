@@ -14,6 +14,7 @@ import unittest
 from pathlib import Path
 
 import engine_kit
+import launcher_build
 from testutil import archive, compile_c, run_main, write_file
 
 NM = "/usr/bin/nm"
@@ -24,6 +25,7 @@ LDFLAGS = "-O2 -g -DNDEBUG -Wl,-search_paths_first -Wl,-headerpad_max_install_na
 LIBS = "-framework OpenGL -lm -Xlinker -weak_framework -Xlinker CoreHaptics -lpthread"
 SDK = "/Applications/Xcode 26.5.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 RUNTIME = "CMakeFiles/runtime_check.dir/gcn-recomp/runtime"
+ENGINE = "5ca1ab1e" * 5
 NINJA = f"""build {RUNTIME}/a.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo a.cpp
   FLAGS = -O2 -g
 build {RUNTIME}/hw/b.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo b.cpp
@@ -54,7 +56,14 @@ def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
     write_file(build, "game_cflags.txt", FLAGS + "\n")
     write_file(build, "game_ldflags.txt", LDFLAGS + "\n")
     write_file(build, "game_libs.txt", LIBS + "\n")
+    engine_sha(build, ENGINE)
     return build
+
+
+def engine_sha(build: Path, sha: str) -> None:
+    """The header gcn-recomp's gcn_engine_sha target writes for runtime_check."""
+    (build / "gcn_engine_sha").mkdir(exist_ok=True)
+    write_file(build / "gcn_engine_sha", "gcn_engine_sha.h", f'#define GCN_ENGINE_SHA "{sha}"\n')
 
 
 class EngineKitTest(unittest.TestCase):
@@ -92,11 +101,30 @@ class EngineKitTest(unittest.TestCase):
         for rel, src in copies.items():
             self.assertEqual((self.out / rel).read_bytes(), src.read_bytes(), rel)
         mk = (self.out / "kit.mk").read_text().splitlines()
-        self.assertEqual(mk[-4:], [f"GAME_CFLAGS := {FLAGS}", f"LINK_FLAGS := {LDFLAGS}",
-                                   f"GAME_LIBS := {LIBS}", "MACOSX_MIN := 14.0"])
+        self.assertEqual(mk[-5:], [f"GAME_CFLAGS := {FLAGS}", f"LINK_FLAGS := {LDFLAGS}",
+                                   f"GAME_LIBS := {LIBS}", "MACOSX_MIN := 14.0", f"ENGINE_COMMIT := {ENGINE}"])
         self.assertEqual(sorted(str(p.relative_to(self.out)) for p in self.out.rglob("*") if p.is_file()),
                          sorted(["engine.o", "kit.mk", *copies]))
         self.assertEqual(stat.S_IMODE(self.out.stat().st_mode), 0o755)
+
+    def test_the_recipe_takes_the_kit_for_its_own_gcn_recomp_commit_only(self) -> None:
+        self.assertEqual(self.kit(fake_build(self.root))[0], 0)
+        self.assertIsNone(launcher_build.kit_problem(self.out, ENGINE))
+        self.assertIn(f"the kit is from gcn-recomp {ENGINE}", launcher_build.kit_problem(self.out, "f" * 40))
+
+    def test_refuses_a_build_without_a_clean_gcn_recomp_commit(self) -> None:
+        for sha in ("", ENGINE + "-dirty", ENGINE[:12]):
+            with self.subTest(sha=sha):
+                build = fake_build(self.root)
+                engine_sha(build, sha)
+                self.assert_refused(build, f'gcn_engine_sha.h names "{sha}", not a gcn-recomp commit')
+
+    def test_refuses_a_build_whose_engine_commit_is_missing_or_malformed(self) -> None:
+        build = fake_build(self.root)
+        write_file(build / "gcn_engine_sha", "gcn_engine_sha.h", f"#define GCN_ENGINE_SHA {ENGINE}\n")
+        self.assert_refused(build, "gcn_engine_sha.h isn't the line gcn-recomp's engine_sha.cmake writes")
+        (build / engine_kit.ENGINE_SHA).unlink()
+        self.assert_refused(build, "gcn_engine_sha.h is missing: build runtime_check")
 
     def test_strip_debug_drops_the_debug_map_and_sdls_dwarf(self) -> None:
         build = fake_build(self.root)
