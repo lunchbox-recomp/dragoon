@@ -3,15 +3,17 @@
 
 Usage: mutant.py SPEC DEST [--repo DIR] [--rev REV] [--python FILE] [--timeout SECONDS]
 
-SPEC is a JSON file holding a list of mutants. A mutant has three fields:
+SPEC is a JSON file holding a list of mutants. A mutant has three fields and may have a fourth:
   name     what the output calls it, on one line and unlike any other name
   dir      the test directory to discover in, relative to the repo, such as tools
   replace  a list of {"file", "old", "new"} edits applied together, in order, each to the
            text the one before left. FILE is relative to the repo. OLD has to occur in it
            exactly once, so a typo can't make a mutant that changes nothing. NEW may be empty.
+  pattern  which test files to run, as unittest's -p takes it (default test_*.py). It matches
+           file names, so it has no /. test_export_source.py runs that one file.
 DEST is a new directory outside the repo. The copies are built there and kept, and nothing
-is removed. baseline-N is the copy for the Nth directory the mutants test and mutant-N is the
-Nth mutant's. The last 64 KiB of each run's output is beside its copy as a .log file.
+is removed. baseline-N is the copy for the Nth dir and pattern the mutants test, and mutant-N
+is the Nth mutant's. The last 64 KiB of each run's output is beside its copy as a .log file.
 
 Every copy is REV (default HEAD) of the repo that holds this tool, or of --repo, made by
 git archive. The repo's own files are never edited or run, and its uncommitted changes aren't
@@ -19,8 +21,8 @@ tested. A copy has no .git and, since git archive leaves submodules out, no gcn-
 that needs either has to skip itself, as RealTreeTest in test_launcher_build.py does.
 
 All the copies are built and all the edits applied before anything runs, so a spec that can't
-work costs no test run. Then each distinct dir gets a baseline, which runs
-  PYTHON -B -m unittest discover -s COPY/DIR -p 'test_*.py'
+work costs no test run. Then each distinct dir and pattern gets a baseline, which runs
+  PYTHON -B -m unittest discover -s COPY/DIR -p PATTERN
 in its copy and has to pass. Without that, a selection that fails on its own would make every
 mutant look killed. Each mutant then runs the same command in a copy of its own, so nothing an
 earlier run left behind is tested. Only PATH, HOME and TMPDIR from the caller's environment
@@ -60,6 +62,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extract differently
 TOOL_ERROR = 2
 TAIL = 64 * 1024
+PATTERN = "test_*.py"
 
 
 class MutantError(Exception):
@@ -78,11 +81,14 @@ class Mutant:
     name: str
     dir: str
     edits: tuple[Edit, ...]
+    pattern: str = PATTERN
 
 
-def exactly(item: object, keys: tuple[str, ...], where: str) -> dict:
-    if not isinstance(item, dict) or set(item) != set(keys):
-        raise MutantError(f"{where} must be an object with {', '.join(keys)} and nothing else")
+def exactly(item: object, keys: tuple[str, ...], where: str,
+            optional: tuple[str, ...] = ()) -> dict:
+    if not isinstance(item, dict) or not set(keys) <= set(item) <= set(keys + optional):
+        more = f" and perhaps {', '.join(optional)}" if optional else ""
+        raise MutantError(f"{where} must be an object with {', '.join(keys)}{more} and nothing else")
     return item
 
 
@@ -111,16 +117,19 @@ def parse_edit(item: object, where: str) -> Edit:
 
 
 def parse_mutant(item: object, where: str) -> Mutant:
-    item = exactly(item, ("name", "dir", "replace"), where)
+    item = exactly(item, ("name", "dir", "replace"), where, optional=("pattern",))
     name = text(item, "name", where)
     if not name.isprintable():
         raise MutantError(f"{where}: name must be on one line")
     directory = repo_path(text(item, "dir", where), "dir", where)
+    pattern = text(item, "pattern", where) if "pattern" in item else PATTERN
+    if "/" in pattern:
+        raise MutantError(f"{where}: pattern {pattern!r} matches file names, so it has no /")
     edits = item["replace"]
     if not isinstance(edits, list) or not edits:
         raise MutantError(f"{where}: replace must be a list of at least one edit")
     return Mutant(name, directory, tuple(parse_edit(e, f"{where}, edit {n}")
-                                         for n, e in enumerate(edits, 1)))
+                                         for n, e in enumerate(edits, 1)), pattern)
 
 
 def load_spec(path: Path) -> list[Mutant]:
@@ -196,11 +205,13 @@ def apply(copy: Path, mutant: Mutant) -> None:
         raise MutantError(f"{mutant.name}: {err}") from err
 
 
-def run_tests(python: str, copy: Path, rel: str, timeout: float, log: Path) -> Optional[int]:
-    """The exit status of test discovery in COPY/REL, or None if it outran TIMEOUT seconds.
-    The last TAIL bytes of its output go to LOG. A timeout, or ^C, kills the whole process
-    group, so nothing the tests started goes on running or holds the pipe open."""
-    cmd = [python, "-B", "-m", "unittest", "discover", "-s", str(copy / rel), "-p", "test_*.py"]
+def run_tests(python: str, copy: Path, rel: str, pattern: str, timeout: float,
+              log: Path) -> Optional[int]:
+    """The exit status of test discovery in COPY/REL for the files PATTERN matches, or None if
+    it outran TIMEOUT seconds. The last TAIL bytes of its output go to LOG. A timeout, or ^C,
+    kills the whole process group, so nothing the tests started goes on running or holds the
+    pipe open."""
+    cmd = [python, "-B", "-m", "unittest", "discover", "-s", str(copy / rel), "-p", pattern]
     proc = subprocess.Popen(cmd, cwd=copy, env=minimal_env(), stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             start_new_session=True)
@@ -251,24 +262,26 @@ def run(args: argparse.Namespace) -> int:
     tar = archive(repo, args.rev)
 
     dest.mkdir(parents=True)
-    dirs = list(dict.fromkeys(m.dir for m in mutants))
-    baselines = [(d, extract(tar, dest / f"baseline-{n}")) for n, d in enumerate(dirs, 1)]
+    suites = list(dict.fromkeys((m.dir, m.pattern) for m in mutants))
+    baselines = [(d, p, extract(tar, dest / f"baseline-{n}")) for n, (d, p) in enumerate(suites, 1)]
     copies = []
     for n, m in enumerate(mutants, 1):
         copies.append(extract(tar, dest / f"mutant-{n}"))
         apply(copies[-1], m)
 
-    for n, (d, copy) in enumerate(baselines, 1):
+    for n, (d, p, copy) in enumerate(baselines, 1):
         log = dest / f"baseline-{n}.log"
-        code = run_tests(python, copy, d, args.timeout, log)
+        code = run_tests(python, copy, d, p, args.timeout, log)
         if code != 0:
             how = f"outran {args.timeout:g} s" if code is None else f"exit {code}"
-            raise MutantError(f"the tests in {d} fail without a mutant ({how}), so a kill would "
-                              f"mean nothing: see {log}")
+            what = d if p == PATTERN else f"{d} for {p}"
+            raise MutantError(f"the tests in {what} fail without a mutant ({how}), so a kill "
+                              f"would mean nothing: see {log}")
 
     counts = {"killed": 0, "survived": 0, "timeout": 0}
     for n, (m, copy) in enumerate(zip(mutants, copies), 1):
-        result = verdict(run_tests(python, copy, m.dir, args.timeout, dest / f"mutant-{n}.log"))
+        result = verdict(run_tests(python, copy, m.dir, m.pattern, args.timeout,
+                                   dest / f"mutant-{n}.log"))
         counts[result] += 1
         print(f"{result} {m.name}", flush=True)
     print(f"total {len(mutants)}, killed {counts['killed']}, survived {counts['survived']}, "

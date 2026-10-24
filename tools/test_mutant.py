@@ -66,12 +66,36 @@ class SlowTest(unittest.TestCase):
     def test_sleeps(self):
         time.sleep(30)
 """
+GREET_PATH = "two files/greet.py"
+GREET = 'def hi():\n    return "hi"\n'
+TEST_GREET = """\
+import unittest
+
+import greet
+
+
+class GreetTest(unittest.TestCase):
+    def test_hi(self):
+        self.assertEqual(greet.hi(), "hi")
+"""
+# A second file in the directory, which only a pattern that names test_greet.py leaves out.
+TEST_EXTRA = """\
+import unittest
+
+
+class ExtraTest(unittest.TestCase):
+    def test_fails(self):
+        self.fail("test_extra.py was selected")
+"""
 FILES = {
     CALC_PATH: CALC,
     "lib dir/test_calc.py": TEST_CALC,
     "env check/test_env.py": TEST_ENV,
     "broken tests/test_broken.py": TEST_BROKEN,
     "slow tests/test_slow.py": TEST_SLOW,
+    GREET_PATH: GREET,
+    "two files/test_greet.py": TEST_GREET,
+    "two files/test_extra.py": TEST_EXTRA,
 }
 
 
@@ -79,8 +103,11 @@ def edit(old: str, new: str, file: str = CALC_PATH) -> dict:
     return {"file": file, "old": old, "new": new}
 
 
-def spec_mutant(name: str, *replace: dict, dir: str = "lib dir") -> dict:
-    return {"name": name, "dir": dir, "replace": list(replace)}
+def spec_mutant(name: str, *replace: dict, dir: str = "lib dir", pattern: str = None) -> dict:
+    entry = {"name": name, "dir": dir, "replace": list(replace)}
+    if pattern is not None:
+        entry["pattern"] = pattern
+    return entry
 
 
 KILLED = spec_mutant("add subtracts", edit("return a + b", "return a - b"))
@@ -121,6 +148,23 @@ class MutantTestCase(unittest.TestCase):
 
     def read(self, copy: str, name: str = CALC_PATH) -> str:
         return (self.dest / copy / name).read_text()
+
+    def recording_python(self) -> tuple:
+        """(a python that writes its working directory and arguments to a file, a JSON line a
+        call, and then runs the real one, that file)."""
+        calls = self.dir / "calls.jsonl"
+        fake = write_file(self.dir, "fake python", (
+            f"#!{sys.executable}\n"
+            "import json, os, subprocess, sys\n"
+            f"with open({str(calls)!r}, 'a') as f:\n"
+            "    f.write(json.dumps([os.getcwd(), sys.argv[1:]]) + '\\n')\n"
+            f"sys.exit(subprocess.run([{sys.executable!r}, *sys.argv[1:]]).returncode)\n"))
+        fake.chmod(0o755)
+        return fake, calls
+
+    @staticmethod
+    def recorded(calls: Path) -> list:
+        return [json.loads(line) for line in calls.read_text().splitlines()]
 
     def assert_tool_error(self, result: tuple, *why: str) -> None:
         code, out, err = result
@@ -238,21 +282,14 @@ class CopyTest(MutantTestCase):
             1, "killed add subtracts\nsurvived sub swapped\n" + total(1, 1, 0)))
 
     def test_the_command_line_and_the_directory_the_tests_run_in(self):
-        calls = self.dir / "calls.jsonl"
-        fake = write_file(self.dir, "fake python", (
-            f"#!{sys.executable}\n"
-            "import json, os, subprocess, sys\n"
-            f"with open({str(calls)!r}, 'a') as f:\n"
-            "    f.write(json.dumps([os.getcwd(), sys.argv[1:]]) + '\\n')\n"
-            f"sys.exit(subprocess.run([{sys.executable!r}, *sys.argv[1:]]).returncode)\n"))
-        fake.chmod(0o755)
+        fake, calls = self.recording_python()
         self.assertEqual(self.run_tool(KILLED, extra=("--python", str(fake)))[0], 0)
         dest = self.dest.resolve()
         want = []
         for copy in ("baseline-1", "mutant-1"):
             want.append([str(dest / copy), ["-B", "-m", "unittest", "discover", "-s",
                                             str(dest / copy / "lib dir"), "-p", "test_*.py"]])
-        self.assertEqual([json.loads(line) for line in calls.read_text().splitlines()], want)
+        self.assertEqual(self.recorded(calls), want)
 
     def test_a_relative_python_is_relative_to_where_the_tool_ran(self):
         wrapper = write_file(self.dir, "py wrapper", f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
@@ -278,6 +315,44 @@ class CopyTest(MutantTestCase):
         result = self.run_tool(spec_mutant("via link", edit("original", "changed", "lib dir/link.txt")))
         self.assert_tool_error(result, "lib dir/link.txt", "outside the copy")
         self.assertEqual(outside.read_text(), "original text\n")
+
+
+class PatternTest(MutantTestCase):
+    def hi(self, name: str = "hi changes", **kw) -> dict:
+        return spec_mutant(name, edit('return "hi"', 'return "ho"', GREET_PATH),
+                           dir="two files", **kw)
+
+    def test_a_pattern_leaves_a_failing_test_file_out(self):
+        self.assertEqual(self.run_tool(self.hi(pattern="test_greet.py")),
+                         (0, "killed hi changes\n" + total(1, 0, 0), ""))
+        self.assertNotIn("test_extra", (self.dest / "baseline-1.log").read_text())
+        mutant_log = (self.dest / "mutant-1.log").read_text()
+        self.assertIn("FAIL: test_hi", mutant_log)
+        self.assertNotIn("test_extra", mutant_log)
+
+    def test_the_default_pattern_finds_every_test_file(self):
+        self.assert_tool_error(self.run_tool(self.hi()), "two files", "fail without a mutant")
+        self.assertIn("test_extra.py was selected", (self.dest / "baseline-1.log").read_text())
+
+    def test_a_failing_baseline_names_its_pattern(self):
+        self.assert_tool_error(self.run_tool(self.hi(pattern="test_extra.py")), "two files",
+                               "test_extra.py", "fail without a mutant")
+
+    def test_each_dir_and_pattern_pair_gets_a_baseline_and_runs_with_its_pattern(self):
+        fake, calls = self.recording_python()
+        by_name, by_glob = self.hi("by name", pattern="test_greet.py"), self.hi(
+            "by glob", pattern="test_gre*.py")
+        self.assertEqual(self.run_tool(by_name, by_glob, extra=("--python", str(fake)))[0], 0)
+        patterns = [args[args.index("-p") + 1] for _, args in self.recorded(calls)]
+        self.assertEqual(patterns, ["test_greet.py", "test_gre*.py"] * 2)
+        self.assertTrue((self.dest / "baseline-2").is_dir())
+        self.assertFalse((self.dest / "baseline-3").exists())
+
+    def test_one_pair_in_two_mutants_gets_one_baseline(self):
+        fake, calls = self.recording_python()
+        one, two = self.hi("one", pattern="test_greet.py"), self.hi("two", pattern="test_greet.py")
+        self.assertEqual(self.run_tool(one, two, extra=("--python", str(fake)))[0], 0)
+        self.assertEqual(len(self.recorded(calls)), 3)
 
 
 class RefusalTest(MutantTestCase):
@@ -407,6 +482,9 @@ class SpecTest(MutantTestCase):
             "an edit that isn't an object": [{**KILLED, "replace": ["return a + b"]}],
             "an edit with no new": [spec_mutant("x", {"file": CALC_PATH, "old": "a"})],
             "an edit with an extra key": [spec_mutant("x", {**edit("a", "b"), "count": 1})],
+            "a pattern that isn't text": [spec_mutant("x", edit("a", "b"), pattern=3)],
+            "an empty pattern": [spec_mutant("x", edit("a", "b"), pattern="")],
+            "a pattern with a slash": [spec_mutant("x", edit("a", "b"), pattern="sub/test_*.py")],
             "an empty old": [spec_mutant("x", edit("", "b"))],
             "an old that isn't text": [spec_mutant("x", edit(1, "b"))],
             "a new that isn't text": [spec_mutant("x", edit("a", 2))],
