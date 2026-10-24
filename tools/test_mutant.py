@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -593,6 +594,20 @@ class SpecTest(MutantTestCase):
         self.run_tool(spec_mutant("crlf", edit("return a - b", "return b - a")))
         self.assertEqual((self.dest / "mutant-1" / CALC_PATH).read_bytes(),
                          crlf.replace("a - b", "b - a").encode())
+
+
+class PathTest(unittest.TestCase):
+    def test_the_fixed_path_is_the_launchers(self):
+        self.assertEqual(mutant.TOOL_PATH, launcher_build.TOOL_PATH)
+
+    def test_the_tool_runs_with_no_other_file_of_the_repo_beside_it(self):
+        """A tool that imported a sibling would run the repo's own files, and a broken one
+        would give a traceback and an exit 1 that reads as a survivor."""
+        with tempfile.TemporaryDirectory() as tmp:
+            alone = write_file(Path(tmp), "mutant.py", Path(mutant.__file__).read_text())
+            done = subprocess.run([sys.executable, "-B", str(alone), "--help"], cwd=tmp,
+                                  env={"PATH": "/usr/bin:/bin"}, capture_output=True, text=True)
+        self.assertEqual((done.returncode, done.stderr), (0, ""))
 
 
 class HelpTest(unittest.TestCase):

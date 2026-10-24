@@ -66,9 +66,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Optional
 
-from launcher_build import TOOL_PATH
-
-ROOT =Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]
+# The launcher's TOOL_PATH, which test_mutant.py checks. It isn't imported, because that would
+# run launcher_build.py and the modules it imports from the repo, outside the exit-2 guard below.
+TOOL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extract differently
 TOOL_ERROR = 2
 TAIL = 64 * 1024
