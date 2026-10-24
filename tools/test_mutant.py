@@ -68,6 +68,18 @@ class SlowTest(unittest.TestCase):
     def test_sleeps(self):
         time.sleep(30)
 """
+# Writes to stderr, which is unbuffered, so the lines come before unittest's own and the
+# log ends where unittest does.
+TEST_NOISY = """\
+import sys
+import unittest
+
+
+class NoisyTest(unittest.TestCase):
+    def test_prints_a_lot(self):
+        for n in range(20000):
+            print(f"noise line {n:06d}", file=sys.stderr)
+"""
 GREET_PATH = "two files/greet.py"
 GREET = 'def hi():\n    return "hi"\n'
 TEST_GREET = """\
@@ -95,6 +107,7 @@ FILES = {
     "env check/test_env.py": TEST_ENV,
     "broken tests/test_broken.py": TEST_BROKEN,
     "slow tests/test_slow.py": TEST_SLOW,
+    "noisy tests/test_noisy.py": TEST_NOISY,
     GREET_PATH: GREET,
     "two files/test_greet.py": TEST_GREET,
     "two files/test_extra.py": TEST_EXTRA,
@@ -168,6 +181,30 @@ class MutantTestCase(unittest.TestCase):
     def recorded(calls: Path) -> list:
         return [json.loads(line) for line in calls.read_text().splitlines()]
 
+    @staticmethod
+    def alive(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        return True
+
+    @staticmethod
+    def kill_quietly(pid: int) -> None:
+        try:
+            os.kill(pid, 9)
+        except ProcessLookupError:
+            pass
+
+    def assert_child_gone(self, pid_file: Path) -> None:
+        """The process a mutant started and wrote the pid of to PID_FILE is dead."""
+        pid = int(pid_file.read_text())
+        self.addCleanup(self.kill_quietly, pid)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and self.alive(pid):
+            time.sleep(0.05)
+        self.assertFalse(self.alive(pid), "the mutant's child outlived the run")
+
     def assert_tool_error(self, result: tuple, *why: str) -> None:
         code, out, err = result
         self.assertEqual(code, 2, err)
@@ -197,27 +234,16 @@ class VerdictTest(MutantTestCase):
         result = self.run_tool(hang, extra=("--timeout", "4"))
         self.assertLess(time.monotonic() - started, 30)
         self.assertEqual(result, (1, "timeout hangs\n" + total(0, 0, 1), ""))
-        pid = int(pid_file.read_text())
-        self.addCleanup(self.kill_quietly, pid)
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline and self.alive(pid):
-            time.sleep(0.05)
-        self.assertFalse(self.alive(pid), "the mutant's child outlived the run")
+        self.assert_child_gone(pid_file)
 
-    @staticmethod
-    def alive(pid: int) -> bool:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        return True
-
-    @staticmethod
-    def kill_quietly(pid: int) -> None:
-        try:
-            os.kill(pid, 9)
-        except ProcessLookupError:
-            pass
+    def test_a_child_left_running_after_the_tests_end_is_killed_too(self):
+        pid_file = self.dir / "leftover pid"
+        leaves = spec_mutant("leaves a child", edit("return a + b", (
+            f"import subprocess; "
+            f"open({str(pid_file)!r}, 'w').write(str(subprocess.Popen(['/bin/sleep', '60']).pid)); "
+            "return a + b")))
+        self.assertEqual(self.run_tool(leaves), (1, "survived leaves a child\n" + total(0, 1, 0), ""))
+        self.assert_child_gone(pid_file)
 
     def test_a_crash_in_the_tool_is_a_tool_error_and_not_a_survivor(self):
         self.write_spec([KILLED])
@@ -265,6 +291,19 @@ class CopyTest(MutantTestCase):
         self.run_tool(KILLED)
         self.assertIn("OK", (self.dest / "baseline-1.log").read_text())
         self.assertIn("FAIL: test_add", (self.dest / "mutant-1.log").read_text())
+
+    def test_a_log_keeps_the_last_64_kib_of_the_output_and_no_more(self):
+        quiet = spec_mutant("quiet", edit("# keep both operands the same", "# edited"),
+                            dir="noisy tests")
+        self.assertEqual(self.run_tool(quiet)[:2], (1, "survived quiet\n" + total(0, 1, 0)))
+        for name in ("baseline-1.log", "mutant-1.log"):
+            with self.subTest(name):
+                data = (self.dest / name).read_bytes()
+                self.assertEqual(len(data), 64 * 1024)  # over 300 KB were written
+                lines = data.decode().splitlines()
+                self.assertEqual(lines[-1], "OK")
+                self.assertIn("noise line 019999", lines)
+                self.assertNotIn("noise line 000000", lines)
 
     def test_no_bytecode_is_written(self):
         self.run_tool(KILLED, SURVIVOR)

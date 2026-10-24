@@ -28,7 +28,8 @@ mutant look killed. Each mutant then runs the same command in a copy of its own,
 earlier run left behind is tested. The tests get PATH=/usr/bin:/bin:/usr/sbin:/sbin (the
 TOOL_PATH of launcher_build.py), HOME and TMPDIR from the caller and PYTHONDONTWRITEBYTECODE=1.
 Nothing else in the caller's environment reaches them, so no key or token in it does. A run that
-outlasts --timeout (600 s by default, for each run) is killed with everything it started.
+outlasts --timeout (600 s by default, for each run) is killed. So is anything a run started
+and left running, when the run ends.
 
 It prints one line per mutant as it finishes, and then a total:
   killed NAME     the tests failed
@@ -212,9 +213,9 @@ def apply(copy: Path, mutant: Mutant) -> None:
 def run_tests(python: str, copy: Path, rel: str, pattern: str, timeout: float,
               log: Path) -> Optional[int]:
     """The exit status of test discovery in COPY/REL for the files PATTERN matches, or None if
-    it outran TIMEOUT seconds. The last TAIL bytes of its output go to LOG. A timeout, or ^C,
-    kills the whole process group, so nothing the tests started goes on running or holds the
-    pipe open."""
+    it outran TIMEOUT seconds. The last TAIL bytes of its output go to LOG. Whatever the way it
+    ends, a timeout and ^C included, the whole process group is killed, so nothing the tests
+    started goes on running or holds the pipe open."""
     cmd = [python, "-B", "-m", "unittest", "discover", "-s", str(copy / rel), "-p", pattern]
     proc = subprocess.Popen(cmd, cwd=copy, env=minimal_env(), stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -234,9 +235,12 @@ def run_tests(python: str, copy: Path, rel: str, pattern: str, timeout: float,
     except subprocess.TimeoutExpired:
         pass
     finally:
+        # After every run and not only a timeout, so a child the tests left behind can't go on
+        # running or keep the pipe open. The group lives as long as one member does, and the
+        # leader's pid isn't reused before then.
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
         if code is None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(proc.pid, signal.SIGKILL)
             proc.wait()
     reader.join(5)
     if not reader.is_alive():

@@ -259,7 +259,7 @@ These keep a kill from meaning nothing.
 - Each mutant runs on a fresh copy, so no stale bytecode or leftover from an earlier run is tested in its place.
 - The tests get `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, as `launcher_build.py`'s tools do, your `HOME` and `TMPDIR` and `PYTHONDONTWRITEBYTECODE=1`. Nothing else in your environment reaches them, so no key or token in it does.
 - Every copy is built and every edit applied before any test runs, so a bad spec costs no run.
-- A run that outlasts `--timeout` (600 s unless you say otherwise, for each run) is killed along with everything it started.
+- A run that outlasts `--timeout` (600 s unless you say otherwise, for each run) is killed along with everything it started. Whatever a run leaves running is killed when the run ends.
 
 A copy has no `.git` and, since `git archive` leaves submodules out, no gcn-recomp. A test that needs either has to skip itself, as `RealTreeTest` in `test_launcher_build.py` does. `--python FILE` picks the interpreter that runs the tests, and it defaults to the one running the tool.
 
