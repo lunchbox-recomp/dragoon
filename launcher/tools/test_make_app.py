@@ -35,8 +35,10 @@ KIT_FILES = sorted(p[len(KIT_DIR):] for p in MANIFEST.files | MANIFEST.objects i
 # the first time it runs, which costs more than the script does, so each test gets its own
 # records file and switches through the environment. A call is recorded to $FAKE_RECORDS as
 # "call", one "arg X" per argument, one "file X" per file under its last argument as it ran,
-# and "end". A file named "fail codesign" in $FAKE_SWITCHES makes it fail. Otherwise it seals
-# the app the way codesign does, with Contents/_CodeSignature/CodeResources.
+# and "end". A file named "fail codesign" in $FAKE_SWITCHES makes it fail. A file named "another
+# run" makes it write a finished Dragoon.app into the output directory first, as a second run
+# sharing that directory would. Otherwise it seals the app the way codesign does, with
+# Contents/_CodeSignature/CodeResources.
 FAKE_CODESIGN = r"""#!/bin/sh
 last=
 {
@@ -48,6 +50,12 @@ last=
   find "$last" -type f | sed 's/^/file /'
   echo end
 } >> "$FAKE_RECORDS"
+if [ -e "$FAKE_SWITCHES/another run" ]; then
+  # Another run sharing the output directory finishes its app while this one is signing.
+  out=${last%/*/*}
+  mkdir -p "$out/Dragoon.app/Contents"
+  echo theirs > "$out/Dragoon.app/Contents/theirs.txt"
+fi
 if [ -e "$FAKE_SWITCHES/fail codesign" ]; then
   echo "fake codesign: refused to seal the app" >&2
   exit 1
@@ -372,10 +380,13 @@ class RefusalTest(AppTestCase):
         self.assert_refused(str(self.out))
 
     def test_an_out_inside_the_kit_or_the_snapshot(self):
-        self.out = self.kit / "dist"
-        self.assert_refused("inside")
-        self.out = self.source / "dist"
-        self.assert_refused("inside")
+        # The last two are below a directory that is there, so a guard that stopped at the
+        # nearest ancestor that exists would let them through.
+        for out in (self.kit / "dist", self.source / "dist", self.kit / "include" / "dist",
+                    self.source / "tools" / "dist", self.kit / "include" / "dist" / "deeper"):
+            with self.subTest(out.relative_to(self.dir).as_posix()):
+                self.out = out
+                self.assert_refused("inside")
 
     def test_an_out_that_reaches_the_kit_or_the_snapshot_through_a_symlink(self):
         os.symlink(self.kit, self.dir / "kit link")
@@ -506,6 +517,17 @@ class FailureTest(AppTestCase):
                 self.out = out
                 self.assert_failed("refused to seal the app")
         self.assertTrue((self.dir / "out dir").is_dir())  # it was there before, so it stays
+
+    def test_a_failing_run_leaves_the_app_a_second_run_finished_in_the_same_out(self):
+        self.switch("fail codesign", "another run")
+        for out in (self.dir / "not yet" / "deeper" / "out dir", self.dir / "new", self.out):
+            with self.subTest(out.relative_to(self.dir).as_posix()):
+                self.out = out
+                code, _, err = self.run_tool()
+                self.assertEqual(code, 1)
+                self.assertIn("refused to seal the app", err)
+                self.assertEqual(os.listdir(out), [APP])  # their app, and not this run's work
+                self.assertEqual((out / APP / "Contents" / "theirs.txt").read_text(), "theirs\n")
 
     def test_a_failing_codesign_says_it_exited_1(self):
         self.switch("fail codesign")

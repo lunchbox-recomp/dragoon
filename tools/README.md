@@ -360,7 +360,7 @@ launcher/tools/make_app.py --out launcher/dist --version 0.1.0 --launcher /tmp/D
 tools/check_bundle.py launcher/dist/Dragoon.app --commit SHA
 ```
 
-The app is sealed with `codesign --force --sign -`, ad hoc, with no hardened runtime and no `--deep`, as a dev build is. `sign_and_package.py` signs a copy for release. `--version` is one to three numbers joined by dots. `OUT` is made if it's missing. The app is built under a temporary name in it and renamed into place. A failed run removes that directory and any directory it made for `OUT`, so it leaves nothing behind. The kit and the snapshot are only read, and `launcher/dist/` is git-ignored for the app to go in.
+The app is sealed with `codesign --force --sign -`, ad hoc, with no hardened runtime and no `--deep`, as a dev build is. `sign_and_package.py` signs a copy for release. `--version` is one to three numbers joined by dots. `OUT` is made if it's missing. The app is built under a temporary name in it and renamed into place. A failed run removes that directory and the directories it made for `OUT`, so it leaves nothing behind. It only removes a directory that's empty by then, so a second run sharing a new `OUT` keeps its app. The kit and the snapshot are only read, and `launcher/dist/` is git-ignored for the app to go in.
 
 It exits 0 when the app is there and prints its path. A step that failed, such as codesign, exits 1. It exits 2 with one line saying why, having written nothing, when:
 

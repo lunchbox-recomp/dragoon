@@ -15,8 +15,8 @@ Writes DIR/Dragoon.app in the layout launcher/bundle-manifest.txt allows:
 The kit and the snapshot arrive byte for byte and are only read. Then `codesign --force --sign -`
 seals the app ad hoc, with no hardened runtime and no --deep, as a dev build is signed. DIR is
 made if it's missing. The app is built under a temporary name in DIR and renamed into place. A
-failed run removes the app's temporary directory and any directory it made for DIR, so it
-leaves nothing behind.
+failed run removes the app's temporary directory and the directories it made for DIR, so it
+leaves nothing behind. A directory that another run has put something in stays.
 
 It refuses a kit from another gcn-recomp commit than the snapshot's, as launcher_build.py does,
 since the kit's engine.o and headers wouldn't match the generated C. It refuses a kit that
@@ -184,7 +184,9 @@ def topmost_missing(path: Path) -> Optional[Path]:
 
 def make(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> Path:
     """Build the app under a temporary name in the output directory and rename it into place.
-    A run that fails removes the directories it made, as export_source.py does for its OUT."""
+    A run that fails removes its temporary directory, then each directory it made for the output
+    directory that is empty by then. Another run may share the output directory, and rmdir
+    leaves one that holds that run's app or its work."""
     made = topmost_missing(a.out)
     work = None
     try:
@@ -195,9 +197,16 @@ def make(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> Pat
         os.rename(work / APP, a.out / APP)
         work.rmdir()
     except BaseException:
-        leftover = made or work  # made holds work, when this run made it
-        if leftover:
-            export_source.clear(leftover, remove=True)
+        if work:
+            shutil.rmtree(work, ignore_errors=True)
+        path = a.out
+        path = a.out
+        while made and path != made.parent:
+            try:
+                os.rmdir(path)  # only an empty one, so another run's app stays
+            except OSError:
+                pass
+            path = path.parent
         raise
     return a.out / APP
 
