@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -105,20 +104,9 @@ class ExtraTest(unittest.TestCase):
 """
 
 
-def passing(name: str) -> str:
-    return f"import unittest\n\n\nclass {name}Test(unittest.TestCase):\n    def test_ok(self):\n        pass\n"
-
-
-# What unittest discover looks at in "outer tests" for test_*.py is test_outer.py and the
-# test_inner.py in the inner package. It skips loose/, which isn't a package, and test-dash.py,
-# which isn't a module name. Both fail, so a run that wrongly included one would show it.
 FILES = {
-    "outer tests/test_outer.py": passing("Outer"),
-    "outer tests/inner/__init__.py": "",
-    "outer tests/inner/test_inner.py": passing("Inner"),
-    "outer tests/loose/test_loose.py": TEST_BROKEN,
-    "outer tests/test-dash.py": TEST_BROKEN,
     "no tests/helper.py": "VALUE = 1\n",
+    "empty tests/test_empty.py": "VALUE = 1\n",  # a name the default pattern matches, with no test
     CALC_PATH: CALC,
     "lib dir/test_calc.py": TEST_CALC,
     "env check/test_env.py": TEST_ENV,
@@ -422,48 +410,59 @@ class PatternTest(MutantTestCase):
         self.assertEqual(len(self.recorded(calls)), 3)
 
 
-class FindTest(MutantTestCase):
-    CASES = (
-        ("lib dir", "test_*.py", True),
-        ("outer tests", "test_*.py", True),
-        ("outer tests", "test_outer.py", True),
-        ("outer tests", "test_inner.py", True),  # in a package
-        ("outer tests", "test_loose.py", False),  # in a directory that isn't a package
-        ("outer tests", "test-dash.py", False),  # not a name a module can have
-        ("outer tests", "test_outr.py", False),  # a typo
-        ("no tests", "test_*.py", False),
-    )
+class CountTest(unittest.TestCase):
+    def test_the_count_in_unittests_summary_line(self):
+        self.assertEqual(mutant.tests_run("....\n" + "-" * 70 + "\nRan 22 tests in 5.219s\n\nOK\n"), 22)
+        self.assertEqual(mutant.tests_run("Ran 1 test in 0.000s\n\nOK"), 1)
 
-    def test_finds_the_files_unittest_discover_looks_at(self):
-        """Each case is checked against the real discover on this Python, which prints how
-        many tests it ran however it exits."""
-        for directory, pattern, found in self.CASES:
-            with self.subTest(dir=directory, pattern=pattern):
-                self.assertEqual(mutant.finds_a_file(self.repo / directory, pattern), found)
-                done = subprocess.run(
-                    [sys.executable, "-B", "-m", "unittest", "discover", "-s",
-                     str(self.repo / directory), "-p", pattern],
-                    cwd=self.dir, capture_output=True, text=True)
-                ran = int(re.search(r"Ran (\d+) test", done.stderr).group(1))
-                self.assertEqual(ran > 0, found, done.stderr)
+    def test_no_tests_on_3_9_and_on_3_12_and_later(self):
+        self.assertEqual(mutant.tests_run("Ran 0 tests in 0.000s\n\nOK\n"), 0)
+        self.assertEqual(mutant.tests_run("Ran 0 tests in 0.000s\n\nNO TESTS RAN\n"), 0)
 
-    def test_a_pattern_that_matches_no_file_is_refused_before_anything_runs(self):
+    def test_the_last_summary_line_counts(self):
+        self.assertEqual(mutant.tests_run("Ran 9 tests in 1s\nRan 0 tests in 0.000s\n\nOK"), 0)
+
+    def test_a_line_that_is_not_the_summary_does_not_count(self):
+        self.assertIsNone(mutant.tests_run("it Ran 3 tests in the dark\nRan 3 tests\n"))
+        self.assertIsNone(mutant.tests_run(""))
+
+
+class NoTestsTest(MutantTestCase):
+    """A baseline that runs no test says nothing about a mutant: on Python 3.9 it exits 0 and
+    on 3.12 and later 5, so these only pass if the count decides."""
+
+    def harmless(self, **where: str) -> dict:
+        return spec_mutant("harmless", edit("# keep both operands the same", "# edited"), **where)
+
+    def assert_ran_no_tests(self, result: tuple, *why: str) -> None:
+        self.assert_tool_error(result, "ran no tests", "baseline-", *why)
+
+    def test_a_misspelled_pattern_is_refused_before_any_mutant_runs(self):
         typo = spec_mutant("typo", edit("# keep both operands the same", "# edited"),
                            pattern="test_calcc.py")
-        self.assert_tool_error(self.run_tool(KILLED, typo), "lib dir", "test_calcc.py",
-                               "no test would run")
-        self.assertEqual(list(self.dest.glob("*.log")), [])
+        self.assert_ran_no_tests(self.run_tool(KILLED, typo), "lib dir", "'test_calcc.py'")
+        self.assertEqual(list(self.dest.glob("mutant-*.log")), [])
+        self.assertIn("Ran 0 tests", (self.dest / "baseline-2.log").read_text())
 
-    def test_a_dir_with_no_test_file_is_refused_under_the_default_pattern(self):
-        none = spec_mutant("none", edit("# keep both operands the same", "# edited"),
-                           dir="no tests")
-        self.assert_tool_error(self.run_tool(none), "no tests", "test_*.py", "no test would run")
+    def test_a_dir_with_no_test_file_is_refused(self):
+        self.assert_ran_no_tests(self.run_tool(self.harmless(dir="no tests")), "no tests",
+                                 "'test_*.py'")
 
-    def test_a_pattern_that_only_a_package_below_the_dir_matches_is_run(self):
-        inner = spec_mutant("inner", edit("# keep both operands the same", "# edited"),
-                            dir="outer tests", pattern="test_inner.py")
-        self.assertEqual(self.run_tool(inner), (1, "survived inner\n" + total(0, 1, 0), ""))
+    def test_a_matching_file_that_holds_no_test_is_refused(self):
+        self.assert_ran_no_tests(self.run_tool(self.harmless(dir="empty tests")), "empty tests")
+
+    def test_a_baseline_with_tests_is_not_refused(self):
+        self.assertEqual(self.run_tool(self.harmless()), (1, "survived harmless\n" + total(0, 1, 0), ""))
         self.assertIn("Ran 1 test", (self.dest / "baseline-1.log").read_text())
+
+    def test_a_python_that_exits_0_and_prints_no_count_is_refused(self):
+        quiet = write_file(self.dir, "quiet python", "#!/bin/sh\nexit 0\n")
+        quiet.chmod(0o755)
+        self.assert_ran_no_tests(self.run_tool(KILLED, extra=("--python", str(quiet))), "lib dir")
+
+    def test_a_failing_baseline_is_still_a_failure_not_an_empty_one(self):
+        self.assert_tool_error(self.run_tool(self.harmless(dir="broken tests")),
+                               "fail without a mutant", "exit 1")
 
 
 class RefusalTest(MutantTestCase):

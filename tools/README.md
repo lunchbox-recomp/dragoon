@@ -233,7 +233,7 @@ tools/check_no_game_data.py
 
 Do the tests notice when the code breaks? It changes a copy of a commit, runs a test directory there and reports whether the tests failed. A changed copy is a mutant. It's killed when the tests fail and survives when they pass, and a survivor is a gap in the tests. A spec file holds the changes, so someone checking a new test keeps it in place of a throwaway script. It can live anywhere, and it's worth committing when others should be able to run the same check.
 
-The spec is a JSON list of mutants. Each has a `name` and a `dir` to discover tests in, relative to the repo (`tools` or `launcher/tools`). Its `replace` list holds `{file, old, new}` edits that are applied together, in order. Every `old` has to occur exactly once in its file, so a typo can't make a mutant that changes nothing. `new` may be empty. An optional `pattern` says which test files in `dir` to run. It's what `unittest discover -p` takes and it defaults to `test_*.py`. It matches file names, so it has no `/`. A `dir` and `pattern` that match no file discover would load are refused before anything runs, because Python 3.9 passes a run of no tests.
+The spec is a JSON list of mutants. Each has a `name` and a `dir` to discover tests in, relative to the repo (`tools` or `launcher/tools`). Its `replace` list holds `{file, old, new}` edits that are applied together, in order. Every `old` has to occur exactly once in its file, so a typo can't make a mutant that changes nothing. `new` may be empty. An optional `pattern` says which test files in `dir` to run. It's what `unittest discover -p` takes and it defaults to `test_*.py`. It matches file names, so it has no `/`. A `dir` and `pattern` that run no test are refused at their baseline.
 
 ```json
 [
@@ -257,10 +257,10 @@ It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it
 These keep a kill from meaning nothing.
 
 - Every copy is a `git archive` of `--rev` (HEAD unless you say otherwise). The repo's own files are never edited or run, and uncommitted changes aren't tested. `--repo` names a checkout other than the one holding the tool.
-- Each distinct `dir` and `pattern` gets a baseline on an unchanged copy first, and it has to pass. A selection that fails on its own would read every mutant as killed.
+- Each distinct `dir` and `pattern` gets a baseline on an unchanged copy first, and it has to pass and run at least one test. A selection that fails on its own would read every mutant as killed. One that runs nothing, such as a misspelled `pattern`, would read every mutant as a survivor, because Python 3.9 exits 0 for a run of no tests. The tool reads the count from unittest's `Ran N tests` line, so it doesn't depend on discover's rules or on the exit code, which is 5 on 3.12 and later.
 - Each mutant runs on a fresh copy, so no stale bytecode or leftover from an earlier run is tested in its place.
 - The tests get `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, as `launcher_build.py`'s tools do, your `HOME` and `TMPDIR` and `PYTHONDONTWRITEBYTECODE=1`. Nothing else in your environment reaches them, so no key or token in it does.
-- Every copy is built and every edit applied before any test runs, so a bad spec costs no run.
+- Every copy is built and every edit applied before any test runs, so a bad edit costs no run. A `pattern` that runs no test costs its baseline.
 - A run that outlasts `--timeout` (600 s unless you say otherwise, for each run) is killed along with everything it started. Whatever a run leaves running is killed when the run ends.
 
 A copy has no `.git` and, since `git archive` leaves submodules out, no gcn-recomp. A test that needs either has to skip itself, as `RealTreeTest` in `test_launcher_build.py` does. `--python FILE` picks the interpreter that runs the tests, and it defaults to the one running the tool.
@@ -272,9 +272,8 @@ It exits 0 when every mutant was killed and 1 when any survived or timed out. It
 - the spec or an argument is bad
 - an `old` isn't found exactly once
 - a file or dir isn't in the copy, or a link would take an edit outside it
-- a `dir` and `pattern` match no test file, so no test would run
 - DEST exists or is inside the repo or the checkout holding the tool
-- a baseline fails or times out
+- a baseline fails, times out or runs no test
 
 A crash in the tool exits 2 as well, so it can't read as a survivor.
 

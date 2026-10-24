@@ -21,16 +21,18 @@ git archive. The repo's own files are never edited or run, and its uncommitted c
 tested. A copy has no .git and, since git archive leaves submodules out, no gcn-recomp. A test
 that needs either has to skip itself, as RealTreeTest in test_launcher_build.py does.
 
-All the copies are built and all the edits applied before anything runs, so a spec that can't
-work costs no test run. Then each distinct dir and pattern gets a baseline, which runs
+All the copies are built and all the edits applied before anything runs, so an edit that can't
+apply costs no test run. Then each distinct dir and pattern gets a baseline, which runs
   PYTHON -B -m unittest discover -s COPY/DIR -p PATTERN
-in its copy and has to pass. Without that, a selection that fails on its own would make every
-mutant look killed. Each mutant then runs the same command in a copy of its own, so nothing an
-earlier run left behind is tested. The tests get PATH=/usr/bin:/bin:/usr/sbin:/sbin (the
-TOOL_PATH of launcher_build.py), HOME and TMPDIR from the caller and PYTHONDONTWRITEBYTECODE=1.
-Nothing else in the caller's environment reaches them, so no key or token in it does. A run that
-outlasts --timeout (600 s by default, for each run) is killed. So is anything a run started
-and left running, when the run ends.
+in its copy and has to pass and to run at least one test, by the "Ran N tests" line unittest
+prints. Without the pass, a selection that fails on its own would make every mutant look killed.
+Without a test, a misspelled pattern would make every mutant survive, since Python 3.9 exits 0
+for a run of none. A bad pattern costs the one baseline. Each mutant then runs the same command
+in a copy of its own, so nothing an earlier run left behind is tested. The tests get
+PATH=/usr/bin:/bin:/usr/sbin:/sbin (the TOOL_PATH of launcher_build.py), HOME and TMPDIR from
+the caller and PYTHONDONTWRITEBYTECODE=1. Nothing else in the caller's environment reaches
+them, so no key or token in it does. A run that outlasts --timeout (600 s by default, for each
+run) is killed. So is anything a run started and left running, when the run ends.
 
 It prints one line per mutant as it finishes, and then a total:
   killed NAME     the tests failed
@@ -46,16 +48,14 @@ one-line "mutant:" message on stderr when it couldn't decide, which is any of th
   a bad argument or spec
   an old found other than once
   a file or dir that isn't in the copy, or a link that leads out of it
-  a dir and pattern that match no test file, so a misspelled pattern isn't a survivor
   a DEST that exists or is inside the repo or the checkout holding this tool
-  a baseline that fails or times out
+  a baseline that fails, times out or runs no test, as a misspelled pattern does
 A mutant's result never exits 2.
 """
 from __future__ import annotations
 
 import argparse
 import contextlib
-import fnmatch
 import json
 import math
 import os
@@ -77,7 +77,7 @@ TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extrac
 TOOL_ERROR = 2
 TAIL = 64 * 1024
 PATTERN = "test_*.py"
-MODULE_NAME = re.compile(r"[_a-z]\w*\.py$", re.IGNORECASE)  # the names unittest discover loads
+RAN = re.compile(r"^Ran (\d+) tests? in ", re.MULTILINE)  # unittest's summary, on 3.9 and 3.14
 
 
 class MutantError(Exception):
@@ -221,20 +221,6 @@ def apply(copy: Path, mutant: Mutant) -> None:
         raise MutantError(f"{mutant.name}: {err}") from err
 
 
-def finds_a_file(start: Path, pattern: str) -> bool:
-    """Whether `unittest discover -s START -p PATTERN` would load a file. It looks at a file
-    whose name is a module's and matches PATTERN, and goes into the directories that have an
-    __init__.py, as discover does, so a pattern discover would use isn't turned away. Python
-    3.9 runs no tests and exits 0 when none is found, which would read as a survivor."""
-    for entry in start.iterdir():
-        if entry.is_file():
-            if MODULE_NAME.match(entry.name) and fnmatch.fnmatch(entry.name, pattern):
-                return True
-        elif (entry / "__init__.py").is_file() and finds_a_file(entry, pattern):
-            return True
-    return False
-
-
 def run_tests(python: str, copy: Path, rel: str, pattern: str, timeout: float,
               log: Path) -> Optional[int]:
     """The exit status of test discovery in COPY/REL for the files PATTERN matches, or None if
@@ -275,6 +261,12 @@ def run_tests(python: str, copy: Path, rel: str, pattern: str, timeout: float,
     return code
 
 
+def tests_run(output: str) -> Optional[int]:
+    """The count in the last "Ran N tests in" line of OUTPUT, or None if it has no such line."""
+    counts = RAN.findall(output)
+    return int(counts[-1]) if counts else None
+
+
 def verdict(code: Optional[int]) -> str:
     return "timeout" if code is None else "survived" if code == 0 else "killed"
 
@@ -305,14 +297,15 @@ def run(args: argparse.Namespace) -> int:
         copies.append(extract(tar, dest / f"mutant-{n}"))
         apply(copies[-1], m)
 
-    for d, p, copy in baselines:
-        if not finds_a_file(copy / d, p):
-            raise MutantError(f"no file in {d} matches the pattern {p!r} for unittest discover, "
-                              f"so no test would run")
-
     for n, (d, p, copy) in enumerate(baselines, 1):
         log = dest / f"baseline-{n}.log"
         code = run_tests(python, copy, d, p, args.timeout, log)
+        ran = tests_run(log.read_text(encoding="utf-8", errors="replace"))
+        # A run of no tests exits 0 on Python 3.9 and 5 on 3.12 and later, so the count decides,
+        # not the code. Without one, a misspelled pattern would read as a survivor.
+        if ran == 0 or (ran is None and code == 0):
+            raise MutantError(f"the baseline for {d} and {p!r} ran no tests, so a survivor would "
+                              f"mean nothing: see {log}")
         if code != 0:
             how = f"outran {args.timeout:g} s" if code is None else f"exit {code}"
             what = d if p == PATTERN else f"{d} for {p}"
