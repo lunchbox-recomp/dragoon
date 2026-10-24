@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -49,6 +50,7 @@ class EnvTest(unittest.TestCase):
             self.assertNotIn(name, os.environ)
         self.assertEqual(os.environ["PATH"], {launcher_build.TOOL_PATH!r})
         self.assertEqual(os.environ["PYTHONDONTWRITEBYTECODE"], "1")
+        self.assertEqual(os.environ["PYTHONUNBUFFERED"], "1")
         for name in ("HOME", "TMPDIR"):
             self.assertIn(name, os.environ)
 """
@@ -81,6 +83,18 @@ class NoisyTest(unittest.TestCase):
         for n in range(20000):
             print(f"noise line {n:06d}", file=sys.stderr)
 """
+# Prints on import, to stdout, which is buffered when the output is a pipe unless the tests run
+# unbuffered. The text would then come after unittest's own summary and read as its count.
+TEST_CHATTY = """\
+import unittest
+
+print("Ran 0 tests in 0.000s\\n\\nOK")
+
+
+class ChattyTest(unittest.TestCase):
+    def test_passes(self):
+        pass
+"""
 GREET_PATH = "two files/greet.py"
 GREET = 'def hi():\n    return "hi"\n'
 TEST_GREET = """\
@@ -102,8 +116,6 @@ class ExtraTest(unittest.TestCase):
     def test_fails(self):
         self.fail("test_extra.py was selected")
 """
-
-
 FILES = {
     "no tests/helper.py": "VALUE = 1\n",
     "empty tests/test_empty.py": "VALUE = 1\n",  # a name the default pattern matches, with no test
@@ -113,6 +125,7 @@ FILES = {
     "broken tests/test_broken.py": TEST_BROKEN,
     "slow tests/test_slow.py": TEST_SLOW,
     "noisy tests/test_noisy.py": TEST_NOISY,
+    "chatty tests/test_chatty.py": TEST_CHATTY,
     GREET_PATH: GREET,
     "two files/test_greet.py": TEST_GREET,
     "two files/test_extra.py": TEST_EXTRA,
@@ -283,11 +296,11 @@ class CopyTest(MutantTestCase):
         self.assertEqual(self.tree(), before)
         self.assertEqual(list(self.repo.rglob("__pycache__")), [])
 
-    def test_every_run_gets_its_own_copy_and_the_copies_are_kept(self):
+    def test_every_run_gets_its_own_copy(self):
         two = spec_mutant("two edits", edit("return a + b", "return a * b"),
                           edit("# keep both operands the same", "# edited"))
         other = spec_mutant("other", edit("return a - b", "return a // b"))
-        self.run_tool(two, other)
+        self.run_tool(two, other, extra=("--keep",))
         self.assertEqual(self.read("baseline-1"), CALC)
         self.assertEqual(self.read("mutant-1"), CALC.replace("a + b", "a * b").replace(
             "keep both operands the same", "edited"))
@@ -295,7 +308,7 @@ class CopyTest(MutantTestCase):
 
     def test_a_baseline_copy_for_each_distinct_dir(self):
         self.run_tool(KILLED, spec_mutant("env", edit("return a + b", "return b + a"),
-                                          dir="env check"), SURVIVOR)
+                                          dir="env check"), SURVIVOR, extra=("--keep",))
         self.assertEqual(sorted(p.name for p in self.dest.iterdir() if p.is_dir()),
                          ["baseline-1", "baseline-2", "mutant-1", "mutant-2", "mutant-3"])
         self.assertTrue((self.dest / "baseline-2" / "env check" / "test_env.py").is_file())
@@ -319,7 +332,8 @@ class CopyTest(MutantTestCase):
                 self.assertNotIn("noise line 000000", lines)
 
     def test_no_bytecode_is_written(self):
-        self.run_tool(KILLED, SURVIVOR)
+        self.run_tool(KILLED, SURVIVOR, extra=("--keep",))
+        self.assertTrue((self.dest / "mutant-1").is_dir())
         self.assertEqual(list(self.dest.rglob("__pycache__")), [])
 
     def test_rev_names_the_commit_to_copy(self):
@@ -372,6 +386,121 @@ class CopyTest(MutantTestCase):
         self.assertEqual(outside.read_text(), "original text\n")
 
 
+class CleanupTest(MutantTestCase):
+    """A run removes the copies it built however it ends, and keeps the logs."""
+
+    def left(self) -> list:
+        return sorted(p.name for p in self.dest.iterdir())
+
+    def crash_at_the_first_mutant(self, error: BaseException):
+        """Baselines run for real, and the first mutant's run raises ERROR."""
+        real = mutant.run_tests
+
+        def run_tests(python, copy, rel, pattern, timeout, log):
+            if log.name.startswith("mutant-"):
+                raise error
+            return real(python, copy, rel, pattern, timeout, log)
+
+        return mock.patch.object(mutant, "run_tests", run_tests)
+
+    def test_the_copies_are_removed_and_the_logs_and_dest_stay(self):
+        self.assertEqual(self.run_tool(KILLED, SURVIVOR)[0], 1)
+        self.assertEqual(self.left(), ["baseline-1.log", "mutant-1.log", "mutant-2.log"])
+        self.assertIn("FAIL: test_add", (self.dest / "mutant-1.log").read_text())
+
+    def test_keep_keeps_the_copies(self):
+        self.run_tool(KILLED, SURVIVOR, extra=("--keep",))
+        self.assertEqual(self.left(), ["baseline-1", "baseline-1.log", "mutant-1", "mutant-1.log",
+                                       "mutant-2", "mutant-2.log"])
+
+    def test_keep_keeps_them_after_a_failing_baseline_too(self):
+        broken = spec_mutant("no good", edit("return a + b", "return a * b"), dir="broken tests")
+        self.assert_tool_error(self.run_tool(broken, extra=("--keep",)), "fail without a mutant")
+        self.assertEqual(self.left(), ["baseline-1", "baseline-1.log", "mutant-1"])
+
+    def test_the_copies_are_removed_after_a_failing_baseline(self):
+        broken = spec_mutant("no good", edit("return a + b", "return a * b"), dir="broken tests")
+        self.assert_tool_error(self.run_tool(KILLED, broken), "fail without a mutant")
+        self.assertEqual(self.left(), ["baseline-1.log", "baseline-2.log"])
+
+    def test_the_copies_are_removed_after_a_baseline_that_outruns_the_timeout(self):
+        slow = spec_mutant("slow", edit("return a + b", "return a * b"), dir="slow tests")
+        self.assert_tool_error(self.run_tool(slow, extra=("--timeout", "0.5")), "0.5 s")
+        self.assertEqual(self.left(), ["baseline-1.log"])
+
+    def test_the_copies_are_removed_after_a_mutant_that_outruns_the_timeout(self):
+        hang = spec_mutant("hangs", edit("return a + b", "import time; time.sleep(60)"))
+        self.assertEqual(self.run_tool(hang, extra=("--timeout", "4"))[:2],
+                         (1, "timeout hangs\n" + total(0, 0, 1)))
+        self.assertEqual(self.left(), ["baseline-1.log", "mutant-1.log"])
+
+    def test_the_copies_are_removed_after_a_crash(self):
+        self.write_spec([KILLED])
+        with self.crash_at_the_first_mutant(RuntimeError("boom")):
+            self.assert_tool_error(self.run_spec(), "RuntimeError: boom")
+        self.assertEqual(self.left(), ["baseline-1.log"])
+
+    def test_the_copies_are_removed_after_ctrl_c(self):
+        self.write_spec([KILLED])
+        with self.crash_at_the_first_mutant(KeyboardInterrupt()), \
+                self.assertRaises(KeyboardInterrupt):
+            self.run_spec()
+        self.assertEqual(self.left(), ["baseline-1.log"])
+
+    def test_a_dest_with_nothing_left_is_removed_too(self):
+        self.assert_tool_error(self.run_tool(KILLED, spec_mutant("typo", edit("zzz", "y"))), "typo")
+        self.assertFalse(self.dest.exists())
+
+    def test_a_file_the_run_didnt_make_keeps_its_dest(self):
+        def plant_and_crash(*args):
+            write_file(self.dest, "mine.txt", "keep")
+            raise RuntimeError("boom")
+
+        self.write_spec([KILLED])
+        with mock.patch.object(mutant, "run_tests", plant_and_crash):
+            self.assert_tool_error(self.run_spec(), "boom")
+        self.assertEqual(self.left(), ["mine.txt"])
+
+    def test_a_dest_that_exists_keeps_what_it_holds(self):
+        (self.dest / "baseline-1").mkdir(parents=True)
+        mine = write_file(self.dest / "baseline-1", "mine.txt", "keep")
+        self.assert_tool_error(self.run_tool(KILLED), str(self.dest))
+        self.assertEqual(mine.read_text(), "keep")
+        self.assertEqual(self.left(), ["baseline-1"])
+
+    def test_nothing_outside_the_runs_own_copies_is_removed(self):
+        beside = write_file(self.dir, "beside the copies.txt", "mine")
+        older = self.dir / "older copies"
+        (older / "baseline-1").mkdir(parents=True)
+        inside = write_file(older / "baseline-1", "mine.txt", "mine")
+        broken = spec_mutant("no good", edit("return a + b", "return a * b"), dir="broken tests")
+        self.run_tool(KILLED, SURVIVOR)
+        self.run_tool(KILLED, broken, dest=self.dir / "second copies")
+        self.assertEqual(beside.read_text(), "mine")
+        self.assertEqual(inside.read_text(), "mine")
+
+    def test_a_link_in_a_copy_is_removed_and_not_followed(self):
+        outside = self.dir / "outside dir"
+        outside.mkdir()
+        precious = write_file(outside, "precious.txt", "mine")
+        os.symlink(outside, self.repo / "lib dir" / "link to outside")
+        git(self.repo, "add", "--", "lib dir/link to outside")
+        git(self.repo, "commit", "-q", "-m", "link")
+        kept = self.dir / "kept copies"
+        self.run_tool(KILLED, extra=("--keep",), dest=kept)
+        self.assertTrue((kept / "baseline-1" / "lib dir" / "link to outside").is_symlink())
+        self.run_tool(KILLED)
+        self.assertEqual(precious.read_text(), "mine")
+
+    def test_a_copy_that_cant_be_removed_is_said_and_the_verdict_stands(self):
+        self.write_spec([KILLED])
+        with mock.patch.object(shutil, "rmtree", side_effect=OSError("Directory not empty")):
+            code, out, err = self.run_spec()
+        self.assertEqual((code, out), (0, "killed add subtracts\n" + total(1, 0, 0)))
+        for copy in ("baseline-1", "mutant-1"):
+            self.assertIn(f"mutant: couldn't remove {self.dest.resolve() / copy}: Directory not empty", err)
+
+
 class PatternTest(MutantTestCase):
     def hi(self, name: str = "hi changes", **kw) -> dict:
         return spec_mutant(name, edit('return "hi"', 'return "ho"', GREET_PATH),
@@ -397,7 +526,8 @@ class PatternTest(MutantTestCase):
         fake, calls = self.recording_python()
         by_name, by_glob = self.hi("by name", pattern="test_greet.py"), self.hi(
             "by glob", pattern="test_gre*.py")
-        self.assertEqual(self.run_tool(by_name, by_glob, extra=("--python", str(fake)))[0], 0)
+        self.assertEqual(self.run_tool(by_name, by_glob,
+                                       extra=("--python", str(fake), "--keep"))[0], 0)
         patterns = [args[args.index("-p") + 1] for _, args in self.recorded(calls)]
         self.assertEqual(patterns, ["test_greet.py", "test_gre*.py"] * 2)
         self.assertTrue((self.dest / "baseline-2").is_dir())
@@ -454,6 +584,13 @@ class NoTestsTest(MutantTestCase):
     def test_a_baseline_with_tests_is_not_refused(self):
         self.assertEqual(self.run_tool(self.harmless()), (1, "survived harmless\n" + total(0, 1, 0), ""))
         self.assertIn("Ran 1 test", (self.dest / "baseline-1.log").read_text())
+
+    def test_a_test_module_that_prints_a_summary_line_isnt_the_count(self):
+        chatty = self.harmless(dir="chatty tests")
+        self.assertEqual(self.run_tool(chatty), (1, "survived harmless\n" + total(0, 1, 0), ""))
+        log = (self.dest / "baseline-1.log").read_text()
+        self.assertIn("Ran 0 tests in 0.000s", log)  # its line is in the log, before the real one
+        self.assertEqual(mutant.tests_run(log), 1)
 
     def test_a_python_that_exits_0_and_prints_no_count_is_refused(self):
         quiet = write_file(self.dir, "quiet python", "#!/bin/sh\nexit 0\n")
@@ -576,6 +713,7 @@ class RefusalTest(MutantTestCase):
         self.write_spec([KILLED])
         with mock.patch.object(mutant, "TAR", str(fake)):
             self.assert_tool_error(self.run_spec(), "No space left on device")
+        self.assertFalse(self.dest.exists())
 
     def test_a_rev_that_looks_like_an_option(self):
         result = self.run_tool(KILLED, extra=("--rev=--output=" + str(self.dir / "out.tar"),))
@@ -644,13 +782,14 @@ class SpecTest(MutantTestCase):
 
     def test_an_edit_may_delete_the_old_text(self):
         gone = spec_mutant("deleted", edit("return a + b", "pass"))
-        self.assertEqual(self.run_tool(gone)[:2], (0, "killed deleted\n" + total(1, 0, 0)))
+        self.assertEqual(self.run_tool(gone, extra=("--keep",))[:2],
+                         (0, "killed deleted\n" + total(1, 0, 0)))
         self.assertNotIn("return a + b", self.read("mutant-1"))
 
     def test_a_crlf_file_keeps_its_line_endings(self):
         crlf = CALC.replace("\n", "\r\n")
         commit(self.repo, {CALC_PATH: crlf.encode()})
-        self.run_tool(spec_mutant("crlf", edit("return a - b", "return b - a")))
+        self.run_tool(spec_mutant("crlf", edit("return a - b", "return b - a")), extra=("--keep",))
         self.assertEqual((self.dest / "mutant-1" / CALC_PATH).read_bytes(),
                          crlf.replace("a - b", "b - a").encode())
 

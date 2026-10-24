@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Change the code on a copy of a commit and see whether the tests notice.
 
-Usage: mutant.py SPEC DEST [--repo DIR] [--rev REV] [--python FILE] [--timeout SECONDS]
+Usage: mutant.py SPEC DEST [--repo DIR] [--rev REV] [--python FILE] [--timeout SECONDS] [--keep]
 
 SPEC is a JSON file holding a list of mutants. A mutant has three fields and may have a fourth:
   name     what the output calls it, on one line and unlike any other name
@@ -12,9 +12,15 @@ SPEC is a JSON file holding a list of mutants. A mutant has three fields and may
   pattern  which test files to run, as unittest's -p takes it (default test_*.py). It matches
            file names, so it has no /. test_export_source.py runs that one file.
 DEST is a new directory outside the repo, and outside the checkout holding this tool when
---repo names another. The copies are built there and kept, and nothing is removed. baseline-N
-is the copy for the Nth dir and pattern the mutants test, and mutant-N is the Nth mutant's.
-The last 64 KiB of each run's output is beside its copy as a .log file.
+--repo names another. The copies are built there. baseline-N is the copy for the Nth dir and
+pattern the mutants test, and mutant-N is the Nth mutant's. The last 64 KiB of each run's output
+is beside its copy as a .log file.
+
+When the run ends, whether with a result, a tool error, a crash or ^C, it removes the copies it
+built and keeps the logs, so a kill can still be checked. It removes DEST too if nothing is
+left in it, which is when it stopped before any test ran. It removes only what it made.
+--keep keeps the copies as well, for reading a mutant's files or running its tests by hand.
+A copy it can't remove is named on stderr and doesn't change the result.
 
 Every copy is REV (default HEAD) of the repo that holds this tool, or of --repo, made by
 git archive. The repo's own files are never edited or run, and its uncommitted changes aren't
@@ -30,8 +36,9 @@ Without a test, a misspelled pattern would make every mutant survive, since Pyth
 for a run of none. A bad pattern costs the one baseline. Each mutant then runs the same command
 in a copy of its own, so nothing an earlier run left behind is tested. The tests get
 PATH=/usr/bin:/bin:/usr/sbin:/sbin (the TOOL_PATH of launcher_build.py), HOME and TMPDIR from
-the caller and PYTHONDONTWRITEBYTECODE=1. Nothing else in the caller's environment reaches
-them, so no key or token in it does. A run that outlasts --timeout (600 s by default, for each
+the caller, PYTHONDONTWRITEBYTECODE=1 and PYTHONUNBUFFERED=1, which keeps what a test prints
+ahead of unittest's summary. Nothing else in the caller's environment reaches them, so no key
+or token in it does. A run that outlasts --timeout (600 s by default, for each
 run) is killed. So is anything a run started and left running, when the run ends.
 
 It prints one line per mutant as it finishes, and then a total:
@@ -60,6 +67,7 @@ import json
 import math
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -164,9 +172,12 @@ def load_spec(path: Path) -> list[Mutant]:
 
 def minimal_env() -> dict[str, str]:
     """All a copy's git, tar and tests get: no key, token, `GIT_DIR` or `PYTHONPATH` of ours,
-    and the same fixed PATH as the launcher's build tools, not whatever is first on ours."""
+    and the same fixed PATH as the launcher's build tools, not whatever is first on ours.
+    PYTHONUNBUFFERED puts what a test prints on stdout ahead of unittest's summary on stderr.
+    Buffered, it would come after, and a line in it that looks like the summary would be read
+    as the count, or the flood from a noisy test would push the real summary out of the log."""
     return {"PATH": TOOL_PATH, "HOME": str(Path.home()), "TMPDIR": tempfile.gettempdir(),
-            "PYTHONDONTWRITEBYTECODE": "1"}
+            "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUNBUFFERED": "1"}
 
 
 def archive(repo: Path, rev: str) -> bytes:
@@ -181,8 +192,10 @@ def archive(repo: Path, rev: str) -> bytes:
     return done.stdout
 
 
-def extract(tar: bytes, copy: Path) -> Path:
+def extract(tar: bytes, copy: Path, made: list[Path]) -> Path:
+    """Extract TAR into the new directory COPY, which is added to MADE as soon as it exists."""
     copy.mkdir()
+    made.append(copy)
     done = subprocess.run([TAR, "-x", "-f", "-", "-C", str(copy)], input=tar,
                           capture_output=True, env=minimal_env())
     if done.returncode != 0:
@@ -271,6 +284,21 @@ def verdict(code: Optional[int]) -> str:
     return "timeout" if code is None else "survived" if code == 0 else "killed"
 
 
+def clean_up(dest: Path, made: list[Path]) -> None:
+    """Remove the copies in MADE and then DEST if that leaves it empty. The logs stay, so DEST
+    does too unless the run stopped before any test ran. rmtree unlinks a link in a copy and
+    doesn't follow it, and rmdir refuses a DEST that holds anything else. A copy that can't be
+    removed is said on stderr and the rest go on, so the verdict, or the error being
+    reported, isn't lost."""
+    for copy in made:
+        try:
+            shutil.rmtree(copy)
+        except OSError as e:
+            print(f"mutant: couldn't remove {copy}: {e}", file=sys.stderr)
+    with contextlib.suppress(OSError):
+        dest.rmdir()
+
+
 def run(args: argparse.Namespace) -> int:
     repo = args.repo.resolve()
     if not (repo / ".git").exists():  # git would look further up, maybe into another repo
@@ -289,12 +317,24 @@ def run(args: argparse.Namespace) -> int:
     mutants = load_spec(args.spec)
     tar = archive(repo, args.rev)
 
-    dest.mkdir(parents=True)
+    dest.mkdir(parents=True)  # from here on DEST is ours, and so is every copy made in it
+    made: list[Path] = []
+    try:
+        return run_mutants(args, python, dest, mutants, tar, made)
+    finally:
+        if not args.keep:
+            clean_up(dest, made)
+
+
+def run_mutants(args: argparse.Namespace, python: str, dest: Path, mutants: list[Mutant],
+                tar: bytes, made: list[Path]) -> int:
+    """Build every copy in DEST, adding each to MADE, and then run the baselines and the mutants."""
     suites = list(dict.fromkeys((m.dir, m.pattern) for m in mutants))
-    baselines = [(d, p, extract(tar, dest / f"baseline-{n}")) for n, (d, p) in enumerate(suites, 1)]
+    baselines = [(d, p, extract(tar, dest / f"baseline-{n}", made))
+                 for n, (d, p) in enumerate(suites, 1)]
     copies = []
     for n, m in enumerate(mutants, 1):
-        copies.append(extract(tar, dest / f"mutant-{n}"))
+        copies.append(extract(tar, dest / f"mutant-{n}", made))
         apply(copies[-1], m)
 
     for n, (d, p, copy) in enumerate(baselines, 1):
@@ -347,6 +387,8 @@ def main(argv: list[str]) -> int:
                     help="the interpreter that runs the tests (default the one running this)")
     ap.add_argument("--timeout", type=seconds, default=600, metavar="SECONDS",
                     help="the limit for each run, baselines included (default 600)")
+    ap.add_argument("--keep", action="store_true",
+                    help="keep the copies in DEST instead of removing them when the run ends")
     args = ap.parse_args(argv)
     try:
         return run(args)
