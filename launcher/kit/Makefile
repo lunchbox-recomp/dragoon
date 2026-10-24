@@ -7,13 +7,14 @@
 # builds the game with.
 # KIT is named on the command line, since make splits the Makefile's own path at its spaces.
 # Make reads KITQ, KIT with each space escaped, and the shell reads "$(KIT)". Make would read a
-# $ in KIT or SDK as its own, and the shell a " or a `, so neither path may hold one.
+# $, : or ; in KIT or SDK as its own, and the shell a " or a `, so neither path may hold one.
+# A name Finder shows with a / holds a : on disk.
 ifndef KIT
 $(error KIT isn't set: make -f <kit>/Makefile KIT=<kit> SDK=<path to MacOSX.sdk>)
 endif
 paths := $(value KIT)$(value SDK)
-ifneq ($(findstring $$,$(paths))$(findstring ",$(paths))$(findstring `,$(paths)),)
-$(error KIT or SDK holds a $$, a " or a `, which make or the shell would read as its own)
+ifneq ($(strip $(foreach c,$$ " ` : ;,$(findstring $(c),$(paths)))),)
+$(error KIT or SDK holds a $$, ", `, : or ;, which make or the shell would read as its own)
 endif
 space := $(subst x, ,x)
 KITQ := $(subst $(space),\ ,$(KIT))

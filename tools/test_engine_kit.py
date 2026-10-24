@@ -284,12 +284,12 @@ class KitMakefileTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
 
     def test_refuses_a_kit_or_sdk_path_make_or_the_shell_would_read(self) -> None:
-        for char in ('$', '"', '`'):
+        for char in ('$', '"', '`', ':', ';'):
             for args in ([f"KIT={self.kit}{char}x", f"SDK={SDK}"], [f"KIT={self.kit}", f"SDK={SDK}{char}x"]):
                 with self.subTest(args=args):
                     done = self.make(*args, kit=False)
                     self.assertNotEqual(done.returncode, 0)
-                    self.assertIn("KIT or SDK holds a $, a \" or a `", done.stderr)
+                    self.assertIn("KIT or SDK holds a $, \", `, : or ;", done.stderr)
                     self.assertEqual(self.calls(), [])
 
     def test_needs_a_kit(self) -> None:
