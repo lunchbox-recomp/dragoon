@@ -19,11 +19,11 @@ one run.
 Unpaced, over the same five routes and 324 s in all, the mixer stage made 132 clicks (24.4 a
 minute) at the baseline in pass 4 and 136 (25.2) at current in pass 3. The audio work didn't
 reduce the mixer stage's clicks over those seconds. In the scored seconds what it cut was
-clipping. The clipped runs fell from 208 (2,200 samples) to 25 (371), the highest main L peak before the clamp fell from
-85,094 to 64,999, and the gaps rose from 3 to 8. A bisect on 2026-10-22 ran both builds
-unpaced at passes 1 and 2's lengths, 319.8 s in all. It agrees. It counted 131 clicks (24.6 a
-minute) at `caf12a2` and 135 (25.3) at `b848158`, while the clipped runs fell from 203 to 25 and
-the gaps rose from 3 to 8.
+clipping. The clipped runs fell from 208 (2,200 samples) to 25 (371), the highest main L peak
+before the clamp fell from 85,094 to 64,999, and the gaps rose from 3 to 8. A bisect on 2026-10-22
+ran both builds unpaced at passes 1 and 2's lengths, 319.8 s in all. It agrees. It counted 131
+clicks (24.6 a minute) at `caf12a2` and 135 (25.3) at `b848158`, while the clipped runs fell from
+203 to 25 and the gaps rose from 3 to 8.
 
 The seconds scored end at each route's last checkpoint plus 15 s, and the unpaced recordings go
 on past them. On the title and mode select the clicks did fall there. Scored again with
