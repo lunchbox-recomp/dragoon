@@ -191,6 +191,17 @@ class RefusalTest(ExportTestCase):
         self.assertTrue(err.rstrip().endswith("failed: exit -9"), err)
         self.assertFalse(self.out.exists())
 
+    def test_a_failing_git_that_prints_nothing_gives_its_exit_status(self):
+        other = self.dir / "other bin"
+        other.mkdir()
+        write_file(other, "git", "#!/bin/sh\nexit 3\n").chmod(0o755)
+        with mock.patch.dict(os.environ, {"PATH": f"{other}:{os.environ['PATH']}"}):
+            code, out, err = self.export()
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("git rev-parse --verify", err)
+        self.assertTrue(err.rstrip().endswith("failed: exit 3"), err)
+        self.assertFalse(self.out.exists())
+
     def test_a_failure_part_way_leaves_no_out_and_the_next_run_works(self):
         self.assertEqual(self.export_failing_on_the_engine()[0], 2)
         self.assertFalse(self.out.exists())

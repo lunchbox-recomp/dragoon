@@ -93,7 +93,8 @@ def git(repo: Path, *args: str) -> str:
         done = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
                               check=True)
     except subprocess.CalledProcessError as e:
-        raise ValueError(f"git {' '.join(args)} in {repo} failed: {e.stderr.strip()}") from None
+        why = e.stderr.strip() or f"exit {e.returncode}"
+        raise ValueError(f"git {' '.join(args)} in {repo} failed: {why}") from None
     return done.stdout.rstrip("\n")
 
 
