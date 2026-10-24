@@ -82,10 +82,11 @@ if marker "fail spctl"; then exit 3; fi
 
 
 def make_app(path: Path, sparkle: bool = True, xpc: bool = False) -> Path:
-    """A stand-in app, as L5 lays it out, with Sparkle 2.9.1's layout. make_app.py removes the
-    XPC services, so they are there only when XPC is true."""
-    files = {"Contents/MacOS/Dragoon": "launcher", "Contents/MacOS/cmake": "cmake",
-             "Contents/MacOS/ninja": "ninja"}
+    """A stand-in app with the engine kit in its Resources, which nothing signs, and Sparkle
+    2.9.1's layout. make_app.py removes the XPC services, so they are there only when XPC is
+    true."""
+    files = {"Contents/MacOS/Dragoon": "launcher",
+             "Contents/Resources/kit/engine.o": "the engine", "Contents/Resources/kit/libSDL3.a": "SDL"}
     if sparkle:
         version = "Contents/Frameworks/Sparkle.framework/Versions/B"
         files.update({f"{version}/Sparkle": "s", f"{version}/Autoupdate": "a",
@@ -193,12 +194,12 @@ class SignTestCase(unittest.TestCase):
     def argvs(self) -> list[list[str]]:
         return [[self.fakes[c["tool"]], *c["argv"]] for c in self.calls()]
 
-    def sign(self, path: Path, identifier: str = "", identity: str = IDENTITY) -> list[str]:
+    def sign(self, path: Path, identity: str = IDENTITY) -> list[str]:
         """The command for an item. A Developer ID signature has the hardened runtime and a
         secure timestamp. An ad hoc one (identity -) has neither."""
         cmd = [self.fakes["codesign"], "-f", "-s", identity]
         cmd += ["--timestamp=none"] if identity == "-" else ["-o", "runtime", "--timestamp"]
-        return cmd + (["-i", identifier] if identifier else []) + [str(path)]
+        return cmd + [str(path)]
 
     def expected(self, notarize: bool = True, sparkle: bool = True,
                  identity: str = IDENTITY) -> list[list[str]]:
@@ -209,8 +210,6 @@ class SignTestCase(unittest.TestCase):
         commands = [
             [self.fakes["ditto"], str(self.app), str(app)],
             ["/bin/ln", "-s", "/Applications", str(staged / "Applications")],
-            self.sign(app / "Contents/MacOS/cmake", BUNDLE_ID + ".cmake", identity),
-            self.sign(app / "Contents/MacOS/ninja", BUNDLE_ID + ".ninja", identity),
         ]
         if sparkle:
             commands += [self.sign(framework / "Versions/B/Autoupdate", identity=identity),
@@ -290,7 +289,7 @@ class FlagTest(SignTestCase):
     def test_every_signature_is_timestamped_and_none_is_deep(self):
         self.run_tool()
         calls = self.signing()
-        self.assertEqual(len(calls), 7)
+        self.assertEqual(len(calls), 5)  # Sparkle's three, the app and the DMG
         for argv in calls:
             with self.subTest(argv[-1]):
                 self.assertIn("--timestamp", argv)
@@ -309,11 +308,10 @@ class FlagTest(SignTestCase):
             with self.subTest(argv[-1]):
                 self.assertFalse([a for a in argv if a.startswith(("--entitlements", "--preserve"))])
 
-    def test_the_bare_tools_get_identifiers_and_sparkles_pieces_keep_theirs(self):
+    def test_only_the_dmg_gets_an_identifier_and_sparkles_pieces_keep_theirs(self):
         self.run_tool()
         ids = {Path(a[-1]).name: a[a.index("-i") + 1] for a in self.signing() if "-i" in a}
-        self.assertEqual(ids, {"cmake": BUNDLE_ID + ".cmake", "ninja": BUNDLE_ID + ".ninja",
-                               "Dragoon.dmg": BUNDLE_ID + ".dmg"})
+        self.assertEqual(ids, {"Dragoon.dmg": BUNDLE_ID + ".dmg"})
 
     def test_the_dmg_holds_the_app_and_an_applications_link_and_nothing_else(self):
         self.run_tool()
@@ -336,7 +334,7 @@ class FlagTest(SignTestCase):
         code, out, err = self.run_tool(notary=False, identity="-")
         self.assertEqual(code, 0)
         calls = self.signing()
-        self.assertEqual(len(calls), 7)
+        self.assertEqual(len(calls), 5)  # Sparkle's three, the app and the DMG
         for argv in calls:
             with self.subTest(argv[-1]):
                 self.assertIn("--timestamp=none", argv)
@@ -394,7 +392,7 @@ class FailureTest(SignTestCase):
         code, _, err = self.run_tool()
         self.assertEqual(code, 1)
         self.assertEqual([c["tool"] for c in self.calls()], ["ditto", "codesign"])
-        self.assertIn("cmake", err)
+        self.assertIn("Autoupdate", err)
         self.assertIn("exited 1", err)
 
     def test_a_failed_dmg_stops_before_it_is_signed_after_three_tries(self):
@@ -514,10 +512,6 @@ class RefusalTest(SignTestCase):
     def test_an_app_with_no_info_plist(self):
         (self.app / "Contents" / "Info.plist").unlink()
         self.assert_refused("Info.plist")
-
-    def test_an_app_missing_cmake_or_ninja(self):
-        (self.app / "Contents/MacOS/ninja").unlink()
-        self.assert_refused("ninja")
 
     def test_an_output_directory_inside_the_app(self):
         self.out = self.app / "release out"  # ditto would copy the app into itself

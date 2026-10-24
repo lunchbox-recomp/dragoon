@@ -27,7 +27,6 @@ DMG = "Dragoon.dmg"
 STAGING = "dmg-root"  # what hdiutil packs: the app and an Applications link
 VOLUME = "Dragoon"
 SPARKLE = "Contents/Frameworks/Sparkle.framework"
-TOOLS = ("cmake", "ninja")  # bare executables in Contents/MacOS, signed with an identifier
 # How long notarytool may wait unless --notary-timeout says otherwise. Apple finishes 98 percent
 # of submissions within 15 minutes.
 NOTARY_MINUTES = 30
@@ -58,14 +57,11 @@ def bundle_identifier(app: Path) -> str:
 
 
 def check_app(app: Path) -> None:
-    """Raise ValueError unless APP is an app this plan can sign: one with a bundle ID, cmake
-    and ninja, and none of Sparkle's XPC services, which would hold code this plan never signs."""
+    """Raise ValueError unless APP is an app this plan can sign: one with a bundle ID and none of
+    Sparkle's XPC services, which would hold code this plan never signs."""
     if not app.is_dir():
         raise ValueError(f"{app} isn't a directory")
     bundle_identifier(app)
-    for tool in TOOLS:
-        if not (app / "Contents" / "MacOS" / tool).is_file():
-            raise ValueError(f"{app} has no Contents/MacOS/{tool}")
     framework = app / SPARKLE
     for services in [*sorted(framework.glob("Versions/*/XPCServices")), framework / "XPCServices"]:
         if os.path.lexists(services):  # a link counts, even one with nothing left to point at
@@ -81,7 +77,7 @@ def timestamp_flag(identity: str) -> str:
     return "--timestamp=none" if identity == AD_HOC else "--timestamp"
 
 
-def sign_item(identity: str, path: Path, identifier: str = "") -> list[str]:
+def sign_item(identity: str, path: Path) -> list[str]:
     """Sign a piece of the app. -f replaces the signature a vendor or lipo left.
 
     A Developer ID signature has the hardened runtime, which notarization requires. Library
@@ -91,16 +87,14 @@ def sign_item(identity: str, path: Path, identifier: str = "") -> list[str]:
     cmd = [CODESIGN, "-f", "-s", identity]
     cmd += [] if identity == AD_HOC else ["-o", "runtime"]
     cmd.append(timestamp_flag(identity))
-    return cmd + (["-i", identifier] if identifier else []) + [str(path)]
+    return cmd + [str(path)]
 
 
 def sign_app(source: Path, app: Path, identity: str) -> list[list[str]]:
-    """Sign the copy at APP inside out. MacOS/cmake and MacOS/ninja go first, then Sparkle's
-    pieces in Sparkle's order without its XPC services, which a launcher that isn't
-    sandboxed doesn't ship, then the app. SOURCE is the input, where Sparkle is looked for."""
-    identifier = bundle_identifier(source)
-    steps = [sign_item(identity, app / "Contents" / "MacOS" / tool, f"{identifier}.{tool}")
-             for tool in TOOLS]
+    """Sign the copy at APP inside out. Sparkle's pieces go first, in Sparkle's order without its
+    XPC services, which a launcher that isn't sandboxed doesn't ship, then the app. SOURCE is
+    the input, where Sparkle is looked for."""
+    steps: list[list[str]] = []
     if (source / SPARKLE).is_dir():
         framework = app / SPARKLE
         current = (source / SPARKLE / "Versions" / "Current").resolve().name  # B in Sparkle 2

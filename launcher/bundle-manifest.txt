@@ -8,32 +8,26 @@ source Contents/Resources/source
 
 # The download is 60 MB at most (the player target in the launcher plan).
 budget dmg 60000000
-# PLACEHOLDER. L5 hasn't measured the dev app yet. This is a guess from the sizes in the
-# research (CMake's binary and modules about 36 MB, SDL's tarball 15.7 MB, the snapshot,
-# Sparkle and the launcher about 12 MB) plus a quarter. Replace it with the dev app's size
-# plus a quarter once L5 has measured it. Keep it under 101 MB so the generated C alone breaks it.
-budget app 80000000
+# PLACEHOLDER until the launcher and Sparkle are built. At Dragoon db8d24b the engine kit was
+# 5.4 MB and the source snapshot 6.1 MB. Sparkle and the launcher are guessed at 6 MB, what's
+# left of the research's 12 MB for them and the snapshot together. That's 17.5 MB, plus a
+# quarter. Keep it under 101 MB so the generated C alone breaks it.
+budget app 22000000
 
-# The launcher and the two tools it runs. The layout is L5's.
+# The launcher. It builds the game with the player's own Command Line Tools and the kit below,
+# so the app holds no CMake, Ninja or SDL source.
 macho Contents/MacOS/Dragoon
-macho Contents/MacOS/cmake
-macho Contents/MacOS/ninja
 file Contents/Info.plist
 # Made by codesign when L16 signs the app.
 file Contents/_CodeSignature/CodeResources
 
-# CMake finds its modules at ../share/cmake-4.4 from where it was started, so the launcher
-# runs it through this link to the copy in Contents/MacOS.
-link Contents/Resources/cmake/bin/cmake ../../../MacOS/cmake
-dir Contents/Resources/cmake/share/cmake-4.4/
-
-file Contents/Resources/third_party/SDL3-3.4.18.tar.gz
 dir Contents/Resources/licenses/
 
-# The prebuilt engine kit tools/engine_kit.py makes, which builds the game without CMake.
-# Where the launcher keeps it isn't settled, so these lines move with it. check_bundle.py reads
-# both objects with nm, and lets the engine alone hold the disc ID, which it carries as a
-# public constant.
+# The engine kit tools/engine_kit.py makes, which launcher_build.py builds the game with
+# (--kit). It sits in Resources beside the snapshot, since both are data the recipe reads and
+# neither runs by itself. codesign seals its files as resources and signs none of them.
+# check_bundle.py reads both objects with nm, and lets the engine alone hold the disc ID, which
+# it carries as a public constant.
 engine Contents/Resources/kit/engine.o
 object Contents/Resources/kit/libSDL3.a
 file Contents/Resources/kit/kit.mk

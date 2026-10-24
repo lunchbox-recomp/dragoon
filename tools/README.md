@@ -318,7 +318,7 @@ tools/check_bundle.py launcher/dist/Dragoon.dmg --commit SHA
 
 It prints one `kind: path (detail)` line per finding and nothing when the bundle is clean. Paths are relative to the app. It exits 0 when clean, 1 with findings and 2 when it couldn't check. A checkout that isn't at `--commit`, a manifest it can't read and a DMG that won't attach all exit 2. `--repo` names the Dragoon checkout the reference snapshot is exported from. It defaults to the one holding the tool. `--manifest` names another manifest.
 
-A path that no manifest line allows is a finding, so a new file in the app starts as a line in the manifest. The app's budget in the manifest is a placeholder until the dev app has been measured.
+A path that no manifest line allows is a finding, so a new file in the app starts as a line in the manifest. The app's budget in the manifest is a placeholder until the launcher and Sparkle are built. The engine kit sits at `Contents/Resources/kit/`, beside the snapshot.
 
 ## bundle_manifest.py
 
@@ -342,7 +342,7 @@ How does check_bundle.py look inside a DMG? It attaches the image with `hdiutil 
 
 ## sign_and_package.py
 
-Can one command sign the launcher, put it in a DMG and notarize it? It lives in `launcher/tools/`, with the commands it runs in `sign_plan.py` beside it. It copies the app to `OUT/dmg-root/Dragoon.app` next to an `Applications` link and signs the copy inside out, so the app you pass stays as it was. With a Developer ID identity every item gets `codesign -f -s IDENTITY -o runtime --timestamp`, as notarization requires. None gets `--deep`. `Contents/MacOS/cmake` and `ninja` go first with `-i` identifiers made from the app's bundle ID. Sparkle's `Autoupdate`, `Updater.app` and framework follow when the app has them, without the XPC services a launcher that isn't sandboxed doesn't ship. An app that still has them is refused. The app goes last, and the launcher claims no entitlements.
+Can one command sign the launcher, put it in a DMG and notarize it? It lives in `launcher/tools/`, with the commands it runs in `sign_plan.py` beside it. It copies the app to `OUT/dmg-root/Dragoon.app` next to an `Applications` link and signs the copy inside out, so the app you pass stays as it was. With a Developer ID identity every item gets `codesign -f -s IDENTITY -o runtime --timestamp`, as notarization requires. None gets `--deep`. Sparkle's `Autoupdate`, `Updater.app` and framework go first when the app has them, without the XPC services a launcher that isn't sandboxed doesn't ship. An app that still has them is refused. The app goes last, and the launcher claims no entitlements. The engine kit's files are sealed with the app as resources, and none is signed on its own.
 
 `codesign --verify --strict --deep` then checks the signed app before the DMG is made, so a broken signature costs no notarization round trip. `hdiutil create -format UDZO` makes `OUT/Dragoon.dmg`, tried up to three times because it sometimes fails with Resource busy, and `codesign -i` signs it with `--timestamp` for a Developer ID identity and `--timestamp=none` for ad hoc. With a Team API key, `xcrun notarytool submit --wait` notarizes the DMG and `xcrun stapler staple` staples it. A notarized DMG then gets `xcrun stapler validate` and the `spctl` assessments for an app and for a disk image.
 

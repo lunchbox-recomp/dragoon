@@ -7,9 +7,8 @@ Usage: sign_and_package.py --app APP --identity NAME --out DIR
 
 APP is left as it is. The tool signs a copy in DIR, which must be empty or missing:
   1  ditto copies APP to DIR/dmg-root/Dragoon.app, beside an Applications link to /Applications
-  2  codesign -f -s NAME -o runtime --timestamp, inside out and never with --deep. Contents/
-     MacOS/cmake and ninja go first with -i identifiers made from the app's bundle ID, then
-     Sparkle's Autoupdate, Updater.app and framework if the app has them, then the app. The
+  2  codesign -f -s NAME -o runtime --timestamp, inside out and never with --deep. Sparkle's
+     Autoupdate, Updater.app and framework go first if the app has them, then the app. The
      launcher claims no entitlements. An app that still has Sparkle's XPC services is refused,
      since nothing here would sign them
   3  codesign --verify --strict --deep on the signed app, before the DMG is made, so a broken

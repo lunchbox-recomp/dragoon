@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 import bundle_manifest
+import engine_kit
 
 REAL = Path(__file__).resolve().parents[1] / "launcher" / "bundle-manifest.txt"
 GOOD = """# What the app may hold
@@ -94,21 +95,27 @@ class RealManifestTest(unittest.TestCase):
     def test_the_download_budget_is_60_mb(self):
         self.assertEqual(self.m.budgets["dmg"], 60_000_000)
 
-    def test_follows_the_dev_apps_layout(self):
+    def test_follows_the_kit_apps_layout(self):
         self.assertEqual(self.m.source, "Contents/Resources/source")
-        self.assertTrue({"Contents/MacOS/Dragoon", "Contents/MacOS/cmake",
-                         "Contents/MacOS/ninja"} <= self.m.machos)
-        self.assertEqual(self.m.links["Contents/Resources/cmake/bin/cmake"], "../../../MacOS/cmake")
-        self.assertIn("Contents/Resources/third_party/SDL3-3.4.18.tar.gz", self.m.files)
-        for prefix in ("Contents/Resources/cmake/share/cmake-4.4/", "Contents/Resources/licenses/",
-                       "Contents/Frameworks/Sparkle.framework/"):
+        self.assertEqual({p for p in self.m.machos if "Sparkle" not in p}, {"Contents/MacOS/Dragoon"})
+        for prefix in ("Contents/Resources/licenses/", "Contents/Frameworks/Sparkle.framework/"):
             self.assertIn(prefix, self.m.dirs)
 
-    def test_the_cmake_link_lands_on_the_bundles_cmake(self):
-        link = "Contents/Resources/cmake/bin/cmake"
-        landing = posixpath.normpath(posixpath.join(posixpath.dirname(link), self.m.links[link]))
-        self.assertEqual(landing, "Contents/MacOS/cmake")
-        self.assertIn(landing, self.m.machos)
+    def test_nothing_the_recipe_no_longer_runs_is_allowed(self):
+        listed = self.m.files | self.m.machos | set(self.m.links) | set(self.m.dirs)
+        self.assertEqual([p for p in listed if "cmake" in p.lower() or "ninja" in p.lower()
+                          or "third_party" in p or p.endswith((".tar.gz", ".zip"))], [])
+
+    def test_the_kit_sits_beside_the_snapshot_whole(self):
+        kit = "Contents/Resources/kit/"
+        names = {p[len(kit):] for p in self.m.files | self.m.objects if p.startswith(kit)}
+        self.assertEqual(names, {"engine.o", "libSDL3.a", "kit.mk", "Makefile",
+                                 *(f"include/{h}" for h in engine_kit.HEADERS),
+                                 "licenses/gcn-recomp.txt", "licenses/SDL3.txt", "licenses/hidapi.txt"})
+        self.assertEqual(posixpath.dirname(kit.rstrip("/")), posixpath.dirname(self.m.source))
+
+    def test_the_app_budget_stays_under_what_the_generated_c_alone_weighs(self):
+        self.assertLess(self.m.budgets["app"], 101_000_000)
 
     def test_every_link_stays_inside_contents(self):
         for link, target in self.m.links.items():
