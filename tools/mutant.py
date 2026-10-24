@@ -47,7 +47,7 @@ one-line "mutant:" message on stderr when it couldn't decide, which is any of th
   an old found other than once
   a file or dir that isn't in the copy, or a link that leads out of it
   a dir and pattern that match no test file, so a misspelled pattern isn't a survivor
-  a DEST that exists or is inside the repo
+  a DEST that exists or is inside the repo or the checkout holding this tool
   a baseline that fails or times out
 A mutant's result never exits 2.
 """
@@ -262,7 +262,8 @@ def run_tests(python: str, copy: Path, rel: str, pattern: str, timeout: float,
     finally:
         # After every run and not only a timeout, so a child the tests left behind can't go on
         # running or keep the pipe open. The group lives as long as one member does, and the
-        # leader's pid isn't reused before then.
+        # leader's pid isn't reused before then. macOS answers EPERM, not ESRCH, when the group's
+        # only member is the leader and it hasn't been reaped, as when a timeout or ^C races its exit.
         with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(proc.pid, signal.SIGKILL)
         if code is None:
