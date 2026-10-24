@@ -22,9 +22,11 @@ DEST too if nothing is left in it, which is when it stopped before any test ran.
 only what it made, and a parent of DEST that it had to make stays. --keep keeps the copies
 as well, for reading a mutant's files or running its tests by hand. A copy it can't remove is
 named on stderr and doesn't change the result. SIGTERM and SIGHUP end it with exit 143 and
-129, after killing the run in progress as ^C does.
-A signal that comes while it removes the copies is ignored, so a second ^C can't leave the
-rest behind. Only SIGKILL leaves the copies behind, and a run that was going.
+129, after killing the run in progress as ^C does. One that was already ignored when the tool
+started stays ignored, so nohup keeps working. A signal that comes while it removes the
+copies is ignored, and the run ends with its usual code, so a second ^C can't leave the rest
+behind. A signal it doesn't catch, such as SIGKILL or SIGQUIT, leaves the copies behind and
+any test still going.
 
 Every copy is REV (default HEAD) of the repo that holds this tool, or of --repo, made by
 git archive. The repo's own files are never edited or run, and its uncommitted changes aren't
@@ -61,7 +63,8 @@ one-line "mutant:" message on stderr when it couldn't decide, which is any of th
   a file or dir that isn't in the copy, or a link that leads out of it
   a DEST that exists or is inside the repo or the checkout holding this tool
   a baseline that fails, times out or runs no test, as a misspelled pattern does
-A mutant's result never exits 2.
+A mutant's result never exits 2. A SIGTERM or SIGHUP ends it with 143 or 129 and prints no
+message of its own.
 """
 from __future__ import annotations
 
@@ -341,7 +344,9 @@ def run(args: argparse.Namespace) -> int:
     mutants = load_spec(args.spec)
     tar = archive(repo, args.rev)
 
-    with handling(ENDING, exit_on_signal):
+    # A signal that was already ignored when the tool started stays so, as nohup sets up for SIGHUP.
+    ending = tuple(s for s in ENDING if signal.getsignal(s) != signal.SIG_IGN)
+    with handling(ending, exit_on_signal):
         dest.mkdir(parents=True)  # from here on DEST is ours, and so is every copy made in it
         made: list[Path] = []
         try:

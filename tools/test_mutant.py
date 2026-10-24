@@ -148,6 +148,10 @@ KILLED = spec_mutant("add subtracts", edit("return a + b", "return a - b"))
 SURVIVOR = spec_mutant("sub swapped", edit("return a - b", "return b - a"))
 
 
+def ignore_sighup() -> None:
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+
+
 def total(killed: int, survived: int, timeout: int) -> str:
     count = killed + survived + timeout
     return f"total {count}, killed {killed}, survived {survived}, timeout {timeout}\n"
@@ -591,8 +595,42 @@ class SignalTest(MutantTestCase):
     def test_sighup_removes_the_copies_and_kills_what_the_tests_started(self):
         self.stopped_by(signal.SIGHUP)
 
+    def test_a_signal_that_was_ignored_at_the_start_stays_ignored(self):
+        """As under nohup: the run carries on and ends with its verdict, copies removed."""
+        started, go = self.dir / "started", self.dir / "go"
+        waits = spec_mutant("waits", edit("return a + b", (
+            f"import os, time\n"
+            f"    open({str(started)!r}, 'w').write('x')\n"
+            f"    for _ in range(1200):\n"  # up to a minute, so a failed test leaves nothing running
+            f"        if os.path.exists({str(go)!r}):\n"
+            f"            break\n"
+            f"        time.sleep(0.05)\n"
+            f"    return a + b")))
+        self.write_spec([waits])
+        proc = subprocess.Popen([sys.executable, "-B", mutant.__file__, str(self.spec_file),
+                                 str(self.dest), "--repo", str(self.repo)],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                preexec_fn=ignore_sighup)
+        self.addCleanup(proc.communicate)  # closes the pipes, after the kill that runs first
+        self.addCleanup(proc.kill)
+        self.addCleanup(go.write_text, "x")
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and not started.is_file():
+            time.sleep(0.05)
+        self.assertTrue(started.is_file(), "the mutant never started")
+        proc.send_signal(signal.SIGHUP)
+        time.sleep(0.5)
+        self.assertIsNone(proc.poll(), "SIGHUP ended a run that started with it ignored")
+        go.write_text("x")
+        out, err = proc.communicate(timeout=60)
+        self.assertEqual((proc.returncode, out, err),
+                         (1, "survived waits\n" + total(0, 1, 0), ""))
+        self.assertEqual(self.left(), ["baseline-1.log", "mutant-1.log"])
+
     def test_the_handlers_are_there_only_while_a_run_is(self):
         wanted = (signal.SIGTERM, signal.SIGHUP)
+        for signum in wanted:  # whatever the runner was started with, as under nohup
+            self.addCleanup(signal.signal, signum, signal.signal(signum, signal.SIG_DFL))
         before = [signal.getsignal(s) for s in wanted]
         during = []
         real = mutant.run_tests

@@ -267,7 +267,7 @@ A copy has no `.git` and, since `git archive` leaves submodules out, no gcn-reco
 
 DEST is a new directory outside the repo. The tool refuses one that exists or is inside the repo or, with `--repo`, inside the checkout holding the tool. The copies are built there as `baseline-N` and `mutant-N`, counting from 1 in the order the spec first uses a dir and pattern and lists a mutant. Each has the last 64 KiB of its run's output beside it as a `.log`. A mutant that breaks an import counts as killed too, so read its log before you trust a kill that matters.
 
-When the run ends it removes the copies and keeps the logs. That holds however the run ends, even on a tool error or ^C. SIGTERM and SIGHUP are handled like ^C and end the tool with exit 143 and 129. A signal that comes while it removes the copies is ignored, so a second ^C can't leave the rest behind. DEST goes too when nothing's left in it, as when the tool stops before any test runs. It removes only what it made, so anything else that ends up in DEST stays and keeps DEST with it. The tool makes any missing parent of DEST and leaves it there, since only DEST itself is removed. A copy it can't remove is named on stderr and doesn't change the result. SIGKILL can't be caught, so a run it ends leaves its copies behind and any test still going. `--keep` keeps the copies, to read a mutant's files or run its tests by hand, and then DEST is yours to delete.
+When the run ends it removes the copies and keeps the logs. That holds however the run ends, even on a tool error or ^C. SIGTERM and SIGHUP are handled like ^C and end the tool with exit 143 and 129. One that was already ignored when the tool started stays ignored, so `nohup` keeps working. A signal that comes while it removes the copies is ignored, and the run ends with its usual code, so a second ^C can't leave the rest behind. DEST goes too when nothing's left in it, as when the tool stops before any test runs. It removes only what it made, so anything else that ends up in DEST stays and keeps DEST with it. The tool makes any missing parent of DEST and leaves it there, since only DEST itself is removed. A copy it can't remove is named on stderr and doesn't change the result. A signal the tool doesn't catch, such as SIGKILL or SIGQUIT, leaves the copies behind and any test still going. `--keep` keeps the copies, to read a mutant's files or run its tests by hand, and then DEST is yours to delete.
 
 It exits 0 when every mutant was killed and 1 when any survived or timed out. It exits 2, as the other tools do, with one `mutant:` line on stderr when it couldn't decide:
 
@@ -277,7 +277,7 @@ It exits 0 when every mutant was killed and 1 when any survived or timed out. It
 - DEST exists or is inside the repo or the checkout holding the tool
 - a baseline fails, times out or runs no test
 
-A crash in the tool exits 2 as well, so it can't read as a survivor.
+A crash in the tool exits 2 as well, so it can't read as a survivor. A SIGTERM or SIGHUP ends it with 143 or 129 and prints no message of its own.
 
 ## export_source.py
 
