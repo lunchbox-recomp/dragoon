@@ -605,9 +605,14 @@ class ArgumentTest(RecipeTestCase):
 class RealTreeTest(unittest.TestCase):
     """The recipe against this repository's own recompiler, CMakeLists.txt and kit Makefile."""
 
-    def test_the_recompiler_and_its_inputs_are_where_the_recipe_looks(self):
-        for rel in (launcher_build.EXTRACT_DOL, launcher_build.RECOMP, launcher_build.SYMBOLS):
+    @unittest.skipUnless((ROOT / "gcn-recomp" / "CMakeLists.txt").is_file(),
+                         "gcn-recomp isn't checked out: git submodule update --init")
+    def test_the_recompiler_is_where_the_recipe_looks(self):
+        for rel in (launcher_build.EXTRACT_DOL, launcher_build.RECOMP):
             self.assertTrue((ROOT / rel).is_file(), rel)
+
+    def test_the_recompilers_inputs_are_where_the_recipe_looks(self):
+        self.assertTrue((ROOT / launcher_build.SYMBOLS).is_file())
         self.assertTrue((ROOT / launcher_build.TABLES).is_dir())
 
     def test_gcn_add_game_takes_nothing_the_recipe_doesnt_pass(self):
