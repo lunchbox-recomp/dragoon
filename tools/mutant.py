@@ -36,8 +36,9 @@ It prints one line per mutant as it finishes, and then a total:
   survived NAME   the tests passed
   timeout NAME    the tests outran --timeout
   total N, killed K, survived S, timeout T
-A mutant that breaks an import or the syntax counts as killed too, so read mutant-N.log
-before trusting a kill that matters.
+A kill that isn't unittest's exit 1 says how the run ended, as in "killed NAME (exit -9)"
+for a signal or "killed NAME (exit 5)" for no tests. A mutant that breaks an import or the
+syntax counts as killed too, so read mutant-N.log before trusting a kill that matters.
 
 Exits 0 when every mutant was killed and 1 when any survived or timed out. Exits 2 with a
 one-line "mutant:" message on stderr when it couldn't decide: a bad argument or spec, an old
@@ -290,10 +291,12 @@ def run(args: argparse.Namespace) -> int:
 
     counts = {"killed": 0, "survived": 0, "timeout": 0}
     for n, (m, copy) in enumerate(zip(mutants, copies), 1):
-        result = verdict(run_tests(python, copy, m.dir, m.pattern, args.timeout,
-                                   dest / f"mutant-{n}.log"))
+        code = run_tests(python, copy, m.dir, m.pattern, args.timeout, dest / f"mutant-{n}.log")
+        result = verdict(code)
         counts[result] += 1
-        print(f"{result} {m.name}", flush=True)
+        # unittest exits 1 when tests fail. Another code (a signal, or 5 for no tests) is said.
+        how = f" (exit {code})" if result == "killed" and code != 1 else ""
+        print(f"{result} {m.name}{how}", flush=True)
     print(f"total {len(mutants)}, killed {counts['killed']}, survived {counts['survived']}, "
           f"timeout {counts['timeout']}", flush=True)
     return 0 if counts["killed"] == len(mutants) else 1

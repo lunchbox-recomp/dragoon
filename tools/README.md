@@ -250,7 +250,7 @@ The spec is a JSON list of mutants. Each has a `name` and a `dir` to discover te
 tools/mutant.py build/probe/mutant/spec.json /tmp/dragoon-mutants
 ```
 
-It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it finishes, then `total N, killed K, survived S, timeout T`. Each run is `python3 -B -m unittest discover -s COPY/DIR -p PATTERN`, run from the copy. With the default pattern a mutant on `tools` takes about a minute. The example above runs one test file and takes seconds.
+It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it finishes, then `total N, killed K, survived S, timeout T`. A kill that isn't unittest's exit 1 says how the run ended, as in `killed NAME (exit -9)` for a signal or `(exit 5)` for no tests. Each run is `python3 -B -m unittest discover -s COPY/DIR -p PATTERN`, run from the copy. With the default pattern a mutant on `tools` takes about a minute. The example above runs one test file and takes seconds.
 
 These keep a kill from meaning nothing.
 

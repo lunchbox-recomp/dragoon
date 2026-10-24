@@ -225,6 +225,14 @@ class VerdictTest(MutantTestCase):
         self.assertEqual(self.run_tool(SURVIVOR, KILLED), (
             1, "survived sub swapped\nkilled add subtracts\n" + total(1, 1, 0), ""))
 
+    def test_a_kill_that_isnt_unittests_exit_1_says_how_the_run_ended(self):
+        leaves = spec_mutant("exits with 7", edit("return a + b", "import os; os._exit(7)"))
+        dies = spec_mutant("dies by a signal", edit(
+            "return a + b", "import os, signal; os.kill(os.getpid(), signal.SIGKILL)"))
+        self.assertEqual(self.run_tool(KILLED, leaves, dies), (
+            0, "killed add subtracts\nkilled exits with 7 (exit 7)\n"
+               "killed dies by a signal (exit -9)\n" + total(3, 0, 0), ""))
+
     def test_a_mutant_that_outruns_the_timeout_and_the_process_it_started(self):
         pid_file = self.dir / "sleeper pid"
         hang = spec_mutant("hangs", edit("return a + b", (
