@@ -239,7 +239,9 @@ The spec is a JSON list of mutants. Each has a `name` and a `dir` to discover te
 [
   {"name": "git() drops the exit status",
    "dir": "tools",
-   "replace": [{"file": "tools/export_source.py", "old": " or f\"exit {e.returncode}\"", "new": ""}]}
+   "replace": [{"file": "tools/export_source.py",
+                "old": "why = e.stderr.strip() or f\"exit {e.returncode}\"",
+                "new": "why = e.stderr.strip()"}]}
 ]
 ```
 
