@@ -36,6 +36,40 @@ jobs:
         run: ninja -C build-nodisc runtime_check
       - name: Engine unit tests
         run: ninja -C build-nodisc unit
+  kit:
+    runs-on: macos-26
+    env:
+      # A player's kit may sit under a path with spaces, so this one does too.
+      KIT: ${{ github.workspace }}/engine kit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Dependencies
+        run: brew install ninja
+      - name: Configure without a disc
+        run: >-
+          cmake -S . -B build-kit -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DGAME_ISO=
+      - name: Compile the engine and SDL
+        run: ninja -C build-kit runtime_check SDL3-static
+      - name: Make the kit
+        run: python3 tools/engine_kit.py --build build-kit --out "$KIT" --strip-debug
+      # The stub tables stand in for the recompiler's output, so a framework missing from
+      # game_libs.txt fails this link.
+      - name: Link the kit against stub tables
+        run: |
+          mkdir -p "stub game/gen"
+          cp tests/kit/stub_tables.c "stub game/gen/"
+          cd "stub game"
+          make -f "$KIT/Makefile" KIT="$KIT" SDK="$(xcrun --show-sdk-path)" CC=clang CXX=clang++
+          test -x dragoon
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: engine-kit
+          path: ${{ env.KIT }}
+          if-no-files-found: error
   launcher:
     runs-on: macos-26
     steps:

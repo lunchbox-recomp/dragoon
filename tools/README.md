@@ -288,6 +288,8 @@ ninja -C build-kit runtime_check SDL3-static
 tools/engine_kit.py --build build-kit --out build-kit/kit --strip-debug
 ```
 
+CI's `kit` job runs these, links the kit against `tests/kit/stub_tables.c`, empty tables that stand in for the recompiler's output, and uploads the kit as the `engine-kit` artifact. A framework missing from `game_libs.txt` fails that link.
+
 On the player's side, the Command Line Tools' python3 runs `extract_dol.py` and `recomp.py` into a directory, and then the kit's Makefile compiles `gen/*.c` there and links `./dragoon`. `KIT` is named on the command line, since make splits the Makefile's own path at its spaces, and the kit's path may have them:
 
 ```
