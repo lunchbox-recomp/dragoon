@@ -2,8 +2,11 @@
 
 Which cameras Kirby Air Ride draws through, how Dragoon widens the world cameras for a wider
 output and what a 16:9 picture still gets wrong. Every number here comes from runs of the
-routes in `tests/routes/` through `tools/probe.sh`, read with `tools/drawlog.py`, on a build
-against gcn-recomp `4c88710`, which adds `--aspect` and `--dump-output`.
+routes in `tests/routes/` through `tools/probe.sh`, read with `tools/drawlog.py`. They were
+taken against gcn-recomp `deac351` with `--aspect` and `--dump-output` added, the change
+`6575c67` makes on the fork's `dragoon` branch. At the pin, `3a8d154`, the race's census at
+4:3 and the kept widening's aspects and draws in the race, City Trial, 2P and 4P came out the
+same.
 
 ## Taking the census
 
@@ -112,8 +115,10 @@ and 2.97524 for frames 2880 to 3479 in 4P and 2P. The two calls set the aspect o
 that aren't drawn as well, and those widen too. The race result didn't change.
 
 The race time bar was written as 1:12.60, which `docs/dev/status.md` recorded at gcn-recomp
-`7d30377`. At this build the race finishes in 1:14.68 at 4:3 too, with the CPUs at 1:15.40,
-1:15.57 and 1:16.36, so the bar here is the 4:3 time.
+`7d30377`. At `deac351` with the aspect change the race finished in 1:14.68 at 4:3 too, with
+the CPUs at 1:15.40, 1:15.57 and 1:16.36, so the bar here is the 4:3 time. At `3a8d154` every
+frame dump from 8,400 to 66,900, the results screen's at 25,800 among them, was the same at
+4:3 and at 16:9 with the widening.
 
 ```sh
 tools/probe.sh wide 30 tests/routes/air-ride-race.txt 4200 --aspect=16:9 --output DRAGOON_WIDEN=1

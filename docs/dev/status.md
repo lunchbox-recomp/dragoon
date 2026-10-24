@@ -9,13 +9,14 @@ Both sets pass again at `b848158`, after the review fixes. The other Air Ride co
 pacing and the twelve-route warm-up were measured on a build of Dragoon `788571c` and
 gcn-recomp `b848158` with the seven course routes added. All twelve frame-hash routes and all
 twelve audio-hash routes pass at `fe0c0bf`. At gcn-recomp `b97c019` eleven routes' frames and
-all twelve routes' audio changed, and both sets of goldens were recorded again there. The pin
-is now `e1016b8`, where all twelve matched them. The goldens of the nine Top Ride and stadium
-routes were recorded at `e1016b8` on Dragoon `1a88f62`, and all twenty-one routes' frames and
-audio match there (under gcn-recomp `e1016b8` below). The Top Ride and stadium pacing numbers
-are from Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen findings
-were checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed at
-`2e6e6f8` and `0059fce` on gcn-recomp `e1016b8` (under Player targets).
+all twelve routes' audio changed, and both sets of goldens were recorded again there. At
+`e1016b8` all twelve matched them. The goldens of the nine Top Ride and stadium routes were
+recorded at `e1016b8` on Dragoon `1a88f62`, and all twenty-one routes' frames and audio match
+there (under gcn-recomp `e1016b8` below). The pin is now `3a8d154`, where all twenty-one still
+match with the widescreen hooks built in and switched off. The Top Ride and stadium pacing
+numbers are from Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen
+findings were checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed
+at `2e6e6f8` and `0059fce` on gcn-recomp `e1016b8` (under Player targets).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -140,9 +141,13 @@ need `--pads=4`.
 | Top Ride race | `top-ride-<course>.txt` | 3600 | Each course 3.62 s into the race. Seven laps on Grass and Sand, six on Sky, Fire and Light, five on Water and Metal |
 
 Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
-frame 25,800. It showed 1:12.60 when this was first written, at gcn-recomp `7d30377`. City Trial with nobody steering drives into the sea and stays there while the
-clock runs. The opening movie, when it isn't skipped, plays to the end and hands over to the
-title and the attract demos.
+frame 25,800. That's from gcn-recomp `deac351` with the aspect change (`widescreen.md`), and
+it showed 1:12.60 when this was first written, at `7d30377`. At the pin, `3a8d154`, its
+results frame is the same at 4:3 and at 16:9 with `DRAGOON_WIDEN=1`.
+
+City Trial with nobody steering drives into the sea and stays there while the clock runs. The
+opening movie, when it isn't skipped, plays to the end and hands over to the title and the
+attract demos.
 
 The seven other course routes were left running for 120 s each with `--fast` and a dump every
 300 frames, four and then three at a time. Checker Knights ran again for 200 s to reach its
