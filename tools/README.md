@@ -257,7 +257,7 @@ These keep a kill from meaning nothing.
 - Every copy is a `git archive` of `--rev` (HEAD unless you say otherwise). The repo's own files are never edited or run, and uncommitted changes aren't tested. `--repo` names a checkout other than the one holding the tool.
 - Each distinct `dir` and `pattern` gets a baseline on an unchanged copy first, and it has to pass. A selection that fails on its own would read every mutant as killed.
 - Each mutant runs on a fresh copy, so no stale bytecode or leftover from an earlier run is tested in its place.
-- The tests get `PATH`, `HOME`, `TMPDIR` and `PYTHONDONTWRITEBYTECODE=1` and nothing else, so no key or token reaches them.
+- The tests get `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, as `launcher_build.py`'s tools do, your `HOME` and `TMPDIR` and `PYTHONDONTWRITEBYTECODE=1`. Nothing else in your environment reaches them, so no key or token in it does.
 - Every copy is built and every edit applied before any test runs, so a bad spec costs no run.
 - A run that outlasts `--timeout` (600 s unless you say otherwise, for each run) is killed along with everything it started.
 

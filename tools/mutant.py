@@ -25,9 +25,10 @@ work costs no test run. Then each distinct dir and pattern gets a baseline, whic
   PYTHON -B -m unittest discover -s COPY/DIR -p PATTERN
 in its copy and has to pass. Without that, a selection that fails on its own would make every
 mutant look killed. Each mutant then runs the same command in a copy of its own, so nothing an
-earlier run left behind is tested. Only PATH, HOME and TMPDIR from the caller's environment
-reach the tests, plus PYTHONDONTWRITEBYTECODE=1, so no key or token does. A run that outlasts
---timeout (600 s by default, for each run) is killed with everything it started.
+earlier run left behind is tested. The tests get PATH=/usr/bin:/bin:/usr/sbin:/sbin (the
+TOOL_PATH of launcher_build.py), HOME and TMPDIR from the caller and PYTHONDONTWRITEBYTECODE=1.
+Nothing else in the caller's environment reaches them, so no key or token in it does. A run that
+outlasts --timeout (600 s by default, for each run) is killed with everything it started.
 
 It prints one line per mutant as it finishes, and then a total:
   killed NAME     the tests failed
@@ -58,7 +59,9 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Optional
 
-ROOT = Path(__file__).resolve().parents[1]
+from launcher_build import TOOL_PATH
+
+ROOT =Path(__file__).resolve().parents[1]
 TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extract differently
 TOOL_ERROR = 2
 TAIL = 64 * 1024
@@ -148,9 +151,10 @@ def load_spec(path: Path) -> list[Mutant]:
 
 
 def minimal_env() -> dict[str, str]:
-    """All a copy's git, tar and tests get: no key, token, `GIT_DIR` or `PYTHONPATH` of ours."""
-    return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(Path.home()),
-            "TMPDIR": tempfile.gettempdir(), "PYTHONDONTWRITEBYTECODE": "1"}
+    """All a copy's git, tar and tests get: no key, token, `GIT_DIR` or `PYTHONPATH` of ours,
+    and the same fixed PATH as the launcher's build tools, not whatever is first on ours."""
+    return {"PATH": TOOL_PATH, "HOME": str(Path.home()), "TMPDIR": tempfile.gettempdir(),
+            "PYTHONDONTWRITEBYTECODE": "1"}
 
 
 def archive(repo: Path, rev: str) -> bytes:

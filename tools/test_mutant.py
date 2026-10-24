@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import launcher_build
 import mutant
 from testutil import GIT_ENV, commit, git, run_main, write_file
 
@@ -36,7 +37,7 @@ class CalcTest(unittest.TestCase):
     def test_add(self):
         self.assertEqual(calc.add(2, 3), 5)
 """
-TEST_ENV = """\
+TEST_ENV = f"""\
 import os
 import unittest
 
@@ -45,8 +46,9 @@ class EnvTest(unittest.TestCase):
     def test_nothing_of_the_parents_gets_in(self):
         for name in ("DRAGOON_SECRET", "GITHUB_TOKEN", "PYTHONPATH", "GIT_AUTHOR_NAME"):
             self.assertNotIn(name, os.environ)
+        self.assertEqual(os.environ["PATH"], {launcher_build.TOOL_PATH!r})
         self.assertEqual(os.environ["PYTHONDONTWRITEBYTECODE"], "1")
-        for name in ("PATH", "HOME", "TMPDIR"):
+        for name in ("HOME", "TMPDIR"):
             self.assertIn(name, os.environ)
 """
 TEST_BROKEN = """\
@@ -300,7 +302,8 @@ class CopyTest(MutantTestCase):
                          (0, "killed add subtracts\n" + total(1, 0, 0)))
 
     def test_the_tests_get_a_minimal_environment(self):
-        leaks = {"DRAGOON_SECRET": "hunter2", "GITHUB_TOKEN": "x", "PYTHONPATH": str(self.repo)}
+        leaks = {"DRAGOON_SECRET": "hunter2", "GITHUB_TOKEN": "x", "PYTHONPATH": str(self.repo),
+                 "PATH": "/nowhere/bin:" + os.environ["PATH"]}
         harmless = spec_mutant("harmless", edit("# keep both operands the same", "# edited"),
                                dir="env check")
         with mock.patch.dict(os.environ, leaks):
