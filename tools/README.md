@@ -336,6 +336,17 @@ launcher/tools/sign_and_package.py --app launcher/dist/Dragoon.app --identity "D
 
 The tests fake codesign, ditto, hdiutil, xcrun and spctl with scripts that record their calls, so they sign nothing.
 
+## fetch_third_party.py
+
+Where do CMake and Ninja come from? `launcher/third_party.txt` pins each by version, URL and SHA-256, one `name version url sha256` line apiece, with a comment saying where the hash came from. fetch_third_party.py is the only tool that downloads anything. It refuses a file whose SHA-256 differs from its pin and extracts the rest. SDL isn't in that file. The tool reads its pin from gcn-recomp's `CMakeLists.txt` with `sdl_source.py` and keeps the tarball whole. It lives in `launcher/tools/`.
+
+```
+launcher/tools/fetch_third_party.py --dest launcher/.third_party
+launcher/tools/fetch_third_party.py --dest launcher/.third_party cmake ninja
+```
+
+`--dest` gets each download and a `<name>-<version>/` tree made afresh on every run. A download stays, so a rerun that finds it intact downloads nothing. Names after the options fetch only those items, and SDL's pin is read only when `sdl3` is one of them. Extraction checks every member before it writes anything. It allows files, directories and symlinks. It refuses an absolute path, a `..`, a hard link and a device. It also refuses any symlink that doesn't resolve to a place inside the tree, once all of them exist. The tree is made beside its final name and renamed into place. It exits 0 when everything is fetched and 2 on a bad argument or pins file. A download, a hash or an extraction that fails stops the run with exit 1. The tests serve fixture archives over `file:` URLs with right and wrong hashes.
+
 ## The engine's own tools
 
 Two tools in `gcn-recomp/tools/` matter when debugging here.
