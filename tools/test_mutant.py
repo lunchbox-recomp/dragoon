@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -509,13 +508,28 @@ class CleanupTest(MutantTestCase):
         self.run_tool(KILLED)
         self.assertEqual(precious.read_text(), "mine")
 
-    def test_a_copy_that_cant_be_removed_is_said_and_the_verdict_stands(self):
+    def test_a_copy_that_cant_be_removed_is_said_and_the_rest_go_and_the_verdict_stands(self):
+        real = mutant.run_tests
+
+        def lock_the_baseline_copy(python, copy, rel, pattern, timeout, log):
+            code = real(python, copy, rel, pattern, timeout, log)
+            if copy.name == "baseline-1":  # a file in a read-only dir can't be unlinked
+                locked = copy / "locked"
+                locked.mkdir()
+                write_file(locked, "held.txt", "x")
+                locked.chmod(0o555)
+                self.addCleanup(locked.chmod, 0o755)
+            return code
+
         self.write_spec([KILLED])
-        with mock.patch.object(shutil, "rmtree", side_effect=OSError("Directory not empty")):
+        with mock.patch.object(mutant, "run_tests", lock_the_baseline_copy):
             code, out, err = self.run_spec()
+        baseline = self.dest.resolve() / "baseline-1"
         self.assertEqual((code, out), (0, "killed add subtracts\n" + total(1, 0, 0)))
-        for copy in ("baseline-1", "mutant-1"):
-            self.assertIn(f"mutant: couldn't remove {self.dest.resolve() / copy}: Directory not empty", err)
+        self.assertTrue(err.startswith(f"mutant: couldn't remove {baseline}: "), err)
+        self.assertIn("Permission denied", err)
+        self.assertEqual(err.count("\n"), 1, err)  # mutant-1 was removed without a word
+        self.assertEqual(self.left(), ["baseline-1", "baseline-1.log", "mutant-1.log"])
 
 
 class PatternTest(MutantTestCase):
