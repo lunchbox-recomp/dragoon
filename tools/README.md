@@ -273,6 +273,8 @@ tools/launcher_build.py --source /tmp/dragoon-source --kit /tmp/engine-kit \
   --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
 ```
 
+A first build on an M4 Max, with the Command Line Tools' make 3.81, clang 21 and the 26.5 SDK, took 95.2 s. That's 4.2 s to recompile, 18.0 s to compile and link, 72.7 s to warm up and 0.1 s to package. `--data` and `--cache` held 482 MB at most, once the game was packaged and before `<cache>/build` was deleted, and 54 MB afterwards. A second build of the same commit took 22.2 s, because the warm-up found its stamp current.
+
 `--no-warmup` skips the warm-up. `--keep-build` keeps `<cache>/build`, which is deleted after a good build otherwise.
 
 ## engine_kit.py
