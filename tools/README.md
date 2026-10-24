@@ -347,6 +347,16 @@ launcher/tools/fetch_third_party.py --dest launcher/.third_party cmake ninja
 
 `--dest` gets each download and a `<name>-<version>/` tree made afresh on every run. A download stays, so a rerun that finds it intact downloads nothing. Names after the options fetch only those items, and SDL's pin is read only when `sdl3` is one of them. Extraction checks every member before it writes anything. It allows files, directories and symlinks. It refuses an absolute path, a `..`, a hard link and a device. It also refuses any symlink that doesn't resolve to a place inside the tree, once all of them exist. The tree is made beside its final name and renamed into place. It exits 0 when everything is fetched and 2 on a bad argument or pins file. A download, a hash or an extraction that fails stops the run with exit 1. The tests serve fixture archives over `file:` URLs with right and wrong hashes.
 
+## make_app.py
+
+Can one command build the dev app? make_app.py assembles `Dragoon.app` from the launcher binary that SwiftPM built, the pieces fetch_third_party.py fetched and a snapshot from `export_source.py`. It builds nothing. `--launcher` defaults to `launcher/.build/release/Dragoon`, and the snapshot comes from the committed state of `--repo`. The layout is in `--help`. CMake and Ninja are thinned to arm64 with `lipo`, and CMake's modules sit under `Contents/Resources/cmake/share` with a `bin/cmake` link back to the copy in `Contents/MacOS`, since CMake finds its modules from where it was started. The SDL tarball is checked against the pin in the snapshot's own gcn-recomp before it's copied. Each piece's license goes in `Contents/Resources/licenses`, and [launcher/README.md](../launcher/README.md) says where each comes from. The app is signed ad hoc with no hardened runtime by the commands `sign_and_package.py` uses. Then it's verified.
+
+```
+launcher/tools/make_app.py --out launcher/dist --version 0.1.0
+```
+
+It exits 0 when the app is made, 1 when a step failed and 2 when an input is missing or an argument is wrong. A failure removes what it wrote. The tests build from fake pieces, a fake `lipo` and `codesign` and a fixture repository, so they need no Swift.
+
 ## The engine's own tools
 
 Two tools in `gcn-recomp/tools/` matter when debugging here.
