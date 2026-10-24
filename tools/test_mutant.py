@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -447,6 +448,31 @@ class CleanupTest(MutantTestCase):
                 self.assertRaises(KeyboardInterrupt):
             self.run_spec()
         self.assertEqual(self.left(), ["baseline-1.log"])
+
+    def test_a_second_signal_while_the_copies_are_removed_is_ignored(self):
+        wanted = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+        got = []
+
+        def record(signum, frame):
+            got.append(signum)
+
+        for signum in wanted:
+            self.addCleanup(signal.signal, signum, signal.signal(signum, record))
+        real = shutil.rmtree
+
+        def rmtree_after_signals(path, *args, **kwargs):
+            for signum in wanted:
+                os.kill(os.getpid(), signum)
+            real(path, *args, **kwargs)
+
+        self.write_spec([KILLED])
+        with mock.patch.object(shutil, "rmtree", rmtree_after_signals):
+            result = self.run_spec()
+        self.assertEqual(result, (0, "killed add subtracts\n" + total(1, 0, 0), ""))
+        self.assertEqual(got, [])  # ignored while the tool removed the copies
+        self.assertEqual(self.left(), ["baseline-1.log", "mutant-1.log"])
+        for signum in wanted:  # and back as they were after
+            self.assertIs(signal.getsignal(signum), record)
 
     def test_a_dest_with_nothing_left_is_removed_too(self):
         self.assert_tool_error(self.run_tool(KILLED, spec_mutant("typo", edit("zzz", "y"))), "typo")

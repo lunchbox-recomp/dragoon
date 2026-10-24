@@ -22,7 +22,8 @@ DEST too if nothing is left in it, which is when it stopped before any test ran.
 only what it made. --keep keeps the copies as well, for reading a mutant's files or running
 its tests by hand. A copy it can't remove is named on stderr and doesn't change the result.
 SIGTERM and SIGHUP end it with exit 143 and 129, after killing the run in progress as ^C does.
-Only SIGKILL leaves the copies behind, and a run that was going.
+A signal that comes while it removes the copies is ignored, so a second ^C can't leave the
+rest behind. Only SIGKILL leaves the copies behind, and a run that was going.
 
 Every copy is REV (default HEAD) of the repo that holds this tool, or of --repo, made by
 git archive. The repo's own files are never edited or run, and its uncommitted changes aren't
@@ -309,14 +310,16 @@ def clean_up(dest: Path, made: list[Path]) -> None:
     does too unless the run stopped before any test ran. rmtree unlinks a link in a copy and
     doesn't follow it, and rmdir refuses a DEST that holds anything else. A copy that can't be
     removed is said on stderr and the rest go on, so the verdict, or the error being
-    reported, isn't lost."""
-    for copy in made:
-        try:
-            shutil.rmtree(copy)
-        except OSError as e:
-            print(f"mutant: couldn't remove {copy}: {e}", file=sys.stderr)
-    with contextlib.suppress(OSError):
-        dest.rmdir()
+    reported, isn't lost. A signal that comes while it works is ignored, since a second ^C
+    would stop rmtree partway with a traceback and leave the rest of the copies."""
+    with handling((signal.SIGINT, *ENDING), signal.SIG_IGN):
+        for copy in made:
+            try:
+                shutil.rmtree(copy)
+            except OSError as e:
+                print(f"mutant: couldn't remove {copy}: {e}", file=sys.stderr)
+        with contextlib.suppress(OSError):
+            dest.rmdir()
 
 
 def run(args: argparse.Namespace) -> int:
