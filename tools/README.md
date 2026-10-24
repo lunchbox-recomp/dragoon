@@ -280,7 +280,7 @@ A first build on an M4 Max took 112 s, with 24 s to configure, 33 s to compile (
 
 ## engine_kit.py
 
-What does a player's Mac need to build the game without CMake, Ninja or SDL's source? engine_kit.py packs it from a build configured with no disc and a deployment target, once `runtime_check` and `SDL3-static` are built. The kit holds `engine.o` (runtime_check's objects joined by `ld -r`, so the link takes all of them), `libSDL3.a`, `recomp.h` and `compat.h`, `kit.mk`, the Makefile from `launcher/kit/` and the licenses of gcn-recomp, SDL and the hidapi inside SDL. `kit.mk` holds what gcn-recomp's configure wrote to the build directory: `GAME_CFLAGS` from `game_cflags.txt`, `LINK_FLAGS` from `game_ldflags.txt` and `GAME_LIBS`, the frameworks and libraries, from `game_libs.txt`. It also holds `MACOSX_MIN`, the build's deployment target. So every flag and framework the game gets comes from CMake.
+What does a player's Mac need to build the game without CMake, Ninja or SDL's source? engine_kit.py packs it from a build configured with no disc and a deployment target, once `runtime_check` and `SDL3-static` are built. The kit holds `engine.o` (runtime_check's objects joined by `ld -r`, so the link takes all of them), `libSDL3.a`, `recomp.h` and `compat.h`, `kit.mk`, the Makefile from `launcher/kit/` and the licenses of gcn-recomp, SDL and the hidapi inside SDL. `kit.mk` takes `GAME_CFLAGS` from the `game_cflags.txt` gcn-recomp's configure wrote to the build directory, `LINK_FLAGS` from its `game_ldflags.txt` and `GAME_LIBS`, the frameworks and libraries, from its `game_libs.txt`. It also holds `MACOSX_MIN`, the build's deployment target. So every flag and framework the game gets comes from CMake.
 
 ```
 cmake -S . -B build-kit -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DGAME_ISO=
@@ -327,7 +327,7 @@ A path that no manifest line allows is a finding, so a new file in the app start
 
 ## bundle_manifest.py
 
-What may the app hold? It reads `launcher/bundle-manifest.txt`. That file names the source snapshot's directory and the two size budgets. It also lists what's allowed outside the snapshot, as plain files, directory prefixes, Mach-O executables, static libraries and objects, and symlinks with their targets. One object at most is the kit's engine, the only file outside the snapshot that may hold the disc ID. The format is at the top of the module. It has no command line.
+What may the app hold? It reads `launcher/bundle-manifest.txt`. That file names the source snapshot's directory and the two size budgets. Everything allowed outside the snapshot has a line naming its kind, such as a plain file, a directory prefix, a Mach-O executable or a symlink with its target. Static libraries and objects have lines of their own, and one of them at most is the kit's engine, the only file outside the snapshot that may hold the disc ID. The format is at the top of the module. It has no command line.
 
 ## bundle_checks.py
 
