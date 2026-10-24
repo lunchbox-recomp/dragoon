@@ -13,6 +13,8 @@ budget dmg 40000   # the download
 file Contents/Info.plist
 dir Contents/Resources/licenses
 macho Contents/MacOS/Dragoon
+engine Contents/Resources/kit/engine.o
+object Contents/Resources/kit/libSDL3.a
 link Contents/Resources/cmake/bin/cmake ../../../MacOS/cmake
 """
 
@@ -25,11 +27,15 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(m.files, frozenset({"Contents/Info.plist"}))
         self.assertEqual(m.dirs, ("Contents/Resources/licenses/",))
         self.assertEqual(m.machos, frozenset({"Contents/MacOS/Dragoon"}))
+        self.assertEqual(m.objects, frozenset({"Contents/Resources/kit/engine.o",
+                                               "Contents/Resources/kit/libSDL3.a"}))
+        self.assertEqual(m.engine, "Contents/Resources/kit/engine.o")
         self.assertEqual(m.links, {"Contents/Resources/cmake/bin/cmake": "../../../MacOS/cmake"})
 
     def test_a_file_is_allowed_by_name_or_by_prefix(self):
         m = bundle_manifest.parse(GOOD)
-        for path in ("Contents/Info.plist", "Contents/MacOS/Dragoon",
+        for path in ("Contents/Info.plist", "Contents/MacOS/Dragoon", "Contents/Resources/kit/engine.o",
+                     "Contents/Resources/kit/libSDL3.a",
                      "Contents/Resources/licenses/CMake.txt",
                      "Contents/Resources/licenses/deeper/Ninja.txt"):
             with self.subTest(path=path):
@@ -65,6 +71,10 @@ class ParseTest(unittest.TestCase):
             "a link to an absolute target": GOOD + "link Contents/x /usr/bin/cmake\n",
             "an extra word": GOOD + "file Contents/x Contents/y\n",
             "a bare directive": GOOD + "file\n",
+            "two engines": GOOD + "engine Contents/Resources/kit/other.o\n",
+            "an engine that's also an object": GOOD + "object Contents/Resources/kit/engine.o\n",
+            "an object not named .a or .o": GOOD + "object Contents/Resources/kit/libSDL3.dylib\n",
+            "an engine not named .a or .o": GOOD.replace("kit/engine.o", "kit/engine"),
         }
         for why, text in bad.items():
             with self.subTest(why):
@@ -111,8 +121,12 @@ class RealManifestTest(unittest.TestCase):
 
     def test_nothing_listed_is_inside_the_snapshot(self):
         inside = self.m.source + "/"
-        listed = self.m.files | self.m.machos | set(self.m.links) | set(self.m.dirs)
+        listed = self.m.files | self.m.machos | self.m.objects | set(self.m.links) | set(self.m.dirs)
         self.assertEqual([p for p in listed if p.startswith(inside)], [])
+
+    def test_the_kits_engine_is_the_one_object_that_may_hold_the_disc_id(self):
+        self.assertEqual(self.m.engine, "Contents/Resources/kit/engine.o")
+        self.assertEqual(self.m.objects, {self.m.engine, "Contents/Resources/kit/libSDL3.a"})
 
 
 if __name__ == "__main__":

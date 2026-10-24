@@ -5,12 +5,14 @@ Each returns Findings and none stops at the first. Paths in a finding are relati
 from __future__ import annotations
 
 import os
+import re
+import subprocess
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
 import bundle_tree
 import export_source
-from bundle_manifest import BundleManifest
+from bundle_manifest import BundleManifest, is_object_name
 from check_no_game_data import is_game_data
 
 APP_NAME = "Dragoon.app"
@@ -18,6 +20,10 @@ APPLICATIONS = "Applications"
 # The 32-bit, 64-bit and universal headers, in both byte orders.
 MACHO_MAGICS = frozenset(bytes.fromhex(h) for h in (
     "feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca"))
+AR_MAGIC = b"!<arch>\n"
+NM = "/usr/bin/nm"
+# What the recompiler names the game's functions and its tables, with the C prefix Mach-O adds.
+GAME_SYMBOL = re.compile(r"_?(fn_[0-9A-Fa-f]{8}|g_recomp_.*)")
 DISC_MAGIC = bytes.fromhex("c2339f3d")
 DISC_MAGIC_AT = 0x1C
 CISO = b"CISO"
@@ -98,15 +104,56 @@ def check_paths(tree: bundle_tree.Tree, manifest: BundleManifest) -> list[Findin
     return found + check_links(tree, manifest)
 
 
+def is_object(path: str, head: bytes) -> bool:
+    """Is the file at PATH, starting with HEAD, an ar archive or named like one or an object?"""
+    return head.startswith(AR_MAGIC) or is_object_name(path)
+
+
 def check_executables(heads: dict[str, bytes], manifest: BundleManifest) -> list[Finding]:
-    """Check 2. A Mach-O, found by its magic, has to be at a path the manifest lists."""
-    return [Finding("executable not on the manifest", path) for path in sorted(heads)
-            if heads[path][:4] in MACHO_MAGICS and path not in manifest.machos]
+    """Check 2. A Mach-O, found by its magic, has to be at a path the manifest lists. An ar
+    archive, found by its magic, and a file named .a or .o have to be on an object line."""
+    found = []
+    for path in sorted(heads):
+        if is_object(path, heads[path]):
+            if path not in manifest.objects:
+                found.append(Finding("object not on the manifest", path))
+        elif heads[path][:4] in MACHO_MAGICS and path not in manifest.machos:
+            found.append(Finding("executable not on the manifest", path))
+    return found
+
+
+def defined_symbols(path: Path) -> list[str]:
+    """The symbols the archive or object at PATH defines, local ones included. Raises
+    ValueError when nm can't read it."""
+    done = subprocess.run([NM, "--defined-only", "-j", str(path)], capture_output=True)
+    if done.returncode != 0:
+        raise ValueError(f"nm exited {done.returncode}")
+    # An archive's listing also has a blank line and a "lib.a(member.o):" line per member.
+    return done.stdout.decode(errors="replace").splitlines()
+
+
+def check_symbols(app: Path, heads: dict[str, bytes]) -> list[Finding]:
+    """Check 2, objects. No archive or object defines a symbol named as the recompiler names
+    the game's functions (fn_ and 8 hex digits) or its tables (g_recomp_), and nm reads each."""
+    found = []
+    for path in sorted(heads):
+        if not is_object(path, heads[path]):
+            continue
+        try:
+            game = [s for s in defined_symbols(app / path) if GAME_SYMBOL.fullmatch(s)]
+        except ValueError as e:
+            found.append(Finding("unreadable object", path, str(e)))
+            continue
+        if game:
+            more = f" and {len(game) - 1} more" if len(game) > 1 else ""
+            found.append(Finding("game code", path, f"defines {game[0]}{more}"))
+    return found
 
 
 def check_content(app: Path, heads: dict[str, bytes], manifest: BundleManifest,
                   disc_id: str) -> list[Finding]:
-    """Check 3. No disc magic or CISO header in any file, and the disc ID only in the snapshot."""
+    """Check 3. No disc magic or CISO header in any file, and the disc ID only in the snapshot
+    and the engine object."""
     found = []
     needle = disc_id.encode()
     for path in sorted(heads):
@@ -114,7 +161,8 @@ def check_content(app: Path, heads: dict[str, bytes], manifest: BundleManifest,
             found.append(Finding("disc image", path, "CISO header"))
         if heads[path][DISC_MAGIC_AT:HEAD] == DISC_MAGIC:
             found.append(Finding("disc image", path, f"GameCube magic at 0x{DISC_MAGIC_AT:X}"))
-        if not path.startswith(manifest.source + "/") and contains(app / path, needle):
+        if (not path.startswith(manifest.source + "/") and path != manifest.engine
+                and contains(app / path, needle)):
             found.append(Finding("disc ID", path, f"{disc_id} outside the source"))
     return found
 
@@ -164,7 +212,7 @@ def check_app(app: Path, manifest: BundleManifest, reference: Path, disc_id: str
     tree = bundle_tree.scan(app)
     heads = read_heads(app, tree)
     return (check_paths(tree, manifest) + check_executables(heads, manifest)
-            + check_content(app, heads, manifest, disc_id)
+            + check_symbols(app, heads) + check_content(app, heads, manifest, disc_id)
             + check_source(app, tree, manifest, reference) + check_size(app.name, tree, manifest))
 
 

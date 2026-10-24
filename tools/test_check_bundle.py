@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,7 +15,7 @@ import bundle_dmg
 import bundle_tree
 import check_bundle
 import export_source
-from testutil import GIT_ENV, commit, fake_hdiutil, git, run_main, write_file
+from testutil import GIT_ENV, archive, commit, compile_c, fake_hdiutil, git, run_main, write_file
 
 MACHO = bytes.fromhex("cffaedfe")
 MACHO_MAGICS = ("feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca",
@@ -23,6 +24,17 @@ DISC_MAGIC = bytes.fromhex("c2339f3d")
 APP = "Dragoon.app"
 SNAP = "Contents/Resources/source/"
 LICENSES = "Contents/Resources/licenses/"
+ENGINE = "Contents/Resources/kit/engine.o"
+SDL = "Contents/Resources/kit/libSDL3.a"
+# Objects compiled from C by the class's setup: the kit's two, as the engine holds the disc ID
+# and leaves the game's tables to the game, and two with what only the game defines.
+OBJECTS = {
+    "engine.o": 'extern const unsigned g_recomp_func_count;\nconst char gcn_game_id[] = "GKYE01";\n'
+                "unsigned engine_funcs(void) { return g_recomp_func_count; }\n",
+    "sdl.o": "int SDL_Fake(void) { return 3; }\n",
+    "functions.o": "int fn_8000ABCD(int x) { return x + 1; }\nint fn_80003100(int x) { return x * 2; }\n",
+    "tables.o": "const unsigned g_recomp_func_count = 0;\n",
+}
 SHA1 = "0123456789abcdef0123456789abcdef01234567"
 CMAKE = f"""add_subdirectory(gcn-recomp)
 gcn_add_game(
@@ -41,6 +53,8 @@ macho Contents/MacOS/ninja
 link Contents/Resources/cmake/bin/cmake ../../../MacOS/cmake
 dir Contents/Resources/cmake/share/cmake-4.4/
 dir Contents/Resources/licenses/
+engine Contents/Resources/kit/engine.o
+object Contents/Resources/kit/libSDL3.a
 """
 
 
@@ -48,9 +62,23 @@ def disc_header() -> bytes:
     return bytes(0x1C) + DISC_MAGIC + bytes(16)
 
 
-def build_app(app: Path, snapshot: Path) -> None:
-    """A small app in the layout of the manifest above, holding SNAPSHOT as its source."""
+def compile_objects(out: Path) -> dict[str, bytes]:
+    """OBJECTS compiled into OUT, by name, and each one also as the only member of an archive
+    named for it with .a."""
+    built = {}
+    for name, source in OBJECTS.items():
+        obj = compile_c(source, out / name, debug=False)
+        built[name] = obj.read_bytes()
+        built[obj.stem + ".a"] = archive(out / (obj.stem + ".a"), obj).read_bytes()
+    return built
+
+
+def build_app(app: Path, snapshot: Path, objects: dict[str, bytes]) -> None:
+    """A small app in the layout of the manifest above, holding SNAPSHOT as its source and
+    the engine and SDL from OBJECTS as its kit."""
     files = {
+        ENGINE: objects["engine.o"],
+        SDL: objects["sdl.a"],
         "Contents/Info.plist": "<plist/>\n",
         "Contents/MacOS/Dragoon": MACHO + b"launcher",
         "Contents/MacOS/cmake": MACHO + b"cmake",
@@ -98,8 +126,9 @@ class BundleTestCase(unittest.TestCase):
         })
         cls.snapshot = cls.root / "snapshot"
         cls.info = export_source.export(cls.repo, cls.snapshot)
+        cls.objects = compile_objects(cls.root / "objects")
         cls.template = cls.root / "template" / APP
-        build_app(cls.template, cls.snapshot)
+        build_app(cls.template, cls.snapshot, cls.objects)
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -271,6 +300,58 @@ class ExecutableTest(BundleTestCase):
         self.plant("Contents/MacOS/dragoon", MACHO)
         self.assert_findings("not on the manifest: Contents/MacOS/dragoon",
                              "executable not on the manifest: Contents/MacOS/dragoon")
+
+
+class ObjectTest(BundleTestCase):
+    def test_an_archive_under_any_name_needs_an_object_line(self):
+        for path in (LICENSES + "notes.txt", "Contents/MacOS/ninja"):
+            with self.subTest(path=path):
+                self.plant(path, self.objects["sdl.a"])
+                self.assert_findings(f"object not on the manifest: {path}")
+                os.unlink(self.app / path)
+
+    def test_a_file_named_a_or_o_needs_an_object_line(self):
+        for name in ("engine.o", "libgame.a", "Engine.O", "LIBGAME.A"):
+            with self.subTest(name=name):
+                path = self.plant(LICENSES + name, self.objects["sdl.o"])
+                self.assert_findings(f"object not on the manifest: {LICENSES}{name}")
+                os.unlink(path)
+
+    def test_a_file_line_wont_do_for_an_object(self):
+        write_file(self.dir, "bundle manifest.txt", MANIFEST + "file Contents/Resources/kit/sdl.o\n")
+        self.plant("Contents/Resources/kit/sdl.o", self.objects["sdl.o"])
+        self.assert_findings("object not on the manifest: Contents/Resources/kit/sdl.o")
+
+    def test_an_archive_defining_the_games_functions_fails(self):
+        self.plant(SDL, self.objects["functions.a"])
+        self.assert_findings(f"game code: {SDL} (defines _fn_80003100 and 1 more)")
+
+    def test_an_object_defining_the_games_tables_fails(self):
+        self.plant(ENGINE, self.objects["tables.o"])
+        self.assert_findings(f"game code: {ENGINE} (defines _g_recomp_func_count)")
+
+    def test_an_unlisted_object_is_read_too(self):
+        self.plant(LICENSES + "game.o", self.objects["functions.o"])
+        self.assert_findings(f"object not on the manifest: {LICENSES}game.o",
+                             f"game code: {LICENSES}game.o (defines _fn_80003100 and 1 more)")
+
+    def test_an_object_nm_cant_read_fails(self):
+        self.plant(SDL, "not an archive\n")
+        self.assert_findings(f"unreadable object: {SDL} (nm exited 1)")
+
+    def test_the_engine_may_use_the_games_tables(self):
+        listed = subprocess.run(["/usr/bin/nm", "-j", str(self.app / ENGINE)], capture_output=True,
+                                text=True, check=True).stdout.split()
+        self.assertIn("_g_recomp_func_count", listed)
+        self.assertEqual(self.check(), (0, [], ""))
+
+    def test_the_engine_may_hold_the_disc_id(self):
+        self.assertIn(b"GKYE01", (self.app / ENGINE).read_bytes())
+        self.assertEqual(self.check(), (0, [], ""))
+
+    def test_the_disc_id_in_another_object_fails(self):
+        self.plant(SDL, self.objects["engine.a"])
+        self.assert_findings(f"disc ID: {SDL} (GKYE01 outside the source)")
 
 
 class ContentTest(BundleTestCase):

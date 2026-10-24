@@ -45,6 +45,22 @@ def write_file(directory: Path, name: str, data: bytes | str) -> Path:
     return path
 
 
+def compile_c(source: str, out: Path, debug: bool = True) -> Path:
+    """OUT, an arm64 object the system's cc compiles from SOURCE, with debug info if DEBUG."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    src = write_file(out.parent, out.name + ".c", source)
+    subprocess.run(["/usr/bin/cc", "-arch", "arm64", *(["-g"] if debug else []), "-O2", "-c", str(src),
+                    "-o", str(out)], check=True)
+    src.unlink()
+    return out
+
+
+def archive(out: Path, *objects: Path) -> Path:
+    """OUT, a static library of OBJECTS made by the system's ar."""
+    subprocess.run(["/usr/bin/ar", "rcs", str(out), *map(str, objects)], check=True)
+    return out
+
+
 def tone(n: int, rate: int, freq: float = 440, amp: float = 20000) -> list[int]:
     """N samples of a sine at RATE Hz."""
     return [round(amp * math.sin(2 * math.pi * freq * i / rate)) for i in range(n)]

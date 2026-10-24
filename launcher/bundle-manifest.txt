@@ -30,6 +30,20 @@ dir Contents/Resources/cmake/share/cmake-4.4/
 file Contents/Resources/third_party/SDL3-3.4.18.tar.gz
 dir Contents/Resources/licenses/
 
+# The prebuilt engine kit tools/engine_kit.py makes, which builds the game without CMake.
+# Where the launcher keeps it isn't settled, so these lines move with it. check_bundle.py reads
+# both objects with nm, and lets the engine alone hold the disc ID, which it carries as a
+# public constant.
+engine Contents/Resources/kit/engine.o
+object Contents/Resources/kit/libSDL3.a
+file Contents/Resources/kit/kit.mk
+file Contents/Resources/kit/Makefile
+file Contents/Resources/kit/include/recomp.h
+file Contents/Resources/kit/include/compat.h
+file Contents/Resources/kit/licenses/gcn-recomp.txt
+file Contents/Resources/kit/licenses/SDL3.txt
+file Contents/Resources/kit/licenses/hidapi.txt
+
 # Sparkle (L14). Laid out as Sparkle 2.9.1 ships, read from an installed copy. L14 pins the
 # release and checks this against it. The XPC services are left out because make_app.py removes
 # them from a launcher that isn't sandboxed.

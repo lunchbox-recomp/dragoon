@@ -11,9 +11,14 @@ since the manifest allows the _CodeSignature that signing adds. The checks are:
                   check_no_game_data.is_game_data or is a build's own output (gen/, rels/,
                   inputs/, main.dol, CMakeCache.txt, build.ninja, memcard_*, .shader-warmup,
                   in any letter case)
-  2  executables  every file that starts with a Mach-O magic is at a path the manifest lists
+  2  executables  every file that starts with a Mach-O magic is at a path the manifest lists.
+                  Every ar archive (!<arch>) and every file named .a or .o, in any letter case,
+                  is on an object or engine line of its own. nm reads each of those, and none
+                  defines fn_ and 8 hex digits or g_recomp_*, the names the recompiler gives
+                  the game's functions and tables
   3  content      no file has the GameCube disc magic at offset 0x1C or starts with CISO, and
-                  the disc ID appears only inside the source snapshot
+                  the disc ID appears only inside the source snapshot and in the engine object,
+                  which carries it as a public constant
   4  source       the snapshot equals export_source.py's output for SHA, file by file by
                   SHA-256. SHA has to be what --repo has checked out
   5  size         the app and the DMG stay inside the manifest's budgets

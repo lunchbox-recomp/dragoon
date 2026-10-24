@@ -308,8 +308,8 @@ Does the launcher ship anything game-derived? The disc never reaches CI, so noth
 | Check | What fails |
 |---|---|
 | paths | A file, link or empty directory outside the source snapshot that `launcher/bundle-manifest.txt` doesn't list. Anywhere, a path that `check_no_game_data.py` flags or that a build leaves behind (`gen/`, `rels/`, `inputs/`, `main.dol`, `CMakeCache.txt`, `build.ninja`, `memcard_*`, `.shader-warmup`, in any letter case) |
-| executables | A file that starts with a Mach-O magic at a path the manifest doesn't list for one, such as a built `dragoon` |
-| content | The GameCube disc magic at offset 0x1C, a `CISO` header, or the disc ID anywhere outside the snapshot |
+| executables | A file that starts with a Mach-O magic at a path the manifest doesn't list for one, such as a built `dragoon`. An ar archive (`!<arch>`) or a file named `.a` or `.o` in any letter case that has no `object` or `engine` line of its own. One of those that nm can't read, or that defines `fn_` and 8 hex digits or `g_recomp_*`, the names the recompiler gives the game's functions and tables |
+| content | The GameCube disc magic at offset 0x1C, a `CISO` header, or the disc ID anywhere outside the snapshot and the engine object. The engine carries the disc ID as a public constant |
 | source | A snapshot that differs from `export_source.py`'s output for the commit, file by file by SHA-256. A dev tree's `rom/game.iso` link or empty `build/` shows up here |
 | size | An app or a DMG over its budget in the manifest |
 | DMG | Anything besides `Dragoon.app` and an `Applications` link to `/Applications` |
@@ -325,7 +325,7 @@ A path that no manifest line allows is a finding, so a new file in the app start
 
 ## bundle_manifest.py
 
-What may the app hold? It reads `launcher/bundle-manifest.txt`. That file names the source snapshot's directory and the two size budgets. It also lists what's allowed outside the snapshot, as plain files, directory prefixes, Mach-O executables and symlinks with their targets. The format is at the top of the module. It has no command line.
+What may the app hold? It reads `launcher/bundle-manifest.txt`. That file names the source snapshot's directory and the two size budgets. It also lists what's allowed outside the snapshot, as plain files, directory prefixes, Mach-O executables, static libraries and objects, and symlinks with their targets. One object at most is the kit's engine, the only file outside the snapshot that may hold the disc ID. The format is at the top of the module. It has no command line.
 
 ## bundle_checks.py
 

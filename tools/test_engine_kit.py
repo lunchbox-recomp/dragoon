@@ -13,10 +13,8 @@ import unittest
 from pathlib import Path
 
 import engine_kit
-from testutil import run_main, write_file
+from testutil import archive, compile_c, run_main, write_file
 
-CC = "/usr/bin/cc"
-AR = "/usr/bin/ar"
 NM = "/usr/bin/nm"
 MAKE = "/usr/bin/make"
 FLAGS = ("-O2 -g -DNDEBUG -std=gnu11 -O2 -fno-strict-aliasing -Wno-unused-label "
@@ -30,14 +28,6 @@ NINJA = f"""build {RUNTIME}/a.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWi
 build {RUNTIME}/hw/b.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo b.cpp
 build CMakeFiles/gcn_core.dir/gcn-recomp/runtime/a.cpp.o: CXX_COMPILER__gcn_core a.cpp
 """
-
-
-def compile_c(source: str, out: Path) -> Path:
-    out.parent.mkdir(parents=True, exist_ok=True)
-    src = write_file(out.parent, out.name + ".c", source)
-    subprocess.run([CC, "-g", "-O2", "-c", str(src), "-o", str(out)], check=True)
-    src.unlink()
-    return out
 
 
 def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
@@ -54,8 +44,7 @@ def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
         path.write_text(text)
     compile_c("int engine_a(int x) { return x + 1; }\n", build / RUNTIME / "a.cpp.o")
     compile_c("int engine_b(int x) { return x * 2; }\n", build / RUNTIME / "hw" / "b.cpp.o")
-    sdl_obj = compile_c("int SDL_Fake(void) { return 3; }\n", sdl_build / "fake.o")
-    subprocess.run([AR, "rcs", str(sdl_build / "libSDL3.a"), str(sdl_obj)], check=True)
+    archive(sdl_build / "libSDL3.a", compile_c("int SDL_Fake(void) { return 3; }\n", sdl_build / "fake.o"))
     write_file(build, "CMakeCache.txt",
                f"GAME_ISO:FILEPATH={disc}\nCMAKE_OSX_DEPLOYMENT_TARGET:STRING={target}\n"
                f"gcn_recomp_SOURCE_DIR:STATIC={engine}\nSDL3_SOURCE_DIR:STATIC={sdl}\n"
