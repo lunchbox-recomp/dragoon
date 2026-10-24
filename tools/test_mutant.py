@@ -451,15 +451,32 @@ class CleanupTest(MutantTestCase):
         self.assert_tool_error(self.run_tool(KILLED, spec_mutant("typo", edit("zzz", "y"))), "typo")
         self.assertFalse(self.dest.exists())
 
-    def test_a_file_the_run_didnt_make_keeps_its_dest(self):
+    def test_what_the_run_didnt_make_stays_and_keeps_its_dest(self):
         def plant_and_crash(*args):
             write_file(self.dest, "mine.txt", "keep")
+            (self.dest / "mine").mkdir()
+            write_file(self.dest / "mine", "inner.txt", "keep")
             raise RuntimeError("boom")
 
         self.write_spec([KILLED])
         with mock.patch.object(mutant, "run_tests", plant_and_crash):
             self.assert_tool_error(self.run_spec(), "boom")
-        self.assertEqual(self.left(), ["mine.txt"])
+        self.assertEqual(self.left(), ["mine", "mine.txt"])
+        self.assertEqual((self.dest / "mine" / "inner.txt").read_text(), "keep")
+
+    def test_a_copy_that_already_exists_isnt_the_runs_to_remove(self):
+        real = mutant.extract
+
+        def extract_over_a_dir(tar, copy, made):
+            copy.mkdir()  # as if something else made it between the run's mkdir of DEST and now
+            write_file(copy, "mine.txt", "keep")
+            return real(tar, copy, made)
+
+        self.write_spec([KILLED])
+        with mock.patch.object(mutant, "extract", extract_over_a_dir):
+            self.assert_tool_error(self.run_spec(), "FileExistsError")
+        self.assertEqual(self.left(), ["baseline-1"])
+        self.assertEqual((self.dest / "baseline-1" / "mine.txt").read_text(), "keep")
 
     def test_a_dest_that_exists_keeps_what_it_holds(self):
         (self.dest / "baseline-1").mkdir(parents=True)
