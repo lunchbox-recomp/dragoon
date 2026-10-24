@@ -12,8 +12,9 @@ SPEC is a JSON file holding a list of mutants. A mutant has three fields and may
   pattern  which test files to run, as unittest's -p takes it (default test_*.py). It matches
            file names, so it has no /. test_export_source.py runs that one file.
 DEST is a new directory outside the repo, and outside the checkout holding this tool when
---repo names another. The copies are built there and kept, and nothing is removed. baseline-N is the copy for the Nth dir and pattern the mutants test, and mutant-N
-is the Nth mutant's. The last 64 KiB of each run's output is beside its copy as a .log file.
+--repo names another. The copies are built there and kept, and nothing is removed. baseline-N
+is the copy for the Nth dir and pattern the mutants test, and mutant-N is the Nth mutant's.
+The last 64 KiB of each run's output is beside its copy as a .log file.
 
 Every copy is REV (default HEAD) of the repo that holds this tool, or of --repo, made by
 git archive. The repo's own files are never edited or run, and its uncommitted changes aren't
@@ -41,9 +42,13 @@ for a signal or "killed NAME (exit 5)" for no tests. A mutant that breaks an imp
 syntax counts as killed too, so read mutant-N.log before trusting a kill that matters.
 
 Exits 0 when every mutant was killed and 1 when any survived or timed out. Exits 2 with a
-one-line "mutant:" message on stderr when it couldn't decide: a bad argument or spec, an old
-found other than once, a file or dir missing from the copy, a DEST that exists or is inside
-the repo, or a baseline that fails or times out. A mutant's result never exits 2.
+one-line "mutant:" message on stderr when it couldn't decide, which is any of these:
+  a bad argument or spec
+  an old found other than once
+  a file or dir that isn't in the copy, or a link that leads out of it
+  a DEST that exists or is inside the repo
+  a baseline that fails or times out
+A mutant's result never exits 2.
 """
 from __future__ import annotations
 
