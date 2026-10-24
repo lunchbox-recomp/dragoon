@@ -239,16 +239,6 @@ class ManifestTest(unittest.TestCase):
             ("link", hashlib.sha256(b"/nowhere/game.iso").hexdigest()),
         ])
 
-    def test_parse_reads_what_format_writes(self):
-        entries = [("a b/c.txt", "1" * 64), ("d.txt", "2" * 64)]
-        self.assertEqual(export_source.parse_manifest(export_source.format_manifest(entries)), entries)
-
-    def test_parse_refuses_a_malformed_line(self):
-        for text in ("1234  a.txt\n", f"{'1' * 64} a.txt\n", f"{'1' * 64}  \n"):
-            with self.subTest(text=text):
-                with self.assertRaises(ValueError):
-                    export_source.parse_manifest(text)
-
 
 if __name__ == "__main__":
     unittest.main()

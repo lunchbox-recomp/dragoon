@@ -34,7 +34,6 @@ ROOT = Path(__file__).resolve().parents[1]
 TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extract differently
 MANIFEST = "source-manifest.txt"
 ENGINE = "gcn-recomp"
-_MANIFEST_LINE = re.compile(r"([0-9a-f]{64})  (.+)")
 
 
 def sha256_file(path: Path) -> str:
@@ -71,17 +70,6 @@ def manifest(root: Path) -> list[tuple[str, str]]:
 
 def format_manifest(entries: list[tuple[str, str]]) -> str:
     return "".join(f"{sha}  {path}\n" for path, sha in entries)
-
-
-def parse_manifest(text: str) -> list[tuple[str, str]]:
-    """The (path, SHA-256) entries of a source-manifest.txt, in its order."""
-    entries = []
-    for n, line in enumerate(text.splitlines(), 1):
-        m = _MANIFEST_LINE.fullmatch(line)
-        if not m:
-            raise ValueError(f"{MANIFEST} line {n} isn't '<sha256>  <path>': {line!r}")
-        entries.append((m.group(2), m.group(1)))
-    return entries
 
 
 def game_ids(cmake_text: str) -> tuple[str, str]:
