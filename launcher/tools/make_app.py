@@ -200,7 +200,6 @@ def make(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> Pat
         if work:
             shutil.rmtree(work, ignore_errors=True)
         path = a.out
-        path = a.out
         while made and path != made.parent:
             try:
                 os.rmdir(path)  # only an empty one, so another run's app stays
