@@ -7,7 +7,6 @@ import math
 import os
 import subprocess
 import sys
-import tarfile
 import wave
 from array import array
 from pathlib import Path
@@ -138,24 +137,6 @@ def fake_hdiutil(directory: Path, records: Path) -> Path:
     text = FAKE_HDIUTIL.replace("@PYTHON@", sys.executable).replace("@RECORDS@", repr(str(records)))
     path = write_file(directory, "hdiutil", text)
     path.chmod(0o755)
-    return path
-
-
-def tar_member(name: str, kind: bytes = tarfile.REGTYPE, mode: int = 0o644,
-               link: str = "") -> tarfile.TarInfo:
-    info = tarfile.TarInfo(name)
-    info.type = kind
-    info.mode = mode
-    info.linkname = link
-    return info
-
-
-def make_tarball(path: Path, members: list[tuple[tarfile.TarInfo, bytes]]) -> Path:
-    """A .tar.gz at PATH holding MEMBERS, each a header and its data."""
-    with tarfile.open(path, "w:gz") as tar:
-        for info, data in members:
-            info.size = len(data)
-            tar.addfile(info, io.BytesIO(data) if data else None)
     return path
 
 

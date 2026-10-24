@@ -1,32 +1,29 @@
 from __future__ import annotations
 
 import fcntl
-import hashlib
 import json
 import os
 import plistlib
-import shutil
+import re
+import subprocess
 import sys
-import tarfile
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-import export_source
 import launcher_build
 import source_info
-from testutil import make_tarball, run_main, tar_member, write_file
+from testutil import run_main, write_file
 
+ROOT = Path(__file__).resolve().parents[1]
+MAKE = "/usr/bin/make"
 COMMIT = "d" * 40
 ENGINE = "e" * 40
+DOL_SHA1 = "a" * 40
 OLD = "20260101-000000-old"
-SDL_DECLARE = """FetchContent_Declare(sdl3
-  URL https://example.com/release-3.4.18/SDL3-3.4.18.tar.gz
-  URL_HASH SHA256={sha}
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
-"""
 ROUTES = "title 20 60 960\ncity-trial-4p 30 60 3480 --pads=4\n"
+STEPS = ["recompile", "compile", "warmup", "package", "swap"]
 
 # Each fake appends what it was given to RECORDS, then does its job unless FAIL exists.
 FAKE_HEAD = """#!{python}
@@ -37,34 +34,35 @@ with open({records!r}, "a") as f:
                         "nobytecode": sys.flags.dont_write_bytecode}}) + "\\n")
 FAIL = os.path.exists({fail!r})
 """
-CMAKE = """
-build = sys.argv[sys.argv.index("-B") + 1]
-source = sys.argv[sys.argv.index("-S") + 1]
-cache = os.path.join(build, "CMakeCache.txt")
-# Like CMake, refuse a build directory that an earlier configure made from another source.
-if os.path.exists(cache):
-    with open(cache) as f:
-        made_from = f.read().strip().split("=", 1)[1]
-    if made_from != source:
-        print("CMake Error: " + source + " does not match the source " + made_from
-              + " used to generate cache")
-        sys.exit(1)
-os.makedirs(build, exist_ok=True)
-with open(cache, "w") as f:
-    f.write("CMAKE_HOME_DIRECTORY:INTERNAL=" + source + "\\n")
+EXTRACT_DOL = """
 if FAIL:
-    print("cmake failed on purpose")
+    print("extract_dol.py failed on purpose")
     sys.exit(1)
+with open(sys.argv[2], "wb") as f:
+    f.write(b"a fake dol")
 """
-NINJA = """
-print("ninja: Entering directory `" + sys.argv[2] + "'")
-print("[12/183] Building C object a.o")
-print("[183/183] Linking CXX executable " + sys.argv[3])
+RECOMP = """
 if FAIL:
-    print("ninja failed on purpose")
+    print("recomp.py failed on purpose")
     sys.exit(1)
-with open(os.path.join(sys.argv[2], sys.argv[3]), "w") as f:
-    f.write("a fake " + sys.argv[3])
+os.makedirs(sys.argv[3], exist_ok=True)
+for name in ("a", "b", "c"):
+    with open(os.path.join(sys.argv[3], name + ".c"), "w") as f:
+        f.write("int " + name + ";\\n")
+"""
+# Prints what the kit's Makefile has make print: each compile, a warning, then the link.
+MAKE_FAKE = """
+var = dict(a.split("=", 1) for a in sys.argv[1:] if "=" in a)
+for c in sorted(n for n in os.listdir("gen") if n.endswith(".c")):
+    print(var["CC"] + ' -arch arm64 -isysroot "' + var["SDK"] + '" -O2 -I"' + var["KIT"]
+          + '/include" -Igen -c gen/' + c + " -o obj/" + c[:-2] + ".o")
+print("gen/b.c:1:5: warning: a line that isn't a compile")
+print(var["CXX"] + ' -O2 -o dragoon obj/a.o obj/b.o obj/c.o "' + var["KIT"] + '/engine.o"')
+if FAIL:
+    print("make failed on purpose")
+    sys.exit(1)
+with open("dragoon", "w") as f:
+    f.write("a fake dragoon")
 """
 CODESIGN = """
 if FAIL:
@@ -106,8 +104,8 @@ def tree(root: Path) -> dict[str, object]:
 
 
 class RecipeTestCase(unittest.TestCase):
-    """Fake tools, an SDL tarball, a snapshot and the player's directories, all at paths
-    with spaces, as the launcher's are."""
+    """Fake tools, a snapshot, a kit and the player's directories, all at paths with spaces,
+    as the launcher's are."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -116,21 +114,20 @@ class RecipeTestCase(unittest.TestCase):
         self.records = self.dir / "records.jsonl"
         self.tools = self.dir / "fake tools"
         self.tools.mkdir()
-        self.cmake = self.fake("cmake", CMAKE)
-        self.ninja = self.fake("ninja", NINJA)
+        self.make = self.fake("make", MAKE_FAKE)
         codesign = self.fake("codesign", CODESIGN)
         self.cc = self.fake("clang", "")
         self.cxx = self.fake("clang++", "")
         self.sdk = self.dir / "SDKs" / "MacOSX26.5.sdk"
         self.sdk.mkdir(parents=True)
         self.disc = write_file(self.dir, "Kirby Air Ride (USA).gcm", b"disc")
-        self.tarball = self.dir / "Third Party" / "SDL3-3.4.18.tar.gz"
-        self.tarball.parent.mkdir()
-        make_tarball(self.tarball, [
-            (tar_member("SDL3-3.4.18/", tarfile.DIRTYPE, 0o755), b""),
-            (tar_member("SDL3-3.4.18/CMakeLists.txt"), b"project(SDL3)\n")])
-        self.source = self.dir / "Dragoon.app" / "Contents" / "Resources" / "source"
-        self.make_snapshot(self.tarball)
+        resources = self.dir / "Dragoon.app" / "Contents" / "Resources"
+        self.source = resources / "source"
+        self.make_snapshot()
+        self.kit = resources / "kit"
+        (self.kit / "include").mkdir(parents=True)
+        for name in ("Makefile", "kit.mk", "engine.o", "libSDL3.a", "include/recomp.h"):
+            write_file(self.kit, name, f"a fake {name}\n")
         self.data = self.dir / "Application Support" / "Dragoon"
         self.cache = self.dir / "Caches" / "Dragoon"
         self.log = self.dir / "Logs" / "build 1.log"
@@ -138,30 +135,27 @@ class RecipeTestCase(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def fake(self, tool: str, body: str, directory: Path | None = None) -> Path:
+    def fake(self, tool: str, body: str, directory: Path | None = None, name: str = "") -> Path:
         text = FAKE_HEAD.format(python=sys.executable, records=str(self.records), tool=tool,
                                 fail=str(self.fail_marker(tool))) + body
-        path = write_file(directory or self.tools, "warm_shaders.py" if tool == "warm_shaders" else tool, text)
+        path = write_file(directory or self.tools, name or tool, text)
         path.chmod(0o755)
         return path
 
     def fail_marker(self, tool: str) -> Path:
         return self.dir / f"fail {tool}"
 
-    def make_snapshot(self, tarball: Path, commit: str = COMMIT) -> None:
-        if self.source.exists():
-            shutil.rmtree(self.source)
-        for d in ("gcn-recomp", "tools", "tests/hashes"):
-            (self.source / d).mkdir(parents=True)
-        write_file(self.source, "CMakeLists.txt", "project(dragoon)\n")
-        sha = hashlib.sha256(tarball.read_bytes()).hexdigest()
-        write_file(self.source / "gcn-recomp", "CMakeLists.txt", SDL_DECLARE.format(sha=sha))
-        self.fake("warm_shaders", WARM, self.source / "tools")
+    def make_snapshot(self, commit: str = COMMIT) -> None:
+        for d in ("gcn-recomp/recomp", "tools", "tests/hashes", "analysis", "recomp"):
+            (self.source / d).mkdir(parents=True, exist_ok=True)
+        self.fake("extract_dol", EXTRACT_DOL, self.source / "gcn-recomp" / "recomp", "extract_dol.py")
+        self.fake("recomp", RECOMP, self.source / "gcn-recomp" / "recomp", "recomp.py")
+        self.fake("warm_shaders", WARM, self.source / "tools", "warm_shaders.py")
+        write_file(self.source / "analysis", "symbols.txt", "fake symbols\n")
+        write_file(self.source / "recomp", "names.txt", "fake names\n")
         write_file(self.source / "tests" / "hashes", "manifest.txt", ROUTES)
         source_info.write(self.source / source_info.NAME, {
-            "dragoon": commit, "gcn-recomp": ENGINE, "disc_id": "GKYE01", "dol_sha1": "a" * 40})
-        write_file(self.source, export_source.MANIFEST,
-                   export_source.format_manifest(export_source.manifest(self.source)))
+            "dragoon": commit, "gcn-recomp": ENGINE, "disc_id": "GKYE01", "dol_sha1": DOL_SHA1})
 
     def old_game(self) -> None:
         """A build that's current and the player's saves, as an earlier build left them."""
@@ -176,15 +170,14 @@ class RecipeTestCase(unittest.TestCase):
         write_file(saves, ".shader-warmup", "old stamp\n")
         write_file(saves / "inputs", "session 1.bin", b"inputs")
 
-    def argv(self, *extra: str, disc: bool = True) -> list[str]:
-        args = ["--source", str(self.source), "--data", str(self.data), "--cache", str(self.cache),
-                "--cmake", str(self.cmake), "--ninja", str(self.ninja), "--cc", str(self.cc),
-                "--cxx", str(self.cxx), "--python", sys.executable, "--sdk", str(self.sdk),
-                "--sdl-tarball", str(self.tarball), "--log", str(self.log)]
-        return args + (["--disc", str(self.disc)] if disc else []) + list(extra)
+    def argv(self, *extra: str) -> list[str]:
+        return ["--source", str(self.source), "--kit", str(self.kit), "--disc", str(self.disc),
+                "--data", str(self.data), "--cache", str(self.cache), "--make", str(self.make),
+                "--cc", str(self.cc), "--cxx", str(self.cxx), "--python", sys.executable,
+                "--sdk", str(self.sdk), "--log", str(self.log), *extra]
 
-    def build(self, *extra: str, disc: bool = True) -> tuple[int, list[dict], str]:
-        code, out, err = run_main(launcher_build.main, *self.argv(*extra, disc=disc))
+    def build(self, *extra: str) -> tuple[int, list[dict], str]:
+        code, out, err = run_main(launcher_build.main, *self.argv(*extra))
         return code, [json.loads(line) for line in out.splitlines()], err
 
     def records_of(self, tool: str) -> list[dict]:
@@ -209,58 +202,72 @@ class RecipeTestCase(unittest.TestCase):
 
 
 class GoodRunTest(RecipeTestCase):
-    def test_configure_line_and_environment_exactly(self):
-        leaky = {"PATH": "/opt/homebrew/bin:/usr/bin", "CMAKE_PREFIX_PATH": "/opt/homebrew",
+    def test_commands_and_environment_exactly(self):
+        leaky = {"PATH": "/opt/homebrew/bin:/usr/bin", "MAKEFLAGS": "-j1 CC=gcc",
                  "PYTHONPATH": "/usr/local/lib/python", "SDKROOT": "/elsewhere"}
         with mock.patch.dict(os.environ, leaky):
             code, _, _ = self.build()
             want_env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(Path.home()),
                         "TMPDIR": tempfile.gettempdir(), "LANG": "en_US.UTF-8",
-                        "PYTHONDONTWRITEBYTECODE": "1", "NINJA_STATUS": "[%f/%t] "}
+                        "PYTHONDONTWRITEBYTECODE": "1"}
         self.assertEqual(code, 0)
-        self.assertEqual(self.record("cmake")["argv"], [
-            "-S", str(self.data / "source" / COMMIT), "-B", str(self.cache / "build"), "-G", "Ninja",
-            f"-DCMAKE_MAKE_PROGRAM={self.ninja}", "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-            f"-DCMAKE_OSX_SYSROOT={self.sdk}", f"-DCMAKE_C_COMPILER={self.cc}",
-            f"-DCMAKE_CXX_COMPILER={self.cxx}", f"-DPython3_EXECUTABLE={sys.executable}",
-            f"-DGAME_ISO={self.disc}", "-DDRAGOON_WARMUP=OFF",
-            f"-DFETCHCONTENT_SOURCE_DIR_SDL3={self.cache / 'sdl' / 'SDL3-3.4.18'}",
-            "-DFETCHCONTENT_FULLY_DISCONNECTED=ON", "-DSDL_HIDAPI_LIBUSB=OFF",
-            "-DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew;/usr/local;/opt/local"])
-        for tool in ("cmake", "ninja", "codesign", "warm_shaders"):
+        build = self.cache / "build"
+        recomp = self.source / "gcn-recomp" / "recomp"
+        self.assertEqual(self.record("extract_dol")["script"], str(recomp / "extract_dol.py"))
+        self.assertEqual(self.record("extract_dol")["argv"],
+                         [str(self.disc), str(build / "main.dol"), "GKYE01", DOL_SHA1])
+        self.assertEqual(self.record("recomp")["script"], str(recomp / "recomp.py"))
+        self.assertEqual(self.record("recomp")["argv"], [
+            str(build / "main.dol"), str(self.source / "analysis" / "symbols.txt"),
+            str(build / "gen"), str(self.source / "recomp")])
+        self.assertEqual(self.record("make")["argv"], [
+            "-f", str(self.kit / "Makefile"), f"-j{os.cpu_count()}", f"KIT={self.kit}",
+            f"SDK={self.sdk}", f"CC={self.cc}", f"CXX={self.cxx}", "dragoon"])
+        for tool, cwd in (("extract_dol", build), ("recomp", build), ("make", build),
+                          ("warm_shaders", self.cache), ("codesign", self.cache)):
             with self.subTest(tool):
                 # macOS's CoreFoundation sets this one in every process that loads it, the
                 # fakes' Python included, whatever environment the parent passed.
                 env = {k: v for k, v in self.record(tool)["env"].items()
                        if k != "__CF_USER_TEXT_ENCODING"}
                 self.assertEqual(env, want_env)
-                self.assertEqual(Path(self.record(tool)["cwd"]).resolve(), self.cache.resolve())
-        self.assertEqual(self.record("ninja")["argv"], ["-C", str(self.cache / "build"), "dragoon"])
+                self.assertEqual(Path(self.record(tool)["cwd"]).resolve(), cwd.resolve())
+        for tool in ("extract_dol", "recomp", "warm_shaders"):
+            self.assertTrue(self.record(tool)["nobytecode"], tool)
 
     def test_no_tool_reads_the_launchers_stdin(self):
         with mock.patch.object(launcher_build.subprocess, "Popen",
                                wraps=launcher_build.subprocess.Popen) as popen:
             code, _, _ = self.build()
         self.assertEqual(code, 0)
-        self.assertGreaterEqual(len(popen.call_args_list), 4)  # cmake, ninja, warm-up, codesign
+        self.assertEqual(len(popen.call_args_list), 5)  # extract, recomp, make, warm-up, codesign
         for call in popen.call_args_list:
             self.assertIs(call.kwargs.get("stdin"), launcher_build.subprocess.DEVNULL, call)
 
-    def test_ninja_status_lines_become_compile_progress(self):
+    def test_python_runs_with_B_so_nothing_lands_in_the_signed_app(self):
+        # PYTHONDONTWRITEBYTECODE says it too, but -B holds whatever the environment says.
+        with mock.patch.object(launcher_build.subprocess, "Popen",
+                               wraps=launcher_build.subprocess.Popen) as popen:
+            self.assertEqual(self.build()[0], 0)
+        recomp = self.source / "gcn-recomp" / "recomp"
+        self.assertEqual([c.args[0][:3] for c in popen.call_args_list if c.args[0][0] == sys.executable], [
+            [sys.executable, "-B", str(recomp / "extract_dol.py")],
+            [sys.executable, "-B", str(recomp / "recomp.py")],
+            [sys.executable, "-B", str(self.source / "tools" / "warm_shaders.py")]])
+
+    def test_each_compile_make_prints_is_a_progress_event(self):
         code, events, _ = self.build()
         self.assertEqual(code, 0)
         self.assertEqual(self.of(events, "progress", "compile"), [
-            {"event": "progress", "step": "compile", "done": 12, "total": 183},
-            {"event": "progress", "step": "compile", "done": 183, "total": 183}])
+            {"event": "progress", "step": "compile", "done": n, "total": 3} for n in (1, 2, 3)])
         log = self.log.read_text()
-        self.assertIn("[12/183] Building C object a.o\n", log)
-        self.assertIn("ninja: Entering directory", log)
+        self.assertIn("gen/b.c:1:5: warning: a line that isn't a compile\n", log)
+        self.assertIn(" -o dragoon obj/a.o", log)
 
     def test_events_follow_the_steps_and_end_with_the_game(self):
         code, events, _ = self.build()
         self.assertEqual(code, 0)
-        self.assertEqual([e["step"] for e in self.of(events, "step")],
-                         ["sdl", "source", "configure", "compile", "warmup", "package", "swap"])
+        self.assertEqual([e["step"] for e in self.of(events, "step")], STEPS)
         self.assertEqual(self.of(events, "error"), [])
         self.assertEqual(events[-1], {"event": "done",
                                       "game": str(self.data / "game" / "current" / "Dragoon.app")})
@@ -280,6 +287,49 @@ class GoodRunTest(RecipeTestCase):
         del before["shaders.bin"], before[".shader-warmup"]
         self.assertEqual(after, before)
         self.assertEqual(os.listdir(self.cache), ["build.lock"])  # the intermediates are gone
+        self.assertEqual(sorted(os.listdir(self.data)), ["game", "saves"])
+
+    def test_the_snapshot_and_the_kit_are_only_read(self):
+        source, kit = tree(self.source), tree(self.kit)
+        self.assertEqual(self.build()[0], 0)
+        self.assertEqual((tree(self.source), tree(self.kit)), (source, kit))
+
+    def test_the_recompile_starts_from_an_empty_build_directory(self):
+        stale = self.cache / "build"
+        for name in ("gen/stale.c", "obj/stale.o", "dragoon"):
+            (stale / name).parent.mkdir(parents=True, exist_ok=True)
+            write_file(stale, name, "from a build that failed")
+        code, events, _ = self.build("--keep-build")
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(os.listdir(stale)), ["dragoon", "gen", "main.dol"])
+        self.assertEqual(sorted(os.listdir(stale / "gen")), ["a.c", "b.c", "c.c"])
+        self.assertEqual(self.of(events, "progress", "compile")[-1]["total"], 3)
+
+    def test_each_step_logs_its_time_and_what_data_and_cache_hold(self):
+        self.old_game()
+        write_file(self.data / "saves", "big.bin", bytes(3_000_000))
+        self.assertEqual(self.build()[0], 0)
+        lines = [m.groups() for m in re.finditer(
+            r"^== (\w+) took \d+\.\d s, with (\d+\.\d) MB in --data and --cache$",
+            self.log.read_text(), re.M)]
+        self.assertEqual([step for step, _ in lines], STEPS)
+        self.assertGreaterEqual(min(float(mb) for _, mb in lines), 3.0)
+
+    def test_disk_use_counts_blocks_as_du_does_and_no_link_targets(self):
+        files, links = self.dir / "files", self.dir / "links"
+        (files / "deeper").mkdir(parents=True)
+        links.mkdir()
+        write_file(files / "deeper", "a", bytes(1_000_000))
+        write_file(files, "b", b"x")
+        os.symlink(files / "deeper" / "a", links / "a")
+        used = launcher_build.disk_use(files)
+        du = subprocess.run(["/usr/bin/du", "-sk", str(files)], capture_output=True, text=True,
+                            check=True).stdout.split()[0]
+        self.assertEqual(used, int(du) * 1024)
+        self.assertGreaterEqual(used, 1_000_000)
+        self.assertLess(launcher_build.disk_use(links), 1_000_000)
+        self.assertEqual(launcher_build.disk_use(files, links),
+                         used + launcher_build.disk_use(links))
 
     def test_links_a_killed_swap_left_are_cleaned_up_at_the_next_swap(self):
         self.old_game()
@@ -308,15 +358,15 @@ class GoodRunTest(RecipeTestCase):
         self.assertRegex(stamp.pop("built"), r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
         self.assertEqual(stamp, {"dragoon": COMMIT, "gcn-recomp": ENGINE, "sdk": str(self.sdk)})
 
-    def test_the_warmup_runs_on_a_copy_without_bytecode(self):
+    def test_the_warmup_runs_the_snapshots_tool_on_the_disc(self):
         self.old_game()
         code, events, _ = self.build()
         self.assertEqual(code, 0)
         warm = self.record("warm_shaders")
-        self.assertEqual(warm["script"], str(self.data / "source" / COMMIT / "tools" / "warm_shaders.py"))
+        self.assertEqual(warm["script"], str(self.source / "tools" / "warm_shaders.py"))
         self.assertEqual(warm["argv"], ["--game", str(self.cache / "build" / "dragoon"),
-                                        "--saves", str(self.cache / "warm" / "saves")])
-        self.assertTrue(warm["nobytecode"])
+                                        "--saves", str(self.cache / "warm" / "saves"),
+                                        "--disc", str(self.disc)])
         self.assertEqual(self.of(events, "progress", "warmup"), [
             {"event": "progress", "step": "warmup", "done": 1, "total": 2},
             {"event": "progress", "step": "warmup", "done": 2, "total": 2}])
@@ -342,29 +392,28 @@ class GoodRunTest(RecipeTestCase):
         self.assertEqual(tree(self.data / "saves"), before)
         self.assertNotEqual(self.current(), OLD)
 
-    def test_keep_build_keeps_the_build_and_the_sdl_it_points_at(self):
+    def test_keep_build_keeps_the_build(self):
         self.assertEqual(self.build("--keep-build")[0], 0)
-        self.assertEqual(sorted(os.listdir(self.cache)), ["build", "build.lock", "sdl"])
+        self.assertEqual(sorted(os.listdir(self.cache)), ["build", "build.lock"])
+        self.assertEqual((self.cache / "build" / "dragoon").read_text(), "a fake dragoon")
 
-    def test_a_second_run_copies_again_and_keeps_the_first_build(self):
+    def test_a_second_run_keeps_the_first_build(self):
         self.assertEqual(self.build()[0], 0)
         first = self.current()
         self.assertEqual(self.build()[0], 0)
         second = self.current()
         self.assertNotEqual(first, second)
         self.assertEqual(sorted(os.listdir(self.data / "game")), sorted(["current", first, second]))
-        self.assertEqual(os.listdir(self.data / "source"), [COMMIT])
-        self.assertEqual(export_source.manifest(self.data / "source" / COMMIT),
-                         export_source.manifest(self.source))
 
 
 class FailureTest(RecipeTestCase):
-    def test_a_failed_step_leaves_current_and_saves_alone(self):
-        for step, tool, name in (("configure", "cmake", "cmake"), ("compile", "ninja", "ninja"),
+    def test_a_failed_step_leaves_data_alone(self):
+        for step, tool, name in (("recompile", "extract_dol", "extract_dol.py"),
+                                 ("recompile", "recomp", "recomp.py"), ("compile", "make", "make"),
                                  ("warmup", "warm_shaders", "warm_shaders.py"),
                                  ("package", "codesign", "codesign")):
-            with self.subTest(step):
-                self.data = self.dir / f"Application Support {step}" / "Dragoon"
+            with self.subTest(tool):
+                self.data = self.dir / f"Application Support {tool}" / "Dragoon"
                 self.old_game()
                 before = tree(self.data)
                 write_file(self.dir, f"fail {tool}", "")
@@ -374,39 +423,8 @@ class FailureTest(RecipeTestCase):
                 self.assertEqual(self.of(events, "error"), [{"event": "error", "step": step,
                                  "message": f"{name} exited 1", "log": str(self.log)}])
                 self.assertEqual(events[-1]["event"], "error")
-                after = tree(self.data)
-                self.assertEqual({p: after.get(p) for p in before}, before)
-                new = [p for p in after if p not in before]
-                self.assertTrue(new)
-                self.assertEqual([p for p in new if not self.a_new_build(p)], [])
+                self.assertEqual(tree(self.data), before)
                 self.assertIn(f"{name} failed on purpose", self.log.read_text())
-
-    @staticmethod
-    def a_new_build(path: str) -> bool:
-        """Whether PATH is in what a build may add before its swap: source/<commit> and game/<id>."""
-        parts = path.split("/")
-        return parts in (["source"], ["source", COMMIT]) or parts[:2] == ["source", COMMIT] \
-            or (parts[0] == "game" and len(parts) > 1 and parts[1] not in ("current", OLD))
-
-    def build_again_at_another_commit(self) -> None:
-        """A good build of a snapshot at another commit into the cache the last run left, as
-        the fake cmake refuses a build directory made from another source, like CMake's."""
-        self.assertTrue((self.cache / "build" / "CMakeCache.txt").is_file())
-        later = "f" * 40
-        self.make_snapshot(self.tarball, later)
-        code, events, _ = self.build()
-        self.assertEqual((code, self.of(events, "error")), (0, []))
-        self.assertEqual(self.records_of("cmake")[-1]["argv"][1], str(self.data / "source" / later))
-
-    def test_the_build_directory_of_a_failed_run_doesnt_stop_the_next_commit(self):
-        write_file(self.dir, "fail ninja", "")
-        self.assertEqual(self.build()[0], 1)
-        self.fail_marker("ninja").unlink()
-        self.build_again_at_another_commit()
-
-    def test_the_build_directory_kept_by_a_good_run_doesnt_stop_the_next_commit(self):
-        self.assertEqual(self.build("--keep-build")[0], 0)
-        self.build_again_at_another_commit()
 
     def test_a_swap_that_fails_installs_nothing_in_the_saves(self):
         self.old_game()
@@ -421,56 +439,6 @@ class FailureTest(RecipeTestCase):
         self.assertTrue((self.data / "game" / "current").is_dir())
         self.assertEqual(self.links_left_in_game(), [])  # the one this run made is gone
 
-    def test_a_tarball_with_the_wrong_hash_stops_before_anything(self):
-        make_tarball(self.tarball, [(tar_member("SDL3-3.4.18/other"), b"not the pinned one")])
-        code, events, _ = self.build()
-        self.assertEqual(code, 1)
-        (error,) = self.of(events, "error")
-        self.assertEqual(error["step"], "sdl")
-        self.assertIn("SHA-256", error["message"])
-        self.assertFalse(self.data.exists())
-        self.assertFalse((self.cache / "sdl").exists())
-        self.assertEqual(self.records_of("cmake"), [])
-
-    def test_a_pinned_tarball_with_a_symlink_is_refused(self):
-        make_tarball(self.tarball, [(tar_member("SDL3-3.4.18/", tarfile.DIRTYPE, 0o755), b""),
-                                    (tar_member("SDL3-3.4.18/x", tarfile.SYMTYPE, link="/etc"), b"")])
-        self.make_snapshot(self.tarball)
-        code, events, _ = self.build()
-        self.assertEqual(code, 1)
-        (error,) = self.of(events, "error")
-        self.assertEqual((error["step"], "SDL3-3.4.18/x" in error["message"]), ("sdl", True))
-        self.assertFalse((self.cache / "sdl").exists())
-
-    def test_the_extracted_files_are_the_bytes_that_were_hashed(self):
-        real = launcher_build.sdl_source.extract
-
-        def rewritten_then_extracted(tarball, dest):
-            # Someone replaces the file after its hash was checked.
-            make_tarball(self.tarball, [(tar_member("SDL3-3.4.18/CMakeLists.txt"), b"swapped\n")])
-            real(tarball, dest)
-
-        with mock.patch.object(launcher_build.sdl_source, "extract", rewritten_then_extracted):
-            code, _, _ = self.build("--keep-build")
-        self.assertEqual(code, 0)
-        self.assertEqual((self.cache / "sdl" / "SDL3-3.4.18" / "CMakeLists.txt").read_text(),
-                         "project(SDL3)\n")
-
-    def test_the_hash_is_of_the_bytes_that_were_read(self):
-        real, tarball = Path.read_bytes, self.tarball
-
-        def rewritten_after_reading(path):
-            data = real(path)
-            if path == tarball:  # someone replaces the file right after it was read
-                make_tarball(tarball, [(tar_member("SDL3-3.4.18/CMakeLists.txt"), b"swapped\n")])
-            return data
-
-        with mock.patch.object(Path, "read_bytes", rewritten_after_reading):
-            code, events, _ = self.build("--keep-build")
-        self.assertEqual((code, self.of(events, "error")), (0, []))
-        self.assertEqual((self.cache / "sdl" / "SDL3-3.4.18" / "CMakeLists.txt").read_text(),
-                         "project(SDL3)\n")
-
     def test_a_failed_package_removes_the_half_made_build(self):
         self.old_game()
         write_file(self.dir, "fail codesign", "")
@@ -478,20 +446,14 @@ class FailureTest(RecipeTestCase):
         self.assertEqual((code, [e["step"] for e in self.of(events, "error")]), (1, ["package"]))
         self.assertEqual(sorted(os.listdir(self.data / "game")), sorted(["current", OLD]))
 
-    def test_a_failure_before_the_first_step_still_names_a_step(self):
+    def test_a_failure_before_the_first_tool_still_names_a_step(self):
         self.cache.mkdir(parents=True)
         write_file(self.cache, "warm", "not a directory")  # the leftover cleanup can't remove it
         code, events, _ = self.build()
         self.assertEqual(code, 1)
         (error,) = self.of(events, "error")
-        self.assertEqual(error["step"], "sdl")
-
-    def test_a_snapshot_that_doesnt_match_its_manifest_is_refused(self):
-        write_file(self.source, "CMakeLists.txt", "project(edited)\n")
-        code, events, _ = self.build()
-        self.assertEqual(code, 1)
-        self.assertEqual([e["step"] for e in self.of(events, "error")], ["source"])
-        self.assertEqual(os.listdir(self.data / "source"), [])
+        self.assertEqual(error["step"], "recompile")
+        self.assertFalse(self.records.exists())
 
 
 class LockTest(RecipeTestCase):
@@ -512,27 +474,14 @@ class LockTest(RecipeTestCase):
         """The launcher gives each build its own log, but a developer's second run may name
         the first one's, which the running build is still writing."""
         self.log.parent.mkdir(parents=True)
-        self.log.write_text("== configure\n")
+        self.log.write_text("== recompile\n")
         self.cache.mkdir(parents=True)
         with (self.cache / "build.lock").open("a") as held:
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
             code, events, _ = self.build()
         self.assertEqual(code, 3)
         self.assertEqual(events[0]["log"], str(self.log))
-        self.assertEqual(self.log.read_text(), "== configure\n")
-
-
-class NoDiscTest(RecipeTestCase):
-    def test_builds_runtime_check_and_stops(self):
-        code, events, _ = self.build("--no-disc", disc=False)
-        self.assertEqual(code, 0)
-        self.assertEqual([e["step"] for e in self.of(events, "step")],
-                         ["sdl", "source", "configure", "compile"])
-        self.assertFalse([a for a in self.record("cmake")["argv"] if a.startswith("-DGAME_ISO")])
-        self.assertEqual(self.record("ninja")["argv"], ["-C", str(self.cache / "build"), "runtime_check"])
-        self.assertEqual(events[-1], {"event": "done", "game": None})
-        self.assertFalse((self.data / "game").exists())
-        self.assertEqual(self.records_of("codesign") + self.records_of("warm_shaders"), [])
+        self.assertEqual(self.log.read_text(), "== recompile\n")
 
 
 class ArgumentTest(RecipeTestCase):
@@ -542,21 +491,26 @@ class ArgumentTest(RecipeTestCase):
             args[args.index(flag) + 1] = value
             return args
 
+        def without(flag: str) -> list[str]:
+            args = self.argv()
+            del args[args.index(flag):args.index(flag) + 2]
+            return args
+
         cases = {
             "a relative path": (swap("--data", "Application Support/Dragoon"), "absolute"),
-            "a missing tool": (swap("--cmake", str(self.tools / "nope")), "--cmake"),
-            "a tool that isn't executable": (swap("--ninja", str(self.disc)), "--ninja"),
+            "a relative kit": (swap("--kit", "Dragoon.app/Contents/Resources/kit"), "absolute"),
+            "a relative make": (swap("--make", "fake tools/make"), "absolute"),
+            "a missing tool": (swap("--make", str(self.tools / "nope")), "--make"),
+            "a tool that isn't executable": (swap("--cc", str(self.disc)), "--cc"),
             "a missing disc": (swap("--disc", str(self.dir / "nope.iso")), "--disc"),
             "a disc that is a directory": (swap("--disc", str(self.tools)), "--disc"),
-            "a missing SDL tarball": (swap("--sdl-tarball", str(self.dir / "nope.tar.gz")),
-                                      "--sdl-tarball"),
-            "an SDL tarball that is a directory": (swap("--sdl-tarball", str(self.tools)),
-                                                   "--sdl-tarball"),
+            "no disc": (without("--disc"), "required"),
+            "no kit": (without("--kit"), "required"),
+            "a missing kit": (swap("--kit", str(self.dir / "nope")), "--kit"),
+            "a kit that is a file": (swap("--kit", str(self.disc)), "--kit"),
             "a missing SDK": (swap("--sdk", str(self.dir / "nope.sdk")), "--sdk"),
             "an SDK that is a file": (swap("--sdk", str(self.disc)), "--sdk"),
             "a source that is a file": (swap("--source", str(self.disc)), "--source"),
-            "both disc options": (self.argv("--no-disc"), "not allowed with"),
-            "neither disc option": (self.argv(disc=False), "required"),
             "a source with no source-info.json": (swap("--source", str(self.tools)),
                                                   source_info.NAME),
         }
@@ -567,6 +521,51 @@ class ArgumentTest(RecipeTestCase):
                 self.assertIn(why, err)
                 self.assertFalse(self.data.exists() or self.cache.exists() or self.log.exists())
                 self.assertFalse(self.records.exists())
+
+
+class RealTreeTest(unittest.TestCase):
+    """The recipe against this repository's own recompiler, CMakeLists.txt and kit Makefile."""
+
+    def test_the_recompiler_and_its_inputs_are_where_the_recipe_looks(self):
+        for rel in (launcher_build.EXTRACT_DOL, launcher_build.RECOMP, launcher_build.SYMBOLS):
+            self.assertTrue((ROOT / rel).is_file(), rel)
+        self.assertTrue((ROOT / launcher_build.TABLES).is_dir())
+
+    def test_gcn_add_game_takes_nothing_the_recipe_doesnt_pass(self):
+        """A DOL fixup, modules or sources of the game's own would need steps the recipe
+        doesn't have."""
+        (call,) = re.findall(r"\bgcn_add_game\s*\(([^)]*)\)", (ROOT / "CMakeLists.txt").read_text())
+        keywords = set(re.findall(r"^\s*([A-Z_]+)\s", call, re.M))
+        self.assertLessEqual(keywords, {"NAME", "TITLE", "LABEL", "DISC_ID", "DOL_SHA1", "SYMBOLS",
+                                        "TABLES", "FPS", "IMAGE_DIR"})
+        self.assertIn(f"SYMBOLS ${{CMAKE_SOURCE_DIR}}/{launcher_build.SYMBOLS}\n", call)
+        self.assertIn(f"TABLES ${{CMAKE_SOURCE_DIR}}/{launcher_build.TABLES}\n", call)
+
+    def test_the_kit_makefile_prints_each_compile_as_the_progress_counts_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game = Path(tmp) / "game dir"
+            (game / "gen").mkdir(parents=True)
+            for name in ("a.c", "b_1.c"):
+                write_file(game / "gen", name, "int x;\n")
+            kit = Path(tmp) / "engine kit"
+            (kit / "include").mkdir(parents=True)
+            write_file(kit, "Makefile", (ROOT / "launcher" / "kit" / "Makefile").read_text())
+            write_file(kit, "kit.mk", "MACOSX_MIN := 14.0\nGAME_CFLAGS := -O2 -g\n"
+                                      "LINK_FLAGS := -O2\nGAME_LIBS := -framework Metal\n")
+            for name in ("engine.o", "libSDL3.a", "include/recomp.h", "include/compat.h"):
+                write_file(kit, name, "")
+            args = launcher_build.parse_args([
+                "--source", tmp, "--kit", str(kit), "--disc", tmp, "--data", tmp, "--cache", tmp,
+                "--make", MAKE, "--cc", "/x/clang", "--cxx", "/x/clang++", "--python", tmp,
+                "--sdk", str(Path(tmp) / "Mac OSX.sdk"), "--log", tmp])
+            cmd = launcher_build.make_command(args)
+            done = subprocess.run([cmd[0], "-n", *cmd[1:]], cwd=game, capture_output=True,
+                                  text=True, check=True)
+        lines = done.stdout.splitlines()
+        compiles = [line for line in lines if launcher_build.COMPILE_LINE.fullmatch(line)]
+        self.assertEqual(len(compiles), 2, lines)
+        self.assertEqual(compiles, [line for line in lines if " -c " in line])
+        self.assertEqual(len([line for line in lines if " -o dragoon " in line]), 1, lines)
 
 
 if __name__ == "__main__":

@@ -248,35 +248,32 @@ It writes nothing and exits 2 when:
 
 ## launcher_build.py
 
-How does the launcher build the game? launcher_build.py is its recipe, and a developer can run it from a shell. Given a snapshot from export_source.py, the player's disc and every tool by full path, it builds `<data>/game/<id>/Dragoon.app` and points `<data>/game/current` at it. It prints one JSON event per line on stdout (the format is in `--help`) and writes every line the tools print to `--log`, with each command and each step's time.
+How does the launcher build the game? launcher_build.py is its recipe, and a developer can run it from a shell. Given a snapshot from export_source.py, a kit from engine_kit.py, the player's disc and every tool by full path, it builds `<data>/game/<id>/Dragoon.app` and points `<data>/game/current` at it. The player's Mac runs no CMake or Ninja and never builds SDL. It prints one JSON event per line on stdout (the format is in `--help`). It writes every line the tools print to `--log`, with each command, each step's time and how much `--data` and `--cache` hold after it.
 
 | Step | What it does |
 |---|---|
-| sdl | Checks the SDL tarball against gcn-recomp's pin and extracts it to `<cache>/sdl` |
-| source | Copies the snapshot to `<data>/source/<commit>` and checks the copy against its manifest |
-| configure | Runs CMake into an empty `<cache>/build`, which recompiles the disc |
-| compile | Runs Ninja for `dragoon`, whose `[done/total]` lines become progress events |
-| warmup | Runs the copy's warm_shaders.py on a copy of the player's shader cache, one progress event per pass |
+| recompile | Empties `<cache>/build`. There the snapshot's `extract_dol.py` takes `main.dol` from the disc, checked against the disc ID and SHA-1 in `source-info.json`, and its `recomp.py` writes the game's C to `gen/` |
+| compile | Runs make on the kit's Makefile with a job per core, which compiles `gen/*.c` and links `dragoon` with the kit. Each compile line make prints becomes a progress event |
+| warmup | Runs the snapshot's warm_shaders.py on the disc and a copy of the player's shader cache, one progress event per pass |
 | package | Wraps the game in an app sealed ad hoc, with a `stamp.json` naming both commits and the SDK |
 | swap | Points `game/current` at the new build, then installs the warmed cache in `<data>/saves` |
 
-The tools run with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and five other variables, listed in `--help`. CMake ignores `/opt/homebrew`, `/usr/local` and `/opt/local`, so Homebrew's Python, SDL or libusb can't reach the build. `FETCHCONTENT_FULLY_DISCONNECTED` makes any download an error.
+The tools run with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and four other variables, listed in `--help`, so nothing Homebrew or MacPorts installed reaches the build. The snapshot and the kit are only read, and Python runs with `-B`, so a build leaves the launcher's seal as it was.
 
-Before the swap nothing in `<data>` changes but the new `source/<commit>` and `game/<id>`. A rebuild of a commit replaces its `source/<commit>`, which the installed game never reads. A failed or killed build leaves the old game current and `saves/` as it was, and a package step that fails removes its `game/<id>`. Earlier builds stay in `<data>/game` for the launcher to delete. A second build while one runs exits 3 at `<cache>/build.lock` without touching anything, its `--log` included.
+Before the swap nothing in `<data>` changes but the new `game/<id>`. A failed or killed build leaves the old game current and `saves/` as it was, and a package step that fails removes its `game/<id>`. Earlier builds stay in `<data>/game` for the launcher to delete. A second build while one runs exits 3 at `<cache>/build.lock` without touching anything, its `--log` included.
 
 ```
-tools/launcher_build.py --source /tmp/dragoon-source --disc "$HOME/Kirby Air Ride (USA).gcm" \
+tools/launcher_build.py --source /tmp/dragoon-source --kit /tmp/engine-kit \
+  --disc "$HOME/Kirby Air Ride (USA).gcm" \
   --data /tmp/dragoon-data --cache /tmp/dragoon-cache --log /tmp/dragoon-build.log \
-  --cmake /opt/homebrew/bin/cmake --ninja /opt/homebrew/bin/ninja \
+  --make /Library/Developer/CommandLineTools/usr/bin/make \
   --cc /Library/Developer/CommandLineTools/usr/bin/clang \
   --cxx /Library/Developer/CommandLineTools/usr/bin/clang++ \
   --python /Library/Developer/CommandLineTools/usr/bin/python3 \
-  --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk --sdl-tarball /tmp/SDL3-3.4.18.tar.gz
+  --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
 ```
 
-A first build on an M4 Max took 112 s, with 24 s to configure, 33 s to compile (SDL's source included) and 55 s to warm up. A second build of the same commit took 57 s, because the warm-up found its stamp current.
-
-`--no-disc` builds `runtime_check` and stops, which proves the tools and SDL's source configure and compile with no disc. `--no-warmup` skips the warm-up. `--keep-build` keeps `<cache>/build` and the SDL source it points at, which are deleted after a good build otherwise.
+`--no-warmup` skips the warm-up. `--keep-build` keeps `<cache>/build`, which is deleted after a good build otherwise.
 
 ## engine_kit.py
 
@@ -290,7 +287,7 @@ tools/engine_kit.py --build build-kit --out build-kit/kit --strip-debug
 
 CI's `kit` job runs these, links the kit against `tests/kit/stub_tables.c`, empty tables that stand in for the recompiler's output, and uploads the kit as the `engine-kit` artifact. A framework missing from `game_libs.txt` fails that link.
 
-On the player's side, the Command Line Tools' python3 runs `extract_dol.py` and `recomp.py` into a directory, and then the kit's Makefile compiles `gen/*.c` there and links `./dragoon`. `KIT` is named on the command line, since make splits the Makefile's own path at its spaces, and the kit's path may have them:
+On the player's side, launcher_build.py has the Command Line Tools' python3 run `extract_dol.py` and `recomp.py` into a directory, and then the kit's Makefile compiles `gen/*.c` there and links `./dragoon`. `KIT` is named on the command line, since make splits the Makefile's own path at its spaces, and the kit's path may have them:
 
 ```
 make -f "$KIT/Makefile" -j16 KIT="$KIT" SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
@@ -300,10 +297,6 @@ make -f "$KIT/Makefile" -j16 KIT="$KIT" SDK=/Library/Developer/CommandLineTools/
 A `$`, `"`, `` ` ``, `:` or `;` in `KIT` or `SDK` stops make with an error, since make or the shell would read it as its own. Finder shows a `:` in a name as a `/`. The launcher passes paths it controls. A new `kit.mk` or kit header rebuilds every object.
 
 A build with a `GAME_ISO` is refused, since its `main.o` would carry the disc's path. So is a build with no deployment target, or one missing any of the three files. gcn-recomp's configure writes the two link files together, and neither when it can't write every library, with a warning saying why. A `game_libs.txt` that names a path is refused too, since a player's Mac may not have it. `ld -r` turns the objects' DWARF into a debug map naming the build's own `.o` files, which a player doesn't have. `--strip-debug` drops that map and `libSDL3.a`'s DWARF. The kit is written under a temporary name and renamed into place, so a failed run leaves no OUT. It exits 1 when ld or strip fails and 2 on a build it can't make a kit from. The tests use objects compiled from one-line C, and compilers that only record their arguments under the real `make`, with the kit, the directory holding `gen/` and the SDK at paths with spaces.
-
-## sdl_source.py
-
-Where does SDL's source come from when nothing downloads? gcn-recomp's `CMakeLists.txt` pins SDL's release tarball by URL and SHA-256 in its `sdl3` `FetchContent_Declare`. sdl_source.py reads that pin, so the hash has one home. The launcher reads the tarball once, so what it extracts is what it hashed. Its extraction checks every member before it writes anything, and refuses absolute paths, `..` and anything but plain files and directories, since the tools' Python 3.9 has no tarfile filter. It has no command line.
 
 ## check_bundle.py
 

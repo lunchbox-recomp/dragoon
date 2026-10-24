@@ -1,49 +1,45 @@
 #!/usr/bin/env python3
-"""Build the game on the player's Mac from a source snapshot and their disc.
+"""Build the game on the player's Mac from a source snapshot, the engine kit and their disc.
 
-Usage: launcher_build.py --source DIR (--disc FILE | --no-disc) --data DIR --cache DIR
-           --cmake FILE --ninja FILE --cc FILE --cxx FILE --python FILE --sdk DIR
-           --sdl-tarball FILE --log FILE [--no-warmup] [--keep-build]
+Usage: launcher_build.py --source DIR --kit DIR --disc FILE --data DIR --cache DIR
+           --make FILE --cc FILE --cxx FILE --python FILE --sdk DIR --log FILE
+           [--no-warmup] [--keep-build]
 
 The launcher runs this, and a developer can run it from a shell. Every path is absolute and
 every tool is the one named, never one found on PATH. The tools get only PATH=/usr/bin:/bin:
-/usr/sbin:/sbin, HOME, TMPDIR, LANG, PYTHONDONTWRITEBYTECODE and NINJA_STATUS, and CMake
-ignores /opt/homebrew, /usr/local and /opt/local, so Homebrew and MacPorts can't reach the
-build. Nothing downloads. The steps are:
-  sdl        check --sdl-tarball against gcn-recomp's pin and extract it to <cache>/sdl
-  source     copy the snapshot to <data>/source/<dragoon commit> and check it against its
-             manifest
-  configure  CMake into an empty <cache>/build, which recompiles the disc
-  compile    Ninja builds dragoon, or runtime_check under --no-disc, which stops there
+/usr/sbin:/sbin, HOME, TMPDIR, LANG and PYTHONDONTWRITEBYTECODE, so nothing from Homebrew or
+MacPorts reaches the build. Nothing downloads, and the snapshot and the kit are only read.
+The steps are:
+  recompile  in an empty <cache>/build, the snapshot's extract_dol.py takes main.dol from the
+             disc, checked against the disc ID and SHA-1 in its source-info.json, and its
+             recomp.py writes the game's C to gen/
+  compile    the kit's Makefile, run by make with a job per core, compiles gen/*.c there and
+             links dragoon with the kit's engine.o and libSDL3.a
   warmup     warm_shaders.py in <cache>/warm, on a copy of the player's shader cache
   package    <data>/game/<id>/Dragoon.app around the game, sealed ad hoc, with a stamp.json
              beside it naming both commits, the SDK and the time
   swap       point <data>/game/current at the new build, then install the warmed cache in
              <data>/saves
-Before the swap nothing in <data> changes but the new source/<commit> and game/<id>. A
-rebuild of a commit replaces its source/<commit>, which the installed game never reads, and
-a package step that fails removes its game/<id>. Earlier builds stay in <data>/game for the
-launcher to delete. After a good build the intermediates in <cache> are deleted, except
-build/ and sdl/ under --keep-build.
+Before the swap nothing in <data> changes but the new game/<id>, and a package step that fails
+removes it. Earlier builds stay in <data>/game for the launcher to delete. After a good build
+the intermediates in <cache> are deleted, except build/ under --keep-build.
 
 Prints one JSON object per line on stdout:
-  {"event": "step", "step": "configure"}
-  {"event": "progress", "step": "compile", "done": 12, "total": 183}
-  {"event": "done", "game": "<data>/game/current/Dragoon.app"}   (null under --no-disc)
-  {"event": "error", "step": "configure", "message": "...", "log": "<file>"}
---log gets every line every tool prints, with each command and each step's time. A build that
-loses the lock doesn't open it.
+  {"event": "step", "step": "recompile"}
+  {"event": "progress", "step": "compile", "done": 12, "total": 135}
+  {"event": "done", "game": "<data>/game/current/Dragoon.app"}
+  {"event": "error", "step": "compile", "message": "...", "log": "<file>"}
+--log gets every line every tool prints, with each command, and each step's time and what
+<data> and <cache> hold after it. A build that loses the lock doesn't open it.
 
-Exits 0 when the new game is current (under --no-disc, when runtime_check built), 1 when a
-step failed, 2 on a bad argument and 3 when another build holds <cache>/build.lock.
+Exits 0 when the new game is current, 1 when a step failed, 2 on a bad argument and 3 when
+another build holds <cache>/build.lock.
 """
 from __future__ import annotations
 
 import argparse
 import contextlib
 import fcntl
-import hashlib
-import io
 import itertools
 import json
 import os
@@ -59,20 +55,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterator, Optional, TextIO
 
-import export_source
 import routes
-import sdl_source
 import source_info
 import warm_shaders
 
 TOOL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 CODESIGN = "/usr/bin/codesign"
-IGNORE_PREFIXES = "/opt/homebrew;/usr/local;/opt/local"
 APP = "Dragoon.app"
 GAME = "dragoon"
 WARMED = (warm_shaders.CACHE, warm_shaders.STAMP)
-NINJA_LINE = re.compile(r"\[(\d+)/(\d+)\] ")
 PARTIAL = ".partial"
+# The recompiler in the snapshot, and the SYMBOLS and TABLES Dragoon's CMakeLists.txt gives
+# gcn_add_game.
+EXTRACT_DOL = "gcn-recomp/recomp/extract_dol.py"
+RECOMP = "gcn-recomp/recomp/recomp.py"
+SYMBOLS = "analysis/symbols.txt"
+TABLES = "recomp"
+# The line make prints for each object the kit's Makefile compiles.
+COMPILE_LINE = re.compile(r".* -c gen/[^ ]+\.c -o obj/[^ ]+\.o")
 # Until the launcher's own bundle ID is chosen, the game's follows the one that needs no domain.
 INFO_PLIST = {
     "CFBundleExecutable": GAME,
@@ -95,19 +95,29 @@ class StepFailed(Exception):
 
 def tool_env() -> dict[str, str]:
     return {"PATH": TOOL_PATH, "HOME": str(Path.home()), "TMPDIR": tempfile.gettempdir(),
-            "LANG": "en_US.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "NINJA_STATUS": "[%f/%t] "}
+            "LANG": "en_US.UTF-8", "PYTHONDONTWRITEBYTECODE": "1"}
 
 
 def emit(**event: object) -> None:
     print(json.dumps(event), flush=True)
 
 
+def disk_use(*roots: Path) -> int:
+    """Bytes the files under ROOTS take on disk, as du counts them, links not followed."""
+    total = 0
+    for root in roots:
+        for parent, _, names in os.walk(root):
+            total += sum(os.lstat(os.path.join(parent, n)).st_blocks * 512 for n in names)
+    return total
+
+
 class Build:
     """The log and the tools run, for one build, and the events its steps print."""
 
-    def __init__(self, log: TextIO, log_path: Path):
+    def __init__(self, log: TextIO, log_path: Path, *watched: Path):
         self.log = log
         self.log_path = log_path
+        self.watched = watched
         self.step = ""
         self.env = tool_env()
 
@@ -126,7 +136,8 @@ class Build:
         self.note(f"== {step}")
         start = time.monotonic()
         yield
-        self.note(f"== {step} took {time.monotonic() - start:.1f} s")
+        self.note(f"== {step} took {time.monotonic() - start:.1f} s, "
+                  f"with {disk_use(*self.watched) / 1e6:.1f} MB in --data and --cache")
 
     def run(self, cmd: list[str], cwd: Path, name: str = "",
             progress: Progress = lambda line: None) -> None:
@@ -146,81 +157,54 @@ class Build:
             raise StepFailed(f"{name or Path(cmd[0]).name} exited {p.returncode}")
 
 
-def ninja_progress(line: str) -> Optional[tuple]:
-    m = NINJA_LINE.match(line)
-    return (int(m.group(1)), int(m.group(2))) if m else None
-
-
 def remove(path: Path) -> None:
     if path.exists():
         shutil.rmtree(path)
 
 
-def unpack_sdl(snapshot: Path, tarball: Path, cache: Path) -> Path:
-    pin = sdl_source.pin((snapshot / "gcn-recomp" / "CMakeLists.txt").read_text())
-    data = tarball.read_bytes()  # once, so what is extracted is what was hashed
-    found = hashlib.sha256(data).hexdigest()
-    if found != pin.sha256:
-        raise StepFailed(f"{tarball} has SHA-256 {found}, but gcn-recomp pins {pin.sha256}")
-    dest = cache / "sdl"
-    remove(dest)
-    sdl_source.extract(io.BytesIO(data), dest)
-    if not (dest / pin.top).is_dir():
-        raise StepFailed(f"{tarball} holds no {pin.top}/")
-    return dest / pin.top
+def recompile(b: Build, a: argparse.Namespace, info: dict[str, str], build: Path) -> None:
+    """main.dol and gen/ in BUILD, which is emptied first."""
+    remove(build)
+    build.mkdir(parents=True)
+    dol = build / "main.dol"
+    b.run([str(a.python), "-B", str(a.source / EXTRACT_DOL), str(a.disc), str(dol),
+           info["disc_id"], info["dol_sha1"]], cwd=build, name="extract_dol.py")
+    b.run([str(a.python), "-B", str(a.source / RECOMP), str(dol), str(a.source / SYMBOLS),
+           str(build / "gen"), str(a.source / TABLES)], cwd=build, name="recomp.py")
 
 
-def copy_source(snapshot: Path, parent: Path, commit: str) -> Path:
-    """Copy SNAPSHOT to PARENT/COMMIT through a temp name and a rename, checked file by file
-    against its manifest. A copy already there is replaced."""
-    parent.mkdir(parents=True, exist_ok=True)
-    for leftover in parent.glob("*" + PARTIAL):  # from a build that was killed
-        shutil.rmtree(leftover, ignore_errors=True)
-    tmp = Path(tempfile.mkdtemp(prefix=f".{commit}.", suffix=PARTIAL, dir=parent))
-    try:
-        shutil.copytree(snapshot, tmp, symlinks=True, dirs_exist_ok=True)
-        want = export_source.parse_manifest((tmp / export_source.MANIFEST).read_text())
-        if export_source.manifest(tmp) != want:
-            raise StepFailed(f"{snapshot} doesn't match its {export_source.MANIFEST}")
-        final = parent / commit
-        if final.exists():  # moved aside, and deleted below with the other leftovers
-            os.rename(final, Path(tempfile.mkdtemp(suffix=PARTIAL, dir=parent)) / commit)
-        os.rename(tmp, final)
-    except BaseException:
-        shutil.rmtree(tmp, ignore_errors=True)
-        raise
-    for leftover in parent.glob("*" + PARTIAL):
-        shutil.rmtree(leftover, ignore_errors=True)
-    return final
+def make_command(a: argparse.Namespace) -> list[str]:
+    return [str(a.make), "-f", str(a.kit / "Makefile"), f"-j{os.cpu_count() or 1}",
+            f"KIT={a.kit}", f"SDK={a.sdk}", f"CC={a.cc}", f"CXX={a.cxx}", GAME]
 
 
-def configure_command(a: argparse.Namespace, source: Path, build: Path, sdl: Path) -> list[str]:
-    cmd = [str(a.cmake), "-S", str(source), "-B", str(build), "-G", "Ninja",
-           f"-DCMAKE_MAKE_PROGRAM={a.ninja}", "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-           f"-DCMAKE_OSX_SYSROOT={a.sdk}", f"-DCMAKE_C_COMPILER={a.cc}",
-           f"-DCMAKE_CXX_COMPILER={a.cxx}", f"-DPython3_EXECUTABLE={a.python}"]
-    if not a.no_disc:
-        cmd.append(f"-DGAME_ISO={a.disc}")
-    return cmd + ["-DDRAGOON_WARMUP=OFF", f"-DFETCHCONTENT_SOURCE_DIR_SDL3={sdl}",
-                  "-DFETCHCONTENT_FULLY_DISCONNECTED=ON", "-DSDL_HIDAPI_LIBUSB=OFF",
-                  f"-DCMAKE_IGNORE_PREFIX_PATH={IGNORE_PREFIXES}"]
+def compile_game(b: Build, a: argparse.Namespace, build: Path) -> None:
+    """BUILD/dragoon from BUILD/gen, with one progress event per object compiled."""
+    total = len(list((build / "gen").glob("*.c")))
+    done = itertools.count(1)
+
+    def progress(line: str) -> Optional[tuple]:
+        return (next(done), total) if COMPILE_LINE.fullmatch(line) else None
+
+    b.run(make_command(a), cwd=build, progress=progress)
 
 
-def warm_up(b: Build, a: argparse.Namespace, source: Path, game: Path, warm: Path) -> None:
-    """Run the source's warm_shaders.py on copies of the player's cache and stamp in WARM."""
+def warm_up(b: Build, a: argparse.Namespace, game: Path, warm: Path) -> None:
+    """Run the snapshot's warm_shaders.py on copies of the player's cache and stamp in WARM."""
     warm.mkdir(parents=True)
     for name in WARMED:
         if (a.data / "saves" / name).is_file():
             shutil.copy2(a.data / "saves" / name, warm / name)
-    manifest = source / routes.MANIFEST.relative_to(routes.ROOT)
+    manifest = a.source / routes.MANIFEST.relative_to(routes.ROOT)
     total = len(routes.parse_manifest(manifest.read_text()))
     done = itertools.count(1)
 
     def progress(line: str) -> Optional[tuple]:
         return (next(done), total) if warm_shaders.PASS_LINE.fullmatch(line) else None
 
-    b.run([str(a.python), "-B", str(source / "tools" / "warm_shaders.py"), "--game", str(game),
-           "--saves", str(warm)], cwd=a.cache, name="warm_shaders.py", progress=progress)
+    b.run([str(a.python), "-B", str(a.source / "tools" / "warm_shaders.py"), "--game", str(game),
+           "--saves", str(warm), "--disc", str(a.disc)], cwd=a.cache, name="warm_shaders.py",
+          progress=progress)
 
 
 def new_build_dir(games: Path, commit: str) -> Path:
@@ -276,26 +260,18 @@ def swap(data: Path, build: Path, warm: Path) -> None:
             warm_shaders.install(warm / name, data / "saves" / name)
 
 
-def build_game(b: Build, a: argparse.Namespace, info: dict[str, str]) -> Optional[Path]:
-    """Every step in order. Returns the game's path, or None under --no-disc."""
+def build_game(b: Build, a: argparse.Namespace, info: dict[str, str]) -> Path:
+    """Every step in order. Returns the game's path."""
     warm = a.cache / "warm" / "saves"
-    with b.stage("sdl"):
-        remove(warm.parent)  # from a build that was killed, which the swap mustn't install from
-        sdl = unpack_sdl(a.source, a.sdl_tarball, a.cache)
-    with b.stage("source"):
-        source = copy_source(a.source, a.data / "source", info["dragoon"])
     build = a.cache / "build"
-    with b.stage("configure"):
-        remove(build)
-        b.run(configure_command(a, source, build, sdl), cwd=a.cache)
+    with b.stage("recompile"):
+        remove(warm.parent)  # from a build that was killed, which the swap mustn't install from
+        recompile(b, a, info, build)
     with b.stage("compile"):
-        b.run([str(a.ninja), "-C", str(build), "runtime_check" if a.no_disc else GAME],
-              cwd=a.cache, progress=ninja_progress)
-    if a.no_disc:
-        return None
+        compile_game(b, a, build)
     if not a.no_warmup:
         with b.stage("warmup"):
-            warm_up(b, a, source, build / GAME, warm)
+            warm_up(b, a, build / GAME, warm)
     with b.stage("package"):
         game = package(b, a, build / GAME, info)
     with b.stage("swap"):
@@ -307,36 +283,32 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--source", type=Path, required=True, help="the read-only source snapshot")
-    disc = ap.add_mutually_exclusive_group(required=True)
-    disc.add_argument("--disc", type=Path, help="the player's disc image")
-    disc.add_argument("--no-disc", action="store_true",
-                      help="configure with no disc and build runtime_check only")
+    ap.add_argument("--kit", type=Path, required=True, help="the engine kit engine_kit.py made")
+    ap.add_argument("--disc", type=Path, required=True, help="the player's disc image")
     ap.add_argument("--data", type=Path, required=True, help="~/Library/Application Support/Dragoon")
     ap.add_argument("--cache", type=Path, required=True, help="~/Library/Caches/Dragoon")
-    for tool in ("cmake", "ninja", "cc", "cxx", "python"):
+    for tool in ("make", "cc", "cxx", "python"):
         ap.add_argument(f"--{tool}", type=Path, required=True)
     ap.add_argument("--sdk", type=Path, required=True)
-    ap.add_argument("--sdl-tarball", type=Path, required=True)
     ap.add_argument("--log", type=Path, required=True, help="every line every tool prints")
     ap.add_argument("--no-warmup", action="store_true", help="skip the shader warm-up")
-    ap.add_argument("--keep-build", action="store_true", help="keep <cache>/build and <cache>/sdl")
+    ap.add_argument("--keep-build", action="store_true", help="keep <cache>/build")
     return ap.parse_args(argv)
 
 
 def bad_argument(a: argparse.Namespace) -> Optional[str]:
-    for flag in ("source", "disc", "data", "cache", "cmake", "ninja", "cc", "cxx", "python",
-                 "sdk", "sdl_tarball", "log"):
+    for flag in ("source", "kit", "disc", "data", "cache", "make", "cc", "cxx", "python", "sdk",
+                 "log"):
         path = getattr(a, flag)
-        if path is not None and not path.is_absolute():
-            return f"--{flag.replace('_', '-')} {path} isn't an absolute path"
-    for flag in ("cmake", "ninja", "cc", "cxx", "python"):
+        if not path.is_absolute():
+            return f"--{flag} {path} isn't an absolute path"
+    for flag in ("make", "cc", "cxx", "python"):
         path = getattr(a, flag)
         if not (path.is_file() and os.access(path, os.X_OK)):
             return f"--{flag} {path} isn't an executable file"
-    for flag, path in (("--sdl-tarball", a.sdl_tarball), ("--disc", a.disc)):
-        if path is not None and not path.is_file():
-            return f"{flag} {path} isn't a file"
-    for flag, path in (("--source", a.source), ("--sdk", a.sdk)):
+    if not a.disc.is_file():
+        return f"--disc {a.disc} isn't a file"
+    for flag, path in (("--source", a.source), ("--kit", a.kit), ("--sdk", a.sdk)):
         if not path.is_dir():
             return f"{flag} {path} isn't a directory"
     return None
@@ -364,15 +336,15 @@ def main(argv: list[str]) -> int:
             return 3
         a.log.parent.mkdir(parents=True, exist_ok=True)
         with a.log.open("a") as log:
-            b = Build(log, a.log)
+            b = Build(log, a.log, a.data, a.cache)
             try:
                 game = build_game(b, a, info)
             except (StepFailed, OSError, ValueError, subprocess.SubprocessError) as e:
                 b.fail(b.step, str(e))
                 return 1
-            for name in ("warm",) + (() if a.keep_build else ("build", "sdl")):
+            for name in ("warm",) + (() if a.keep_build else ("build",)):
                 shutil.rmtree(a.cache / name, ignore_errors=True)
-            emit(event="done", game=str(game) if game else None)
+            emit(event="done", game=str(game))
     return 0
 
 
