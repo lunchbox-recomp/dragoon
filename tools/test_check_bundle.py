@@ -34,6 +34,7 @@ SDL = "Contents/Resources/kit/libSDL3.a"
 OBJECTS = {
     "engine.o": 'extern const unsigned g_recomp_func_count;\nconst char gcn_game_id[] = "GKYE01";\n'
                 "unsigned engine_funcs(void) { return g_recomp_func_count; }\n",
+    "engine2.o": 'const char gcn_game_id[] = "GKYE01";\nconst char gcn_game_id2[] = "GKYE01!";\n',
     "sdl.o": "int SDL_Fake(void) { return 3; }\n",
     "tool.o": "int main(void) { return 0; }\n",
     "functions.o": "int fn_8000ABCD(int x) { return x + 1; }\nint fn_80003100(int x) { return x * 2; }\n",
@@ -92,20 +93,35 @@ def compile_objects(out: Path) -> dict[str, bytes]:
 
 
 def ar_archive(*members: tuple[str, bytes]) -> bytes:
-    """An ar archive of MEMBERS, (name, data) pairs, written byte by byte."""
+    """An ar archive of MEMBERS, (name, data) pairs, written byte by byte with the names after
+    BSD headers, as macOS's ar writes them."""
     out = bytearray(AR_MAGIC)
     for name, data in members:
-        out += f"{name:<16}{0:<12}{0:<6}{0:<6}{644:<8}{len(data):<10}`\n".encode() + data
+        raw = name.encode()
+        out += f"#1/{len(raw):<13}{0:<12}{0:<6}{0:<6}{644:<8}{len(raw) + len(data):<10}`\n".encode() + raw + data
         out += b"\n" * (len(out) % 2)
     return bytes(out)
 
 
-def fat_file(*slices: bytes) -> bytes:
-    """A fat file holding SLICES, each marked arm64 and starting on a 4096-byte boundary."""
-    out = bytearray(bytes.fromhex("cafebabe") + len(slices).to_bytes(4, "big"))
+def object_32() -> bytes:
+    """A 32-bit little-endian Mach-O object with one load command, its LC_SYMTAB, which names
+    an empty 4-byte string table at its end."""
+    header = b"".join(n.to_bytes(4, "little") for n in (0xFEEDFACE, 7, 3, 1, 1, 24, 0))
+    symtab = b"".join(n.to_bytes(4, "little") for n in (2, 24, 52, 0, 52, 4))
+    return header + symtab + bytes(4)
+
+
+def fat_file(*slices: bytes, wide: bool = False) -> bytes:
+    """A fat file holding SLICES, each marked arm64 and starting on a 4096-byte boundary, with
+    64-bit offsets and sizes if WIDE."""
+    out = bytearray(bytes.fromhex("cafebabf" if wide else "cafebabe") + len(slices).to_bytes(4, "big"))
     offset = 4096
     for data in slices:
-        out += b"".join(n.to_bytes(4, "big") for n in (0x0100000C, 0, offset, len(data), 12))
+        if wide:
+            out += b"".join(n.to_bytes(width, "big") for n, width in
+                            ((0x0100000C, 4), (0, 4), (offset, 8), (len(data), 8), (12, 4), (0, 4)))
+        else:
+            out += b"".join(n.to_bytes(4, "big") for n in (0x0100000C, 0, offset, len(data), 12))
         offset += -(-len(data) // 4096) * 4096
     for data in slices:
         out += bytes(-len(out) % 4096) + data
@@ -396,12 +412,63 @@ class ObjectTest(BundleTestCase):
         executable = bytearray(self.objects["engine.o"])
         executable[12] = 2  # MH_EXECUTE
         for name, data in (("an archive", self.objects["engine.a"]), ("an executable", bytes(executable)),
-                           ("a fat archive", self.objects["fat/sdl+sdl.a"])):
+                           ("a fat archive", self.objects["fat/sdl+sdl.a"]), ("a 32-bit object", object_32()),
+                           ("bytes after its string table", self.objects["engine.o"] + b"generic bytes")):
             with self.subTest(name):
                 self.plant(ENGINE, data)
                 code, out, _ = self.check()
                 self.assertEqual(code, 1)
                 self.assertIn(f"engine not a Mach-O object: {ENGINE}", out)
+
+    def test_the_engine_with_a_blob_after_it_fails(self):
+        self.plant(ENGINE, self.objects["engine.o"] + b"generic bytes GKYE01")
+        self.assert_findings(f"engine not a Mach-O object: {ENGINE}",
+                             f"disc ID: {ENGINE} (GKYE01 2 times, and the engine carries it once)")
+
+    def test_the_engine_may_hold_the_disc_id_once(self):
+        self.plant(ENGINE, self.objects["engine2.o"])
+        self.assert_findings(f"disc ID: {ENGINE} (GKYE01 2 times, and the engine carries it once)")
+
+    def test_a_symbol_table_may_only_open_an_archive_under_its_own_names(self):
+        sdl = self.objects["sdl.o"]
+        cases = {"after an object": (ar_archive(("sdl.o", sdl), ("__.SYMDEF", b"generic blob")), "__.SYMDEF"),
+                 "under another name": (ar_archive(("__.SYMDEF_blob", b"generic blob"), ("sdl.o", sdl)),
+                                        "__.SYMDEF_blob")}
+        for why, (data, member) in cases.items():
+            with self.subTest(why):
+                self.plant(SDL, data)
+                self.assert_findings(f"unreadable object: {SDL} (its member {member} isn't Mach-O)")
+
+    def test_a_member_has_to_end_at_its_string_table(self):
+        sdl = self.objects["sdl.o"]
+        swallowed = ar_archive(("tables.o", self.objects["tables.o"]))[len(AR_MAGIC):]
+        cases = {"a blob after it": sdl + b"generic blob", "the next member inside it": sdl + swallowed,
+                 "eight newlines after it": sdl + b"\n" * 8, "zeros after it": sdl + bytes(4)}
+        for why, data in cases.items():
+            with self.subTest(why):
+                self.plant(SDL, ar_archive(("sdl.o", data)))
+                self.assert_findings(f"unreadable object: {SDL} (its member sdl.o doesn't end where its"
+                                     " string table does)")
+        with self.subTest("a Mach-O magic and a blob"):
+            self.plant(SDL, ar_archive(("sdl.o", sdl[:4] + b"generic blob")))
+            self.assert_findings(f"unreadable object: {SDL} (its member sdl.o has load commands that don't fit it)")
+
+    def test_newlines_may_pad_a_member_as_strip_leaves_one(self):
+        self.plant(SDL, ar_archive(("sdl.o", self.objects["sdl.o"] + b"\n" * 4)))
+        self.assertEqual(self.check(), (0, [], ""))
+
+    def test_an_odd_sized_symbol_table_is_padded_past(self):
+        # No ranlib entries and a 2-byte string table: 10 bytes after a 9-byte name.
+        symdef = bytes(4) + (2).to_bytes(4, "little") + bytes(2)
+        data = ar_archive(("__.SYMDEF", symdef), ("sdl.o", self.objects["sdl.o"]))
+        self.assertEqual((len("__.SYMDEF") + len(symdef)) % 2, 1)
+        self.plant(SDL, data)
+        self.assertEqual(subprocess.run(["/usr/bin/nm", str(self.app / SDL)], capture_output=True).returncode, 0)
+        self.assertEqual(self.check(), (0, [], ""))
+
+    def test_a_fat64_files_archive_slices_are_read(self):
+        self.plant(SDL, fat_file(ar_archive(("sdl.o", self.objects["sdl.o"]), ("blob.bin", b"generic")), wide=True))
+        self.assert_findings(f"unreadable object: {SDL} (its member blob.bin isn't Mach-O)")
 
     def test_a_thin_object_at_a_macho_path_is_read(self):
         self.plant("Contents/MacOS/ninja", self.objects["functions.o"])
@@ -473,22 +540,23 @@ class ContentTest(BundleTestCase):
         self.assert_findings("disc ID: Contents/MacOS/ninja (GKYE01 outside the source)")
 
 
-class ContainsTest(unittest.TestCase):
+class OccurrencesTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.dir = Path(tmp.name)
 
-    def test_finds_a_needle_across_a_block_boundary(self):
+    def test_counts_each_needle_once_across_block_boundaries(self):
         for offset in range(0, 20):
             with self.subTest(offset=offset):
-                path = write_file(self.dir, "f", bytes(offset) + b"GKYE01" + bytes(30))
-                self.assertTrue(bundle_checks.contains(path, b"GKYE01", block=8))
+                path = write_file(self.dir, "f", bytes(offset) + b"GKYE01" + bytes(offset) + b"GKYE01" + bytes(30))
+                self.assertEqual(bundle_checks.occurrences(path, b"GKYE01", block=8), 2)
+                self.assertEqual(bundle_checks.occurrences(path, b"GKYE01"), 2)
 
     def test_does_not_find_what_is_not_there(self):
         path = write_file(self.dir, "f", b"GKYE0" + bytes(30) + b"1GKYE")
-        self.assertFalse(bundle_checks.contains(path, b"GKYE01", block=8))
-        self.assertFalse(bundle_checks.contains(write_file(self.dir, "empty", b""), b"GKYE01"))
+        self.assertEqual(bundle_checks.occurrences(path, b"GKYE01", block=8), 0)
+        self.assertEqual(bundle_checks.occurrences(write_file(self.dir, "empty", b""), b"GKYE01"), 0)
 
 
 class SourceTest(BundleTestCase):

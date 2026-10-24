@@ -20,6 +20,8 @@ APP_NAME = "Dragoon.app"
 APPLICATIONS = "Applications"
 # What the recompiler names the game's functions and its tables, with the C prefix Mach-O adds.
 GAME_SYMBOL = re.compile(r"_?(fn_[0-9A-Fa-f]{8}|g_recomp_.*)")
+# The engine carries the disc ID once, as a public constant, and the engine object may too.
+ENGINE_DISC_IDS = 1
 DISC_MAGIC = bytes.fromhex("c2339f3d")
 DISC_MAGIC_AT = 0x1C
 CISO = b"CISO"
@@ -46,16 +48,16 @@ def is_build_output(path: str) -> bool:
             or parts[-1].startswith("memcard_"))
 
 
-def contains(path: Path, needle: bytes, block: int = 1 << 20) -> bool:
-    """Does the file at PATH hold NEEDLE anywhere? It reads BLOCK bytes at a time."""
-    tail = b""
+def occurrences(path: Path, needle: bytes, block: int = 1 << 20) -> int:
+    """How often the file at PATH holds NEEDLE, which can't overlap itself. It reads BLOCK bytes
+    at a time, keeping the bytes too few to hold NEEDLE for the next block."""
+    count, tail = 0, b""
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(block), b""):
             data = tail + chunk
-            if needle in data:
-                return True
+            count += data.count(needle)
             tail = data[max(len(data) - (len(needle) - 1), 0):]
-    return False
+    return count
 
 
 def read_heads(app: Path, tree: bundle_tree.Tree) -> dict[str, bytes]:
@@ -109,7 +111,7 @@ def is_object(app: Path, path: str, head: bytes) -> bool:
 def check_executables(app: Path, heads: dict[str, bytes], manifest: BundleManifest) -> list[Finding]:
     """Check 2. A Mach-O, found by its magic, has to be at a path the manifest lists. An ar
     archive, found by its magic, and a file named .a or .o have to be on an object line. The
-    engine has to be a thin Mach-O object."""
+    engine has to be a thin Mach-O object that ends where its string table does."""
     found = []
     for path in sorted(heads):
         if is_object(app, path, heads[path]):
@@ -117,7 +119,7 @@ def check_executables(app: Path, heads: dict[str, bytes], manifest: BundleManife
                 found.append(Finding("object not on the manifest", path))
         elif heads[path][:4] in MACHO_MAGICS and path not in manifest.machos:
             found.append(Finding("executable not on the manifest", path))
-        if path == manifest.engine and not bundle_objects.is_thin_object(heads[path]):
+        if path == manifest.engine and not bundle_objects.is_lone_object(app / path, heads[path]):
             found.append(Finding("engine not a Mach-O object", path))
     return found
 
@@ -145,7 +147,7 @@ def check_symbols(app: Path, heads: dict[str, bytes]) -> list[Finding]:
 def check_content(app: Path, heads: dict[str, bytes], manifest: BundleManifest,
                   disc_id: str) -> list[Finding]:
     """Check 3. No disc magic or CISO header in any file, and the disc ID only in the snapshot
-    and the engine object."""
+    and as often in the engine object as the engine carries it."""
     found = []
     needle = disc_id.encode()
     for path in sorted(heads):
@@ -153,9 +155,13 @@ def check_content(app: Path, heads: dict[str, bytes], manifest: BundleManifest,
             found.append(Finding("disc image", path, "CISO header"))
         if heads[path][DISC_MAGIC_AT:HEAD] == DISC_MAGIC:
             found.append(Finding("disc image", path, f"GameCube magic at 0x{DISC_MAGIC_AT:X}"))
-        if (not path.startswith(manifest.source + "/") and path != manifest.engine
-                and contains(app / path, needle)):
+        if path.startswith(manifest.source + "/"):
+            continue
+        times = occurrences(app / path, needle)
+        if path != manifest.engine and times:
             found.append(Finding("disc ID", path, f"{disc_id} outside the source"))
+        elif path == manifest.engine and times > ENGINE_DISC_IDS:
+            found.append(Finding("disc ID", path, f"{disc_id} {times} times, and the engine carries it once"))
     return found
 
 

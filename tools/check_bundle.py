@@ -14,13 +14,14 @@ since the manifest allows the _CodeSignature that signing adds. The checks are:
   2  executables  every file that starts with a Mach-O magic is at a path the manifest lists.
                   Every ar archive (!<arch>, or a fat file holding one) and every file named .a
                   or .o, in any letter case, is on an object or engine line of its own, and the
-                  engine is a thin Mach-O object. Each of those and each Mach-O can be read
-                  whole, every archive member besides the symbol table being a thin Mach-O, and
-                  none defines fn_ and 8 hex digits or g_recomp_* in any architecture, the names
-                  the recompiler gives the game's functions and tables
+                  engine is a thin Mach-O object that ends where its string table does. Each
+                  of those and each Mach-O can be read whole: an archive may open with its
+                  symbol table, and every other member is a thin Mach-O that ends at its string
+                  table. None defines fn_ and 8 hex digits or g_recomp_* in any architecture,
+                  the names the recompiler gives the game's functions and tables
   3  content      no file has the GameCube disc magic at offset 0x1C or starts with CISO, and
-                  the disc ID appears only inside the source snapshot and in the engine object,
-                  which carries it as a public constant
+                  the disc ID appears only inside the source snapshot and once in the engine
+                  object, which carries it as a public constant
   4  source       the snapshot equals export_source.py's output for SHA, file by file by
                   SHA-256. SHA has to be what --repo has checked out
   5  size         the app and the DMG stay inside the manifest's budgets
