@@ -565,7 +565,8 @@ class RefusalTest(SignTestCase):
     def test_a_day_is_the_longest_notary_timeout(self):
         code, _, _ = self.run_tool("--dry-run", "--notary-timeout", "1440")
         self.assertEqual(code, 0)
-        self.assert_refused("between 0 and 1440 minutes", "--dry-run", "--notary-timeout", "1440.5")
+        self.assert_refused("above 0 and up to 1440 minutes", "--dry-run", "--notary-timeout",
+                            "1440.5")
 
     def test_a_notary_key_file_that_is_not_there(self):
         self.key.unlink()
