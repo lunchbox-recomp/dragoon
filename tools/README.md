@@ -278,6 +278,25 @@ A first build on an M4 Max took 112 s, with 24 s to configure, 33 s to compile (
 
 `--no-disc` builds `runtime_check` and stops, which proves the tools and SDL's source configure and compile with no disc. `--no-warmup` skips the warm-up. `--keep-build` keeps `<cache>/build` and the SDL source it points at, which are deleted after a good build otherwise.
 
+## engine_kit.py
+
+What does a player's Mac need to build the game without CMake, Ninja or SDL's source? engine_kit.py packs it from a build configured with no disc and a deployment target, once `runtime_check` and `SDL3-static` are built. The kit holds `engine.o` (runtime_check's objects joined by `ld -r`, so the link takes all of them), `libSDL3.a`, `recomp.h` and `compat.h`, `kit.mk`, the Makefile from `launcher/kit/` and the licenses of gcn-recomp, SDL and the hidapi inside SDL. `kit.mk` holds what gcn-recomp's configure wrote to the build directory: `GAME_CFLAGS` from `game_cflags.txt`, `LINK_FLAGS` from `game_ldflags.txt` and `GAME_LIBS`, the frameworks and libraries, from `game_libs.txt`. It also holds `MACOSX_MIN`, the build's deployment target. So every flag and framework the game gets comes from CMake.
+
+```
+cmake -S . -B build-kit -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DGAME_ISO=
+ninja -C build-kit runtime_check SDL3-static
+tools/engine_kit.py --build build-kit --out build-kit/kit --strip-debug
+```
+
+On the player's side, the Command Line Tools' python3 runs `extract_dol.py` and `recomp.py` into a directory, and then the kit's Makefile compiles `gen/*.c` there and links `./dragoon`. `KIT` is named on the command line, since make splits the Makefile's own path at its spaces, and the kit's path may have them:
+
+```
+make -f "$KIT/Makefile" -j16 KIT="$KIT" SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
+  CC=/Library/Developer/CommandLineTools/usr/bin/clang CXX=/Library/Developer/CommandLineTools/usr/bin/clang++
+```
+
+A build with a `GAME_ISO` is refused, since its `main.o` would carry the disc's path. So is a build with no deployment target, or one missing any of the three files. gcn-recomp's configure writes the two link files together, and neither when it can't write every library, with a warning saying why. A `game_libs.txt` that names a path is refused too, since a player's Mac may not have it. `ld -r` turns the objects' DWARF into a debug map naming the build's own `.o` files, which a player doesn't have. `--strip-debug` drops that map and `libSDL3.a`'s DWARF. The kit is written under a temporary name and renamed into place, so a failed run leaves no OUT. It exits 1 when ld or strip fails and 2 on a build it can't make a kit from. The tests use objects compiled from one-line C, and compilers that only record their arguments under the real `make`, with the kit, the directory holding `gen/` and the SDK at paths with spaces.
+
 ## sdl_source.py
 
 Where does SDL's source come from when nothing downloads? gcn-recomp's `CMakeLists.txt` pins SDL's release tarball by URL and SHA-256 in its `sdl3` `FetchContent_Declare`. sdl_source.py reads that pin, so the hash has one home. The launcher reads the tarball once, so what it extracts is what it hashed. Its extraction checks every member before it writes anything, and refuses absolute paths, `..` and anything but plain files and directories, since the tools' Python 3.9 has no tarfile filter. It has no command line.
