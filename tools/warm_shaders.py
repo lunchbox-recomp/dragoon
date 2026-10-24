@@ -73,6 +73,9 @@ TAIL_LINES = 15
 ROUTE_TAIL_FRAMES = 900  # past the last frame a route must reach, to build what follows it
 # The line each finished pass prints, which the launcher's build counts as progress.
 PASS_LINE = re.compile(r"\S+: \d+ frames, \d+\.\d s")
+# Ends the message of a warm-up that can't run, for whichever build ran it.
+SKIP_HINT = ("(-DDRAGOON_WARMUP=OFF skips the warm-up in a CMake build, and --no-warmup in "
+             "launcher_build.py)")
 # What the game prints once it has built the programs the cache held, before its first frame.
 BOOT_LINE = re.compile(r"\[shaders\] (\d+) programs from cache .* in (\d+) ms")
 
@@ -126,7 +129,7 @@ def engine_rev() -> str:
     info = ROOT / source_info.NAME
     if not info.exists():
         raise ValueError(f"no gcn-recomp checkout or {source_info.NAME}, so the stamp can't "
-                         "name the engine (configure with -DDRAGOON_WARMUP=OFF to skip the warm-up)")
+                         f"name the engine {SKIP_HINT}")
     return source_info.read(info)["gcn-recomp"]
 
 
@@ -346,8 +349,8 @@ def main(argv: list[str]) -> int:
             warm(args.game.resolve(), args.saves, plan, args.jobs, args.report,
                  args.disc.resolve() if args.disc else None)
         except PassFailed as e:
-            print(f"shader warm-up failed, {args.saves} left as it was: {e}\n"
-                  "(configure with -DDRAGOON_WARMUP=OFF to skip the warm-up)", file=sys.stderr)
+            print(f"shader warm-up failed, {args.saves} left as it was: {e}\n{SKIP_HINT}",
+                  file=sys.stderr)
             return 1
         stamp_path.write_text(want + "\n")
         size = (args.saves / CACHE).stat().st_size

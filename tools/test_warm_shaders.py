@@ -200,7 +200,9 @@ class EngineRevTest(unittest.TestCase):
         with self.assertRaises(ValueError) as caught:
             warm_shaders.engine_rev()
         self.assertIn(source_info.NAME, str(caught.exception))
-        self.assertIn("-DDRAGOON_WARMUP=OFF", str(caught.exception))
+        self.assertTrue(str(caught.exception).endswith(warm_shaders.SKIP_HINT))
+        for skip in ("-DDRAGOON_WARMUP=OFF", "--no-warmup in launcher_build.py"):
+            self.assertIn(skip, warm_shaders.SKIP_HINT)
 
     def test_a_malformed_file_raises_with_its_path(self):
         path = self.write_info("not a commit")
@@ -370,7 +372,7 @@ class WarmTest(WarmTestCase):
             code, _, err = self.warm()
         self.assertEqual(code, 2)
         self.assertIn("gcn-recomp", err)
-        self.assertTrue(err.strip().endswith("-DDRAGOON_WARMUP=OFF to skip the warm-up)"))
+        self.assertTrue(err.strip().endswith(warm_shaders.SKIP_HINT))
         self.assertFalse(self.saves.exists())
 
     def test_a_snapshot_stamps_the_engine_its_source_info_names(self):
@@ -412,7 +414,7 @@ class WarmTest(WarmTestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("title", err)
         self.assertIn("within 1 s", err)
-        self.assertIn("-DDRAGOON_WARMUP=OFF", err)
+        self.assertTrue(err.strip().endswith(warm_shaders.SKIP_HINT))
         self.assertEqual(self.snapshot(), before)
 
     def test_missing_route_file_exits_2_and_leaves_saves_alone(self):
