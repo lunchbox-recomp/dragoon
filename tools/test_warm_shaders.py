@@ -257,6 +257,30 @@ class WarmTest(WarmTestCase):
         self.assertIn("--pads=4", four.split())
         self.assertIn(FOUR_EXIT, four.split())
 
+    def test_a_disc_reaches_every_pass_as_an_absolute_path(self):
+        disc = write_file(self.dir, "Kirby Air Ride (USA).gcm", b"a disc")
+        cwd = os.getcwd()
+        os.chdir(self.dir)  # the passes run elsewhere, so a relative path wouldn't reach them
+        self.addCleanup(os.chdir, cwd)
+        self.assertEqual(self.warm("--disc", disc.name)[0], 0)
+        title, four = self.game_lines()
+        self.assertTrue(title.startswith(f"--hidden --fast --no-input-log --pads=1 {TITLE_EXIT} "
+                                         f"{disc.resolve()} SDL=dummy "), title)
+        self.assertIn(f" {FOUR_EXIT} {disc.resolve()} SDL=dummy ", four)
+
+    def test_without_a_disc_the_game_gets_no_path(self):
+        self.assertEqual(self.warm()[0], 0)
+        for line in self.game_lines():
+            args = line.split(" SDL=")[0].split()
+            self.assertEqual([a for a in args if not a.startswith("--")], [])
+
+    def test_a_missing_disc_exits_2_before_any_pass(self):
+        code, _, err = self.warm("--disc", str(self.dir / "no such disc.iso"))
+        self.assertEqual(code, 2)
+        self.assertIn("no such disc.iso", err)
+        self.assertEqual(self.game_lines(), [])
+        self.assertFalse(self.saves.exists())
+
     def test_switches_that_write_one_file_are_not_inherited(self):
         # Up to six games at once would all write the file, so only the pass's own GCN_INPUT
         # and the diagnostics that read nothing but the environment get through.

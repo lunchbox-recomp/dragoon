@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Warm the player's shader cache by playing the game once, hidden and silent.
 
-Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--force] [--jobs N]
-                       [--report DIR]
+Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--disc FILE] [--force]
+                       [--jobs N] [--report DIR]
 
 Runs the game, one pass per route in tests/hashes/manifest.txt, each in a scratch directory
 of its own with a blank memory card as a fresh install has. (A route that finds the card an
@@ -19,8 +19,9 @@ files' text and a SHA-1 of this script. If all three
 match and shaders.bin exists, the run is skipped. A pass that outlasts twice its real-time
 length plus 30 s is killed and fails, and the others are stopped. --force runs anyway. --game
 and --saves default to build/dragoon and saves under the repository, wherever the tool is
-run from. --report DIR keeps each pass's output and the cache it left in DIR, and prints a
-table of what each pass added (see write_report).
+run from. --disc names the disc image every pass plays. A game built from the engine kit
+has no disc of its own, so it needs one. --report DIR keeps each pass's output and the cache
+it left in DIR, and prints a table of what each pass added (see write_report).
 
 Prints one line per pass and a closing line with the cache's size. A failed pass prints
 the game's last output to stderr.
@@ -167,13 +168,14 @@ def last_compile_frame(log: str) -> int:
     return max((n for n, f in frametime.parse(log.splitlines()).items() if f.compiles), default=0)
 
 
-def run_pass(game: Path, p: Pass, scratch: Path, stop: threading.Event) -> None:
+def run_pass(game: Path, p: Pass, scratch: Path, stop: threading.Event,
+             disc: Optional[Path] = None) -> None:
     """Play P in SCRATCH, killing the game if STOP is set or it outlasts its time limit."""
     env = {k: v for k, v in os.environ.items() if k not in OWN_ENV}
     env["SDL_AUDIO_DRIVER"] = "dummy"
     env["GCN_INPUT"] = script_text(p.route_file)
     cmd = [str(game), "--hidden", "--fast", "--no-input-log", f"--pads={p.pads}",
-           f"--exit-after={p.exit_after}"]
+           f"--exit-after={p.exit_after}"] + ([str(disc)] if disc else [])
     log = scratch / "stdout.txt"
     limit = pass_timeout(p.exit_after)
     with log.open("wb") as f:
@@ -250,7 +252,7 @@ def start_order(plan: list[Pass], jobs: int) -> list[int]:
 
 
 def warm(game: Path, saves: Path, plan: list[Pass], jobs: int = 1,
-         report: Optional[Path] = None) -> None:
+         report: Optional[Path] = None, disc: Optional[Path] = None) -> None:
     """Play every pass, JOBS at a time, and install the cache they build between them.
 
     A pass runs in a scratch directory of its own, with a blank memory card and a copy of
@@ -272,7 +274,7 @@ def warm(game: Path, saves: Path, plan: list[Pass], jobs: int = 1,
                 raise PassStopped
             began = time.monotonic()
             try:
-                run_pass(game, plan[i], scratch[i], stop)
+                run_pass(game, plan[i], scratch[i], stop, disc)
             except PassFailed:
                 stop.set()  # here, so that no queued pass starts before the caller hears of it
                 raise
@@ -315,6 +317,7 @@ def main(argv: list[str]) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--game", type=Path, default=ROOT / "build" / "dragoon")
     ap.add_argument("--saves", type=Path, default=ROOT / "saves")
+    ap.add_argument("--disc", type=Path, help="the disc image to play, for a game built without one")
     ap.add_argument("--force", action="store_true", help="run even if the stamp is current")
     ap.add_argument("--jobs", type=int, default=JOBS, metavar="N",
                     help=f"passes to play at once (default {JOBS})")
@@ -326,6 +329,8 @@ def main(argv: list[str]) -> int:
             raise ValueError(f"--jobs is a number of passes, 1 or more, not {args.jobs}")
         if not args.game.is_file():
             raise ValueError(f"{args.game}: no such game, build it first")
+        if args.disc and not args.disc.is_file():
+            raise ValueError(f"{args.disc}: no such disc image")
         manifest_text = MANIFEST.read_text()
         routes = parse_manifest(manifest_text)
         plan = passes(routes)
@@ -338,7 +343,8 @@ def main(argv: list[str]) -> int:
             return 0
         start = time.monotonic()
         try:
-            warm(args.game.resolve(), args.saves, plan, args.jobs, args.report)
+            warm(args.game.resolve(), args.saves, plan, args.jobs, args.report,
+                 args.disc.resolve() if args.disc else None)
         except PassFailed as e:
             print(f"shader warm-up failed, {args.saves} left as it was: {e}\n"
                   "(configure with -DDRAGOON_WARMUP=OFF to skip the warm-up)", file=sys.stderr)

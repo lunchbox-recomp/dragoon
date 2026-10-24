@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import shutil
 import stat
 import subprocess
@@ -13,8 +15,8 @@ PROBE = ROOT / "tools" / "probe.sh"
 NAME = "test-probe-never-run"
 
 
-def probe(*args: str, script: Path = PROBE) -> subprocess.CompletedProcess:
-    return subprocess.run([str(script), *args], capture_output=True, text=True, timeout=10)
+def probe(*args: str, script: Path = PROBE, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run([str(script), *args], capture_output=True, text=True, timeout=10, cwd=cwd)
 
 
 class ProbeArgumentsTest(unittest.TestCase):
@@ -25,6 +27,9 @@ class ProbeArgumentsTest(unittest.TestCase):
         r = probe("--help")
         self.assertEqual(r.returncode, 0)
         self.assertIn("Usage:", r.stdout)
+        self.assertIn("--disc=PATH", r.stdout)
+        self.assertTrue(r.stdout.endswith("under --bench) isn't built.\n"), r.stdout)
+        self.assertNotIn("set -e", r.stdout)
 
     def test_no_arguments_exits_2(self):
         self.assertEqual(probe().returncode, 2)
@@ -51,7 +56,7 @@ class ProbeTreeTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = Path(tmp.name).resolve()  # as $PWD gives it
         (self.root / "tools").mkdir()
         self.script = self.root / "tools" / "probe.sh"
         shutil.copy(PROBE, self.script)
@@ -96,11 +101,36 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertEqual(got, warm_shaders.script_text(route))
         self.assertEqual(got, "120:A:5,300:A:5,900:A:5")
 
-    def game_args(self, *settings: str) -> list[str]:
-        self.add_game("dragoon", "printf '%s\\n' \"$@\" > args.txt\n")
-        r = probe(NAME, "1", "", "60", *settings, script=self.script)
+    def game_args(self, *settings: str, game: str = "dragoon") -> list[str]:
+        self.add_game(game, "printf '%s\\n' \"$@\" > args.txt\necho 'whole run'\n")
+        r = probe(NAME, "1", "", "60", *settings, script=self.script, cwd=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         return (self.root / "build" / "probe" / NAME / "args.txt").read_text().splitlines()
+
+    def disc(self) -> Path:
+        (self.root / "rom dir").mkdir()
+        return write_file(self.root / "rom dir", "Kirby Air Ride (USA).gcm", b"a disc")
+
+    def test_a_disc_reaches_the_game_as_an_absolute_path(self):
+        disc = self.disc()
+        args = self.game_args("--disc=rom dir/Kirby Air Ride (USA).gcm")  # from the root
+        self.assertEqual(args[-1], str(disc))
+        self.assertEqual([a for a in args if a.startswith("--disc")], [])
+
+    def test_a_disc_reaches_the_bench_too(self):
+        disc = self.disc()
+        args = self.game_args(f"--disc={disc}", "--bench", game="dragoon_bench")
+        self.assertEqual(args[-1], str(disc))
+
+    def test_without_a_disc_the_game_gets_no_path(self):
+        self.assertEqual([a for a in self.game_args() if not a.startswith("--")], [])
+
+    def test_a_missing_disc_exits_2_before_making_a_run_directory(self):
+        self.add_game("dragoon", "")
+        r = probe(NAME, "1", "", "60", "--disc=no such.iso", script=self.script, cwd=self.root)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn(f"{self.root}/no such.iso", r.stderr)
+        self.assertFalse((self.root / "build" / "probe").exists())
 
     def test_log_list_reaches_the_windowed_game(self):
         self.assertIn("--log=dsp,ai", self.game_args("--log=dsp,ai"))

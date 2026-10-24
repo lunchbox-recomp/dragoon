@@ -20,12 +20,15 @@
 #                   its docs/diagnostics.md). Windowed runs only. dragoon_bench takes no
 #                   --log, so --log with --bench exits 2. An unknown category stops the
 #                   game at once; stdout.txt names it
+#     --disc=PATH   the disc image to play. A game built from the engine kit has no disc
+#                   of its own, so it needs one
 # The game runs inside build/probe/NAME/, so a new NAME starts from a blank memory card and
 # a NAME that's run again keeps the card its last run left behind.
-# Exits 0 once the run ends, 1 when the bench printed no report, 2 on a bad argument or when
-# the game binary (build/dragoon, or build/dragoon_bench under --bench) isn't built.
+# Exits 0 once the run ends, 1 when the bench printed no report, 2 on a bad argument, a
+# --disc that isn't a file or when the game binary (build/dragoon, or build/dragoon_bench
+# under --bench) isn't built.
 set -e
-case ${1:-} in -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case ${1:-} in -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 if [ $# -lt 2 ]; then
   echo "usage: tools/probe.sh NAME SECONDS [INPUT_SCRIPT [DUMP_EVERY [SETTING ...]]] (--help for more)" >&2
   exit 2
@@ -43,6 +46,7 @@ fast=--fast
 bench=
 scale=1
 log=
+disc=
 # Keeps the GCN_ settings in "$@" and takes the rest out.
 for s in "$@"; do
   shift
@@ -53,9 +57,13 @@ for s in "$@"; do
     --bench) bench=1 ;;
     --scale=[1-9]) scale=${s#--scale=} ;;
     --log=?*) log=$s ;;
+    --disc=?*) disc=${s#--disc=} ;;
     *) echo "not a setting (see tools/probe.sh --help): $s" >&2; exit 2 ;;
   esac
 done
+# The game runs in the run's directory, so a relative path is taken from here first.
+case $disc in ''|/*) ;; *) disc=$PWD/$disc ;; esac
+if [ -n "$disc" ] && [ ! -f "$disc" ]; then echo "no disc image at $disc" >&2; exit 2; fi
 if [ -n "$log" ] && [ -n "$bench" ]; then
   echo "$log needs a windowed run; dragoon_bench takes no --log" >&2
   exit 2
@@ -67,13 +75,14 @@ mkdir -p "$out"
 cd "$out"
 if [ -n "$bench" ]; then
   env GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$game" --seconds="$seconds" \
-    --pads="$pads" >"$out/stdout.txt" 2>&1 || true
+    --pads="$pads" ${disc:+"$disc"} >"$out/stdout.txt" 2>&1 || true
   grep -A2 '^whole run' "$out/stdout.txt"
   exit 0
 fi
 # At --scale=1 a dump is 640x480 and 1.2 MB, uncompressed; N times each side at --scale=N.
 env SDL_AUDIO_DRIVER=dummy GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$game" --hidden $fast --no-input-log \
-  ${log:+"$log"} --pads="$pads" --scale="$scale" --dump-dir="$out" --dump-every="$every" >"$out/stdout.txt" 2>&1 &
+  ${log:+"$log"} --pads="$pads" --scale="$scale" --dump-dir="$out" --dump-every="$every" \
+  ${disc:+"$disc"} >"$out/stdout.txt" 2>&1 &
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true' EXIT
 trap 'exit 130' INT TERM
