@@ -360,14 +360,14 @@ launcher/tools/make_app.py --out launcher/dist --version 0.1.0 --launcher /tmp/D
 tools/check_bundle.py launcher/dist/Dragoon.app --commit SHA
 ```
 
-The app is sealed with `codesign --force --sign -`, ad hoc, with no hardened runtime and no `--deep`, as a dev build is. `sign_and_package.py` signs a copy for release. `--version` is one to three numbers joined by dots. `OUT` is made if it's missing. The app is built under a temporary name in it and renamed into place, so a failed run leaves no half app. The kit and the snapshot are only read, and `launcher/dist/` is git-ignored for the app to go in.
+The app is sealed with `codesign --force --sign -`, ad hoc, with no hardened runtime and no `--deep`, as a dev build is. `sign_and_package.py` signs a copy for release. `--version` is one to three numbers joined by dots. `OUT` is made if it's missing. The app is built under a temporary name in it and renamed into place. A failed run removes that directory and any directory it made for `OUT`, so it leaves nothing behind. The kit and the snapshot are only read, and `launcher/dist/` is git-ignored for the app to go in.
 
 It exits 0 when the app is there and prints its path. A step that failed, such as codesign, exits 1. It exits 2 with one line saying why, having written nothing, when:
 
-- an argument is missing or bad, or `OUT` is inside the kit or the snapshot
+- an argument is missing or bad, or `OUT` is the kit or the snapshot or below one, however its name is spelled
 - `OUT/Dragoon.app` already exists
 - the kit lacks a file that `launcher/bundle-manifest.txt` lists, or holds one it doesn't
-- the snapshot lacks `source-info.json`, `source-manifest.txt` or `LICENSE`, or a file that `source-manifest.txt` lists
+- the snapshot lacks `source-info.json`, `source-manifest.txt` or `LICENSE`, or its files aren't the ones `source-manifest.txt` lists with their hashes, because one is missing, extra or edited
 - the kit is from another gcn-recomp commit than the snapshot's, which `kit_problem` in `launcher_build.py` decides for both tools
 
 The tests fake codesign with a script that records its call, so they sign nothing. Every path in them has a space.

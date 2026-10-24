@@ -116,9 +116,13 @@ def make_source(path: Path, engine: str = ENGINE) -> Path:
     os.symlink("../README.md", path / "tools" / "read me link")
     source_info.write(path / source_info.NAME, {"dragoon": DRAGOON, "gcn-recomp": engine,
                                                 "disc_id": "ABCD01", "dol_sha1": "a" * 40})
-    listing = export_source.format_manifest(export_source.manifest(path))
-    (path / export_source.MANIFEST).write_text(listing)
+    write_listing(path)
     return path
+
+
+def write_listing(path: Path) -> None:
+    """The source-manifest.txt export_source.py writes for the files under PATH."""
+    (path / export_source.MANIFEST).write_text(export_source.format_manifest(export_source.manifest(path)))
 
 
 class AppTestCase(unittest.TestCase):
@@ -277,6 +281,7 @@ class PlistTest(AppTestCase):
         self.assertEqual(self.plist(self.build()), {
             "CFBundleIdentifier": "io.github.lunchbox-recomp.dragoon",
             "CFBundleExecutable": "Dragoon",
+            "CFBundleInfoDictionaryVersion": "6.0",
             "CFBundleName": "Dragoon",
             "CFBundlePackageType": "APPL",
             "LSMinimumSystemVersion": "14.0",
@@ -372,6 +377,25 @@ class RefusalTest(AppTestCase):
         self.out = self.source / "dist"
         self.assert_refused("inside")
 
+    def test_an_out_that_reaches_the_kit_or_the_snapshot_through_a_symlink(self):
+        os.symlink(self.kit, self.dir / "kit link")
+        os.symlink(self.source, self.dir / "source link")
+        for link in ("kit link", "source link"):
+            with self.subTest(link):
+                self.out = self.dir / link / "dist"
+                self.assert_refused("inside")
+
+    def test_an_out_inside_the_kit_or_the_snapshot_spelled_in_another_case(self):
+        for original in (self.kit, self.source):
+            shouted = Path(str(original).upper())
+            if not shouted.exists():
+                self.skipTest("this volume tells names apart by case")
+            with self.subTest(original.name):
+                self.out = shouted / "dist"
+                self.assert_refused("inside")
+                self.out = shouted / "dist" / "deeper"
+                self.assert_refused("inside")
+
     def test_an_app_that_is_already_there(self):
         (self.out / APP / "Contents").mkdir(parents=True)
         (self.out / APP / "Contents" / "mine.txt").write_text("keep")
@@ -423,8 +447,28 @@ class RefusalTest(AppTestCase):
                 else:
                     os.symlink(keep, file)
 
+    def test_a_snapshot_with_a_file_edited_since_its_listing_was_written(self):
+        (self.source / "README.md").write_text("read me, but different\n")
+        self.assert_refused(f"differs from its {export_source.MANIFEST} at README.md")
+        (self.source / "README.md").write_text("read me\n")
+        (self.source / "tools" / "with space.py").write_text("print('bye')\n")
+        self.assert_refused("tools/with space.py")
+
+    def test_a_snapshot_with_a_file_its_listing_does_not_have(self):
+        (self.source / "extra file.txt").write_text("x")
+        self.assert_refused(f"differs from its {export_source.MANIFEST} at extra file.txt")
+        (self.source / "extra file.txt").unlink()
+        os.symlink("README.md", self.source / "extra link")
+        self.assert_refused("extra link")
+
+    def test_a_snapshot_whose_listing_is_edited(self):
+        listing = self.source / export_source.MANIFEST
+        listing.write_text(listing.read_text() + "\n")
+        self.assert_refused(f"differs from its {export_source.MANIFEST}")
+
     def test_a_snapshot_whose_source_info_cannot_be_read(self):
         (self.source / source_info.NAME).write_text("{}")
+        write_listing(self.source)  # so the listing matches and the file itself is what's wrong
         self.assert_refused(source_info.NAME)
 
     def test_a_snapshot_of_another_commit_than_the_kits(self):
@@ -447,14 +491,21 @@ class FailureTest(AppTestCase):
         self.assertEqual(err.count("\n"), 1, err)
         self.assertTrue(err.startswith("make_app.py: "), err)
         self.assertIn(why, err)
-        self.assertEqual(os.listdir(self.out), [])
-        self.assertEqual(self.everything(), before)
+        self.assertEqual(self.everything(), before)  # no app, no temporary directory, no new directory
 
     def test_a_failing_codesign_leaves_no_app(self):
         self.switch("fail codesign")
         self.assert_failed("refused to seal the app")
         (call,) = self.calls()
         self.assertTrue(call["files"], "codesign had nothing to seal")
+
+    def test_a_failing_codesign_removes_the_directories_it_made_for_out_and_no_more(self):
+        self.switch("fail codesign")
+        for out in (self.dir / "new", self.dir / "not yet" / "deeper" / "out dir", self.out / "below"):
+            with self.subTest(out.relative_to(self.dir).as_posix()):
+                self.out = out
+                self.assert_failed("refused to seal the app")
+        self.assertTrue((self.dir / "out dir").is_dir())  # it was there before, so it stays
 
     def test_a_failing_codesign_says_it_exited_1(self):
         self.switch("fail codesign")

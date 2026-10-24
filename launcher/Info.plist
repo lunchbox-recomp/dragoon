@@ -6,6 +6,8 @@
 	<string>Dragoon</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.lunchbox-recomp.dragoon</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Dragoon</string>
 	<key>CFBundlePackageType</key>

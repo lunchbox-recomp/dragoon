@@ -14,13 +14,16 @@ Writes DIR/Dragoon.app in the layout launcher/bundle-manifest.txt allows:
   Contents/Resources/licenses/  Dragoon.txt, the snapshot's LICENSE
 The kit and the snapshot arrive byte for byte and are only read. Then `codesign --force --sign -`
 seals the app ad hoc, with no hardened runtime and no --deep, as a dev build is signed. DIR is
-made if it's missing. The app is built under a temporary name in DIR and renamed into place, so
-a failed run leaves no half app.
+made if it's missing. The app is built under a temporary name in DIR and renamed into place. A
+failed run removes the app's temporary directory and any directory it made for DIR, so it
+leaves nothing behind.
 
 It refuses a kit from another gcn-recomp commit than the snapshot's, as launcher_build.py does,
 since the kit's engine.o and headers wouldn't match the generated C. It refuses a kit that
-lacks a file the manifest lists or holds one it doesn't, and a snapshot that lacks its
-source-info.json, source-manifest.txt or LICENSE or a file source-manifest.txt lists.
+lacks a file the manifest lists or holds one it doesn't. It refuses a snapshot that lacks its
+source-info.json, source-manifest.txt or LICENSE, and one whose files aren't what
+source-manifest.txt lists, whether a file is missing, extra or edited. It refuses a DIR that is
+the kit or the snapshot or below one, however its name is spelled.
 
 Exits 0 when the app is there and prints its path. Exits 1 when a step failed, such as codesign,
 and 2 on a bad argument or an input it can't use, with one line on stderr saying why and
@@ -92,25 +95,33 @@ def kit_listing_problem(kit: Path, manifest: bundle_manifest.BundleManifest) -> 
     return None
 
 
-def snapshot_missing(source: Path) -> list[str]:
-    """The files SOURCE should hold and doesn't: its own three, and each one that
-    source-manifest.txt lists. Raises ValueError for a line of that file it can't read."""
+def snapshot_problem(source: Path) -> Optional[str]:
+    """Why SOURCE isn't a snapshot as export_source.py wrote it, or None when it is. Its own
+    three files have to be there, and source-manifest.txt has to be the text export_source.py
+    writes for the files SOURCE holds, which catches a file that is missing, extra or edited."""
     missing = [p for p in (source_info.NAME, export_source.MANIFEST, LICENSE) if not (source / p).is_file()]
     if missing:
-        return missing
-    listing = source / export_source.MANIFEST
-    for line in listing.read_text(encoding="utf-8").splitlines():
-        _, gap, path = line.partition("  ")
-        if not gap or not path:
-            raise ValueError(f"{listing}: can't read the line {line!r}")
-        if not os.path.lexists(source / path):
-            missing.append(path)
-    return missing
+        return f"the snapshot {source} is missing {named(missing)}"
+    want = export_source.format_manifest(export_source.manifest(source))
+    have = (source / export_source.MANIFEST).read_text(encoding="utf-8")
+    if want == have:
+        return None
+    differing = set(want.splitlines()) ^ set(have.splitlines())
+    paths = sorted({line.partition("  ")[2] or line for line in differing} - {""})
+    return (f"the snapshot {source} differs from its {export_source.MANIFEST}"
+            + (f" at {named(paths)}" if paths else ""))
 
 
-def snapshot_problem(source: Path) -> Optional[str]:
-    missing = snapshot_missing(source)
-    return f"the snapshot {source} is missing {named(missing)}" if missing else None
+def is_inside(path: Path, parent: Path) -> bool:
+    """Is PATH, or a directory above it, the directory PARENT? samefile sees through a symlink
+    and through another spelling of the name on a volume that ignores case, which comparing
+    paths wouldn't."""
+    while True:
+        if path.exists() and os.path.samefile(path, parent):
+            return True
+        if path.parent == path:
+            return False
+        path = path.parent
 
 
 def bad_argument(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> Optional[str]:
@@ -124,9 +135,8 @@ def bad_argument(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest
             return f"{flag} {path} isn't a directory"
     if a.out.exists() and not a.out.is_dir():
         return f"--out {a.out} isn't a directory"
-    out = a.out.resolve()
     for flag, path in (("--kit", a.kit), ("--source", a.source)):
-        if path.resolve() in (out, *out.parents):
+        if is_inside(a.out, path):
             return f"--out {a.out} is inside {flag} {path}, where the copy would contain itself"
     if os.path.lexists(a.out / APP):
         return f"{a.out / APP} already exists"
@@ -163,18 +173,32 @@ def seal(app: Path) -> None:
         raise StepFailed(f"codesign exited {done.returncode}: {' '.join(done.stdout.split())}")
 
 
+def topmost_missing(path: Path) -> Optional[Path]:
+    """The directory nearest the root on the way to PATH that doesn't exist yet, or None when
+    PATH exists. Making PATH makes it and everything below it."""
+    missing = None
+    while not path.exists():
+        missing, path = path, path.parent
+    return missing
+
+
 def make(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> Path:
-    """Build the app under a temporary name in the output directory and rename it into place."""
-    a.out.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix=".make_app.", dir=a.out))
+    """Build the app under a temporary name in the output directory and rename it into place.
+    A run that fails removes the directories it made, as export_source.py does for its OUT."""
+    made = topmost_missing(a.out)
+    work = None
     try:
+        a.out.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix=".make_app.", dir=a.out))
         assemble(work / APP, a, manifest)
         seal(work / APP)
         os.rename(work / APP, a.out / APP)
+        work.rmdir()
     except BaseException:
-        shutil.rmtree(work, ignore_errors=True)
+        leftover = made or work  # made holds work, when this run made it
+        if leftover:
+            export_source.clear(leftover, remove=True)
         raise
-    work.rmdir()
     return a.out / APP
 
 
