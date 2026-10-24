@@ -16,7 +16,7 @@ dir Contents/Resources/licenses
 macho Contents/MacOS/Dragoon
 engine Contents/Resources/kit/engine.o
 object Contents/Resources/kit/libSDL3.a
-link Contents/Resources/cmake/bin/cmake ../../../MacOS/cmake
+link Contents/Frameworks/Sparkle.framework/Sparkle Versions/Current/Sparkle
 """
 
 
@@ -31,19 +31,20 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(m.objects, frozenset({"Contents/Resources/kit/engine.o",
                                                "Contents/Resources/kit/libSDL3.a"}))
         self.assertEqual(m.engine, "Contents/Resources/kit/engine.o")
-        self.assertEqual(m.links, {"Contents/Resources/cmake/bin/cmake": "../../../MacOS/cmake"})
+        self.assertEqual(m.links,
+                         {"Contents/Frameworks/Sparkle.framework/Sparkle": "Versions/Current/Sparkle"})
 
     def test_a_file_is_allowed_by_name_or_by_prefix(self):
         m = bundle_manifest.parse(GOOD)
         for path in ("Contents/Info.plist", "Contents/MacOS/Dragoon", "Contents/Resources/kit/engine.o",
                      "Contents/Resources/kit/libSDL3.a",
-                     "Contents/Resources/licenses/CMake.txt",
-                     "Contents/Resources/licenses/deeper/Ninja.txt"):
+                     "Contents/Resources/licenses/SDL3.txt",
+                     "Contents/Resources/licenses/deeper/hidapi.txt"):
             with self.subTest(path=path):
                 self.assertTrue(m.allows_file(path))
         for path in ("Contents/Resources/dragoon", "Contents/Info.plist.bak",
                      "Contents/Resources/licenses2/x", "Contents/Resources/licenses",
-                     "Contents/Resources/cmake/bin/cmake"):
+                     "Contents/Frameworks/Sparkle.framework/Sparkle"):
             with self.subTest(path=path):
                 self.assertFalse(m.allows_file(path))
 
@@ -69,7 +70,7 @@ class ParseTest(unittest.TestCase):
             "a path with a double slash": GOOD + "file Contents//x\n",
             "a file with a trailing slash": GOOD + "file Contents/x/\n",
             "a link with no target": GOOD + "link Contents/x\n",
-            "a link to an absolute target": GOOD + "link Contents/x /usr/bin/cmake\n",
+            "a link to an absolute target": GOOD + "link Contents/x /usr/bin/true\n",
             "an extra word": GOOD + "file Contents/x Contents/y\n",
             "a bare directive": GOOD + "file\n",
             "two engines": GOOD + "engine Contents/Resources/kit/other.o\n",

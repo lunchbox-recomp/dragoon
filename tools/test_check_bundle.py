@@ -28,6 +28,10 @@ SNAP = "Contents/Resources/source/"
 LICENSES = "Contents/Resources/licenses/"
 ENGINE = "Contents/Resources/kit/engine.o"
 SDL = "Contents/Resources/kit/libSDL3.a"
+KIT_MK = "Contents/Resources/kit/kit.mk"
+SPARKLE = "Contents/Frameworks/Sparkle.framework/"
+UPDATER = SPARKLE + "Versions/B/Autoupdate"
+SPARKLE_RES = SPARKLE + "Versions/B/Resources/"
 # Objects compiled from C by the class's setup: the kit's two, as the engine holds the disc ID
 # and leaves the game's tables to the game, a stand-in for the app's executables, two with what
 # only the game defines and one with names that come close.
@@ -54,12 +58,12 @@ MANIFEST = """source Contents/Resources/source
 budget app 20000
 budget dmg 40000
 file Contents/Info.plist
-file Contents/Resources/third_party/SDL3-3.4.18.tar.gz
+file Contents/Resources/kit/kit.mk
 macho Contents/MacOS/Dragoon
-macho Contents/MacOS/cmake
-macho Contents/MacOS/ninja
-link Contents/Resources/cmake/bin/cmake ../../../MacOS/cmake
-dir Contents/Resources/cmake/share/cmake-4.4/
+macho Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle
+macho Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate
+link Contents/Frameworks/Sparkle.framework/Sparkle Versions/B/Sparkle
+dir Contents/Frameworks/Sparkle.framework/Versions/B/Resources/
 dir Contents/Resources/licenses/
 engine Contents/Resources/kit/engine.o
 object Contents/Resources/kit/libSDL3.a
@@ -136,18 +140,17 @@ def build_app(app: Path, snapshot: Path, objects: dict[str, bytes]) -> None:
         SDL: objects["sdl.a"],
         "Contents/Info.plist": "<plist/>\n",
         "Contents/MacOS/Dragoon": objects["tool.o"],
-        "Contents/MacOS/cmake": objects["tool.o"],
-        "Contents/MacOS/ninja": objects["tool.o"],
-        "Contents/Resources/cmake/share/cmake-4.4/Modules/FindThing.cmake": "find_package(Thing)\n",
-        "Contents/Resources/third_party/SDL3-3.4.18.tar.gz": b"an SDL tarball",
-        "Contents/Resources/licenses/CMake.txt": "BSD 3-clause\n",
+        SPARKLE + "Versions/B/Sparkle": objects["tool.o"],
+        UPDATER: objects["tool.o"],
+        SPARKLE_RES + "Info.plist": "<plist/>\n",
+        KIT_MK: "MACOSX_MIN := 14.0\n",
+        LICENSES + "Sparkle.txt": "MIT\n",
     }
     for name, data in files.items():
         path = app / name
         path.parent.mkdir(parents=True, exist_ok=True)
         write_file(path.parent, path.name, data)
-    (app / "Contents/Resources/cmake/bin").mkdir(parents=True)
-    os.symlink("../../../MacOS/cmake", app / "Contents/Resources/cmake/bin/cmake")
+    os.symlink("Versions/B/Sparkle", app / SPARKLE / "Sparkle")
     shutil.copytree(snapshot, app / SNAP.rstrip("/"), symlinks=True)
 
 
@@ -292,19 +295,18 @@ class PlantedFileTest(BundleTestCase):
                              "(-> /Users/someone/Kirby Air Ride (USA).gcm)")
 
     def test_a_file_over_budget(self):
-        self.plant("Contents/Resources/third_party/SDL3-3.4.18.tar.gz", bytes(25000))
+        self.plant(KIT_MK, bytes(25000))
         code, out, _ = self.check()
         self.assertEqual(code, 1)
         self.assertEqual(len(out), 1)
         self.assertRegex(out[0], rf"^over budget: {APP} \(2\d{{4}} bytes, budget 20000\)$")
 
     def test_a_bundle_exactly_at_its_budget_passes_and_a_byte_more_fails(self):
-        tarball = "Contents/Resources/third_party/SDL3-3.4.18.tar.gz"
         room = 20000 - sum(bundle_tree.scan(self.app).files.values())  # budget app 20000
-        size = (self.app / tarball).stat().st_size + room
-        self.plant(tarball, bytes(size))
+        size = (self.app / KIT_MK).stat().st_size + room
+        self.plant(KIT_MK, bytes(size))
         self.assertEqual(self.check(), (0, [], ""))
-        self.plant(tarball, bytes(size + 1))
+        self.plant(KIT_MK, bytes(size + 1))
         self.assert_findings(f"over budget: {APP} (20001 bytes, budget 20000)")
 
     def test_what_the_build_leaves_behind_fails_anywhere(self):
@@ -313,7 +315,7 @@ class PlantedFileTest(BundleTestCase):
         # An app on a volume that ignores case builds these the same as the names above.
         names += ["Gen/f0.c", "RELS/x", "Main.DOL", "cmakecache.txt", "Build.ninja", "MemCard_a",
                   ".Shader-Warmup", "Inputs/p1.txt"]
-        for where in (LICENSES, "Contents/Resources/cmake/share/cmake-4.4/", SNAP + "gcn-recomp/"):
+        for where in (LICENSES, SPARKLE_RES, SNAP + "gcn-recomp/"):
             for name in names:
                 with self.subTest(where=where, name=name):
                     path = self.plant(where + name)
@@ -350,9 +352,8 @@ class ExecutableTest(BundleTestCase):
                              f"extra in the source: {SNAP}tools/dragoon")
 
     def test_a_macho_at_a_path_listed_as_a_plain_file_fails(self):
-        self.plant("Contents/Resources/third_party/SDL3-3.4.18.tar.gz", self.objects["tool.o"])
-        self.assert_findings(
-            "executable not on the manifest: Contents/Resources/third_party/SDL3-3.4.18.tar.gz")
+        self.plant(KIT_MK, self.objects["tool.o"])
+        self.assert_findings(f"executable not on the manifest: {KIT_MK}")
 
     def test_the_launchers_name_in_another_case_is_another_path(self):
         os.unlink(self.app / "Contents/MacOS/Dragoon")
@@ -363,8 +364,8 @@ class ExecutableTest(BundleTestCase):
 
 class ObjectTest(BundleTestCase):
     def test_an_archive_under_any_name_needs_an_object_line(self):
-        for path, data in ((LICENSES + "notes.txt", "sdl.a"), ("Contents/MacOS/ninja", "sdl.a"),
-                           ("Contents/MacOS/ninja", "fat/sdl+sdl.a")):
+        for path, data in ((LICENSES + "notes.txt", "sdl.a"), (UPDATER, "sdl.a"),
+                           (UPDATER, "fat/sdl+sdl.a")):
             with self.subTest(path=path, data=data):
                 self.plant(path, self.objects[data])
                 self.assert_findings(f"object not on the manifest: {path}")
@@ -471,8 +472,8 @@ class ObjectTest(BundleTestCase):
         self.assert_findings(f"unreadable object: {SDL} (its member blob.bin isn't Mach-O)")
 
     def test_a_thin_object_at_a_macho_path_is_read(self):
-        self.plant("Contents/MacOS/ninja", self.objects["functions.o"])
-        self.assert_findings("game code: Contents/MacOS/ninja (defines _fn_80003100 and 1 more)")
+        self.plant(UPDATER, self.objects["functions.o"])
+        self.assert_findings(f"game code: {UPDATER} (defines _fn_80003100 and 1 more)")
 
     def test_a_fat_archive_is_read_in_every_architecture(self):
         self.plant(SDL, self.objects["fat/sdl+functions.a"])
@@ -528,16 +529,16 @@ class ObjectTest(BundleTestCase):
 
 class ContentTest(BundleTestCase):
     def test_the_disc_id_outside_the_snapshot_fails(self):
-        self.plant(LICENSES + "CMake.txt", "BSD 3-clause\nGKYE01\n")
-        self.assert_findings(f"disc ID: {LICENSES}CMake.txt (GKYE01 outside the source)")
+        self.plant(LICENSES + "Sparkle.txt", "MIT\nGKYE01\n")
+        self.assert_findings(f"disc ID: {LICENSES}Sparkle.txt (GKYE01 outside the source)")
 
     def test_the_disc_id_inside_the_snapshot_is_fine(self):
         self.assertIn(b"GKYE01", (self.app / SNAP / "CMakeLists.txt").read_bytes())
         self.assertEqual(self.check(), (0, [], ""))
 
     def test_a_disc_id_inside_a_binary_fails(self):
-        self.plant("Contents/MacOS/ninja", self.objects["engine.o"])
-        self.assert_findings("disc ID: Contents/MacOS/ninja (GKYE01 outside the source)")
+        self.plant(UPDATER, self.objects["engine.o"])
+        self.assert_findings(f"disc ID: {UPDATER} (GKYE01 outside the source)")
 
 
 class OccurrencesTest(unittest.TestCase):
@@ -601,15 +602,15 @@ class SourceTest(BundleTestCase):
 
 class SymlinkTest(BundleTestCase):
     def test_a_listed_link_with_another_target(self):
-        link = self.app / "Contents/Resources/cmake/bin/cmake"
+        link = self.app / SPARKLE / "Sparkle"
         os.unlink(link)
-        os.symlink("../../../MacOS/ninja", link)
-        self.assert_findings("symlink target: Contents/Resources/cmake/bin/cmake "
-                             "(-> ../../../MacOS/ninja, the manifest has ../../../MacOS/cmake)")
+        os.symlink("Versions/B/Autoupdate", link)
+        self.assert_findings(f"symlink target: {SPARKLE}Sparkle "
+                             "(-> Versions/B/Autoupdate, the manifest has Versions/B/Sparkle)")
 
     def test_a_link_under_an_allowed_prefix_still_has_to_be_listed(self):
-        os.symlink("../../MacOS/cmake", self.app / (LICENSES + "cmake"))
-        self.assert_findings(f"symlink not on the manifest: {LICENSES}cmake (-> ../../MacOS/cmake)")
+        os.symlink("../../MacOS/Dragoon", self.app / (LICENSES + "Dragoon"))
+        self.assert_findings(f"symlink not on the manifest: {LICENSES}Dragoon (-> ../../MacOS/Dragoon)")
 
     def test_a_link_is_never_followed(self):
         os.symlink("/dev/null", self.app / (SNAP + "empty"))
@@ -631,7 +632,7 @@ class OddEntryTest(BundleTestCase):
 
     def test_an_empty_directory_under_a_prefix_is_fine(self):
         (self.app / LICENSES / "empty").mkdir()
-        (self.app / "Contents/Resources/cmake/share/cmake-4.4/Empty").mkdir()
+        (self.app / SPARKLE_RES / "Empty").mkdir()
         self.assertEqual(self.check(), (0, [], ""))
 
     def test_a_pipe(self):
