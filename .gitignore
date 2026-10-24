@@ -22,3 +22,7 @@ analysis/out/
 __pycache__/
 # Each player's own controller settings
 /controls.txt
+
+# The launcher's downloads and the dev app built from them
+launcher/.third_party/
+launcher/dist/

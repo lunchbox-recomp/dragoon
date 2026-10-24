@@ -1,0 +1,13 @@
+# The binaries the launcher bundles, one "name version url sha256" line each. Only
+# tools/fetch_third_party.py downloads them, and it refuses a file whose SHA-256 differs. None
+# are committed. SDL isn't listed because gcn-recomp's CMakeLists.txt pins it, and the fetch
+# reads the URL and hash from there.
+
+# SHA-256 from cmake-4.4.4-SHA-256.txt on Kitware's v4.4.4 release,
+# https://github.com/Kitware/CMake/releases/tag/v4.4.4. The release page's own digest agrees, and
+# so did the download.
+cmake 4.4.4 https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-macos-universal.tar.gz 4b7b73704b1db9b374e5c9ab8e17ac6148b817b6396ee75cd94a852cbac9d305
+
+# Ninja publishes no hash file. SHA-256 from the digest GitHub shows for the asset on the v1.13.2
+# release, https://github.com/ninja-build/ninja/releases/tag/v1.13.2. The download matched it.
+ninja 1.13.2 https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b
