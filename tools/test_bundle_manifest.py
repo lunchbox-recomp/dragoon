@@ -75,6 +75,7 @@ class ParseTest(unittest.TestCase):
             "an engine that's also an object": GOOD + "object Contents/Resources/kit/engine.o\n",
             "an object not named .a or .o": GOOD + "object Contents/Resources/kit/libSDL3.dylib\n",
             "an engine not named .a or .o": GOOD.replace("kit/engine.o", "kit/engine"),
+            "an engine named .a": GOOD.replace("kit/engine.o", "kit/engine.a"),
         }
         for why, text in bad.items():
             with self.subTest(why):

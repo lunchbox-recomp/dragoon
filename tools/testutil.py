@@ -45,11 +45,11 @@ def write_file(directory: Path, name: str, data: bytes | str) -> Path:
     return path
 
 
-def compile_c(source: str, out: Path, debug: bool = True) -> Path:
-    """OUT, an arm64 object the system's cc compiles from SOURCE, with debug info if DEBUG."""
+def compile_c(source: str, out: Path, debug: bool = True, arch: str = "arm64") -> Path:
+    """OUT, an object for ARCH the system's cc compiles from SOURCE, with debug info if DEBUG."""
     out.parent.mkdir(parents=True, exist_ok=True)
     src = write_file(out.parent, out.name + ".c", source)
-    subprocess.run(["/usr/bin/cc", "-arch", "arm64", *(["-g"] if debug else []), "-O2", "-c", str(src),
+    subprocess.run(["/usr/bin/cc", "-arch", arch, *(["-g"] if debug else []), "-O2", "-c", str(src),
                     "-o", str(out)], check=True)
     src.unlink()
     return out

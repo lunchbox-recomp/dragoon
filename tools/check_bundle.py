@@ -12,10 +12,12 @@ since the manifest allows the _CodeSignature that signing adds. The checks are:
                   inputs/, main.dol, CMakeCache.txt, build.ninja, memcard_*, .shader-warmup,
                   in any letter case)
   2  executables  every file that starts with a Mach-O magic is at a path the manifest lists.
-                  Every ar archive (!<arch>) and every file named .a or .o, in any letter case,
-                  is on an object or engine line of its own. nm reads each of those, and none
-                  defines fn_ and 8 hex digits or g_recomp_*, the names the recompiler gives
-                  the game's functions and tables
+                  Every ar archive (!<arch>, or a fat file holding one) and every file named .a
+                  or .o, in any letter case, is on an object or engine line of its own, and the
+                  engine is a thin Mach-O object. Each of those and each Mach-O can be read
+                  whole, every archive member besides the symbol table being a thin Mach-O, and
+                  none defines fn_ and 8 hex digits or g_recomp_* in any architecture, the names
+                  the recompiler gives the game's functions and tables
   3  content      no file has the GameCube disc magic at offset 0x1C or starts with CISO, and
                   the disc ID appears only inside the source snapshot and in the engine object,
                   which carries it as a public constant

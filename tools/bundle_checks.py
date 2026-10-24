@@ -6,22 +6,18 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
+import bundle_objects
 import bundle_tree
 import export_source
 from bundle_manifest import BundleManifest, is_object_name
+from bundle_objects import AR_MAGIC, MACHO_MAGICS
 from check_no_game_data import is_game_data
 
 APP_NAME = "Dragoon.app"
 APPLICATIONS = "Applications"
-# The 32-bit, 64-bit and universal headers, in both byte orders.
-MACHO_MAGICS = frozenset(bytes.fromhex(h) for h in (
-    "feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca"))
-AR_MAGIC = b"!<arch>\n"
-NM = "/usr/bin/nm"
 # What the recompiler names the game's functions and its tables, with the C prefix Mach-O adds.
 GAME_SYMBOL = re.compile(r"_?(fn_[0-9A-Fa-f]{8}|g_recomp_.*)")
 DISC_MAGIC = bytes.fromhex("c2339f3d")
@@ -104,43 +100,39 @@ def check_paths(tree: bundle_tree.Tree, manifest: BundleManifest) -> list[Findin
     return found + check_links(tree, manifest)
 
 
-def is_object(path: str, head: bytes) -> bool:
-    """Is the file at PATH, starting with HEAD, an ar archive or named like one or an object?"""
-    return head.startswith(AR_MAGIC) or is_object_name(path)
+def is_object(app: Path, path: str, head: bytes) -> bool:
+    """Is the file at PATH, starting with HEAD, an ar archive, a fat file holding one, or named
+    like an archive or an object?"""
+    return is_object_name(path) or bundle_objects.is_archive(app / path, head)
 
 
-def check_executables(heads: dict[str, bytes], manifest: BundleManifest) -> list[Finding]:
+def check_executables(app: Path, heads: dict[str, bytes], manifest: BundleManifest) -> list[Finding]:
     """Check 2. A Mach-O, found by its magic, has to be at a path the manifest lists. An ar
-    archive, found by its magic, and a file named .a or .o have to be on an object line."""
+    archive, found by its magic, and a file named .a or .o have to be on an object line. The
+    engine has to be a thin Mach-O object."""
     found = []
     for path in sorted(heads):
-        if is_object(path, heads[path]):
+        if is_object(app, path, heads[path]):
             if path not in manifest.objects:
                 found.append(Finding("object not on the manifest", path))
         elif heads[path][:4] in MACHO_MAGICS and path not in manifest.machos:
             found.append(Finding("executable not on the manifest", path))
+        if path == manifest.engine and not bundle_objects.is_thin_object(heads[path]):
+            found.append(Finding("engine not a Mach-O object", path))
     return found
 
 
-def defined_symbols(path: Path) -> list[str]:
-    """The symbols the archive or object at PATH defines, local ones included. Raises
-    ValueError when nm can't read it."""
-    done = subprocess.run([NM, "--defined-only", "-j", str(path)], capture_output=True)
-    if done.returncode != 0:
-        raise ValueError(f"nm exited {done.returncode}")
-    # An archive's listing also has a blank line and a "lib.a(member.o):" line per member.
-    return done.stdout.decode(errors="replace").splitlines()
-
-
 def check_symbols(app: Path, heads: dict[str, bytes]) -> list[Finding]:
-    """Check 2, objects. No archive or object defines a symbol named as the recompiler names
-    the game's functions (fn_ and 8 hex digits) or its tables (g_recomp_), and nm reads each."""
+    """Check 2, symbols. No Mach-O, archive or file named like one defines a symbol named as the
+    recompiler names the game's functions (fn_ and 8 hex digits) or its tables (g_recomp_), and
+    each of them can be read whole."""
     found = []
     for path in sorted(heads):
-        if not is_object(path, heads[path]):
+        head = heads[path]
+        if not (head[:4] in MACHO_MAGICS or head.startswith(AR_MAGIC) or is_object_name(path)):
             continue
         try:
-            game = [s for s in defined_symbols(app / path) if GAME_SYMBOL.fullmatch(s)]
+            game = [s for s in bundle_objects.defined_symbols(app / path, head) if GAME_SYMBOL.fullmatch(s)]
         except ValueError as e:
             found.append(Finding("unreadable object", path, str(e)))
             continue
@@ -211,7 +203,7 @@ def check_app(app: Path, manifest: BundleManifest, reference: Path, disc_id: str
     """Checks 1 to 5 on the app at APP."""
     tree = bundle_tree.scan(app)
     heads = read_heads(app, tree)
-    return (check_paths(tree, manifest) + check_executables(heads, manifest)
+    return (check_paths(tree, manifest) + check_executables(app, heads, manifest)
             + check_symbols(app, heads) + check_content(app, heads, manifest, disc_id)
             + check_source(app, tree, manifest, reference) + check_size(app.name, tree, manifest))
 

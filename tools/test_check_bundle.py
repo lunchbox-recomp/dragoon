@@ -18,8 +18,10 @@ import export_source
 from testutil import GIT_ENV, archive, commit, compile_c, fake_hdiutil, git, run_main, write_file
 
 MACHO = bytes.fromhex("cffaedfe")
+AR_MAGIC = b"!<arch>\n"
 MACHO_MAGICS = ("feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca",
                 "cafebabf", "bfbafeca")
+MACHO_MAGIC_BYTES = {bytes.fromhex(m) for m in MACHO_MAGICS}
 DISC_MAGIC = bytes.fromhex("c2339f3d")
 APP = "Dragoon.app"
 SNAP = "Contents/Resources/source/"
@@ -27,14 +29,19 @@ LICENSES = "Contents/Resources/licenses/"
 ENGINE = "Contents/Resources/kit/engine.o"
 SDL = "Contents/Resources/kit/libSDL3.a"
 # Objects compiled from C by the class's setup: the kit's two, as the engine holds the disc ID
-# and leaves the game's tables to the game, and two with what only the game defines.
+# and leaves the game's tables to the game, a stand-in for the app's executables, two with what
+# only the game defines and one with names that come close.
 OBJECTS = {
     "engine.o": 'extern const unsigned g_recomp_func_count;\nconst char gcn_game_id[] = "GKYE01";\n'
                 "unsigned engine_funcs(void) { return g_recomp_func_count; }\n",
     "sdl.o": "int SDL_Fake(void) { return 3; }\n",
+    "tool.o": "int main(void) { return 0; }\n",
     "functions.o": "int fn_8000ABCD(int x) { return x + 1; }\nint fn_80003100(int x) { return x * 2; }\n",
     "tables.o": "const unsigned g_recomp_func_count = 0;\n",
+    "near.o": "int fn_8000ABC(int x) { return x; }\nint fn_8000ABCDE(int x) { return x; }\n"
+              "int my_fn_80003100(int x) { return x; }\nconst unsigned g_recompiled = 0;\n",
 }
+X86_OBJECTS = ("sdl.o", "functions.o")
 SHA1 = "0123456789abcdef0123456789abcdef01234567"
 CMAKE = f"""add_subdirectory(gcn-recomp)
 gcn_add_game(
@@ -64,13 +71,45 @@ def disc_header() -> bytes:
 
 def compile_objects(out: Path) -> dict[str, bytes]:
     """OBJECTS compiled into OUT, by name, and each one also as the only member of an archive
-    named for it with .a."""
+    named for it with .a. X86_OBJECTS are compiled for x86_64 too, as x86_64/NAME and its
+    archive, and lipo joins each arm64 archive with each x86_64 one as fat/ARM+X86.a."""
     built = {}
-    for name, source in OBJECTS.items():
-        obj = compile_c(source, out / name, debug=False)
-        built[name] = obj.read_bytes()
-        built[obj.stem + ".a"] = archive(out / (obj.stem + ".a"), obj).read_bytes()
+    for arch, names in (("arm64", OBJECTS), ("x86_64", X86_OBJECTS)):
+        prefix = "" if arch == "arm64" else "x86_64/"
+        for name in names:
+            obj = compile_c(OBJECTS[name], out / (prefix + name), debug=False, arch=arch)
+            built[prefix + name] = obj.read_bytes()
+            built[prefix + obj.stem + ".a"] = archive(obj.with_suffix(".a"), obj).read_bytes()
+    for arm in X86_OBJECTS:
+        for x86 in X86_OBJECTS:
+            name = f"fat/{Path(arm).stem}+{Path(x86).stem}.a"
+            (out / name).parent.mkdir(exist_ok=True)
+            subprocess.run(["/usr/bin/lipo", "-create", str(out / Path(arm).with_suffix(".a")),
+                            str(out / "x86_64" / Path(x86).with_suffix(".a")), "-output", str(out / name)],
+                           check=True)
+            built[name] = (out / name).read_bytes()
     return built
+
+
+def ar_archive(*members: tuple[str, bytes]) -> bytes:
+    """An ar archive of MEMBERS, (name, data) pairs, written byte by byte."""
+    out = bytearray(AR_MAGIC)
+    for name, data in members:
+        out += f"{name:<16}{0:<12}{0:<6}{0:<6}{644:<8}{len(data):<10}`\n".encode() + data
+        out += b"\n" * (len(out) % 2)
+    return bytes(out)
+
+
+def fat_file(*slices: bytes) -> bytes:
+    """A fat file holding SLICES, each marked arm64 and starting on a 4096-byte boundary."""
+    out = bytearray(bytes.fromhex("cafebabe") + len(slices).to_bytes(4, "big"))
+    offset = 4096
+    for data in slices:
+        out += b"".join(n.to_bytes(4, "big") for n in (0x0100000C, 0, offset, len(data), 12))
+        offset += -(-len(data) // 4096) * 4096
+    for data in slices:
+        out += bytes(-len(out) % 4096) + data
+    return bytes(out)
 
 
 def build_app(app: Path, snapshot: Path, objects: dict[str, bytes]) -> None:
@@ -80,9 +119,9 @@ def build_app(app: Path, snapshot: Path, objects: dict[str, bytes]) -> None:
         ENGINE: objects["engine.o"],
         SDL: objects["sdl.a"],
         "Contents/Info.plist": "<plist/>\n",
-        "Contents/MacOS/Dragoon": MACHO + b"launcher",
-        "Contents/MacOS/cmake": MACHO + b"cmake",
-        "Contents/MacOS/ninja": MACHO + b"ninja",
+        "Contents/MacOS/Dragoon": objects["tool.o"],
+        "Contents/MacOS/cmake": objects["tool.o"],
+        "Contents/MacOS/ninja": objects["tool.o"],
         "Contents/Resources/cmake/share/cmake-4.4/Modules/FindThing.cmake": "find_package(Thing)\n",
         "Contents/Resources/third_party/SDL3-3.4.18.tar.gz": b"an SDL tarball",
         "Contents/Resources/licenses/CMake.txt": "BSD 3-clause\n",
@@ -198,7 +237,7 @@ class PlantedFileTest(BundleTestCase):
                              f"extra in the source: {SNAP}build/gen/f0.c")
 
     def test_a_built_game_outside_the_snapshot(self):
-        self.plant("Contents/Resources/dragoon", MACHO + b"the game")
+        self.plant("Contents/Resources/dragoon", self.objects["tool.o"])
         self.assert_findings("not on the manifest: Contents/Resources/dragoon",
                              "executable not on the manifest: Contents/Resources/dragoon")
 
@@ -279,36 +318,102 @@ class PlantedFileTest(BundleTestCase):
 
 
 class ExecutableTest(BundleTestCase):
-    def test_every_macho_magic_at_an_unlisted_path_fails(self):
+    def test_every_macho_magic_at_an_unlisted_path_fails_and_is_read(self):
+        bench = LICENSES + "dragoon_bench"
         for magic in MACHO_MAGICS:
             with self.subTest(magic=magic):
-                self.plant(LICENSES + "dragoon_bench", bytes.fromhex(magic) + b"code")
-                self.assert_findings(f"executable not on the manifest: {LICENSES}dragoon_bench")
+                self.plant(bench, bytes.fromhex(magic) + b"code")
+                # b"code" is no fat header's count of slices.
+                why = "its fat header doesn't fit the file" if magic in ("cafebabe", "cafebabf") else "nm exited 1"
+                self.assert_findings(f"executable not on the manifest: {bench}",
+                                     f"unreadable object: {bench} ({why})")
 
     def test_a_macho_in_the_snapshot_fails(self):
-        self.plant(SNAP + "tools/dragoon", MACHO)
+        self.plant(SNAP + "tools/dragoon", self.objects["tool.o"])
         self.assert_findings(f"executable not on the manifest: {SNAP}tools/dragoon",
                              f"extra in the source: {SNAP}tools/dragoon")
 
     def test_a_macho_at_a_path_listed_as_a_plain_file_fails(self):
-        self.plant("Contents/Resources/third_party/SDL3-3.4.18.tar.gz", MACHO)
+        self.plant("Contents/Resources/third_party/SDL3-3.4.18.tar.gz", self.objects["tool.o"])
         self.assert_findings(
             "executable not on the manifest: Contents/Resources/third_party/SDL3-3.4.18.tar.gz")
 
     def test_the_launchers_name_in_another_case_is_another_path(self):
         os.unlink(self.app / "Contents/MacOS/Dragoon")
-        self.plant("Contents/MacOS/dragoon", MACHO)
+        self.plant("Contents/MacOS/dragoon", self.objects["tool.o"])
         self.assert_findings("not on the manifest: Contents/MacOS/dragoon",
                              "executable not on the manifest: Contents/MacOS/dragoon")
 
 
 class ObjectTest(BundleTestCase):
     def test_an_archive_under_any_name_needs_an_object_line(self):
-        for path in (LICENSES + "notes.txt", "Contents/MacOS/ninja"):
-            with self.subTest(path=path):
-                self.plant(path, self.objects["sdl.a"])
+        for path, data in ((LICENSES + "notes.txt", "sdl.a"), ("Contents/MacOS/ninja", "sdl.a"),
+                           ("Contents/MacOS/ninja", "fat/sdl+sdl.a")):
+            with self.subTest(path=path, data=data):
+                self.plant(path, self.objects[data])
                 self.assert_findings(f"object not on the manifest: {path}")
                 os.unlink(self.app / path)
+
+    def test_a_member_that_isnt_mach_o_makes_an_archive_unreadable(self):
+        # A generic blob with the GameCube magic at 0x1C, as a disc image starts, beside an object.
+        blob = ar_archive(("blob.bin", disc_header()), ("sdl.o", self.objects["sdl.o"]))
+        for path, kit_file in ((SDL, "sdl.a"), (ENGINE, "engine.o")):
+            with self.subTest(path=path):
+                self.plant(path, blob)
+                self.assertEqual(subprocess.run(["/usr/bin/nm", str(self.app / path)],
+                                                capture_output=True).returncode, 0)
+                findings = [f"unreadable object: {path} (its member blob.bin isn't Mach-O)"]
+                if path == ENGINE:
+                    findings.append(f"engine not a Mach-O object: {ENGINE}")
+                self.assert_findings(*findings)
+                self.plant(path, self.objects[kit_file])
+
+    def test_a_member_in_a_fat_files_slice_is_read_too(self):
+        self.plant(SDL, fat_file(ar_archive(("sdl.o", self.objects["sdl.o"]), ("blob.bin", b"generic"))))
+        self.assert_findings(f"unreadable object: {SDL} (its member blob.bin isn't Mach-O)")
+
+    def test_the_symbol_table_member_isnt_mach_o_and_passes(self):
+        # ar's first member, named after its BSD header, is the symbol table.
+        self.assertEqual(self.objects["sdl.a"][8:13], b"#1/20")
+        self.assertTrue(self.objects["sdl.a"][68:88].startswith(b"__.SYMDEF"))
+        self.assertNotIn(self.objects["sdl.a"][88:92], MACHO_MAGIC_BYTES)
+        self.assertEqual(self.check(), (0, [], ""))
+
+    def test_an_archive_or_fat_file_that_doesnt_parse_is_unreadable(self):
+        cases = {
+            "a cut header": (AR_MAGIC + b"sdl.o   ", "its member header at byte 8 can't be read"),
+            "a member too long": (ar_archive(("sdl.o", self.objects["sdl.o"]))[:-100],
+                                  "its member sdl.o runs past its end"),
+            "a fat header too long": (bytes.fromhex("cafebabe") + (3).to_bytes(4, "big") + bytes(30),
+                                      "its fat header doesn't fit the file"),
+        }
+        for why, (data, detail) in cases.items():
+            with self.subTest(why):
+                self.plant(SDL, data)
+                self.assert_findings(f"unreadable object: {SDL} ({detail})")
+
+    def test_the_engine_has_to_be_a_thin_mach_o_object(self):
+        executable = bytearray(self.objects["engine.o"])
+        executable[12] = 2  # MH_EXECUTE
+        for name, data in (("an archive", self.objects["engine.a"]), ("an executable", bytes(executable)),
+                           ("a fat archive", self.objects["fat/sdl+sdl.a"])):
+            with self.subTest(name):
+                self.plant(ENGINE, data)
+                code, out, _ = self.check()
+                self.assertEqual(code, 1)
+                self.assertIn(f"engine not a Mach-O object: {ENGINE}", out)
+
+    def test_a_thin_object_at_a_macho_path_is_read(self):
+        self.plant("Contents/MacOS/ninja", self.objects["functions.o"])
+        self.assert_findings("game code: Contents/MacOS/ninja (defines _fn_80003100 and 1 more)")
+
+    def test_a_fat_archive_is_read_in_every_architecture(self):
+        self.plant(SDL, self.objects["fat/sdl+functions.a"])
+        self.assert_findings(f"game code: {SDL} (defines _fn_80003100 and 1 more)")
+
+    def test_names_close_to_the_games_pass(self):
+        self.plant(SDL, self.objects["near.a"])
+        self.assertEqual(self.check(), (0, [], ""))
 
     def test_a_file_named_a_or_o_needs_an_object_line(self):
         for name in ("engine.o", "libgame.a", "Engine.O", "LIBGAME.A"):
@@ -364,7 +469,7 @@ class ContentTest(BundleTestCase):
         self.assertEqual(self.check(), (0, [], ""))
 
     def test_a_disc_id_inside_a_binary_fails(self):
-        self.plant("Contents/MacOS/ninja", MACHO + bytes(5000) + b"GKYE01")
+        self.plant("Contents/MacOS/ninja", self.objects["engine.o"])
         self.assert_findings("disc ID: Contents/MacOS/ninja (GKYE01 outside the source)")
 
 

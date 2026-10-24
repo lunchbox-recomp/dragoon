@@ -10,7 +10,8 @@ and have no spaces.
   macho PATH         a Mach-O executable that may be there
   object PATH        a static library or object file that may be there. PATH ends in .a or .o
   engine PATH        the kit's engine object, an object line whose file may also hold the disc
-                     ID, which the engine carries as a public constant. One at most
+                     ID, which the engine carries as a public constant. PATH ends in .o, and
+                     the file has to be a thin Mach-O object. One at most
   link PATH TARGET   a symlink that may be there, and the target it has to point at
 check_bundle.py reads it. A path that no line allows is a finding. A file named .a or .o, or
 that is an ar archive, needs an object or engine line of its own.
@@ -103,6 +104,8 @@ def parse(text: str) -> BundleManifest:
                 if not is_object_name(path):
                     raise ValueError(f"{path} isn't named .a or .o")
                 if directive == "engine":
+                    if not path.lower().endswith(".o"):
+                        raise ValueError(f"the engine {path} isn't named .o")
                     if engine is not None:
                         raise ValueError("engine is listed twice")
                     engine = path
