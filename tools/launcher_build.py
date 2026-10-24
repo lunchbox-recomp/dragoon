@@ -103,11 +103,16 @@ def emit(**event: object) -> None:
 
 
 def disk_use(*roots: Path) -> int:
-    """Bytes the files under ROOTS take on disk, as du counts them, links not followed."""
+    """Bytes the files under ROOTS take on disk, as du counts them, links not followed. A file
+    removed between the listing and the measuring counts as nothing."""
     total = 0
     for root in roots:
         for parent, _, names in os.walk(root):
-            total += sum(os.lstat(os.path.join(parent, n)).st_blocks * 512 for n in names)
+            for name in names:
+                try:
+                    total += os.lstat(os.path.join(parent, name)).st_blocks * 512
+                except FileNotFoundError:
+                    pass
     return total
 
 
@@ -136,8 +141,12 @@ class Build:
         self.note(f"== {step}")
         start = time.monotonic()
         yield
-        self.note(f"== {step} took {time.monotonic() - start:.1f} s, "
-                  f"with {disk_use(*self.watched) / 1e6:.1f} MB in --data and --cache")
+        took = f"== {step} took {time.monotonic() - start:.1f} s"
+        try:
+            held = f"with {disk_use(*self.watched) / 1e6:.1f} MB in --data and --cache"
+        except OSError as e:  # the measurement is a note, and never fails the step
+            held = f"and --data and --cache couldn't be measured ({e})"
+        self.note(f"{took}, {held}")
 
     def run(self, cmd: list[str], cwd: Path, name: str = "",
             progress: Progress = lambda line: None) -> None:

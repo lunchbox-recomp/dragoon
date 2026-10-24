@@ -248,7 +248,7 @@ It writes nothing and exits 2 when:
 
 ## launcher_build.py
 
-How does the launcher build the game? launcher_build.py is its recipe, and a developer can run it from a shell. Given a snapshot from export_source.py, a kit from engine_kit.py, the player's disc and every tool by full path, it builds `<data>/game/<id>/Dragoon.app` and points `<data>/game/current` at it. The player's Mac runs no CMake or Ninja and never builds SDL. It prints one JSON event per line on stdout (the format is in `--help`). It writes every line the tools print to `--log`, with each command, each step's time and how much `--data` and `--cache` hold after it.
+How does the launcher build the game? launcher_build.py is its recipe, and a developer can run it from a shell. Given a snapshot from export_source.py, a kit from engine_kit.py, the player's disc and every tool by full path, it builds `<data>/game/<id>/Dragoon.app` and points `<data>/game/current` at it. The player's Mac runs no CMake or Ninja and never builds SDL. It prints one JSON event per line on stdout (the format is in `--help`). It writes every line the tools print to `--log`, with each command, each step's time and how much `--data` and `--cache` hold after it. That measurement never fails a step. A file removed while it's measured counts as nothing, and any other error is written to the log in its place.
 
 | Step | What it does |
 |---|---|

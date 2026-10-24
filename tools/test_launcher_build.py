@@ -331,6 +331,33 @@ class GoodRunTest(RecipeTestCase):
         self.assertEqual(launcher_build.disk_use(files, links),
                          used + launcher_build.disk_use(links))
 
+    def test_disk_use_skips_a_file_removed_after_the_listing(self):
+        files = self.dir / "files"
+        files.mkdir()
+        write_file(files, "kept", bytes(1_000_000))
+        write_file(files, "gone", bytes(1_000_000))
+        lstat = os.lstat
+
+        def removed_first(path, *args, **kwargs):
+            if os.path.basename(path) == "gone":
+                raise FileNotFoundError(2, "No such file or directory", path)
+            return lstat(path, *args, **kwargs)
+
+        with mock.patch.object(launcher_build.os, "lstat", side_effect=removed_first):
+            used = launcher_build.disk_use(files)
+        self.assertEqual(used, lstat(files / "kept").st_blocks * 512)
+        self.assertGreaterEqual(used, 1_000_000)
+
+    def test_a_measurement_that_fails_is_a_note_and_never_fails_the_step(self):
+        denied = PermissionError(13, "Permission denied", "/a/dir")
+        with mock.patch.object(launcher_build, "disk_use", side_effect=denied):
+            code, events, _ = self.build()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertEqual(re.findall(
+            r"^== (\w+) took \d+\.\d s, and --data and --cache couldn't be measured "
+            r"\(\[Errno 13\] Permission denied: '/a/dir'\)$", self.log.read_text(), re.M), STEPS)
+
     def test_links_a_killed_swap_left_are_cleaned_up_at_the_next_swap(self):
         self.old_game()
         os.symlink("somewhere", self.data / "game" / ".current.99999.partial")
