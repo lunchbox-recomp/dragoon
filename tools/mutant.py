@@ -19,9 +19,10 @@ is beside its copy as a .log file.
 When the run ends, whether with a result, a tool error, a crash, ^C, SIGTERM or SIGHUP, it
 removes the copies it built and keeps the logs, so a kill can still be checked. It removes
 DEST too if nothing is left in it, which is when it stopped before any test ran. It removes
-only what it made. --keep keeps the copies as well, for reading a mutant's files or running
-its tests by hand. A copy it can't remove is named on stderr and doesn't change the result.
-SIGTERM and SIGHUP end it with exit 143 and 129, after killing the run in progress as ^C does.
+only what it made, and a parent of DEST that it had to make stays. --keep keeps the copies
+as well, for reading a mutant's files or running its tests by hand. A copy it can't remove is
+named on stderr and doesn't change the result. SIGTERM and SIGHUP end it with exit 143 and
+129, after killing the run in progress as ^C does.
 A signal that comes while it removes the copies is ignored, so a second ^C can't leave the
 rest behind. Only SIGKILL leaves the copies behind, and a run that was going.
 
