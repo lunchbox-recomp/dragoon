@@ -206,11 +206,13 @@ class KitMakefileTest(unittest.TestCase):
         for name in ("recomp_000.c", "recomp_001.c", "recomp_table.c"):
             write_file(self.work / "gen", name, "")
         write_file(self.work / "gen", "recomp_funcs.h", "")
-        self.cc, self.cxx = (self.fake(root, tool) for tool in ("cc", "cxx"))
+        tools = root / "Command Line Tools" / "usr" / "bin"
+        tools.mkdir(parents=True)
+        self.cc, self.cxx = (self.fake(tools, tool) for tool in ("cc", "cxx"))
 
-    def fake(self, root: Path, tool: str) -> Path:
-        path = write_file(root, tool, FAKE_COMPILER.format(python=sys.executable,
-                                                           records=str(self.records), tool=tool))
+    def fake(self, directory: Path, tool: str) -> Path:
+        path = write_file(directory, tool, FAKE_COMPILER.format(python=sys.executable,
+                                                                records=str(self.records), tool=tool))
         path.chmod(0o755)
         return path
 
@@ -242,6 +244,12 @@ class KitMakefileTest(unittest.TestCase):
                          + [f"obj/{s}.o" for s in stems] + [f"{self.kit}/engine.o", f"{self.kit}/libSDL3.a"]
                          + shlex.split(LIBS))
         self.assertTrue((self.work / "dragoon").exists())
+
+    def test_runs_compilers_whose_path_holds_a_space(self) -> None:
+        self.assertIn(" ", str(self.cc.parent))
+        done = self.make("-j4", f"SDK={SDK}")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(sorted(c["tool"] for c in self.calls()), ["cc", "cc", "cc", "cxx"])
 
     def built_then_changed(self, changed: Path) -> None:
         """Build, then date the inputs, the outputs and CHANGED so that only CHANGED is newer
@@ -283,13 +291,16 @@ class KitMakefileTest(unittest.TestCase):
         done = self.make("-B", f"SDK={SDK}")
         self.assertEqual(done.returncode, 0, done.stderr)
 
-    def test_refuses_a_kit_or_sdk_path_make_or_the_shell_would_read(self) -> None:
+    def test_refuses_a_path_make_or_the_shell_would_read(self) -> None:
+        """A CC or CXX named after make()'s own wins, as the later of two on make's command line."""
+        good = {"KIT": self.kit, "SDK": SDK, "CC": self.cc, "CXX": self.cxx}
         for char in ('$', '"', '`', ':', ';'):
-            for args in ([f"KIT={self.kit}{char}x", f"SDK={SDK}"], [f"KIT={self.kit}", f"SDK={SDK}{char}x"]):
-                with self.subTest(args=args):
+            for name in good:
+                args = [f"{key}={path}{char}x" if key == name else f"{key}={path}" for key, path in good.items()]
+                with self.subTest(name=name, char=char):
                     done = self.make(*args, kit=False)
                     self.assertNotEqual(done.returncode, 0)
-                    self.assertIn("KIT or SDK holds a $, \", `, : or ;", done.stderr)
+                    self.assertIn("KIT, SDK, CC or CXX holds a $, \", `, : or ;", done.stderr)
                     self.assertEqual(self.calls(), [])
 
     def test_needs_a_kit(self) -> None:
