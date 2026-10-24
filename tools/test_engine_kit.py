@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import stat
 import subprocess
 import sys
 import tempfile
@@ -95,6 +96,7 @@ class EngineKitTest(unittest.TestCase):
                                    f"GAME_LIBS := {LIBS}", "MACOSX_MIN := 14.0"])
         self.assertEqual(sorted(str(p.relative_to(self.out)) for p in self.out.rglob("*") if p.is_file()),
                          sorted(["engine.o", "kit.mk", *copies]))
+        self.assertEqual(stat.S_IMODE(self.out.stat().st_mode), 0o755)
 
     def test_strip_debug_drops_the_debug_map_and_sdls_dwarf(self) -> None:
         build = fake_build(self.root)
@@ -114,7 +116,9 @@ class EngineKitTest(unittest.TestCase):
         self.assert_refused(fake_build(self.root, disc="/discs/game.iso"), "GAME_ISO=/discs/game.iso")
 
     def test_refuses_a_build_without_a_deployment_target(self) -> None:
-        self.assert_refused(fake_build(self.root, target=""), "no CMAKE_OSX_DEPLOYMENT_TARGET")
+        for target in ("", "abc"):
+            with self.subTest(target=target):
+                self.assert_refused(fake_build(self.root, target=target), "no CMAKE_OSX_DEPLOYMENT_TARGET")
 
     def test_refuses_a_gcn_recomp_that_writes_no_flags(self) -> None:
         build = fake_build(self.root)
@@ -135,16 +139,27 @@ class EngineKitTest(unittest.TestCase):
         self.assert_refused(build, "game_libs.txt is empty")
 
     def test_refuses_libraries_named_by_path(self) -> None:
-        build = fake_build(self.root)
-        write_file(build, "game_libs.txt", "-framework Cocoa /opt/homebrew/lib/libSDL3.dylib -lm\n")
-        self.assert_refused(build, "names /opt/homebrew/lib/libSDL3.dylib, a path a player's Mac may not have")
+        for path in ("/opt/homebrew/lib/libSDL3.dylib", "-L/opt/homebrew/lib"):
+            with self.subTest(path):
+                build = fake_build(self.root)
+                write_file(build, "game_libs.txt", f"-framework Cocoa {path} -lm\n")
+                self.assert_refused(build, f"names {path}, a path a player's Mac may not have")
 
     def test_refuses_flags_make_would_read_differently(self) -> None:
         for name in ("game_cflags.txt", "game_ldflags.txt", "game_libs.txt"):
-            with self.subTest(name):
-                build = fake_build(self.root)
-                write_file(build, name, "-O2 -DX=$(Y)\n")
-                self.assert_refused(build, f"{name} isn't one line of flags make can take")
+            for flags in ("-O2 -DX=$(Y)", "-O2 # a note", "-O2\n-g", "-O2 \\"):
+                with self.subTest(name=name, flags=flags):
+                    build = fake_build(self.root)
+                    write_file(build, name, flags + "\n")
+                    self.assert_refused(build, f"{name} isn't one line of flags make can take")
+
+    def test_tells_a_flag_file_it_cant_read_from_a_missing_one(self) -> None:
+        build = fake_build(self.root)
+        write_file(build, "game_cflags.txt", b"-O2 -DNAME=\xff\n")
+        self.assert_refused(build, "game_cflags.txt isn't UTF-8 text")
+        (build / "game_cflags.txt").unlink()
+        (build / "game_cflags.txt").mkdir()
+        self.assert_refused(build, "game_cflags.txt: can't read it (Is a directory)")
 
     def test_refuses_runtime_check_unbuilt(self) -> None:
         build = fake_build(self.root)

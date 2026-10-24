@@ -67,7 +67,8 @@ def read_cache(path: Path) -> dict[str, str]:
 
 
 def make_safe(flags: str, where: str) -> str:
-    if any(c in flags for c in "#$\n"):
+    # A trailing backslash would fold kit.mk's next line into this one.
+    if any(c in flags for c in "#$\n") or flags.endswith("\\"):
         raise KitError(f"{where} isn't one line of flags make can take as written")
     return flags
 
@@ -76,9 +77,13 @@ def build_flags(build: Path, name: str, why_missing: str) -> str:
     """The one line of flags gcn-recomp's configure wrote to <build>/NAME."""
     path = build / name
     try:
-        flags = path.read_text().strip()
-    except OSError:
+        flags = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
         raise KitError(f"{path} is missing: {why_missing}") from None
+    except OSError as e:
+        raise KitError(f"{path}: can't read it ({e.strerror})") from None
+    except UnicodeDecodeError:
+        raise KitError(f"{path} isn't UTF-8 text") from None
     if not flags:
         raise KitError(f"{path} is empty")
     return make_safe(flags, str(path))
@@ -152,6 +157,7 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
             f"MACOSX_MIN := {target}\n")
         if strip_debug:
             run([str(strip), "-S", str(tmp / "engine.o"), str(tmp / "libSDL3.a")])
+        tmp.chmod(0o755)  # mkdtemp made it 0700
         tmp.rename(out)
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
