@@ -229,6 +229,49 @@ It prints one line per path and exits 1 if it found any, so it can run in CI. It
 tools/check_no_game_data.py
 ```
 
+## mutant.py
+
+Do the tests notice when the code breaks? It changes a copy of a commit, runs a test directory there and reports whether the tests failed. A changed copy is a mutant. It's killed when the tests fail and survives when they pass, and a survivor is a gap in the tests. A spec file holds the changes, so a reviewer checking a new test commits it in place of a throwaway script.
+
+The spec is a JSON list of mutants. Each has a `name` and a `dir` to discover tests in, relative to the repo (`tools` or `launcher/tools`). Its `replace` list holds `{file, old, new}` edits that are applied together, in order. Every `old` has to occur exactly once in its file, so a typo can't make a mutant that changes nothing. `new` may be empty.
+
+```json
+[
+  {"name": "git() drops the exit status",
+   "dir": "tools",
+   "replace": [{"file": "tools/export_source.py", "old": " or f\"exit {e.returncode}\"", "new": ""}]}
+]
+```
+
+```
+tools/mutant.py build/probe/mutant/spec.json /tmp/dragoon-mutants
+```
+
+It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it finishes, then `total N, killed K, survived S, timeout T`. Each run is the whole directory's tests (`python3 -B -m unittest discover -s COPY/DIR -p 'test_*.py'`, run from the copy), so a mutant on `tools` takes about a minute.
+
+These keep a kill from meaning nothing.
+
+- Every copy is a `git archive` of `--rev` (HEAD unless you say otherwise). The repo's own files are never edited or run, and uncommitted changes aren't tested. `--repo` names a checkout other than the one holding the tool.
+- Each distinct `dir` gets a baseline on an unchanged copy first, and it has to pass. A selection that fails on its own would read every mutant as killed.
+- Each mutant runs on a fresh copy, so no stale bytecode or leftover from an earlier run is tested in its place.
+- The tests get `PATH`, `HOME`, `TMPDIR` and `PYTHONDONTWRITEBYTECODE=1` and nothing else, so no key or token reaches them.
+- Every copy is built and every edit applied before any test runs, so a bad spec costs no run.
+- A run that outlasts `--timeout` (600 s unless you say otherwise, for each run) is killed along with everything it started.
+
+A copy has no `.git` and, since `git archive` leaves submodules out, no gcn-recomp. A test that needs either has to skip itself, as `RealTreeTest` in `test_launcher_build.py` does. `--python FILE` picks the interpreter that runs the tests, and it defaults to the one running the tool.
+
+DEST is a new directory outside the repo, and the tool refuses one that exists or is inside the repo. The copies stay there as `baseline-N` and `mutant-N`, counting from 1 in the order the spec first uses a dir and lists a mutant. Each has the last 64 KiB of its run's output beside it as a `.log`. A mutant that breaks an import counts as killed too, so read its log before you trust a kill that matters. Nothing is removed, so move DEST to the Trash when you're done.
+
+It exits 0 when every mutant was killed and 1 when any survived or timed out. It exits 2, as the other tools do, with one `mutant:` line on stderr when it couldn't decide:
+
+- the spec or an argument is bad
+- an `old` isn't found exactly once
+- a file or dir isn't in the copy, or a link would take an edit outside it
+- DEST exists or is inside the repo
+- a baseline fails or times out
+
+A crash in the tool exits 2 as well, so it can't read as a survivor.
+
 ## export_source.py
 
 What source does the launcher build? export_source.py writes a snapshot of Dragoon's HEAD, with gcn-recomp in `gcn-recomp/` at the commit HEAD pins, as `git archive` gives them. Untracked and ignored files such as `rom/game.iso`, `build/` and `saves/` never reach it. Nor does git history. It adds `source-info.json` (see source_info.py) and `source-manifest.txt`, which lists every other file as a `<sha256>  <path>` line sorted by path.

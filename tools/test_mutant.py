@@ -1,0 +1,451 @@
+import hashlib
+import json
+import os
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from unittest import mock
+
+import mutant
+from testutil import GIT_ENV, commit, git, run_main, write_file
+
+CALC_PATH = "lib dir/calc.py"
+CALC = """\
+def add(a, b):
+    return a + b
+
+
+def sub(a, b):
+    return a - b
+
+
+def twice(x):
+    # keep both operands the same
+    return add(x, x)
+"""
+# Only add is tested, so a change to sub or twice survives.
+TEST_CALC = """\
+import unittest
+
+import calc
+
+
+class CalcTest(unittest.TestCase):
+    def test_add(self):
+        self.assertEqual(calc.add(2, 3), 5)
+"""
+TEST_ENV = """\
+import os
+import unittest
+
+
+class EnvTest(unittest.TestCase):
+    def test_nothing_of_the_parents_gets_in(self):
+        for name in ("DRAGOON_SECRET", "GITHUB_TOKEN", "PYTHONPATH", "GIT_AUTHOR_NAME"):
+            self.assertNotIn(name, os.environ)
+        self.assertEqual(os.environ["PYTHONDONTWRITEBYTECODE"], "1")
+        for name in ("PATH", "HOME", "TMPDIR"):
+            self.assertIn(name, os.environ)
+"""
+TEST_BROKEN = """\
+import unittest
+
+
+class BrokenTest(unittest.TestCase):
+    def test_fails(self):
+        self.fail("always fails")
+"""
+TEST_SLOW = """\
+import time
+import unittest
+
+
+class SlowTest(unittest.TestCase):
+    def test_sleeps(self):
+        time.sleep(30)
+"""
+FILES = {
+    CALC_PATH: CALC,
+    "lib dir/test_calc.py": TEST_CALC,
+    "env check/test_env.py": TEST_ENV,
+    "broken tests/test_broken.py": TEST_BROKEN,
+    "slow tests/test_slow.py": TEST_SLOW,
+}
+
+
+def edit(old: str, new: str, file: str = CALC_PATH) -> dict:
+    return {"file": file, "old": old, "new": new}
+
+
+def spec_mutant(name: str, *replace: dict, dir: str = "lib dir") -> dict:
+    return {"name": name, "dir": dir, "replace": list(replace)}
+
+
+KILLED = spec_mutant("add subtracts", edit("return a + b", "return a - b"))
+SURVIVOR = spec_mutant("sub swapped", edit("return a - b", "return b - a"))
+
+
+def total(killed: int, survived: int, timeout: int) -> str:
+    count = killed + survived + timeout
+    return f"total {count}, killed {killed}, survived {survived}, timeout {timeout}\n"
+
+
+class MutantTestCase(unittest.TestCase):
+    """A repository with a module, a test that checks half of it and three test directories
+    that fail, hang or check the environment, with a space in every path."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        patch = mock.patch.dict(os.environ, GIT_ENV)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.dir = Path(tmp.name)
+        self.repo = self.dir / "the repo"
+        self.first = commit(self.repo, FILES)
+        self.dest = self.dir / "the copies"
+        self.spec_file = self.dir / "the spec.json"
+
+    def write_spec(self, content: object) -> None:
+        self.spec_file.write_text(content if isinstance(content, str) else json.dumps(content))
+
+    def run_spec(self, *extra: str, dest: Path = None) -> tuple:
+        return run_main(mutant.main, str(self.spec_file), str(dest or self.dest),
+                        "--repo", str(self.repo), *extra)
+
+    def run_tool(self, *mutants: dict, extra: tuple = (), dest: Path = None) -> tuple:
+        self.write_spec(list(mutants))
+        return self.run_spec(*extra, dest=dest)
+
+    def read(self, copy: str, name: str = CALC_PATH) -> str:
+        return (self.dest / copy / name).read_text()
+
+    def assert_tool_error(self, result: tuple, *why: str) -> None:
+        code, out, err = result
+        self.assertEqual(code, 2, err)
+        self.assertEqual(out, "")
+        self.assertTrue(err.startswith("mutant: "), err)
+        for text in why:
+            self.assertIn(text, err)
+
+
+class VerdictTest(MutantTestCase):
+    def test_a_killed_mutant(self):
+        self.assertEqual(self.run_tool(KILLED), (0, "killed add subtracts\n" + total(1, 0, 0), ""))
+
+    def test_a_surviving_mutant(self):
+        self.assertEqual(self.run_tool(SURVIVOR), (1, "survived sub swapped\n" + total(0, 1, 0), ""))
+
+    def test_one_line_per_mutant_in_the_specs_order(self):
+        self.assertEqual(self.run_tool(SURVIVOR, KILLED), (
+            1, "survived sub swapped\nkilled add subtracts\n" + total(1, 1, 0), ""))
+
+    def test_a_mutant_that_outruns_the_timeout_and_the_process_it_started(self):
+        pid_file = self.dir / "sleeper pid"
+        hang = spec_mutant("hangs", edit("return a + b", (
+            f"import subprocess; p = subprocess.Popen(['/bin/sleep', '60']); "
+            f"open({str(pid_file)!r}, 'w').write(str(p.pid)); p.wait()")))
+        started = time.monotonic()
+        result = self.run_tool(hang, extra=("--timeout", "4"))
+        self.assertLess(time.monotonic() - started, 30)
+        self.assertEqual(result, (1, "timeout hangs\n" + total(0, 0, 1), ""))
+        pid = int(pid_file.read_text())
+        self.addCleanup(self.kill_quietly, pid)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and self.alive(pid):
+            time.sleep(0.05)
+        self.assertFalse(self.alive(pid), "the mutant's child outlived the run")
+
+    @staticmethod
+    def alive(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        return True
+
+    @staticmethod
+    def kill_quietly(pid: int) -> None:
+        try:
+            os.kill(pid, 9)
+        except ProcessLookupError:
+            pass
+
+    def test_a_crash_in_the_tool_is_a_tool_error_and_not_a_survivor(self):
+        self.write_spec([KILLED])
+        with mock.patch.object(mutant, "run_tests", side_effect=RuntimeError("boom")):
+            self.assert_tool_error(self.run_spec(), "RuntimeError: boom")
+
+
+class CopyTest(MutantTestCase):
+    def tree(self) -> tuple:
+        """Every file outside .git with its hash, and what git says about the tree."""
+        files = {p.relative_to(self.repo).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                 for p in sorted(self.repo.rglob("*"))
+                 if p.is_file() and ".git" not in p.relative_to(self.repo).parts}
+        return files, git(self.repo, "status", "--porcelain", "--ignored")
+
+    def test_the_repo_is_untouched_and_the_committed_files_are_what_run(self):
+        # The committed calc.py has "a + b" once. If the tool read this one instead, KILLED
+        # would find nothing to replace.
+        write_file(self.repo / "lib dir", "calc.py", CALC.replace("a + b", "a * b"))
+        write_file(self.repo, "notes.txt", "mine")
+        before = self.tree()
+        self.assertEqual(self.run_tool(KILLED, SURVIVOR)[:2], (
+            1, "killed add subtracts\nsurvived sub swapped\n" + total(1, 1, 0)))
+        self.assertEqual(self.tree(), before)
+        self.assertEqual(list(self.repo.rglob("__pycache__")), [])
+
+    def test_every_run_gets_its_own_copy_and_the_copies_are_kept(self):
+        two = spec_mutant("two edits", edit("return a + b", "return a * b"),
+                          edit("# keep both operands the same", "# edited"))
+        other = spec_mutant("other", edit("return a - b", "return a // b"))
+        self.run_tool(two, other)
+        self.assertEqual(self.read("baseline-1"), CALC)
+        self.assertEqual(self.read("mutant-1"), CALC.replace("a + b", "a * b").replace(
+            "keep both operands the same", "edited"))
+        self.assertEqual(self.read("mutant-2"), CALC.replace("a - b", "a // b"))
+
+    def test_a_baseline_copy_for_each_distinct_dir(self):
+        self.run_tool(KILLED, spec_mutant("env", edit("return a + b", "return b + a"),
+                                          dir="env check"), SURVIVOR)
+        self.assertEqual(sorted(p.name for p in self.dest.iterdir() if p.is_dir()),
+                         ["baseline-1", "baseline-2", "mutant-1", "mutant-2", "mutant-3"])
+        self.assertTrue((self.dest / "baseline-2" / "env check" / "test_env.py").is_file())
+
+    def test_the_tail_of_each_runs_output_is_kept(self):
+        self.run_tool(KILLED)
+        self.assertIn("OK", (self.dest / "baseline-1.log").read_text())
+        self.assertIn("FAIL: test_add", (self.dest / "mutant-1.log").read_text())
+
+    def test_no_bytecode_is_written(self):
+        self.run_tool(KILLED, SURVIVOR)
+        self.assertEqual(list(self.dest.rglob("__pycache__")), [])
+
+    def test_rev_names_the_commit_to_copy(self):
+        commit(self.repo, {CALC_PATH: CALC.replace("return a + b", "return b + a")})
+        self.assert_tool_error(self.run_tool(KILLED), "add subtracts", "0 times")
+        later = self.dir / "later copies"
+        self.assertEqual(self.run_tool(KILLED, extra=("--rev", self.first), dest=later)[:2],
+                         (0, "killed add subtracts\n" + total(1, 0, 0)))
+
+    def test_paths_with_spaces(self):
+        for path in (self.repo, self.dest, self.spec_file, self.repo / "lib dir"):
+            self.assertIn(" ", str(path))
+        self.assertEqual(self.run_tool(KILLED, SURVIVOR)[:2], (
+            1, "killed add subtracts\nsurvived sub swapped\n" + total(1, 1, 0)))
+
+    def test_the_command_line_and_the_directory_the_tests_run_in(self):
+        calls = self.dir / "calls.jsonl"
+        fake = write_file(self.dir, "fake python", (
+            f"#!{sys.executable}\n"
+            "import json, os, subprocess, sys\n"
+            f"with open({str(calls)!r}, 'a') as f:\n"
+            "    f.write(json.dumps([os.getcwd(), sys.argv[1:]]) + '\\n')\n"
+            f"sys.exit(subprocess.run([{sys.executable!r}, *sys.argv[1:]]).returncode)\n"))
+        fake.chmod(0o755)
+        self.assertEqual(self.run_tool(KILLED, extra=("--python", str(fake)))[0], 0)
+        dest = self.dest.resolve()
+        want = []
+        for copy in ("baseline-1", "mutant-1"):
+            want.append([str(dest / copy), ["-B", "-m", "unittest", "discover", "-s",
+                                            str(dest / copy / "lib dir"), "-p", "test_*.py"]])
+        self.assertEqual([json.loads(line) for line in calls.read_text().splitlines()], want)
+
+    def test_a_relative_python_is_relative_to_where_the_tool_ran(self):
+        wrapper = write_file(self.dir, "py wrapper", f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+        wrapper.chmod(0o755)
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(self.dir)  # the tests run in a copy, so the path has to be made absolute
+        self.assertEqual(self.run_tool(KILLED, extra=("--python", "./py wrapper"))[:2],
+                         (0, "killed add subtracts\n" + total(1, 0, 0)))
+
+    def test_the_tests_get_a_minimal_environment(self):
+        leaks = {"DRAGOON_SECRET": "hunter2", "GITHUB_TOKEN": "x", "PYTHONPATH": str(self.repo)}
+        harmless = spec_mutant("harmless", edit("# keep both operands the same", "# edited"),
+                               dir="env check")
+        with mock.patch.dict(os.environ, leaks):
+            # The test in env check fails its baseline, a tool error, if anything leaked.
+            self.assertEqual(self.run_tool(harmless), (1, "survived harmless\n" + total(0, 1, 0), ""))
+
+    def test_a_symlink_that_leaves_the_copy_isnt_written_through(self):
+        outside = write_file(self.dir, "outside.txt", "original text\n")
+        os.symlink(outside, self.repo / "lib dir" / "link.txt")
+        git(self.repo, "add", "--", "lib dir/link.txt")
+        git(self.repo, "commit", "-q", "-m", "link")
+        result = self.run_tool(spec_mutant("via link", edit("original", "changed", "lib dir/link.txt")))
+        self.assert_tool_error(result, "lib dir/link.txt", "outside the copy")
+        self.assertEqual(outside.read_text(), "original text\n")
+
+
+class RefusalTest(MutantTestCase):
+    def test_an_old_found_nowhere(self):
+        result = self.run_tool(KILLED, spec_mutant("typo", edit("return a * b", "return a / b")))
+        self.assert_tool_error(result, "typo", CALC_PATH, "0 times")
+
+    def test_an_old_found_twice(self):
+        result = self.run_tool(KILLED, spec_mutant("vague", edit("(a, b):", "(b, a):")))
+        self.assert_tool_error(result, "vague", CALC_PATH, "2 times")
+
+    def test_a_second_edit_is_counted_in_the_text_the_first_left(self):
+        result = self.run_tool(spec_mutant("clash", edit("return a + b", "return a - b"),
+                                           edit("return a - b", "return b - a")))
+        self.assert_tool_error(result, "clash", "2 times")
+
+    def test_a_file_that_isnt_in_the_copy(self):
+        self.assert_tool_error(self.run_tool(spec_mutant("gone", edit("a", "b", "lib dir/none.py"))),
+                               "gone", "lib dir/none.py")
+
+    def test_a_file_that_is_a_directory(self):
+        self.assert_tool_error(self.run_tool(spec_mutant("dir", edit("a", "b", "lib dir"))),
+                               "dir", "lib dir")
+
+    def test_a_file_that_isnt_text(self):
+        commit(self.repo, {"lib dir/blob.dat": b"\xff\xfe"})
+        self.assert_tool_error(self.run_tool(spec_mutant("blob", edit("a", "b", "lib dir/blob.dat"))),
+                               "blob", "lib dir/blob.dat", "UTF-8")
+
+    def test_a_dir_that_isnt_in_the_copy(self):
+        self.assert_tool_error(self.run_tool(spec_mutant("nowhere", edit("return a + b", "x"),
+                                                         dir="no such dir")),
+                               "nowhere", "no such dir")
+
+    def test_nothing_runs_when_a_later_mutant_is_refused(self):
+        self.assert_tool_error(self.run_tool(KILLED, spec_mutant("typo", edit("zzz", "y"))), "typo")
+        self.assertEqual(list(self.dest.glob("*.log")), [])
+
+    def test_a_failing_baseline_is_a_tool_error_and_not_a_kill(self):
+        broken = spec_mutant("no good", edit("return a + b", "return a * b"), dir="broken tests")
+        result = self.run_tool(KILLED, broken)
+        self.assert_tool_error(result, "broken tests", "fail without a mutant", "baseline-2.log")
+        self.assertIn("always fails", (self.dest / "baseline-2.log").read_text())
+        self.assertEqual(list(self.dest.glob("mutant-*.log")), [])
+
+    def test_a_baseline_that_outruns_the_timeout(self):
+        slow = spec_mutant("slow", edit("return a + b", "return a * b"), dir="slow tests")
+        self.assert_tool_error(self.run_tool(slow, extra=("--timeout", "0.5")),
+                               "slow tests", "0.5 s", "baseline-1.log")
+
+    def test_a_dest_that_exists(self):
+        self.dest.mkdir()
+        write_file(self.dest, "mine.txt", "keep")
+        self.assert_tool_error(self.run_tool(KILLED), str(self.dest))
+        self.assertEqual(os.listdir(self.dest), ["mine.txt"])
+
+    def test_a_dest_inside_the_repo(self):
+        dest = self.repo / "build" / "copies"
+        self.assert_tool_error(self.run_tool(KILLED, dest=dest), "inside the repo")
+        self.assertFalse((self.repo / "build").exists())
+
+    def test_a_dest_inside_the_repo_by_way_of_a_link(self):
+        os.symlink(self.repo, self.dir / "link to repo")
+        dest = self.dir / "link to repo" / "copies"
+        self.assert_tool_error(self.run_tool(KILLED, dest=dest), "inside the repo")
+        self.assertFalse((self.repo / "copies").exists())
+
+    def test_the_repo_itself_as_dest_is_a_dest_that_exists(self):
+        self.assert_tool_error(self.run_tool(KILLED, dest=self.repo), str(self.repo))
+
+    def test_a_directory_that_isnt_a_checkout(self):
+        self.write_spec([KILLED])
+        result = run_main(mutant.main, str(self.spec_file), str(self.dest), "--repo", str(self.dir))
+        self.assert_tool_error(result, "isn't a git checkout")
+
+    def test_a_rev_git_doesnt_know(self):
+        self.assert_tool_error(self.run_tool(KILLED, extra=("--rev", "no-such-rev")), "no-such-rev")
+        self.assertFalse(self.dest.exists())
+
+    def test_a_tar_that_fails_says_why(self):
+        fake = write_file(self.dir, "fake tar", '#!/bin/sh\necho "tar: No space left on device" >&2\nexit 1\n')
+        fake.chmod(0o755)
+        self.write_spec([KILLED])
+        with mock.patch.object(mutant, "TAR", str(fake)):
+            self.assert_tool_error(self.run_spec(), "No space left on device")
+
+    def test_a_rev_that_looks_like_an_option(self):
+        result = self.run_tool(KILLED, extra=("--rev=--output=" + str(self.dir / "out.tar"),))
+        self.assert_tool_error(result, "--output")
+        self.assertFalse((self.dir / "out.tar").exists())
+
+    def test_a_python_that_isnt_there(self):
+        self.assert_tool_error(self.run_tool(KILLED, extra=("--python", str(self.dir / "no python"))),
+                               "no python")
+        self.assertFalse(self.dest.exists())
+
+    def test_a_timeout_that_isnt_a_positive_number(self):
+        for value in ("0", "-1", "soon", "nan", "inf"):
+            with self.subTest(value):
+                self.write_spec([KILLED])
+                code, out, err = self.run_spec("--timeout=" + value)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("--timeout", err)
+                self.assertFalse(self.dest.exists())
+
+
+class SpecTest(MutantTestCase):
+    def test_what_a_spec_may_not_hold(self):
+        bad = {
+            "an object, not a list": KILLED,
+            "an empty list": [],
+            "a mutant that isn't an object": ["add subtracts"],
+            "no name": [{"dir": "lib dir", "replace": KILLED["replace"]}],
+            "an extra key": [{**KILLED, "extra": 1}],
+            "a name that isn't text": [{**KILLED, "name": 3}],
+            "an empty name": [{**KILLED, "name": ""}],
+            "a name with a newline": [{**KILLED, "name": "two\nlines"}],
+            "the same name twice": [KILLED, KILLED],
+            "a dir that isn't text": [{**KILLED, "dir": ["lib dir"]}],
+            "an empty dir": [{**KILLED, "dir": ""}],
+            "an absolute dir": [{**KILLED, "dir": str(self.repo / "lib dir")}],
+            "a dir up a level": [{**KILLED, "dir": "../lib dir"}],
+            "a dir that goes up in the middle": [{**KILLED, "dir": "lib dir/../../x"}],
+            "no replace": [{"name": "x", "dir": "lib dir"}],
+            "an empty replace": [spec_mutant("x")],
+            "a replace that isn't a list": [{**KILLED, "replace": edit("a", "b")}],
+            "an edit that isn't an object": [{**KILLED, "replace": ["return a + b"]}],
+            "an edit with no new": [spec_mutant("x", {"file": CALC_PATH, "old": "a"})],
+            "an edit with an extra key": [spec_mutant("x", {**edit("a", "b"), "count": 1})],
+            "an empty old": [spec_mutant("x", edit("", "b"))],
+            "an old that isn't text": [spec_mutant("x", edit(1, "b"))],
+            "a new that isn't text": [spec_mutant("x", edit("a", 2))],
+            "an old the same as its new": [spec_mutant("x", edit("return a + b", "return a + b"))],
+            "an empty file": [spec_mutant("x", edit("a", "b", ""))],
+            "an absolute file": [spec_mutant("x", edit("a", "b", str(self.repo / CALC_PATH)))],
+            "a file up a level": [spec_mutant("x", edit("a", "b", "../the spec.json"))],
+            "text that isn't JSON": "[{",
+        }
+        for label, content in bad.items():
+            with self.subTest(label):
+                self.write_spec(content)
+                self.assert_tool_error(self.run_spec())
+                self.assertFalse(self.dest.exists())
+
+    def test_a_spec_that_isnt_there(self):
+        self.assert_tool_error(self.run_spec(), str(self.spec_file))
+        self.assertFalse(self.dest.exists())
+
+    def test_an_edit_may_delete_the_old_text(self):
+        gone = spec_mutant("deleted", edit("return a + b", "pass"))
+        self.assertEqual(self.run_tool(gone)[:2], (0, "killed deleted\n" + total(1, 0, 0)))
+        self.assertNotIn("return a + b", self.read("mutant-1"))
+
+    def test_a_crlf_file_keeps_its_line_endings(self):
+        crlf = CALC.replace("\n", "\r\n")
+        commit(self.repo, {CALC_PATH: crlf.encode()})
+        self.run_tool(spec_mutant("crlf", edit("return a - b", "return b - a")))
+        self.assertEqual((self.dest / "mutant-1" / CALC_PATH).read_bytes(),
+                         crlf.replace("a - b", "b - a").encode())
+
+
+class HelpTest(unittest.TestCase):
+    def test_help_prints_the_usage(self):
+        code, out, err = run_main(mutant.main, "--help")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("SPEC DEST", out)
+        self.assertIn("--timeout", out)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""Change the code on a copy of a commit and see whether the tests notice.
+
+Usage: mutant.py SPEC DEST [--repo DIR] [--rev REV] [--python FILE] [--timeout SECONDS]
+
+SPEC is a JSON file holding a list of mutants. A mutant has three fields:
+  name     what the output calls it, on one line and unlike any other name
+  dir      the test directory to discover in, relative to the repo, such as tools
+  replace  a list of {"file", "old", "new"} edits applied together, in order, each to the
+           text the one before left. FILE is relative to the repo. OLD has to occur in it
+           exactly once, so a typo can't make a mutant that changes nothing. NEW may be empty.
+DEST is a new directory outside the repo. The copies are built there and kept, and nothing
+is removed. baseline-N is the copy for the Nth directory the mutants test and mutant-N is the
+Nth mutant's. The last 64 KiB of each run's output is beside its copy as a .log file.
+
+Every copy is REV (default HEAD) of the repo that holds this tool, or of --repo, made by
+git archive. The repo's own files are never edited or run, and its uncommitted changes aren't
+tested. A copy has no .git and, since git archive leaves submodules out, no gcn-recomp. A test
+that needs either has to skip itself, as RealTreeTest in test_launcher_build.py does.
+
+All the copies are built and all the edits applied before anything runs, so a spec that can't
+work costs no test run. Then each distinct dir gets a baseline, which runs
+  PYTHON -B -m unittest discover -s COPY/DIR -p 'test_*.py'
+in its copy and has to pass. Without that, a selection that fails on its own would make every
+mutant look killed. Each mutant then runs the same command in a copy of its own, so nothing an
+earlier run left behind is tested. Only PATH, HOME and TMPDIR from the caller's environment
+reach the tests, plus PYTHONDONTWRITEBYTECODE=1, so no key or token does. A run that outlasts
+--timeout (600 s by default, for each run) is killed with everything it started.
+
+It prints one line per mutant as it finishes, and then a total:
+  killed NAME     the tests failed
+  survived NAME   the tests passed
+  timeout NAME    the tests outran --timeout
+  total N, killed K, survived S, timeout T
+A mutant that breaks an import or the syntax counts as killed too, so read mutant-N.log
+before trusting a kill that matters.
+
+Exits 0 when every mutant was killed and 1 when any survived or timed out. Exits 2 with a
+one-line "mutant:" message on stderr when it couldn't decide: a bad argument or spec, an old
+found other than once, a file or dir missing from the copy, a DEST that exists or is inside
+the repo, or a baseline that fails or times out. A mutant's result never exits 2.
+"""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import json
+import math
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+from typing import Optional
+
+ROOT = Path(__file__).resolve().parents[1]
+TAR = "/usr/bin/tar"  # not the first tar on PATH, which may be GNU's and extract differently
+TOOL_ERROR = 2
+TAIL = 64 * 1024
+
+
+class MutantError(Exception):
+    """A problem with the spec or the setup, which says nothing about any mutant."""
+
+
+@dataclass(frozen=True)
+class Edit:
+    file: str
+    old: str
+    new: str
+
+
+@dataclass(frozen=True)
+class Mutant:
+    name: str
+    dir: str
+    edits: tuple[Edit, ...]
+
+
+def exactly(item: object, keys: tuple[str, ...], where: str) -> dict:
+    if not isinstance(item, dict) or set(item) != set(keys):
+        raise MutantError(f"{where} must be an object with {', '.join(keys)} and nothing else")
+    return item
+
+
+def text(item: dict, key: str, where: str, empty: bool = False) -> str:
+    value = item[key]
+    if not isinstance(value, str) or not (value or empty):
+        raise MutantError(f"{where}: {key} must be {'text' if empty else 'non-empty text'}")
+    return value
+
+
+def repo_path(path: str, key: str, where: str) -> str:
+    """PATH if it can name something inside the repo: not absolute and with no `..`."""
+    pure = PurePosixPath(path)
+    if pure.is_absolute() or ".." in pure.parts:
+        raise MutantError(f"{where}: {key} {path!r} isn't a path inside the repo")
+    return path
+
+
+def parse_edit(item: object, where: str) -> Edit:
+    item = exactly(item, ("file", "old", "new"), where)
+    file = repo_path(text(item, "file", where), "file", where)
+    old, new = text(item, "old", where), text(item, "new", where, empty=True)
+    if old == new:
+        raise MutantError(f"{where}: old and new are the same, so it changes nothing")
+    return Edit(file, old, new)
+
+
+def parse_mutant(item: object, where: str) -> Mutant:
+    item = exactly(item, ("name", "dir", "replace"), where)
+    name = text(item, "name", where)
+    if not name.isprintable():
+        raise MutantError(f"{where}: name must be on one line")
+    directory = repo_path(text(item, "dir", where), "dir", where)
+    edits = item["replace"]
+    if not isinstance(edits, list) or not edits:
+        raise MutantError(f"{where}: replace must be a list of at least one edit")
+    return Mutant(name, directory, tuple(parse_edit(e, f"{where}, edit {n}")
+                                         for n, e in enumerate(edits, 1)))
+
+
+def load_spec(path: Path) -> list[Mutant]:
+    try:
+        data = json.loads(path.read_bytes().decode("utf-8"))
+    except (OSError, ValueError) as e:  # json's and the decoder's errors are both ValueErrors
+        raise MutantError(f"cannot read {path}: {e}") from e
+    if not isinstance(data, list) or not data:
+        raise MutantError(f"{path} must hold a list of at least one mutant")
+    mutants = [parse_mutant(m, f"{path}: mutant {n}") for n, m in enumerate(data, 1)]
+    names = [m.name for m in mutants]
+    for name in names:
+        if names.count(name) > 1:
+            raise MutantError(f"{path}: two mutants are named {name!r}")
+    return mutants
+
+
+def minimal_env() -> dict[str, str]:
+    """All a copy's git, tar and tests get: no key, token, `GIT_DIR` or `PYTHONPATH` of ours."""
+    return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(Path.home()),
+            "TMPDIR": tempfile.gettempdir(), "PYTHONDONTWRITEBYTECODE": "1"}
+
+
+def archive(repo: Path, rev: str) -> bytes:
+    """REV of REPO as a tar, taken once, so every copy is the same commit however long a run is."""
+    if rev.startswith("-"):  # git would read it as an option, `--output=FILE` among them
+        raise MutantError(f"--rev {rev!r} looks like an option")
+    done = subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", rev],
+                          capture_output=True, env=minimal_env())
+    if done.returncode != 0:
+        why = done.stderr.decode(errors="replace").strip() or f"exit {done.returncode}"
+        raise MutantError(f"git archive {rev} failed: {why}")
+    return done.stdout
+
+
+def extract(tar: bytes, copy: Path) -> Path:
+    copy.mkdir()
+    done = subprocess.run([TAR, "-x", "-f", "-", "-C", str(copy)], input=tar,
+                          capture_output=True, env=minimal_env())
+    if done.returncode != 0:
+        why = done.stderr.decode(errors="replace").strip() or f"exit {done.returncode}"
+        raise MutantError(f"tar into {copy} failed: {why}")
+    return copy
+
+
+def member(copy: Path, rel: str, kind: str) -> Path:
+    """COPY/REL, which has to be a file or a dir (KIND) that is inside the copy once links are
+    followed. A symlink in the archive could otherwise take an edit to a file outside it."""
+    path = (copy / rel).resolve()
+    if not path.is_relative_to(copy):
+        raise MutantError(f"{rel} leads outside the copy")
+    if not (path.is_file() if kind == "file" else path.is_dir()):
+        raise MutantError(f"{rel} isn't a {kind} in the copy")
+    return path
+
+
+def apply(copy: Path, mutant: Mutant) -> None:
+    """Make COPY the mutant, after checking its dir is there. Edits are bytes in and out, so a
+    file keeps its line endings."""
+    try:
+        member(copy, mutant.dir, "dir")
+        for e in mutant.edits:
+            path = member(copy, e.file, "file")
+            try:
+                body = path.read_bytes().decode("utf-8")
+            except UnicodeDecodeError:
+                raise MutantError(f"{e.file} isn't UTF-8 text") from None
+            found = body.count(e.old)
+            if found != 1:
+                raise MutantError(f"{e.file}: the old text is found {found} times, not once")
+            path.write_bytes(body.replace(e.old, e.new).encode("utf-8"))
+    except (MutantError, OSError) as err:
+        raise MutantError(f"{mutant.name}: {err}") from err
+
+
+def run_tests(python: str, copy: Path, rel: str, timeout: float, log: Path) -> Optional[int]:
+    """The exit status of test discovery in COPY/REL, or None if it outran TIMEOUT seconds.
+    The last TAIL bytes of its output go to LOG. A timeout, or ^C, kills the whole process
+    group, so nothing the tests started goes on running or holds the pipe open."""
+    cmd = [python, "-B", "-m", "unittest", "discover", "-s", str(copy / rel), "-p", "test_*.py"]
+    proc = subprocess.Popen(cmd, cwd=copy, env=minimal_env(), stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            start_new_session=True)
+    tail = bytearray()
+
+    def drain() -> None:  # a mutant that prints forever must not fill the disk or the memory
+        for chunk in iter(lambda: proc.stdout.read1(1 << 16), b""):
+            tail.extend(chunk)
+            del tail[:-TAIL]
+
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
+    code: Optional[int] = None
+    try:
+        code = proc.wait(timeout)
+    except subprocess.TimeoutExpired:
+        pass
+    finally:
+        if code is None:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+    reader.join(5)
+    if not reader.is_alive():
+        proc.stdout.close()
+    log.write_bytes(bytes(tail))
+    return code
+
+
+def verdict(code: Optional[int]) -> str:
+    return "timeout" if code is None else "survived" if code == 0 else "killed"
+
+
+def run(args: argparse.Namespace) -> int:
+    repo = args.repo.resolve()
+    if not (repo / ".git").exists():  # git would look further up, maybe into another repo
+        raise MutantError(f"{repo} isn't a git checkout")
+    if os.path.lexists(args.dest):
+        raise MutantError(f"{args.dest} exists: give a new directory")
+    dest = args.dest.resolve()
+    # samefile, so a link or another letter case of the repo's path doesn't get past
+    if any(p.exists() and p.samefile(repo) for p in (dest, *dest.parents)):
+        raise MutantError(f"{dest} is inside the repo: the copies go outside it")
+    python = os.path.abspath(args.python)  # not resolved, which would lose a venv's link
+    if not (os.path.isfile(python) and os.access(python, os.X_OK)):
+        raise MutantError(f"{args.python} isn't an executable file")
+    mutants = load_spec(args.spec)
+    tar = archive(repo, args.rev)
+
+    dest.mkdir(parents=True)
+    dirs = list(dict.fromkeys(m.dir for m in mutants))
+    baselines = [(d, extract(tar, dest / f"baseline-{n}")) for n, d in enumerate(dirs, 1)]
+    copies = []
+    for n, m in enumerate(mutants, 1):
+        copies.append(extract(tar, dest / f"mutant-{n}"))
+        apply(copies[-1], m)
+
+    for n, (d, copy) in enumerate(baselines, 1):
+        log = dest / f"baseline-{n}.log"
+        code = run_tests(python, copy, d, args.timeout, log)
+        if code != 0:
+            how = f"outran {args.timeout:g} s" if code is None else f"exit {code}"
+            raise MutantError(f"the tests in {d} fail without a mutant ({how}), so a kill would "
+                              f"mean nothing: see {log}")
+
+    counts = {"killed": 0, "survived": 0, "timeout": 0}
+    for n, (m, copy) in enumerate(zip(mutants, copies), 1):
+        result = verdict(run_tests(python, copy, m.dir, args.timeout, dest / f"mutant-{n}.log"))
+        counts[result] += 1
+        print(f"{result} {m.name}", flush=True)
+    print(f"total {len(mutants)}, killed {counts['killed']}, survived {counts['survived']}, "
+          f"timeout {counts['timeout']}", flush=True)
+    return 0 if counts["killed"] == len(mutants) else 1
+
+
+def seconds(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} isn't a number of seconds") from None
+    if not (math.isfinite(number) and number > 0):
+        raise argparse.ArgumentTypeError(f"{value!r} isn't a number of seconds above 0")
+    return number
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="mutant.py", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("spec", type=Path, metavar="SPEC", help="a JSON file of mutants")
+    ap.add_argument("dest", type=Path, metavar="DEST", help="a new directory outside the repo")
+    ap.add_argument("--repo", type=Path, default=ROOT, metavar="DIR",
+                    help="the checkout to copy, by default the one holding this tool")
+    ap.add_argument("--rev", default="HEAD", help="the commit to copy (default HEAD)")
+    ap.add_argument("--python", default=sys.executable, metavar="FILE",
+                    help="the interpreter that runs the tests (default the one running this)")
+    ap.add_argument("--timeout", type=seconds, default=600, metavar="SECONDS",
+                    help="the limit for each run, baselines included (default 600)")
+    args = ap.parse_args(argv)
+    try:
+        return run(args)
+    except Exception as e:  # any of them, or a traceback's exit 1 would read as a survivor
+        why = str(e) if isinstance(e, MutantError) else f"{type(e).__name__}: {e}"
+        print(f"mutant: {why}", file=sys.stderr)
+        return TOOL_ERROR
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

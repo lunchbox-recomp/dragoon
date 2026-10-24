@@ -265,8 +265,11 @@ class MainTest(unittest.TestCase):
 
 
 class DescribeTest(unittest.TestCase):
+    ROOT = Path(audio_scorecard.__file__).resolve().parents[1]
+
+    @unittest.skipUnless((ROOT / ".git").exists(), "not a git checkout, as in a git archive copy")
     def test_names_this_checkouts_commit(self):
-        got = audio_scorecard.describe(Path(audio_scorecard.__file__).resolve().parents[1])
+        got = audio_scorecard.describe(self.ROOT)
         self.assertRegex(got, r"^[0-9a-f]{7,}(-dirty)?$")
 
     def test_a_directory_outside_git_has_none(self):
