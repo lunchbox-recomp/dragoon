@@ -61,7 +61,7 @@ tools/shader_cache.py diff build/old-keys.bin build/probe/demo/saves/shaders.bin
 
 ## frame_hashes.py
 
-Did a change alter what the renderer draws? It runs each route in `tests/hashes/manifest.txt` through probe.sh and compares the SHA-1 of every dumped frame with the golden in `tests/hashes/gl/<route>.txt`. `check` reports each frame that changed or wasn't reached. `record` rewrites the goldens, so use it only when a change to the output is on purpose. The frames are moved to the Trash once hashed and are never committed.
+Did a change alter what the renderer draws? It runs each route in `tests/hashes/manifest.txt` through probe.sh and compares the SHA-1 of every dumped frame with the golden in `tests/hashes/gl/<route>.txt`. `check` reports each frame that changed or wasn't reached. `record` rewrites the goldens, so use it only when a change to the output is on purpose. The frames are deleted once hashed and are never committed.
 
 The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. A `check` of all twelve routes took 302 s while other copies of the game ran on the same machine.
 
@@ -78,7 +78,7 @@ tools/audio_hashes.py check air-ride-race
 tools/audio_hashes.py record title --lists 7200,20000
 ```
 
-A `check` of all twelve routes took 300 s while other copies of the game ran on the same machine. Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is moved to the Trash first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
+A `check` of all twelve routes took 300 s while other copies of the game ran on the same machine. Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is deleted first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
 
 ## audio_clicks.py
 
@@ -115,7 +115,7 @@ tools/audio_scorecard.py base=/path/to/old-clone/build current=build
 tools/audio_scorecard.py base=/path/to/old-clone/build current=build --routes title --json
 ```
 
-Each run lasts the route's last checkpoint at 60 frames a second plus 15 s of wall-clock time (`--margin` changes the 15). It dumps that one frame (`GCN_DUMP_RANGE`). A run that doesn't reach it stops the tool with exit 2. The real-time runs go to `build/probe/scorecard-ROUTE/` in each clone and the unpaced ones to `build/probe/scorecard-unpaced-ROUTE/`. An earlier run in that directory goes to the Trash first, so every run starts from a blank memory card and an empty shader cache. `--no-run` measures the runs already there. The five routes `scorecard.md` scores (`--routes title,menu,air-ride-race,city-trial,city-trial-4p`) take about 11 minutes a build.
+Each run lasts the route's last checkpoint at 60 frames a second plus 15 s of wall-clock time (`--margin` changes the 15). It dumps that one frame (`GCN_DUMP_RANGE`). A run that doesn't reach it stops the tool with exit 2. The real-time runs go to `build/probe/scorecard-ROUTE/` in each clone and the unpaced ones to `build/probe/scorecard-unpaced-ROUTE/`. An earlier run in that directory is deleted first, so every run starts from a blank memory card and an empty shader cache. `--no-run` measures the runs already there. The five routes `scorecard.md` scores (`--routes title,menu,air-ride-race,city-trial,city-trial-4p`) take about 11 minutes a build.
 
 The mixer stage is the unpaced run's `GCN_AIDWAV`, the DMA's blocks before the audio ring, cut to the route's last checkpoint plus the margin and read with audio_clicks.py's `--raw 32000 --period 160`. An unpaced run's game time doesn't follow the host's, so two unpaced runs of one build should give the same blocks. The pairs compared so far did, byte for byte, as `scorecard.md` says. A real-time run's clock catches up when the host falls behind, the DMA then plays a block twice, presses land on other frames and sounds move. So a real-time run's blocks say as much about the host's timing as about the build. An unpaced run gets more of the game's time than the cut in its wall-clock seconds, and a recording shorter than the cut stops the tool with exit 2. The unpaced run's log gives the highest `[ax] frames` peak (main L before the output clamp) and the sum of the `[ax] bus` lines' `clipped`, from the lines whose list count is within the cut. A list is a 160-sample block.
 
@@ -210,7 +210,7 @@ What does a source snapshot hold? Its `source-info.json` names the Dragoon and g
 
 ## probe_dirs.py
 
-What happens to a probe run and its directory? It holds `trash`, which moves a directory from `build/probe/` into `~/.Trash` under a time-stamped name, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error. frame_hashes.py, audio_hashes.py and the scorecard use both. It has no command line.
+What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error. `remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that is itself a link. frame_hashes.py, audio_hashes.py and the scorecard use both. It has no command line.
 
 ## aid_blocks.py
 

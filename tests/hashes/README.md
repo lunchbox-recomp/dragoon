@@ -13,7 +13,7 @@ Both take an optional list of route names. `check` runs each route through `tool
 
 The hashes depend on the renderer, the scale (always 1), the macOS version and the GPU, so goldens are per machine. The committed ones were recorded on an M4 Max under macOS 26, so a mismatch on another Mac is expected. After a macOS or GPU change, look at a route's frames from `tools/probe.sh` before running `record`.
 
-Frames come from the player's own disc, so they are never committed. The tool moves them to the Trash once they're hashed, and only the hashes stay.
+Frames come from the player's own disc, so they are never committed. The tool deletes them once they're hashed, and only the hashes stay.
 
 ## Audio hashes
 

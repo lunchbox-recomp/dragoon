@@ -9,7 +9,7 @@ runs. Goldens are in tests/hashes/gl/<route>.txt, one "frame_NNNNN <sha1>" line 
 frame. check prints one status line per route and one line per frame that changed or wasn't
 reached. record rewrites the goldens, and writes none for a route that skipped a dump. A
 check reads every golden before it runs the game. The frames come from the player's disc, so
-they're moved to the Trash once hashed and never committed.
+they're deleted once hashed and never committed.
 
 Exits 0 when every route matches (or is recorded), 1 when a frame changed or wasn't reached,
 2 on a bad argument, a missing or malformed golden, or a probe.sh run that failed.
@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 from frame_dumps import frame_files
-from probe_dirs import run_probe, trash
+from probe_dirs import remove_run, run_probe
 from routes import MANIFEST, Route, route_file, select_routes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,13 +78,13 @@ def probe_args(route: Route, name: str) -> list[str]:
 def hash_route(route: Route) -> dict[int, str]:
     out = ROOT / "build" / "probe" / f"hashes-{route.name}"
     if out.exists():
-        trash(out)  # a blank memory card, and no frames from an older build
+        remove_run(out)  # a blank memory card, and no frames from an older build
     try:
         run_probe(probe_args(route, out.name), ROOT, route.name)
         return hash_frames(out)
     finally:
         if out.exists():
-            trash(out)
+            remove_run(out)
 
 
 def record_route(route: Route, got: dict[int, str], path: Path) -> bool:

@@ -112,28 +112,28 @@ class HashRouteTest(unittest.TestCase):
 
     def hash_route(self, run: mock.Mock) -> tuple[dict[int, str], mock.Mock]:
         self.calls = mock.Mock()
-        trash = self.calls.trash
+        remove = self.calls.remove
         self.calls.attach_mock(run, "run")
-        with (mock.patch.object(audio_hashes, "trash", trash),
+        with (mock.patch.object(audio_hashes, "remove_run", remove),
               mock.patch.object(subprocess, "run", run)):
-            return audio_hashes.hash_route(self.route), trash
+            return audio_hashes.hash_route(self.route), remove
 
-    def test_trashes_a_directory_left_from_an_earlier_run_before_the_run_and_keeps_the_last(self):
-        _, trash = self.hash_route(mock.Mock())
-        trash.assert_called_once_with(self.out)
+    def test_removes_a_directory_left_from_an_earlier_run_before_the_run_and_keeps_the_last(self):
+        _, remove = self.hash_route(mock.Mock())
+        remove.assert_called_once_with(self.out)
 
-    def test_trashes_before_the_probe_runs_so_the_game_starts_on_a_blank_card(self):
+    def test_removes_before_the_probe_runs_so_the_game_starts_on_a_blank_card(self):
         self.hash_route(mock.Mock())
-        self.assertEqual([name for name, _, _ in self.calls.mock_calls], ["trash", "run"])
+        self.assertEqual([name for name, _, _ in self.calls.mock_calls], ["remove", "run"])
 
-    def test_trashes_nothing_when_there_is_no_earlier_run(self):
+    def test_removes_nothing_when_there_is_no_earlier_run(self):
         self.out.rename(self.root / "elsewhere")
         def play(*args, **kwargs):
             self.out.mkdir()
             write_file(self.out, "stdout.txt", BENCH_OUT)
 
-        _, trash = self.hash_route(mock.Mock(side_effect=play))
-        trash.assert_not_called()
+        _, remove = self.hash_route(mock.Mock(side_effect=play))
+        remove.assert_not_called()
 
     def test_runs_probe_as_a_bench_with_the_stats_on_and_reads_the_hashes(self):
         run = mock.Mock()

@@ -61,8 +61,8 @@ class HashRouteTest(unittest.TestCase):
     out = frame_hashes.ROOT / "build" / "probe" / "hashes-title"
 
     def run_route(self, exists: bool, run: mock.Mock, fails: bool = False) -> mock.Mock:
-        trash = mock.Mock()
-        with (mock.patch.object(frame_hashes, "trash", trash),
+        remove = mock.Mock()
+        with (mock.patch.object(frame_hashes, "remove_run", remove),
               mock.patch.object(subprocess, "run", run),
               mock.patch.object(frame_hashes, "hash_frames", return_value={60: A}),
               mock.patch.object(Path, "exists", return_value=exists)):
@@ -71,7 +71,7 @@ class HashRouteTest(unittest.TestCase):
                     frame_hashes.hash_route(self.route)
             else:
                 self.got = frame_hashes.hash_route(self.route)
-        return trash
+        return remove
 
     def test_runs_probe_with_the_route_and_hashes_the_frames(self):
         run = mock.Mock()
@@ -81,16 +81,16 @@ class HashRouteTest(unittest.TestCase):
                           str(routes.route_file("title")), "60"])
         self.assertEqual(self.got, {60: A})
 
-    def test_trashes_a_directory_left_from_an_earlier_run_before_and_after(self):
-        trash = self.run_route(True, mock.Mock())
-        self.assertEqual(trash.call_args_list, [mock.call(self.out), mock.call(self.out)])
+    def test_removes_a_directory_left_from_an_earlier_run_before_and_after(self):
+        remove = self.run_route(True, mock.Mock())
+        self.assertEqual(remove.call_args_list, [mock.call(self.out), mock.call(self.out)])
 
-    def test_trashes_the_frames_when_the_probe_fails(self):
+    def test_removes_the_frames_when_the_probe_fails(self):
         run = mock.Mock(side_effect=subprocess.CalledProcessError(1, "probe"))
-        trash = self.run_route(False, run, fails=True)
-        trash.assert_not_called()
-        trash = self.run_route(True, run, fails=True)
-        self.assertEqual(trash.call_count, 2)
+        remove = self.run_route(False, run, fails=True)
+        remove.assert_not_called()
+        remove = self.run_route(True, run, fails=True)
+        self.assertEqual(remove.call_count, 2)
 
 
 class MainTest(unittest.TestCase):

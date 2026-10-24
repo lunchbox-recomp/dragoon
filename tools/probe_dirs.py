@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import time
 from pathlib import Path
 
 
-def trash(directory: Path) -> None:
-    """Move DIRECTORY into ~/.Trash under a time-stamped name, so its game data isn't kept."""
-    dest = Path.home() / ".Trash" / f"{directory.name}-{time.strftime('%Y%m%d-%H%M%S')}"
-    shutil.move(str(directory), str(dest))
+def remove_run(directory: Path) -> None:
+    """Delete DIRECTORY and everything in it, so its game data isn't kept. A link inside is
+    unlinked and what it points at stays. A DIRECTORY that is itself a link is a ValueError and
+    nothing changes. One that's missing, or a file that can't be deleted, is an OSError."""
+    if directory.is_symlink():
+        raise ValueError(f"{directory}: is a link, not a probe run's directory")
+    shutil.rmtree(directory)
 
 
 def run_probe(args: list[str], cwd: Path, what: str, env: dict[str, str] | None = None) -> None:

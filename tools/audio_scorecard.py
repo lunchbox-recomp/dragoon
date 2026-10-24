@@ -12,7 +12,7 @@ audio driver, GCN_AXSTATS=1, and the route file and manifest settings from this 
 route plays twice on a build, once --real-time and once unpaced. Each run lasts the route's
 last checkpoint at 60 frames a second plus --margin seconds (15 by default) of wall-clock time,
 and dumps that one frame to show it got there. They go to <clone>/build/probe/scorecard-ROUTE/
-and scorecard-unpaced-ROUTE/, and an earlier run there is moved to the Trash first, so the game
+and scorecard-unpaced-ROUTE/, and an earlier run there is deleted first, so the game
 starts from a blank memory card and an empty shader cache. --no-run measures the runs already
 there instead.
 

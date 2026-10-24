@@ -28,7 +28,7 @@ import re
 import sys
 from pathlib import Path
 
-from probe_dirs import run_probe, trash
+from probe_dirs import remove_run, run_probe
 from routes import MANIFEST, Route, route_file, select_routes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,7 +96,7 @@ def probe_args(route: Route, name: str) -> list[str]:
 def hash_route(route: Route) -> dict[int, str]:
     out = ROOT / "build" / "probe" / f"audio-{route.name}"
     if out.exists():
-        trash(out)  # a blank memory card; the last run stays after this one, for its [ax] lines
+        remove_run(out)  # a blank memory card; the last run stays after this one, for its [ax] lines
     name = out.name
     run_probe(probe_args(route, name), ROOT, route.name, {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
     return parse_hashes((out / "stdout.txt").read_text())

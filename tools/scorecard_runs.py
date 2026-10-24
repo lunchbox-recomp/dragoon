@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from frame_dumps import frame_files
-from probe_dirs import run_probe, trash
+from probe_dirs import remove_run, run_probe
 from routes import Route, route_file
 
 MARGIN_S = 15  # seconds played past a route's last checkpoint
@@ -107,7 +107,7 @@ def probe_args(build: Build, route: Route, margin: int = MARGIN_S, unpaced: bool
 def play_one(build: Build, route: Route, margin: int, unpaced: bool, commits: Commits) -> Run:
     run = run_for(build, route, unpaced)
     if run.directory.exists():
-        trash(run.directory)  # a blank memory card; the last run stays after this one
+        remove_run(run.directory)  # a blank memory card; the last run stays after this one
     what = f"{build.label} {route.name}" + (" unpaced" if unpaced else "")
     run_probe(probe_args(build, route, margin, unpaced), build.clone, what,
               {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})

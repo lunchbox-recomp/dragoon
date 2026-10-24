@@ -99,12 +99,12 @@ def frame_at(directory: Path, frame: int) -> None:
 class PlayTest(Clone):
     def play(self, run: mock.Mock, *margin: int) -> mock.Mock:
         self.calls = mock.Mock()
-        trash = self.calls.trash
+        remove = self.calls.remove
         self.calls.attach_mock(run, "run")
-        with (mock.patch.object(scorecard_runs, "trash", trash),
+        with (mock.patch.object(scorecard_runs, "remove_run", remove),
               mock.patch.object(subprocess, "run", run)):
             self.result = scorecard_runs.play(self.build, RACE, *margin, commits=COMMITS)
-        return trash
+        return remove
 
     def reaches(self, frame: int = 6000, unpaced_frame: int = 6000):
         def run(args, **kwargs):
@@ -146,14 +146,14 @@ class PlayTest(Clone):
                              {"dragoon": "6b81b6e-dirty", "gcn_recomp": "caf12a2"})
         self.assertEqual(scorecard_runs.read_commits(self.result.unpaced), COMMITS)
 
-    def test_trashes_each_earlier_run_before_playing_so_the_card_is_blank(self):
+    def test_removes_each_earlier_run_before_playing_so_the_card_is_blank(self):
         self.out.mkdir(parents=True)
         self.unpaced.mkdir(parents=True)
-        trash = self.play(self.reaches())
-        self.assertEqual(trash.call_args_list, [mock.call(self.out), mock.call(self.unpaced)])
-        self.assertEqual([name for name, _, _ in self.calls.mock_calls], ["trash", "run", "trash", "run"])
+        remove = self.play(self.reaches())
+        self.assertEqual(remove.call_args_list, [mock.call(self.out), mock.call(self.unpaced)])
+        self.assertEqual([name for name, _, _ in self.calls.mock_calls], ["remove", "run", "remove", "run"])
 
-    def test_trashes_nothing_when_there_is_no_earlier_run(self):
+    def test_removes_nothing_when_there_is_no_earlier_run(self):
         self.play(self.reaches()).assert_not_called()
 
     def test_a_failed_probe_names_the_build_and_route(self):
