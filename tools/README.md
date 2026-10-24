@@ -342,6 +342,36 @@ What does an app tree hold? It lists the regular files with their sizes, the sym
 
 How does check_bundle.py look inside a DMG? It attaches the image with `hdiutil attach -readonly -nobrowse -mountpoint` at a fresh temporary directory and always detaches it, forcing the detach if the volume is busy or the plain one hangs. An attach gets two minutes and a detach one, so a stuck hdiutil can't hold a CI job until its own timeout. A detach that fails after the checks ran still prints their findings, with the error on stderr. The tests fake hdiutil. It has no command line.
 
+## make_app.py
+
+How do the pieces become `Dragoon.app`? make_app.py lives in `launcher/tools/`. It writes `OUT/Dragoon.app` around the launcher that `swift build -c release` made. It never runs SwiftPM, so the launcher has to be built first. The app also holds an engine kit, which is CI's `engine-kit` artifact or one made by hand with `engine_kit.py`, and a snapshot from `export_source.py`.
+
+| In the app | What it holds |
+|---|---|
+| `Contents/MacOS/Dragoon` | The launcher, mode 0755 |
+| `Contents/Resources/kit/` | The kit, byte for byte |
+| `Contents/Resources/source/` | The snapshot, byte for byte |
+| `Contents/Resources/licenses/Dragoon.txt` | The snapshot's `LICENSE` |
+| `Contents/Info.plist` | `launcher/Info.plist` with `CFBundleShortVersionString` and `CFBundleVersion` set to `--version` |
+
+```
+launcher/tools/make_app.py --out launcher/dist --version 0.1.0 --launcher /tmp/Dragoon \
+  --kit /tmp/engine-kit --source /tmp/dragoon-source
+tools/check_bundle.py launcher/dist/Dragoon.app --commit SHA
+```
+
+The app is sealed with `codesign --force --sign -`, ad hoc, with no hardened runtime and no `--deep`, as a dev build is. `sign_and_package.py` signs a copy for release. `--version` is one to three numbers joined by dots. `OUT` is made if it's missing. The app is built under a temporary name in it and renamed into place, so a failed run leaves no half app. The kit and the snapshot are only read, and `launcher/dist/` is git-ignored for the app to go in.
+
+It exits 0 when the app is there and prints its path. A step that failed, such as codesign, exits 1. It exits 2 with one line saying why, having written nothing, when:
+
+- an argument is missing or bad, or `OUT` is inside the kit or the snapshot
+- `OUT/Dragoon.app` already exists
+- the kit lacks a file that `launcher/bundle-manifest.txt` lists, or holds one it doesn't
+- the snapshot lacks `source-info.json`, `source-manifest.txt` or `LICENSE`, or a file that `source-manifest.txt` lists
+- the kit is from another gcn-recomp commit than the snapshot's, which `kit_problem` in `launcher_build.py` decides for both tools
+
+The tests fake codesign with a script that records its call, so they sign nothing. Every path in them has a space.
+
 ## sign_and_package.py
 
 Can one command sign the launcher, put it in a DMG and notarize it? It lives in `launcher/tools/`, with the commands it runs in `sign_plan.py` beside it. It copies the app to `OUT/dmg-root/Dragoon.app` next to an `Applications` link and signs the copy inside out, so the app you pass stays as it was. With a Developer ID identity every item gets `codesign -f -s IDENTITY -o runtime --timestamp`, as notarization requires. None gets `--deep`. Sparkle's `Autoupdate`, `Updater.app` and framework go first when the app has them, without the XPC services a launcher that isn't sandboxed doesn't ship. An app that still has them is refused. The app goes last, and the launcher claims no entitlements. The engine kit's files are sealed with the app as resources, and none is signed on its own.

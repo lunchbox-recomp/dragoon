@@ -2,6 +2,7 @@
 rom/*
 !rom/README.md
 build*/
+launcher/dist/
 saves/
 *.iso
 *.gcm

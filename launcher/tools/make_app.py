@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Assemble Dragoon.app from the built launcher, an engine kit and a source snapshot.
+
+Usage: make_app.py --out DIR --version V --launcher FILE --kit DIR --source DIR
+
+Writes DIR/Dragoon.app in the layout launcher/bundle-manifest.txt allows:
+  Contents/Info.plist           launcher/Info.plist with CFBundleShortVersionString and
+                                CFBundleVersion set to V, which is one to three numbers
+                                joined by dots, such as 1.2.3
+  Contents/MacOS/Dragoon        FILE, the launcher `swift build -c release` made, mode 0755.
+                                This tool never runs SwiftPM
+  Contents/Resources/kit/       --kit, what engine_kit.py wrote or CI's engine-kit artifact
+  Contents/Resources/source/    --source, export_source.py's snapshot
+  Contents/Resources/licenses/  Dragoon.txt, the snapshot's LICENSE
+The kit and the snapshot arrive byte for byte and are only read. Then `codesign --force --sign -`
+seals the app ad hoc, with no hardened runtime and no --deep, as a dev build is signed. DIR is
+made if it's missing. The app is built under a temporary name in DIR and renamed into place, so
+a failed run leaves no half app.
+
+It refuses a kit from another gcn-recomp commit than the snapshot's, as launcher_build.py does,
+since the kit's engine.o and headers wouldn't match the generated C. It refuses a kit that
+lacks a file the manifest lists or holds one it doesn't, and a snapshot that lacks its
+source-info.json, source-manifest.txt or LICENSE or a file source-manifest.txt lists.
+
+Exits 0 when the app is there and prints its path. Exits 1 when a step failed, such as codesign,
+and 2 on a bad argument or an input it can't use, with one line on stderr saying why and
+nothing written.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import NoReturn, Optional
+
+ROOT = Path(__file__).resolve().parents[2]
+# The repo's other tools live in tools/, which isn't on the path of a script in launcher/tools/.
+sys.path.append(str(ROOT / "tools"))
+
+import bundle_manifest
+import bundle_tree
+import export_source
+import source_info
+from launcher_build import kit_problem
+
+CODESIGN = "/usr/bin/codesign"
+MANIFEST = ROOT / "launcher" / "bundle-manifest.txt"
+TEMPLATE = ROOT / "launcher" / "Info.plist"
+APP = "Dragoon.app"
+KIT = "Contents/Resources/kit"
+LICENSES = "Contents/Resources/licenses"
+LICENSE = "LICENSE"  # Dragoon's own, at the top of the snapshot
+VERSION = re.compile(r"[0-9]+(\.[0-9]+){0,2}")
+
+
+class StepFailed(Exception):
+    """A step ran and failed (exit 1)."""
+
+
+class Parser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        print(f"make_app.py: {message}", file=sys.stderr)
+        sys.exit(2)
+
+
+def named(paths: list[str]) -> str:
+    """The first of PATHS, and how many more there are."""
+    return paths[0] + (f" and {len(paths) - 1} more" if len(paths) > 1 else "")
+
+
+def kit_files(manifest: bundle_manifest.BundleManifest) -> list[str]:
+    """The files the manifest lists in the kit, relative to the kit."""
+    return sorted(p[len(KIT) + 1:] for p in manifest.files | manifest.objects if p.startswith(KIT + "/"))
+
+
+def kit_listing_problem(kit: Path, manifest: bundle_manifest.BundleManifest) -> Optional[str]:
+    """Why the files in KIT aren't the ones the manifest lists, or None when they are."""
+    found = bundle_tree.scan(kit)
+    missing = [p for p in kit_files(manifest) if p not in found.files]
+    if missing:
+        return f"the kit {kit} is missing {named(missing)}"
+    extra = ([p for p in sorted(found.files) if not manifest.allows_file(f"{KIT}/{p}")]
+             + sorted(found.links) + found.empty_dirs + found.others)
+    if extra:
+        return f"the kit {kit} holds {named(extra)}, which {MANIFEST.name} doesn't allow"
+    return None
+
+
+def snapshot_missing(source: Path) -> list[str]:
+    """The files SOURCE should hold and doesn't: its own three, and each one that
+    source-manifest.txt lists. Raises ValueError for a line of that file it can't read."""
+    missing = [p for p in (source_info.NAME, export_source.MANIFEST, LICENSE) if not (source / p).is_file()]
+    if missing:
+        return missing
+    listing = source / export_source.MANIFEST
+    for line in listing.read_text(encoding="utf-8").splitlines():
+        _, gap, path = line.partition("  ")
+        if not gap or not path:
+            raise ValueError(f"{listing}: can't read the line {line!r}")
+        if not os.path.lexists(source / path):
+            missing.append(path)
+    return missing
+
+
+def snapshot_problem(source: Path) -> Optional[str]:
+    missing = snapshot_missing(source)
+    return f"the snapshot {source} is missing {named(missing)}" if missing else None
+
+
+def bad_argument(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> Optional[str]:
+    """Why the tool can't run on A, or None. It reads the inputs and writes nothing."""
+    if not VERSION.fullmatch(a.version):
+        return f"--version {a.version!r} isn't one to three numbers joined by dots, such as 1.2.3"
+    if not a.launcher.is_file():
+        return f"--launcher {a.launcher} isn't a file"
+    for flag, path in (("--kit", a.kit), ("--source", a.source)):
+        if not path.is_dir():
+            return f"{flag} {path} isn't a directory"
+    if a.out.exists() and not a.out.is_dir():
+        return f"--out {a.out} isn't a directory"
+    out = a.out.resolve()
+    for flag, path in (("--kit", a.kit), ("--source", a.source)):
+        if path.resolve() in (out, *out.parents):
+            return f"--out {a.out} is inside {flag} {path}, where the copy would contain itself"
+    if os.path.lexists(a.out / APP):
+        return f"{a.out / APP} already exists"
+    problem = kit_listing_problem(a.kit, manifest) or snapshot_problem(a.source)
+    if problem:
+        return problem
+    info = source_info.read(a.source / source_info.NAME)
+    return kit_problem(a.kit, info["gcn-recomp"])
+
+
+def assemble(app: Path, a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> None:
+    """The app's files, unsigned, at APP."""
+    contents = app / "Contents"
+    (contents / "MacOS").mkdir(parents=True)
+    launcher = contents / "MacOS" / "Dragoon"
+    shutil.copyfile(a.launcher, launcher)
+    launcher.chmod(0o755)
+    shutil.copytree(a.kit, app / KIT, symlinks=True)
+    shutil.copytree(a.source, app / manifest.source, symlinks=True)
+    (app / LICENSES).mkdir()
+    shutil.copyfile(a.source / LICENSE, app / LICENSES / "Dragoon.txt")
+    with TEMPLATE.open("rb") as f:
+        plist = plistlib.load(f)
+    plist.update(CFBundleShortVersionString=a.version, CFBundleVersion=a.version)
+    with (contents / "Info.plist").open("wb") as f:
+        plistlib.dump(plist, f)
+
+
+def seal(app: Path) -> None:
+    """Sign APP ad hoc. Raises StepFailed when codesign fails."""
+    done = subprocess.run([CODESIGN, "--force", "--sign", "-", str(app)], stdin=subprocess.DEVNULL,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+    if done.returncode != 0:
+        raise StepFailed(f"codesign exited {done.returncode}: {' '.join(done.stdout.split())}")
+
+
+def make(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> Path:
+    """Build the app under a temporary name in the output directory and rename it into place."""
+    a.out.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix=".make_app.", dir=a.out))
+    try:
+        assemble(work / APP, a, manifest)
+        seal(work / APP)
+        os.rename(work / APP, a.out / APP)
+    except BaseException:
+        shutil.rmtree(work, ignore_errors=True)
+        raise
+    work.rmdir()
+    return a.out / APP
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    ap = Parser(prog="make_app.py", description=__doc__,
+                formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", type=Path, required=True, help="the directory that gets Dragoon.app")
+    ap.add_argument("--version", required=True, help="the app's version, such as 1.2.3")
+    ap.add_argument("--launcher", type=Path, required=True, help="the built launcher")
+    ap.add_argument("--kit", type=Path, required=True, help="the engine kit")
+    ap.add_argument("--source", type=Path, required=True, help="the source snapshot")
+    a = ap.parse_args(argv)
+    for name in ("out", "launcher", "kit", "source"):
+        setattr(a, name, Path(os.path.abspath(getattr(a, name))))
+    return a
+
+
+def main(argv: list[str]) -> int:
+    a = parse_args(argv)
+    try:
+        manifest = bundle_manifest.read(MANIFEST)
+        problem = bad_argument(a, manifest)
+    except (OSError, ValueError) as e:
+        problem = str(e)
+    if problem:
+        print(f"make_app.py: {problem}", file=sys.stderr)
+        return 2
+    try:
+        app = make(a, manifest)
+    except (StepFailed, OSError) as e:  # shutil.Error is an OSError
+        print(f"make_app.py: {e}", file=sys.stderr)
+        return 1
+    print(app)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
