@@ -123,9 +123,6 @@ def group(draws: list[Draw]) -> list[Group]:
 
 
 def _close(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
-    # zip's strict flag needs Python 3.10, and the system Python is 3.9.
-    if len(a) != len(b):
-        raise ValueError(f"projections of {len(a)} and {len(b)} figures")
     return all(abs(x - y) <= TOLERANCE for x, y in zip(a, b))
 
 

@@ -241,6 +241,14 @@ class AspectsCommandTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertNotIn("1.25538", out)
 
+    def test_window_takes_its_first_and_last_frames(self):
+        lines = [census(149, "81424A80", 1.25538), census(150, "81424A80", 1.67384),
+                 census(250, "81424A80", 1.67384), census(251, "81424A80", 2.23179)]
+        code, out, _ = run_main(drawlog.main, "aspects", self.log(*lines), "--from", "150", "--to", "250")
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            "81424A80 vp 0,0 640x480 fov 78.0  aspect 1.67384 in frames 150..250 (2 frames)"])
+
     def test_orthographic_cameras_are_left_out(self):
         code, out, _ = run_main(drawlog.main, "aspects", self.log(CENSUS_HUD, census(1, "81424A80", 1.2)))
         self.assertEqual(code, 0)
