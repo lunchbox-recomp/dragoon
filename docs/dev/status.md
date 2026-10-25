@@ -703,6 +703,48 @@ later pass started on it, where the routes' A presses take the load menus instea
 new save data file" ones. On City Trial, a pass at scale 1 `--fast`, scale 2 `--fast` and
 scale 2 `--real-time` built the same 107 keys.
 
+### Longer course passes
+
+Run from the warm cache to frame 16,000, six of the eight Air Ride courses still compiled
+programs. That's 21 compiles of 10 distinct keys, all past the frame where that course's pass
+stopped. The manifest's `warm=` setting now plays Sky Sands to 14,400, Magma Flows to 12,700 and
+Frozen Hillside to 6,000, and the other passes keep their length.
+
+| Bar | Before | After |
+|---|---|---|
+| Compiles on the eight course routes, unpaced to 16,000 frames (0) | 21, on six courses | 0 |
+| Compiles in 130 s real-time runs of those routes (0) | 3, at 5,649, 5,752 and 7,111 | 0 |
+| Warm-up, five passes at once (90 s or less) | 64.9 s, 65.0 s and 68.0 s at loads of 4.16, 7.36 and 5.54 | 73.7 s, 75.7 s and 76.1 s at loads of 8.36, 6.99 and 1.91 |
+
+Sky Sands drew 8 of the 10 keys, between frames 9,333 and 14,186. They include every key that
+Fantasy Meadows, Celestial Valley and Beanstalk Park drew late, so a longer Sky Sands pass covers
+those three courses too. Magma Flows and Frozen Hillside each drew one key no other course did.
+
+Before is the manifest at Dragoon `3f0f8c3` and after is the one with the `warm=` settings, both
+at gcn-recomp `dac449e` on an M4 Max. Each warm-up was `tools/warm_shaders.py --force` from an
+empty cache, and the load in the table is the 1-minute average when it began.
+
+Each course run started with a warm-up's cache in its `saves/shaders.bin`, 318 keys before and
+328 after, and ran hidden and silent, four at once. The 16,000-frame runs were
+`tools/probe.sh NAME 400 tests/routes/ROUTE.txt 100000 --exit-after=16000 GCN_FRAMETIME=1`, and
+the 130 s runs were
+`tools/probe.sh NAME 130 tests/routes/ROUTE.txt 100000 --real-time GCN_FRAMETIME=1`, which
+reached frames 7,671 to 7,678. Compiles are the `[shaders] compiled program` lines, counted with
+`grep -c`.
+
+`warm_shaders.py --report` under `GCN_FRAMETIME=1` splits the pass time, and both runs below used
+this tree's copy, the before one on the old manifest. The 17,800 frames the three passes gained
+added 43.1 pass-seconds, and the frames past 3,400 took all of it.
+
+| Stretch | Before | After |
+|---|---|---|
+| Starting the game | 7.9 s | 7.7 s |
+| Frames to 2,000 | 98.0 s | 95.8 s |
+| Frames 2,001 to 3,400 | 33.8 s | 33.0 s |
+| The rest | 173.9 s | 220.2 s |
+| All 21 passes | 313.6 s | 356.7 s |
+| Warm-up, with the load when it began | 66.1 s at 2.62 | 75.0 s at 11.16 |
+
 ## gcn-recomp `e1016b8`
 
 The pin moved from gcn-recomp `b848158` to `e1016b8`, 87 commits, by way of `b97c019`, 66

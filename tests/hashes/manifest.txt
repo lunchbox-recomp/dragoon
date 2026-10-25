@@ -1,16 +1,19 @@
 # route seconds dump_every required_frames [warm=N] [probe settings]
 # Required frames are the frames a route must reach, and docs/dev/status.md lists the checkpoints it plays
-# to. Seconds are wall-clock with --fast. warm=N has tools/warm_shaders.py play the route to frame N
-# instead of 900 frames past its last required frame.
+# to. Seconds are wall-clock with --fast.
+#
+# warm=N has tools/warm_shaders.py play the route to frame N instead of 900 frames past its last
+# required frame. The Sky Sands pass also builds the programs Fantasy Meadows, Celestial Valley and
+# Beanstalk Park first draw past their own passes' ends.
 title          20 60 60,960
 menu           20 60 1200
 air-ride-race  30 60 4200,6000
 city-trial     25 60 3300
 city-trial-4p  30 60 2700,3480 --pads=4
 air-ride-celestial-valley  25 60 4200
-air-ride-sky-sands         25 60 4200
-air-ride-frozen-hillside   25 60 4200
-air-ride-magma-flows       25 60 4200
+air-ride-sky-sands         25 60 4200 warm=14400
+air-ride-frozen-hillside   25 60 4200 warm=6000
+air-ride-magma-flows       25 60 4200 warm=12700
 air-ride-beanstalk-park    25 60 4200
 air-ride-machine-passage   25 60 4200
 air-ride-checker-knights   25 60 4200
