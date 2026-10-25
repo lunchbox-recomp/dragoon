@@ -1,6 +1,8 @@
 # Tools
 
-Each tool answers one question. Start with probe.sh, which makes the runs the others read. To playtest with sound, run playtest.sh. session_report.py explains the session afterwards. Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`. The launcher's own helpers live in `launcher/tools/` with their tests beside them, so run those with `python3 -m unittest discover -s launcher/tools -p 'test_*.py'` too. Both run under the Command Line Tools' Python 3.9 and under a newer one.
+Each tool answers one question. Start with probe.sh, which makes the runs the others read. To playtest with sound, run playtest.sh and read the session with session_report.py.
+
+Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`. The launcher's own helpers live in `launcher/tools/` with their tests beside them, so run those with `python3 -m unittest discover -s launcher/tools -p 'test_*.py'` too. Both run under the Command Line Tools' Python 3.9 and under a newer one.
 
 ## Conventions
 
@@ -22,7 +24,11 @@ After the NAME and seconds come an input script or a route file from `tests/rout
 
 `--aspect=16:9` stretches the picture to 16:9, and `--output` also writes `output_NNNNN.png` beside each frame, showing what the window shows. Both need a windowed run, so probe.sh refuses either with `--bench`. The frame count it prints leaves the output dumps out.
 
-`--replay=DIR` plays back the input log in DIR (an absolute path), and `--exit-after=N` quits once N frames have been shown. Both need a windowed run, so probe.sh refuses either with `--bench`. A run keeps no input log unless `GCN_SESSION=DIR` records a session. A relative DIR is taken from the run's directory, and the session's `inputs/` lands in it. A run ends early when the game exits.
+`--replay=DIR` plays back the input log in `DIR/inputs.txt`, and `--exit-after=N` quits once N frames have been shown. A relative DIR is taken from where probe.sh was run, like a `--disc` path. A DIR with no `inputs.txt` exits 2.
+
+Both need a windowed run, so probe.sh refuses either with `--bench`. A run ends early when the game exits.
+
+A run keeps no input log unless `GCN_SESSION=DIR` records a session. A relative DIR is taken from the run's directory, `build/probe/NAME/`, for this one. The session's `inputs/` lands in that DIR.
 
 ```
 tools/probe.sh demo 20 tests/routes/title.txt 60 GCN_FRAMETIME=1
@@ -32,15 +38,21 @@ That prints the run's directory as an absolute path, then a frame count (140 on 
 
 ## playtest.sh
 
-What happened while I played? It runs the game in its window with sound, as `build/dragoon` runs for a player. It sets `GCN_SESSION` to `build/playtest/<date>-<time>/` ("Playtest sessions" in gcn-recomp's `docs/diagnostics.md`). The game records into that one directory what went to the sound device (`out.wav`), the mixer's blocks before the audio ring (`aid.raw`), the input log with the memory card it started from (`inputs/`) and `session.json`. Everything it prints goes to the terminal and to `stdout.txt` there, the frame times and the sound device's timing lines among it. Quit the game as usual or press Ctrl+C in the terminal, and playtest.sh prints the directory.
+What happened while I played? It runs the game in its window with sound, as `build/dragoon` runs for a player. It sets `GCN_SESSION` to `build/playtest/<date>-<time>/` ("Playtest sessions" in gcn-recomp's `docs/diagnostics.md`).
+
+The game records into that one directory what went to the sound device (`out.wav`), the mixer's blocks before the audio ring (`aid.raw`), the input log with the memory card it started from (`inputs/`) and `session.json`. Everything it prints goes to the terminal and to `stdout.txt` there, the frame times and the sound device's timing lines among it. Quit the game as usual or press Ctrl+C in the terminal, and playtest.sh prints the directory.
 
 ```
 tools/playtest.sh
 ```
 
-That's all a playtester runs. It runs from the repository's root, so it plays on the card and shader cache in `saves/` as `build/dragoon` does. Nothing needs sending back. The session stays in `build/playtest/`, which git ignores. session_report.py and replay_session.py read it there. The recordings, the input log and the card snapshot are the player's own game data. They're never committed, and check_no_game_data.py fails on any of them.
+That's all a playtester runs. It runs from the repository's root, so it plays on the card and shader cache in `saves/` as `build/dragoon` does. Nothing needs sending back.
 
-`--pads=N` plugs in more controllers and `--scale=N` sets the render scale. `GCN_*=value` sets any other switch, and one the session sets itself, like `GCN_WAV`, takes the value given instead. `--dry-run` prints the directory and the command without running anything, which is how its tests check it. It exits with the game's status, or 2 when `GCN_SESSION` is already set or the game isn't built. Without `GCN_SESSION` the game records none of this.
+The session stays in `build/playtest/`, and session_report.py and replay_session.py read it there. The recordings, the input log and the card snapshot are the player's own game data. `.gitignore` ignores them, and check_no_game_data.py fails on any that's tracked.
+
+`--pads=N` plugs in more controllers and `--scale=N` sets the render scale. `GCN_*=value` sets any other switch, and one the session sets itself, like `GCN_WAV`, takes the value given instead. `--dry-run` prints the directory and the command without running anything, which is how its tests check it.
+
+It exits with the game's status, or 2 when `GCN_SESSION` is already set or the game isn't built. Without `GCN_SESSION` the game records none of this.
 
 ## session_report.py
 
@@ -57,23 +69,35 @@ It prints these:
 - clicks, gaps and clipped runs a minute in `out.wav` (the device stage) and in `aid.raw` (the mixer stage), through audio_clicks.py
 - each device-stage click put down to a stage
 - the frame pacing from frame 300 through frametime.py, with the frames over 33 ms
-- the shaders compiled while it ran, and every panic, `FATAL` or `FAULT` line
+- the shaders compiled while it ran, and every `FATAL` or `FAULT` line, which a guest panic ends in
 
-A click is the mixer's when `aid.raw` clicks within 2 ms of the moment that output frame was made from. The `[audio] output frame F plays DMA frame D` lines find that moment to within about 1.3 ms. Otherwise it's the ring's when the ring cut, or a stretch of pulls it couldn't fill began or ended, within 5 ms of it. Failing that it's the device's when a callback came late within 5 ms, and if nothing explains it, it's unexplained. Music streamed from the disc is mixed in after the ring, so a click in that music is unexplained. So is a sharp onset that the click finder flags in the 48 kHz device stage and not in the 32 kHz mixer stage. A late callback can starve the device without a mark in `out.wav`, which holds what was handed over and not when, so the late callbacks are listed on their own too.
+A click is the mixer's when `aid.raw` clicks within 2 ms of the moment that output frame was made from. The `[audio] output frame F plays DMA frame D` lines find that moment to within about 1.3 ms. Otherwise it's the ring's when the ring cut, or a stretch of pulls it couldn't fill began or ended, within 5 ms of it.
 
-`--system-log` also counts the Core Audio overloads macOS logged from the session's start to 5 s past the end of `out.wav`. Core Audio logs one when an IO cycle misses its deadline. It runs `/usr/bin/log show --style compact` over that window with the predicate `subsystem == "com.apple.coreaudio" AND eventMessage CONTAINS[c] "overload"`, which only reads the log. It counts the lines from that subsystem whose message holds the word in any letter case, by process. The unified log doesn't keep messages long, so an old session's window can come back empty.
+Failing that it's the device's when a callback came late within 5 ms, and if nothing explains it, it's unexplained. Music streamed from the disc is mixed in after the ring, so a click in that music is unexplained. So is a sharp onset that the click finder flags in the 48 kHz device stage and not in the 32 kHz mixer stage.
 
-`--json` prints the whole result, and `--list N` caps the times printed for each list (default 10). A run-N directory, made when the game reset the console, reads its own part of the session's `stdout.txt`. A file that's missing or empty leaves its sections out and is named on stderr. It exits 2 only when the directory has no readable `session.json`.
+A late callback can starve the device without a mark in `out.wav`, which holds what was handed over and not when, so the late callbacks are listed on their own too.
+
+`--system-log` also counts the Core Audio overloads macOS logged from the session's start to 5 s past the end of `out.wav`. Core Audio logs one when an IO cycle misses its deadline. It runs `/usr/bin/log show --style compact` over that window with the predicate `subsystem == "com.apple.coreaudio" AND eventMessage CONTAINS[c] "overload"`, which only reads the log.
+
+It counts the lines from that subsystem whose message holds the word in any letter case, by process. The unified log doesn't keep messages long, so an old session's window can come back empty.
+
+`--json` prints the whole result, and `--list N` caps the times printed for each list (default 10). A file that's missing or empty leaves its sections out and is named on stderr. It exits 2 only when the directory has no readable `session.json`.
+
+A run-N directory, made when the game reset the console and started again, reads its own part of the session's `stdout.txt`. The report names the run that follows a reset, and says so when the game shut the console down instead.
 
 ## replay_session.py
 
-Does a session replay faithfully? It plays a session's input log back through probe.sh in a hidden window with no sound, with `--replay`, `GCN_AIDWAV`, `GCN_AXSTATS=1` and SDL's dummy driver, as `build/probe/replay-<name>/`. Guest time is virtual, so a faithful replay hands the mixer the same blocks the session did. It compares the SHA-1 of the session's `aid.raw` with that of as much of the replay's, says where they first differ when they do and lists the mixer clicks in the replay over the session's length. It also shows each line where the game said the replay parted from its recording, and warns when the session ran on another engine commit than the one built.
+Does a session replay faithfully? It plays a session's input log back through probe.sh in a hidden window with no sound, with `--replay`, `GCN_AIDWAV`, `GCN_AXSTATS=1` and SDL's dummy driver, as `build/probe/replay-<name>/`. Guest time is virtual, so a faithful replay hands the mixer the same blocks the session did.
+
+It compares the SHA-1 of the session's `aid.raw` with that of as much of the replay's, says where they first differ when they do and lists the mixer clicks in the replay over the session's length. It also shows each line where the game said the replay parted from its recording, and warns when the session ran on another engine commit than the one built.
 
 ```
 tools/replay_session.py build/playtest/20261022-161851
 ```
 
-The replay runs to 600 frames more than 60 for each second of the session's mixer audio. probe.sh gives it twice the session's length plus two minutes. The input log is copied into the replay's directory first, since a replay keeps a scratch copy of the memory card beside the log it reads, so the session stays as it was. An earlier replay's directory is deleted first. It exits 0 when the mixer audio matches, 1 when it differs or the replay stops short, and 2 on a bad argument, a session without `inputs/` or `aid.raw`, or a probe.sh run that failed.
+The replay runs to 600 frames more than 60 for each second of the session's mixer audio. probe.sh gives it twice the session's length plus two minutes. The input log is copied into the replay's directory first, since a replay keeps a scratch copy of the memory card beside the log it reads, so the session stays as it was.
+
+An earlier replay's directory is deleted first. It exits 0 when the mixer audio matches, 1 when it differs or the replay stops short, and 2 on a bad argument, a session without `inputs/` or with an `aid.raw` of less than one frame, or a probe.sh run that failed.
 
 ## frametime.py
 
@@ -173,7 +197,7 @@ sed -n -E 's/^\[ring\] cut .* frame ([0-9]+)$/\1/p' build/probe/title-cuts/stdou
 tools/audio_clicks.py build/probe/title-cuts/out.wav --marks build/probe/title-cuts/cuts.txt
 ```
 
-`analyse_long`, for other tools to call, works through a recording 30 seconds at a time instead of holding every sample's second difference at once, which for an hour of stereo is gigabytes. It finds what one pass would, and its tests check that.
+`analyse_file`, for other tools to call, reads a recording from disc 10 seconds at a time instead of holding every sample's second difference at once, which for an hour of stereo is tens of gigabytes. It finds what one pass would, and its tests check that. A gap or a clipped run that goes on past a part is followed to its end.
 
 ## audio_scorecard.py
 
@@ -289,7 +313,9 @@ What does `GCN_AIDWAV` write? It holds the DMA's rate, its 160-sample block and 
 
 ## session_log.py
 
-What does a session's log say about its sound device, its ring and its crashes? It reads the `[audio]`, `[ring]`, `[shaders]` and `[session]` lines of a session's `stdout.txt`, with its panic, `FATAL` and `FAULT` lines, for session_report.py. It splits the log at its `[session]` lines, so a run-N directory gets its own part. It has no command line.
+What does a session's log say about its sound device, its ring and its crashes? It reads the `[audio]`, `[ring]`, `[shaders]` and `[session]` lines of a session's `stdout.txt`, with its `FATAL` and `FAULT` lines, for session_report.py. A guest panic ends in a `FATAL` line, so it counts once.
+
+It splits the log at its `[session]` lines, so a run-N directory gets its own part. It has no command line.
 
 ## click_stages.py
 
@@ -297,7 +323,9 @@ Which stage made each click the sound device got? It puts each device-stage clic
 
 ## core_audio_log.py
 
-How many Core Audio overloads did macOS log while a session ran? It builds the read-only `log show` command and counts the matching lines by process. Its tests read lines captured from a Mac's log, with overload lines written in their layout, never live output. It has no command line.
+How many Core Audio overloads did macOS log while a session ran? It builds the read-only `log show` command and counts the matching lines by process. Its tests read lines captured from a Mac's log, with overload lines written in their layout and never live output.
+
+It has no command line.
 
 ## session_text.py
 
@@ -310,7 +338,7 @@ Is anything from a disc tracked by git? It flags tracked paths that look like ga
 - Disc images and executables by suffix, `.raw` memory cards and audio recordings, `.wav` recordings and `.bin` shader caches and key lists, wherever they sit.
 - Anything under a top-level `build*/` or `rom/` (except the `rom/` README), and anything under a `saves/` at any depth.
 - Frame dumps (`frame_NNNNN.png` and `output_NNNNN.png`), `stdout.txt` and `panic.txt`, wherever they sit. Other PNG files are fine.
-- A playtest session's `session.json`, the input log's `inputs.txt` and the `aid.raw.txt` block log, wherever `GCN_SESSION` put them. Its `.raw` and `.wav` recordings were covered already, and so was a session under `build/`.
+- A playtest session's `session.json`, the input log's `inputs.txt` and the `aid.raw.txt` block log, wherever `GCN_SESSION` put them. Its `.raw` and `.wav` recordings fall under the suffix rule, and a session under `build/` under the build rule.
 
 It prints one line per path and exits 1 if it found any, so it can run in CI. It prints nothing when the tree is clean.
 
