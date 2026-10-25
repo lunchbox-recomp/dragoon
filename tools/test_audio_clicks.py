@@ -7,6 +7,7 @@ import unittest
 import wave
 from array import array
 from pathlib import Path
+from unittest import mock
 
 import audio_clicks
 from audio_clicks import Recording
@@ -193,10 +194,23 @@ class AnalyseTest(unittest.TestCase):
             audio_clicks.analyse(rec([0] * RATE), 2)
 
 
-class AnalyseLongTest(unittest.TestCase):
-    """analyse_long must find what one pass finds, with every event near a part's edge."""
+class AnalyseFileTest(unittest.TestCase):
+    """analyse_file must find what one pass finds, with every event near a part's edge."""
 
-    def recording(self) -> Recording:
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def check(self, *channels: list[int], part_s: float) -> audio_clicks.Report:
+        """What analyse_file finds in the channels (one is both sides) at part_s, which has to be
+        what one pass finds."""
+        left, right = channels if len(channels) == 2 else (channels[0], channels[0])
+        got = audio_clicks.analyse_file(write_file(self.dir, "r.raw", pcm(left, right)), RATE, part_s=part_s)
+        self.assertEqual(got, audio_clicks.analyse(rec(left, right), 0))
+        return got
+
+    def recording(self) -> tuple[list[int], list[int]]:
         noise = random.Random(7)
         left = [a + noise.randint(-300, 300) for a in tone(330, 1, 6000)]
         right = [a + noise.randint(-300, 300) for a in tone(500, 1, 6000)]
@@ -208,17 +222,34 @@ class AnalyseLongTest(unittest.TestCase):
         left[28790:28812] = [32767] * 22  # a clipped run across an edge
         right[33598:33600] = [-32768] * 2  # one that ends on an edge
         right[38399:38401] = [32767] * 2  # one that straddles it
-        return rec(left, right)
+        return left, right
 
     def test_finds_what_one_pass_finds(self):
-        r = self.recording()
-        whole = audio_clicks.analyse(r, 0)
+        whole = audio_clicks.analyse(rec(*self.recording()), 0)
         self.assertGreater(len(whole.clicks), 4)
         self.assertEqual(len(whole.gaps), 2)
         self.assertEqual(len(whole.clipped), 3)
         for part_s in (0.1, 0.0371, 0.25, 5):
             with self.subTest(part_s=part_s):
-                self.assertEqual(audio_clicks.analyse_long(r, part_s), whole)
+                self.check(*self.recording(), part_s=part_s)
+
+    def test_follows_a_gap_and_a_clipped_run_to_their_ends(self):
+        got = self.check(*self.recording(), part_s=0.1)
+        self.assertAlmostEqual(got.gaps[0].ms, 8500 / 48)
+        self.assertEqual(got.clipped[0].samples, 22)
+
+    def test_follows_them_a_block_at_a_time(self):
+        with mock.patch.object(audio_clicks, "FOLLOW_FRAMES", 100):
+            got = self.check(*self.recording(), part_s=0.1)
+        self.assertAlmostEqual(got.gaps[0].ms, 8500 / 48)
+
+    def test_a_gap_and_a_clipped_run_that_end_the_recording_end_with_it(self):
+        x = tone(440, 1, 10000)
+        x[-3000:] = [0] * 3000
+        y = tone(440, 1, 10000)
+        y[-6:] = [32767] * 6
+        self.assertEqual(self.check(x, part_s=0.1).gaps[0].ms, 3000 / 48)
+        self.assertEqual(self.check(y, x, part_s=0.1).clipped[0].samples, 6)
 
     def test_a_sample_near_a_parts_end_is_judged_on_the_context_past_it(self):
         # An impulse 5 samples before the edge at 9600 stands out from silence, but a burst
@@ -226,15 +257,23 @@ class AnalyseLongTest(unittest.TestCase):
         x = [0] * RATE
         x[9595] = 2000
         x[9820:9836] = [3000 if i % 2 else -3000 for i in range(16)]
-        whole = audio_clicks.analyse(rec(x), 0)
-        self.assertNotIn(9595, [round(c.at * RATE) for c in whole.clicks])
-        self.assertEqual(audio_clicks.analyse_long(rec(x), 0.1), whole)
+        self.assertNotIn(9595, [round(c.at * RATE) for c in audio_clicks.analyse(rec(x), 0).clicks])
+        self.check(x, part_s=0.2)
 
-    def test_follows_a_gap_and_a_clipped_run_to_their_ends(self):
-        r = self.recording()
-        got = audio_clicks.analyse_long(r, 0.1)
-        self.assertAlmostEqual(got.gaps[0].ms, 8500 / 48)
-        self.assertEqual(got.clipped[0].samples, 22)
+    def test_the_first_and_last_sample_of_a_part_are_judged_on_all_their_context(self):
+        # A spike 241 samples (5 ms and one) from an impulse is the furthest one that its second
+        # difference's context reaches, after the last sample of a part or before the first.
+        for impulse, spike in ((9599, 9599 + 241), (9600, 9600 - 241)):
+            x = [0] * RATE
+            x[impulse], x[spike] = 2000, 30000
+            with self.subTest(impulse=impulse):
+                self.assertNotIn(impulse, [round(c.at * RATE) for c in audio_clicks.analyse(rec(x), 0).clicks])
+                self.check(x, part_s=0.2)
+
+    def test_a_gap_that_starts_one_sample_before_a_part_is_counted_once(self):
+        x = tone(440, 1, 10000)
+        x[9599:9999] = [0] * 400
+        self.assertEqual(len(self.check(x, part_s=0.2).gaps), 1)
 
     def test_noise_with_random_events_matches_at_any_part_size(self):
         rnd = random.Random(3)
@@ -246,10 +285,48 @@ class AnalyseLongTest(unittest.TestCase):
             x[at:at + length] = [0] * length
         x = [max(-32768, min(32767, v)) for v in x]
         self.assertEqual(len(x), RATE)
-        whole = audio_clicks.analyse(rec(x), 0)
         for part_s in (0.013, 0.1, 0.33):
             with self.subTest(part_s=part_s):
-                self.assertEqual(audio_clicks.analyse_long(rec(x), part_s), whole)
+                self.check(x, part_s=part_s)
+
+    def test_a_wav_is_read_a_part_at_a_time_too(self):
+        left, right = self.recording()
+        path = write_wav(self.dir, "out.wav", left, right)
+        got = audio_clicks.analyse_file(path, part_s=0.1)
+        self.assertEqual(got, audio_clicks.analyse(audio_clicks.read_wav(path), 0))
+        self.assertEqual(len(got.gaps), 2)
+
+    def test_a_raw_recording_is_cut_to_the_frames_asked_for(self):
+        left, right = self.recording()
+        path = write_file(self.dir, "aid.raw", pcm(left, right))
+        got = audio_clicks.analyse_file(path, RATE, 30000, part_s=0.1)
+        self.assertEqual(got, audio_clicks.analyse(audio_clicks.read_raw(path, RATE, 30000), 0))
+        self.assertEqual(got.seconds, 30000 / RATE)
+
+    def test_it_holds_about_a_part_and_never_the_whole_recording(self):
+        left, right = self.recording()
+        asked = []
+
+        def read(lo: int, hi: int) -> list[array]:
+            asked.append(hi - lo)
+            return [array("h", left[lo:hi]), array("h", right[lo:hi])]
+
+        with mock.patch.object(audio_clicks, "FOLLOW_FRAMES", 100):
+            audio_clicks.analyse_source(audio_clicks.Source(RATE, 2, len(left), read), 0.1)
+        self.assertLessEqual(max(asked), 4800 + 2 * 241)
+        self.assertGreater(len(asked), 10)
+
+    def test_refuses_what_it_cannot_read_as_read_wav_and_read_raw_do(self):
+        short = write_wav(self.dir, "short.wav", [1, 2, 3, 4], [-1, -2, -3, -4])
+        short.write_bytes(short.read_bytes()[:-8])
+        for name, path, rate, msg in (
+                ("8-bit", write_wav(self.dir, "b.wav", [0, 0], width=1), None, "8-bit samples"),
+                ("not wav", write_file(self.dir, "c.wav", "hello"), None, "not a PCM WAV file"),
+                ("empty wav", write_wav(self.dir, "d.wav", []), None, "no samples"),
+                ("cut short", short, None, "ends before its header says"),
+                ("empty raw", write_file(self.dir, "e.raw", b"\0\0\0"), 32000, "no samples")):
+            with self.subTest(name), self.assertRaisesRegex(ValueError, f"{path}: {msg}"):
+                audio_clicks.analyse_file(path, rate, part_s=0.1)
 
 
 class ReadTest(unittest.TestCase):

@@ -69,10 +69,9 @@ def stage_sound(path: Path, raw_rate: int | None) -> audio_clicks.Report | None:
     if not path.is_file():
         return None
     try:
-        rec = audio_clicks.read_raw(path, raw_rate) if raw_rate else audio_clicks.read_wav(path)
+        return audio_clicks.analyse_file(path, raw_rate)
     except ValueError:
         return None
-    return audio_clicks.analyse_long(rec)
 
 
 def sound_summary(r: audio_clicks.Report) -> dict:

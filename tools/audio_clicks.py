@@ -42,6 +42,8 @@ import sys
 import wave
 from array import array
 from bisect import bisect_left
+from collections.abc import Callable, Iterator
+from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass
 from itertools import accumulate
 from pathlib import Path
@@ -54,7 +56,9 @@ GAP_MS = 5           # the shortest silence that's a gap, and the stretch before
 GAP_LEVEL = 300      # the RMS the stretch before a silence must be over
 JOIN_SLACK = 2       # how near a join or a mark a click must be to count as on it
 FULL_SCALE = (-32768, 32767)
-PART_S = 30          # how much of a recording analyse_long works on at once
+PART_S = 10          # how much of a recording analyse_file works on at once
+FOLLOW_FRAMES = 1 << 14  # how many frames at a time a gap or a clipped run is followed on
+RAW_FRAME = 4        # bytes in a raw 16-bit stereo frame
 
 
 @dataclass
@@ -132,15 +136,20 @@ def read_raw(path: Path, rate: int, frames: int | None = None) -> Recording:
     return split(path, raw, 2, rate)
 
 
-def split(path: Path, raw: bytes, n: int, rate: int) -> Recording:
+def deinterleave(raw: bytes, n: int) -> list[array]:
     """Little-endian 16-bit frames of n channels, as one array per channel."""
     data = array("h")
     data.frombytes(raw[:len(raw) - len(raw) % (2 * n)])  # a recording cut off mid-frame
     if sys.byteorder == "big":
         data.byteswap()
-    if not data:
+    return [data[c::n] for c in range(n)]
+
+
+def split(path: Path, raw: bytes, n: int, rate: int) -> Recording:
+    channels = deinterleave(raw, n)
+    if not channels[0]:
         raise ValueError(f"{path}: no samples")
-    return Recording(rate, [data[c::n] for c in range(n)])
+    return Recording(rate, channels)
 
 
 def read_marks(path: Path) -> list[int]:
@@ -266,47 +275,111 @@ def analyse(rec: Recording, start_s: float, period: int = 0, marks: list[int] | 
                       [skip + i for i in clicks], [m for m in marks if skip <= m < rec.frames], part.frames))
 
 
-def analyse_long(rec: Recording, part_s: float = PART_S) -> Report:
-    """What analyse(rec, 0) finds, worked out part_s seconds at a time. One pass holds every
-    sample's second difference as a Python int, about 5 MB a second of stereo, so an hour's
-    session would need gigabytes. Each part is read with enough of its neighbours that every
-    sample in it is judged on the same context as in one pass, and a gap or a clipped run that
-    starts in a part and goes on past it is followed to its end."""
-    n, rate, chans = rec.frames, rec.rate, rec.channels
+@dataclass
+class Source:
+    """A recording left on disk. read(lo, hi) gives its frames from lo up to hi, one array per
+    channel."""
+    rate: int
+    channels: int
+    frames: int
+    read: Callable[[int, int], list[array]]
+
+
+@contextmanager
+def wav_source(path: Path) -> Iterator[Source]:
+    """A 16-bit PCM WAV as a Source, refused with the ValueError read_wav gives."""
+    try:
+        w = wave.open(str(path), "rb")
+    except (wave.Error, EOFError) as e:
+        raise ValueError(f"{path}: not a PCM WAV file ({e})") from None
+    with closing(w):
+        if w.getsampwidth() != 2:
+            raise ValueError(f"{path}: {8 * w.getsampwidth()}-bit samples; only 16-bit PCM is read")
+        n, total = w.getnchannels(), w.getnframes()
+        if not total:
+            raise ValueError(f"{path}: no samples")
+
+        def read(lo: int, hi: int) -> list[array]:
+            w.setpos(lo)
+            raw = w.readframes(hi - lo)
+            if len(raw) < 2 * n * (hi - lo):
+                raise ValueError(f"{path}: ends before its header says")
+            return deinterleave(raw, n)
+
+        yield Source(w.getframerate(), n, total, read)
+
+
+@contextmanager
+def raw_source(path: Path, rate: int, frames: int | None = None) -> Iterator[Source]:
+    """Raw 16-bit stereo at rate as a Source, or only its first `frames` frames."""
+    have = path.stat().st_size // RAW_FRAME
+    total = have if frames is None else min(frames, have)
+    if not total:
+        raise ValueError(f"{path}: no samples")
+    with path.open("rb") as f:
+        def read(lo: int, hi: int) -> list[array]:
+            f.seek(lo * RAW_FRAME)
+            return deinterleave(f.read((hi - lo) * RAW_FRAME), 2)
+
+        yield Source(rate, 2, total, read)
+
+
+def run_end(src: Source, end: int, same: Callable[[tuple[int, ...]], bool]) -> int:
+    """The first frame from `end` on that `same` turns down, or the frame count."""
+    while end < src.frames:
+        block = src.read(end, min(src.frames, end + FOLLOW_FRAMES))
+        for i, frame in enumerate(zip(*block)):
+            if not same(frame):
+                return end + i
+        end += len(block[0])
+    return end
+
+
+def analyse_source(src: Source, part_s: float = PART_S) -> Report:
+    """What analyse(the recording, 0) finds, worked out part_s seconds at a time. One pass holds
+    every sample's second difference as a Python int, about 30 MB for each second of 48 kHz
+    stereo, so an hour of sound would need tens of gigabytes. This reads a part with the
+    stretch either side of it that every sample in it is judged on, so what it holds is about
+    one part. A gap or a clipped run that starts in a part and goes on past what was read is
+    followed to its end."""
+    n, rate = src.frames, src.rate
     part = max(1, round(part_s * rate))
-    margin = rate * CONTEXT_MS // 1000 + 3  # a click's context, its two neighbours and the sample itself
-    need = rate * GAP_MS // 1000
+    # The stretch a sample is judged on, and the one sample past it that a second difference reaches.
+    pad = max(CONTEXT_MS, GAP_MS) * rate // 1000 + 1
     found: list[tuple[int, int]] = []
     gaps: list[tuple[int, int]] = []
     clips: list[tuple[int, int]] = []
     for a in range(0, n, part):
         b = min(n, a + part)
-        lo, hi = max(0, a - margin), min(n, b + margin)
-        for ch in chans:
-            found += [(lo + i, size) for i, size in click_samples(ch[lo:hi], rate) if a <= lo + i < b]
-        # A gap's run must start in the part, with the stretch before it in hand.
-        lo, hi = max(0, a - need - 1), min(n, b + need)
-        for s, length in gap_runs(Recording(rate, [ch[lo:hi] for ch in chans])):
+        lo, hi = max(0, a - pad), min(n, b + pad)
+        chans = src.read(lo, hi)
+        for c, ch in enumerate(chans):
+            found += [(lo + i, size) for i, size in click_samples(ch, rate) if a <= lo + i < b]
+            for s, length in clip_runs(ch):
+                if a <= lo + s < b:  # not the last part's or the next's
+                    end = lo + s + length
+                    if end == hi:
+                        end = run_end(src, end, lambda frame: frame[c] == ch[s])
+                    clips.append((lo + s, end - lo - s))
+        for s, length in gap_runs(Recording(rate, chans)):
             if a <= lo + s < b:
                 end = lo + s + length
-                if end == hi:  # it runs to the end of what was read, so follow it
-                    while end < n and not any(ch[end] for ch in chans):
-                        end += 1
+                if end == hi:
+                    end = run_end(src, end, lambda frame: not any(frame))
                 gaps.append((lo + s, end - lo - s))
-        for ch in chans:
-            for s, length in clip_runs(ch[a:min(n, b + 1)]):
-                start = a + s
-                if start >= b or (s == 0 and a > 0 and ch[a - 1] == ch[a]):
-                    continue  # the next part's, or one that started in the last
-                end = start + length
-                while end < n and ch[end] == ch[start]:
-                    end += 1
-                clips.append((start, end - start))
     merged = merge(found, rate * MERGE_MS // 1000)
-    return Report(seconds=n / rate, rate=rate, channels=len(chans), start=0.0,
+    return Report(seconds=n / rate, rate=rate, channels=src.channels, start=0.0,
                   clicks=[Click(i / rate, 20 * math.log10(size / -FULL_SCALE[0])) for i, size in merged],
                   gaps=[Gap(s / rate, length * 1000 / rate) for s, length in gaps],
                   clipped=[Clip(s / rate, length) for s, length in sorted(clips)])
+
+
+def analyse_file(path: Path, raw_rate: int | None = None, frames: int | None = None,
+                 part_s: float = PART_S) -> Report:
+    """analyse(read_wav(path), 0), or with raw_rate analyse(read_raw(path, raw_rate, frames), 0),
+    without holding the recording: analyse_source's parts are read as they're needed."""
+    with (wav_source(path) if raw_rate is None else raw_source(path, raw_rate, frames)) as src:
+        return analyse_source(src, part_s)
 
 
 def print_report(path: Path, r: Report, limit: int) -> None:

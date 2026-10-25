@@ -102,10 +102,10 @@ def compare(session_aid: Path, replay_aid: Path) -> Comparison:
 
 def replay_clicks(replay_aid: Path, length: int) -> list[float]:
     try:
-        rec = audio_clicks.read_raw(replay_aid, DMA_RATE, length // FRAME_BYTES)
+        report = audio_clicks.analyse_file(replay_aid, DMA_RATE, length // FRAME_BYTES)
     except ValueError:  # not one whole frame yet
         return []
-    return [c.at for c in audio_clicks.analyse_long(rec).clicks]
+    return [c.at for c in report.clicks]
 
 
 def engine_note(session: Path, header: Path) -> str | None:
