@@ -2,8 +2,8 @@
 # The camera census (src/census.cpp, DRAGOON_CENSUS=1). Hooks are declared here because the
 # generated code is C and sees only recomp.h.
 # HSD_CObjSetCurrent on entry, r3 the camera it makes current. Restates the store of the
-# stack frame.
-80401150 { void dragoon_census_camera(uint32_t); dragoon_census_camera(c->r[3]); } { uint32_t ea = (c->r[1] + (uint32_t)-336); ST32(ea, c->r[1]); c->r[1] = ea; }
+# stack frame and the store watch the recompiler puts after it.
+80401150 { void dragoon_census_camera(uint32_t); dragoon_census_camera(c->r[3]); } { uint32_t ea = (c->r[1] + (uint32_t)-336); ST32(ea, c->r[1]); c->r[1] = ea; } WATCH_STORE(0x80401150u, c->r[1]);
 # GObj_SetTextureCamera, before it calls an object's render callback, r24 the object and r12
 # the callback. Restates the move of the callback to ctr.
 8042A13C { void dragoon_census_draw(uint32_t, uint32_t); dragoon_census_draw(c->r[24], c->r[12]); } c->ctr = c->r[12];
