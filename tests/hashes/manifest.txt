@@ -1,6 +1,7 @@
-# route seconds dump_every required_frames [probe settings]
+# route seconds dump_every required_frames [warm=N] [probe settings]
 # Required frames are the frames a route must reach, and docs/dev/status.md lists the checkpoints it plays
-# to. Seconds are wall-clock with --fast.
+# to. Seconds are wall-clock with --fast. warm=N has tools/warm_shaders.py play the route to frame N
+# instead of 900 frames past its last required frame.
 title          20 60 60,960
 menu           20 60 1200
 air-ride-race  30 60 4200,6000

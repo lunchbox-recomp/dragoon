@@ -277,9 +277,13 @@ tools/ax_stats.py before/stdout.txt build/probe/audio-title/stdout.txt --until 2
 
 Will a player's first session stall on shader compiles? It plays the game once so the cache is already warm. The build runs it as the `dragoon_warmup` target, unless it's configured with `-DDRAGOON_WARMUP=OFF`, has no disc or is a cross build. It runs the game hidden and fast, with SDL's dummy audio driver, with one pass per route in `tests/hashes/manifest.txt`. Each pass has a scratch directory of its own and starts from a blank memory card, as a fresh install does, because a route that finds an earlier pass's card takes other menus and builds other keys. Its `shaders.bin` starts as a copy of the player's own and gains the keys its route builds. Passes don't share a cache, so several play at once. `--jobs N` sets how many, and the default is a third of the cores, at most six. The longest start first. When they are done their caches are merged, each key once and in the manifest's order. The game doesn't inherit `GCN_INPUT`, `GCN_WAV`, `GCN_PROFILE`, `GCN_FEED_DUMP` or `GCN_SESSION`, since each names a file or route that the passes would otherwise share. `--disc FILE` names the disc image every pass plays, which a game built from the engine kit needs.
 
+A pass plays to 900 frames past its route's last required frame, or to frame N when the route has a `warm=N` setting in the manifest.
+
 The merged cache is copied over `saves/shaders.bin` only once every pass has succeeded, and it only gains keys. No other file in `saves/` is touched, so the player's memory card stays as it is. A failed pass stops the ones still playing, exits 1 and leaves `saves/` as it was. `saves/.shader-warmup` holds the gcn-recomp commit and a SHA-1 each of the manifest (with the route files' text) and of warm_shaders.py. If all three match, the next run does nothing. A relink doesn't replay the game, but an edited route or tool does. A checkout asks git for the gcn-recomp commit. A source snapshot has no history, so it takes the commit from its `source-info.json`. A copy with neither exits 2. `--force` plays it anyway. A pass that outlasts twice its length at 60 fps plus 30 s is killed and counts as failed.
 
 `--report DIR` keeps each pass's output as `NAME.log` and the cache it left as `NAME.bin` in DIR, and prints `report.txt`. A row says how many programs the game built from the starting cache before its first frame and how long that took, and how many keys the pass built itself. It also gives the keys and programs the pass added that the starting cache and the passes before it in the manifest lacked, and the merged cache's size so far. With `GCN_FRAMETIME=1` in the environment it gives the frame the pass built its last program in.
+
+Four more columns split each pass's seconds into starting the game, frames up to 2,000, frames 2,001 to 3,400 and the rest. A frame's share is its `[ft]` guest interval, and starting the game is the time before the first frame and after the last. They need `GCN_FRAMETIME=1` too and read 0 without it, and a closing `all` row adds up the frames, the seconds and the four splits.
 
 ```
 tools/warm_shaders.py --force
@@ -307,6 +311,8 @@ A CLONE is refused when it isn't a directory, when its `build/probe` isn't `CLON
 ## routes.py
 
 Which routes does the repository play? `tests/hashes/manifest.txt` lists them, and `tests/routes/` holds their files. routes.py reads the manifest into `Route` records and gives each route file's path, for frame_hashes.py, audio_hashes.py and warm_shaders.py. It also picks routes by name for the first two. It has no command line.
+
+A route's `warm=N` setting goes in its `warm` field and stays out of its probe.sh settings, since probe.sh refuses a setting it doesn't know.
 
 ## source_info.py
 

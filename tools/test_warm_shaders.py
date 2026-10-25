@@ -26,10 +26,11 @@ FOUR_EXIT = f"--exit-after={FOUR_FRAMES}"
 # frames to key numbers) go in unless the cache holds them, each an 8-byte key, an 8-byte source
 # hash that is the same number and no binary, as on macOS. It prints the lines the real game
 # prints once it has built what the cache held and under GCN_FRAMETIME=1 for each program built
-# in play. FAKE_SLEEP_ON and FAKE_FAIL_ON name the runs (by a part of the line logged) that hang
-# or exit 1, and FAKE_MEET makes each wait until another run has started too. FAKE_HOLD_ON
-# names a run that waits until every other run is done (FAKE_RELEASE is the file they make)
-# and then half a second more, so it ends last.
+# in play, and [ft] lines giving frames 2000, 2001 and 3401 0.1, 0.2 and 0.4 s. FAKE_SLEEP_ON
+# and FAKE_FAIL_ON name the runs (by a part of the line logged) that hang or exit 1, and
+# FAKE_MEET makes each wait until another run has started too. FAKE_HOLD_ON names a run that
+# waits until every other run is done (FAKE_RELEASE is the file they make) and then half a
+# second more, so it ends last.
 FAKE_GAME = f"""#!{sys.executable}
 import json, os, struct, sys, time
 os.makedirs("saves", exist_ok=True)
@@ -54,6 +55,8 @@ with open(path, "ab") as f:
             f.write(key + key + struct.pack("<II", 0, 0))
             print(f"[shaders] compiled program {{n}} in 1.0 ms")
             print(f"[rt] f{{500 + n}} render   1.00ms")
+for frame, ms in ((1999, 100), (2000, 200), (3400, 400)):  # frames 2000, 2001 and 3401
+    print(f"[ft] f{{frame}} guest {{ms}}.00ms  fe   0.01ms (tex  0.00)  draws    1/   1  verts      3  idx      3  states    0")
 with open("saves/memcard_a.raw", "wb") as f:
     f.write(b"scratch card")
 if os.environ.get("FAKE_MEET"):
@@ -153,6 +156,10 @@ class PassesTest(unittest.TestCase):
         self.assertEqual([p.pads for p in ps], [1, 4])
         self.assertEqual(ps[0].route_file, routes.ROUTES / "title.txt")
 
+    def test_a_warm_frame_in_the_manifest_sets_the_pass_s_length(self):
+        ps = warm_shaders.passes(routes.parse_manifest("sky 25 60 4200 warm=14400\nmeadows 30 60 6000 warm=5000\n"))
+        self.assertEqual([p.exit_after for p in ps], [14400, 5000])
+
 
 class LastCompileFrameTest(unittest.TestCase):
     def test_a_program_belongs_to_the_next_render_line(self):
@@ -168,6 +175,23 @@ class LastCompileFrameTest(unittest.TestCase):
 
     def test_a_log_without_frame_timing_is_frame_0(self):
         self.assertEqual(warm_shaders.last_compile_frame("[shaders] 70 programs from cache in 107 ms\n"), 0)
+
+
+def ft_line(frame: int, ms: float) -> str:
+    """The [ft] line the game prints before it counts FRAME + 1, which took MS."""
+    return (f"[ft] f{frame} guest {ms:6.2f}ms  fe   0.01ms (tex  0.00)  draws    1/   1  verts"
+            f"      3  idx      3  states    0\n")
+
+
+class StretchesTest(unittest.TestCase):
+    def test_frames_go_to_their_stretch_and_starting_takes_the_rest(self):
+        # Frames 1, 2000, 2001, 3400, 3401 and 9000: each stretch ends on its own last frame.
+        log = "".join(ft_line(f, ms) for f, ms in ((0, 0), (1999, 1000), (2000, 2000),
+                                                   (3399, 500), (3400, 3000), (8999, 250)))
+        self.assertEqual(warm_shaders.stretches(log, 10.0), [3.25, 1.0, 2.5, 3.25])
+
+    def test_a_log_without_frame_timing_is_all_0(self):
+        self.assertEqual(warm_shaders.stretches("[rt] f2 render   4.60ms\n", 10.0), [0.0] * 4)
 
 
 class EngineRevTest(unittest.TestCase):
@@ -521,20 +545,41 @@ class ReportTest(WarmTestCase):
         self.addCleanup(patch.stop)
         self.report = self.dir / "report"
 
-    def rows(self) -> list[list[str]]:
+    def lines(self) -> list[list[str]]:
+        """The table under its header, the passes and then the all row."""
         text = (self.report / "report.txt").read_text()
         return [line.split() for line in text.splitlines()[1:]]
+
+    def rows(self) -> list[list[str]]:
+        return self.lines()[:-1]
 
     def test_each_pass_adds_the_keys_and_programs_no_earlier_pass_had(self):
         code, out, _ = self.warm("--report", str(self.report))
         self.assertEqual(code, 0)
         title, four = self.rows()
         # name, frames, s, boot programs, boot ms, own, +keys, +programs, keys, last frame built in
-        self.assertEqual([title[0], title[1], *title[3:]],
+        self.assertEqual([title[0], title[1], *title[3:10]],
                          ["title", str(TITLE_FRAMES), "0", "0", "2", "2", "2", "2", "502"])
-        self.assertEqual([four[0], four[1], *four[3:]],
+        self.assertEqual([four[0], four[1], *four[3:10]],
                          ["city-trial-4p", str(FOUR_FRAMES), "0", "0", "3", "2", "2", "4", "504"])
-        self.assertIn("city-trial-4p", out.splitlines()[-2])
+        self.assertEqual([line.split()[0] for line in out.splitlines()[-4:-1]],
+                         ["title", "city-trial-4p", "all"])
+
+    def test_the_last_four_columns_split_each_pass_s_seconds(self):
+        self.assertEqual(self.warm("--report", str(self.report))[0], 0)
+        for row in self.rows():
+            # start, frames to 2,000, 2,001 to 3,400 and the rest, from the fake's [ft] lines
+            self.assertEqual(row[11:], ["0.1", "0.2", "0.4"])
+            self.assertAlmostEqual(float(row[10]), float(row[2]) - 0.7, delta=0.11)
+
+    def test_the_all_row_adds_up_the_frames_the_seconds_and_the_splits(self):
+        self.assertEqual(self.warm("--report", str(self.report))[0], 0)
+        title, four, total = self.lines()
+        self.assertEqual(total[:2], ["all", str(TITLE_FRAMES + FOUR_FRAMES)])
+        self.assertAlmostEqual(float(total[2]), float(title[2]) + float(four[2]), delta=0.11)
+        self.assertEqual(total[3:10], ["-"] * 7)
+        self.assertEqual(total[11:], ["0.2", "0.4", "0.8"])
+        self.assertAlmostEqual(float(total[10]), float(total[2]) - 1.4, delta=0.11)
 
     def test_keys_the_players_cache_held_are_not_new_or_the_pass_s_own(self):
         self.saves.mkdir()

@@ -11,8 +11,15 @@ class ManifestTest(unittest.TestCase):
         parsed = routes.parse_manifest("# comment\n\ncity-trial-4p 30 60 2700,3480 --pads=4\n")
         self.assertEqual(len(parsed), 1)
         r = parsed[0]
-        self.assertEqual((r.name, r.seconds, r.dump_every, r.required, r.extra),
-                         ("city-trial-4p", 30, 60, [2700, 3480], ["--pads=4"]))
+        self.assertEqual((r.name, r.seconds, r.dump_every, r.required, r.extra, r.warm),
+                         ("city-trial-4p", 30, 60, [2700, 3480], ["--pads=4"], None))
+
+    def test_warm_frame_is_kept_out_of_the_probe_settings(self):
+        parsed = routes.parse_manifest("sky 25 60 4200 --pads=2 warm=14400 GCN_FRAMETIME=1\n")
+        self.assertEqual((parsed[0].extra, parsed[0].warm), (["--pads=2", "GCN_FRAMETIME=1"], 14400))
+
+    def test_the_last_warm_frame_wins(self):
+        self.assertEqual(routes.parse_manifest("sky 25 60 4200 warm=7000 warm=7300\n")[0].warm, 7300)
 
 
 class SelectRoutesTest(unittest.TestCase):

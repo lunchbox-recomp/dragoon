@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "hashes" / "manifest.txt"
 ROUTES = ROOT / "tests" / "routes"
+WARM = "warm="  # the manifest's one setting for warm_shaders.py, which probe.sh never sees
 
 
 @dataclass
@@ -15,7 +17,8 @@ class Route:
     seconds: int
     dump_every: int
     required: list[int]
-    extra: list[str]
+    extra: list[str]  # probe.sh settings
+    warm: Optional[int] = None  # the frame warm_shaders.py plays the route to, if the manifest says
 
 
 def parse_manifest(text: str) -> list[Route]:
@@ -24,9 +27,12 @@ def parse_manifest(text: str) -> list[Route]:
         line = line.split("#", 1)[0].strip()
         if not line:
             continue
-        name, seconds, every, required, *extra = line.split()
+        name, seconds, every, required, *settings = line.split()
+        warm = [s.removeprefix(WARM) for s in settings if s.startswith(WARM)]
         routes.append(Route(name, int(seconds), int(every),
-                            [int(f) for f in required.split(",")], extra))
+                            [int(f) for f in required.split(",")],
+                            [s for s in settings if not s.startswith(WARM)],
+                            int(warm[-1]) if warm else None))
     return routes
 
 
