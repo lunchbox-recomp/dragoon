@@ -62,7 +62,7 @@ Start Game.
 
 Sky Sands and Magma Flows open the two Air Ride routes and are raced until every racer has
 finished and the replay plays. Their first START leaves the replay for the results, and a
-second goes from the results straight to the course select.
+second goes on to the course select, after a checklist box when the race earned one.
 
 Run one with `tools/probe.sh`, which takes a route file in place of a script.
 
