@@ -96,13 +96,14 @@ def press_frame(press: str) -> int:
 class RealManifestTest(unittest.TestCase):
     """tests/hashes/manifest.txt itself."""
 
-    # The last frame each route compiled a program in. Sky Sands and Magma Flows did at these when
-    # played unpaced to frame 16,000 from a warm-up whose passes stopped 900 frames past their last
-    # required frames, and Sky Sands draws the late programs of air-ride-race,
-    # air-ride-celestial-valley and air-ride-beanstalk-park by its own last one. docs/dev/status.md
-    # has the runs, under "Longer course passes". Frozen Hillside's and Checker Knights' frames are
-    # the last compiles of their own passes from an empty cache, since raced after another course
-    # each missed programs ("Chained course passes").
+    # Sky Sands and Magma Flows last compiled a program at these frames when played unpaced to
+    # frame 16,000 from a warm-up whose passes stopped 900 frames past their last required frames,
+    # and Sky Sands draws the late programs of air-ride-race, air-ride-celestial-valley and
+    # air-ride-beanstalk-park by its own last one (docs/dev/status.md, "Longer course passes").
+    # Frozen Hillside's 5,835 and Checker Knights' 5,005 are their own passes' last compiles, in
+    # the last column of warm_shaders.py --report for a warm-up from an empty cache at 3eb2006.
+    # They keep passes of their own, since raced after another course each missed programs
+    # ("Chained course passes").
     LAST_COMPILE = {"air-ride-sky-sands": 14186, "air-ride-magma-flows": 12525,
                     "air-ride-frozen-hillside": 5835, "air-ride-checker-knights": 5005}
 
