@@ -256,11 +256,20 @@ to 2.0 ms. The render frame that first drew with it took 41.57 ms on Fantasy Mea
 
 ### At gcn-recomp `dac449e`
 
-These rows are from Dragoon `4602fa1` with the pin moved to `dac449e`, and the rows above are from Dragoon `788571c` at gcn-recomp `b848158`. The same eight routes ran once more, as `tools/probe.sh pace-ROUTE 130 tests/routes/ROUTE.txt 100000 --real-time GCN_FRAMETIME=1`, hidden and silent. Each started with the cache from one warm-up of all twenty-one manifest routes copied to its `saves/shaders.bin`, so boot loaded 318 programs.
+These rows are from Dragoon `4602fa1` with the pin moved to `dac449e`, and the rows above are from
+Dragoon `788571c` at gcn-recomp `b848158`. The same eight routes ran once more, as
+`tools/probe.sh pace-ROUTE 130 tests/routes/ROUTE.txt 100000 --real-time GCN_FRAMETIME=1`, hidden
+and silent. Each started with the cache from one warm-up of all twenty-one manifest routes copied
+to its `saves/shaders.bin`, so boot loaded 318 programs.
 
-The load average when each run began was 2.4 to 4.1, except the first run's 11.0, which started right after the warm-up. The rows are `tools/frametime.py build/probe/pace-ROUTE/stdout.txt --from 3400 --slow 16.7 --late 25`. The sd is the population standard deviation of the guest's frame interval, and Late counts guest intervals over 25 ms.
+The load average when each run began was 2.4 to 4.1, except the first run's 11.0, which started
+right after the warm-up. The rows are
+`tools/frametime.py build/probe/pace-ROUTE/stdout.txt --from 3400 --slow 16.7 --late 25`. The sd
+is the population standard deviation of the guest's frame interval, and Late counts guest
+intervals over 25 ms.
 
-Compiles are the `[shaders] compiled program` lines after boot. Boot is the `programs from cache` line's time for 318 programs.
+Compiles are the `[shaders] compiled program` lines after boot. Boot is the `programs from cache`
+line's time for 318 programs.
 
 | Course | Frames | Guest mean | sd | 95th | 99th | Worst | Late | `[rt]` mean | `[rt]` 99th | `[rt]` worst | Compiles | Boot |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -273,13 +282,23 @@ Compiles are the `[shaders] compiled program` lines after boot. Boot is the `pro
 | Machine Passage | 4,295 | 16.68 ms | 0.065 ms | 16.77 ms | 16.95 ms | 17.00 ms | 0 | 0.52 ms | 0.92 ms | 3.16 ms | 0 | 491 ms |
 | Checker Knights | 4,289 | 16.68 ms | 0.106 ms | 16.85 ms | 16.99 ms | 17.99 ms | 0 | 0.62 ms | 1.10 ms | 2.73 ms | 0 | 491 ms |
 
-Every course averaged 16.68 ms a guest frame, against 16.68 to 16.70 ms before. The 99th percentile was under 17.0 ms where it was under 18.4 ms before, but the earlier rows used a 222-program cache and ran beside two or three other copies of Dragoon, so the two sets aren't like for like. The worst guest frame on any course was 18.06 ms, and no course had a guest interval over 25 ms.
+Every course averaged 16.68 ms a guest frame, against 16.68 to 16.70 ms before. The 99th
+percentile was under 17.0 ms where it was under 18.4 ms before, but the earlier rows used a
+222-program cache and ran beside two or three other copies of Dragoon, so the two sets aren't
+like for like. The worst guest frame on any course was 18.06 ms, and no course had a guest
+interval over 25 ms.
 
-Six of the eight had an sd of 0.064 to 0.071 ms. Celestial Valley's was 0.092 ms and Checker Knights' was 0.106 ms. Repeat runs kept them wide, at 0.107 ms for Celestial Valley and 0.105 and 0.097 ms for Checker Knights, against 0.072 ms for Machine Passage.
+Six of the eight had an sd of 0.064 to 0.071 ms. Celestial Valley's was 0.092 ms and Checker
+Knights' was 0.106 ms. Repeat runs kept them wide, at 0.107 ms for Celestial Valley and 0.105
+and 0.097 ms for Checker Knights, against 0.072 ms for Machine Passage.
 
-The log doesn't say what widened them. The `[rt]` columns vary from run to run, as repeat runs of Checker Knights (twice), Celestial Valley and Machine Passage read a mean of 0.79 to 0.86 ms and a 99th of 2.20 to 2.51 ms, where the rows above read 0.52 to 0.62 ms and 0.92 to 1.10 ms for those courses.
+The log doesn't say what widened them. The `[rt]` columns vary from run to run, as repeat runs
+of Checker Knights (twice), Celestial Valley and Machine Passage read a mean of 0.79 to 0.86 ms
+and a 99th of 2.20 to 2.51 ms, where the rows above read 0.52 to 0.62 ms and 0.92 to 1.10 ms for
+those courses.
 
-Three courses compiled one program each in play, at the frames in the Compiles column. Each compile took 1.9 to 3.0 ms, and the render frame that first drew with it took 3.97 to 6.14 ms.
+Three courses compiled one program each in play, at the frames in the Compiles column. Each
+compile took 1.9 to 3.0 ms, and the render frame that first drew with it took 3.97 to 6.14 ms.
 
 ## Memory card
 
@@ -731,15 +750,26 @@ and 1,500). Frame 1,200 hashes to `ba0a9f9b` on all nine, as it does on the menu
 
 ## gcn-recomp `dac449e`
 
-The pin moved from `3a8d154` to `dac449e`, 27 commits. They write the memory card after a quiet second and not after each page. They also remember which gamepad was on each port in `saves/ports.txt`.
+The pin moved from `3a8d154` to `dac449e`, 27 commits. They write the memory card after a quiet
+second and not after each page. They also remember which gamepad was on each port in
+`saves/ports.txt`.
 
-The pacer sleeps two thirds of each wait and spins the last 100 us, with the guest threads at user-interactive QoS on Apple platforms. DVD streamed music is held through a pause.
+The pacer sleeps two thirds of each wait and spins the last 100 us, with the guest threads at
+user-interactive QoS on Apple platforms. DVD streamed music is held through a pause.
 
-Built on Dragoon `4602fa1` with the pin moved to `dac449e`, the game ran `tools/frame_hashes.py check` and `tools/audio_hashes.py check` against the goldens on `main`. Every route matched, all 1,297 frames and all 42 audio rows, so no golden was recorded. The frame check took about 10 min 10 s and the audio check about 10 min 40 s.
+Built on Dragoon `4602fa1` with the pin moved to `dac449e`, the game ran
+`tools/frame_hashes.py check` and `tools/audio_hashes.py check` against the goldens on `main`.
+Every route matched, all 1,297 frames and all 42 audio rows, so no golden was recorded. The frame
+check took about 10 min 10 s and the audio check about 10 min 40 s.
 
-Main has since moved to `5d01033`, and `4602fa1..5d01033` changes only files under `tools/`. The game and the hash tools aren't among them, so the build and these results are the same on the new head.
+Main has since moved to `5d01033`, and `4602fa1..5d01033` changes only files under `tools/`. The
+game and the hash tools aren't among them, so the build and these results are the same on the new
+head.
 
-The frame hashes run with `--fast`, where `clock_pace` returns before it waits. The audio hashes read the AX output of `dragoon_bench`, which opens no gamepad and stubs the audio subsystem that holds the music. The card's file is written later now, and the guest still reads the card from memory.
+The frame hashes run with `--fast`, where `clock_pace` returns before it waits. The audio hashes
+read the AX output of `dragoon_bench`, which opens no gamepad and stubs the audio subsystem that
+holds the music. The card's file is written later now, and the guest still reads the card from
+memory.
 
 ## Fixes on the way
 
