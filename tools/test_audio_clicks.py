@@ -1,6 +1,7 @@
 import json
 import math
 import random
+import struct
 import sys
 import tempfile
 import unittest
@@ -38,6 +39,11 @@ def write_wav(directory: Path, name: str, *channels: list[int], width: int = 2) 
                 data.byteswap()
             w.writeframes(data.tobytes())
     return path
+
+
+def list_chunk(size: int) -> bytes:
+    """A LIST chunk of SIZE bytes, which a WAV reader skips."""
+    return b"LIST" + struct.pack("<I", size) + bytes(size)
 
 
 def clicks(*channels: list[int]) -> list[float]:
@@ -360,6 +366,35 @@ class AnalyseFileTest(unittest.TestCase):
         self.assertEqual(got, audio_clicks.analyse(whole, 0))
         self.assertEqual(got.seconds, whole.frames / RATE)
 
+    def wav_with(self, name: str, *channels: list[int], before: bytes = b"", after: bytes = b"", cut: int = 0) -> Path:
+        """A WAV of the channels with BEFORE as chunks ahead of its data and AFTER as chunks past it,
+        then the last CUT bytes gone."""
+        raw = write_wav(self.dir, name, *channels).read_bytes()
+        at = raw.index(b"data")
+        path = self.dir / name
+        path.write_bytes((raw[:at] + before + raw[at:] + after)[:len(raw) + len(before) + len(after) - cut])
+        return path
+
+    def test_a_chunk_after_the_data_isnt_frames(self):
+        left, right = self.recording()
+        path = self.wav_with("out.wav", left, right, after=list_chunk(1000))
+        whole = audio_clicks.read_wav(path)
+        self.assertEqual(whole.frames, len(left))
+        self.assertEqual(audio_clicks.analyse_file(path, part_s=0.1), audio_clicks.analyse(whole, 0))
+
+    def test_a_mono_wav_that_ends_before_its_header_says_has_the_frames_that_are_there(self):
+        left, _ = self.recording()
+        path = self.wav_with("out.wav", left, cut=4001)  # the last 2,000 frames and a byte of the one before
+        whole = audio_clicks.read_wav(path)
+        self.assertEqual((len(whole.channels), whole.frames), (1, len(left) - 2001))
+        self.assertEqual(audio_clicks.analyse_file(path, part_s=0.1), audio_clicks.analyse(whole, 0))
+
+    def test_a_wav_with_a_chunk_ahead_of_its_data_that_ends_early_has_the_frames_that_are_there(self):
+        left, right = self.recording()
+        path = self.wav_with("out.wav", left, right, before=list_chunk(1000), cut=8003)
+        whole = audio_clicks.read_wav(path)
+        self.assertEqual(whole.frames, len(left) - 2001)
+        self.assertEqual(audio_clicks.analyse_file(path, part_s=0.1), audio_clicks.analyse(whole, 0))
 
 
 class ReadTest(unittest.TestCase):
