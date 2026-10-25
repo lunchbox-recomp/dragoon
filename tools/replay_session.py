@@ -22,8 +22,8 @@ recorded on another engine commit than the one built is likely to part from its 
 and the report says so.
 
 Exits 0 when the replay's mixer audio matches the session's, 1 when it differs or stops
-short, 2 on a bad argument, a session without inputs/ or aid.raw, or a probe.sh run that
-failed.
+short, 2 on a bad argument, a session without inputs/ or an aid.raw of at least one frame,
+or a probe.sh run that failed.
 """
 from __future__ import annotations
 
@@ -140,6 +140,8 @@ def replay(session: Path, probe_root: Path = PROBE_ROOT, run=probe_dirs.run_prob
     for path in (inputs, aid):
         if not path.exists():
             raise ValueError(f"{path}: missing; is {session} a session directory?")
+    if aid.stat().st_size < FRAME_BYTES:
+        raise ValueError(f"{aid}: holds no mixer audio, so a replay has nothing to match")
     seconds = aid.stat().st_size / (FRAME_BYTES * DMA_RATE)
     name = name_for(session)
     out = probe_root / name

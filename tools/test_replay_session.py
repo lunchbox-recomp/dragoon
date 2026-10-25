@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import replay_session
 from testutil import pcm, run_main, tone, write_file
@@ -92,6 +93,14 @@ class ReplayTest(unittest.TestCase):
         self.assertEqual(r.comparison.first_difference, 48000 * 4 + 2)
         self.assertIn("first differ 1.500 s in", "\n".join(replay_session.render(self.session, r, 10)))
 
+    def test_a_difference_past_the_first_chunk_is_placed_by_its_offset_in_the_file(self):
+        changed = bytearray(self.sound)
+        changed[150] ^= 1
+        with mock.patch.object(replay_session, "CHUNK", 64):
+            r = self.replay(FakeProbe(self.probe_root, bytes(changed)))
+        self.assertFalse(r.comparison.match)
+        self.assertEqual(r.comparison.first_difference, 150)
+
     def test_a_short_replay_doesnt_match(self):
         r = self.replay(FakeProbe(self.probe_root, self.sound[:len(self.sound) // 2]))
         self.assertTrue(r.comparison.short)
@@ -117,6 +126,26 @@ class ReplayTest(unittest.TestCase):
         self.assertEqual(r.out, old)
         self.assertFalse((old / "memcard_a.raw").exists())
         self.assertTrue((old / "aid.raw").is_file())
+
+    def test_an_old_replay_directory_that_is_a_link_is_refused_and_what_it_points_at_stays(self):
+        target = self.tmp / "elsewhere"
+        target.mkdir()
+        write_file(target, "keep.txt", "kept")
+        self.probe_root.mkdir()
+        (self.probe_root / "replay-20261022-160000").symlink_to(target, target_is_directory=True)
+        fake = FakeProbe(self.probe_root, self.sound)
+        with self.assertRaisesRegex(ValueError, "is a link"):
+            self.replay(fake)
+        self.assertEqual((target / "keep.txt").read_text(), "kept")
+        self.assertEqual(fake.calls, [])
+
+    def test_a_session_with_no_whole_frame_of_mixer_audio_is_refused_before_a_replay_runs(self):
+        for size in (0, 3):
+            write_file(self.session, "aid.raw", self.sound[:size])
+            fake = FakeProbe(self.probe_root, self.sound)
+            with self.subTest(size=size), self.assertRaisesRegex(ValueError, "holds no mixer audio"):
+                self.replay(fake)
+            self.assertEqual(fake.calls, [])
 
     def test_a_replay_that_wrote_no_mixer_audio_is_refused_naming_its_log(self):
         class Silent(FakeProbe):
