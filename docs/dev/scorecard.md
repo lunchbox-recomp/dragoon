@@ -878,7 +878,12 @@ route's four runs.
 tools/block_clicks.py build/probe/scorecard-air-ride-race/mixer.raw
 md5 build/probe/scorecard-air-ride-race/frame_06000.png \
   build/probe/scorecard-unpaced-air-ride-race/frame_06000.png
+awk '$4 == 1 && prev != 1 {n++} {prev = $4} END {print n + 0}' \
+  build/probe/scorecard-air-ride-race/mixer.raw.txt
 ```
+
+The `awk` line counts the stretches of consecutive caught-up blocks that pass 6 gives for
+play 3. It reads the fourth column of the block log beside the recording.
 
 | | Commit |
 |---|---|
