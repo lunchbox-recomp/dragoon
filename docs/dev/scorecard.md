@@ -4,8 +4,8 @@ What gcn-recomp's audio work changed, measured by program with nobody listening.
 `tools/audio_scorecard.py --routes title,menu,air-ride-race,city-trial,city-trial-4p` plays
 five routes and counts clicks, gaps and clipping before the audio ring and after it. The
 baseline is gcn-recomp `caf12a2`, with none of the audio work. Current is gcn-recomp `b848158`.
-Next is gcn-recomp `b97c019`. The pin is now `e1016b8`, which changes no audio file after
-`b97c019` (under Pass 5).
+Next is gcn-recomp `b97c019`. The pin was `e1016b8`, which changes no audio file after
+`b97c019` (under Pass 5), and is `dac449e` as of pass 6 (under Pass 6).
 
 The tool scores the two stages from different runs. The mixer stage, every block the DMA
 delivered, comes from an unpaced run, whose game time doesn't wait on the host. Each pair of
@@ -58,6 +58,16 @@ current's device stage clipped 27, 23 and 14 runs on the race in passes 1 to 3. 
 the mixer's clamp changed, which count both signs on both builds, went from 587 to 574. The
 mixer stage's gaps held at 8, and the device stage's went from 8 to 9.
 
+Pass 6 compared gcn-recomp `3a8d154` with `dac449e`, which adds a frame pacer, in three plays.
+Unpaced, the mixer stage scored the same at both on every figure in every play, and it matches
+pass 5's next cell for cell. The recordings of the one play that was compared are byte for byte
+the same over the shorter of each pair.
+
+In real time, over the five routes, the mixer stage made 86 to 94 clicks a play at `3a8d154` and
+81 to 83 at `dac449e`. The blocks delivered while the clock caught up fell from 247 to 255 a
+play to 51 to 67. The device stage made 74 to 96 clicks at `3a8d154` and 63 to 81 at `dac449e`,
+and the three plays didn't separate them.
+
 ## Where the numbers come from
 
 | Source | Builds | Runs | Tool |
@@ -71,8 +81,11 @@ mixer stage's gaps held at 8, and the device stage's went from 8 to 9.
 | Pass 5 | Current and next | Five routes, real-time and unpaced | `2b98e17` |
 | Past the cut, pass 5 | Current and next | Pass 5's unpaced recordings, rescored with `--no-run` | `2b98e17` |
 | Clipped runs by sign, pass 5 | Current and next | Pass 5's recordings, read with `clip_signs.py` | `0268d8a` |
+| Pass 6 | `3a8d154` and `dac449e` | Five routes, real-time and unpaced, three plays | `3f0f8c3` |
+| Past the cut, pass 6 | `3a8d154` and `dac449e` | Each play's unpaced recordings, rescored with `--no-run` | `3f0f8c3` |
+| Clipped runs by sign, pass 6 | `3a8d154` and `dac449e` | Each play's recordings, read with `clip_signs.py` | `3f0f8c3` |
 
-All but passes 4 and 5 ran on 2026-10-22. The rescoring and the split by sign play no game and
+All but passes 4 to 6 ran on 2026-10-22. The rescoring and the split by sign play no game and
 were done on 2026-10-23. The bisect's notes aren't in this repository, so its numbers are
 quoted below and named as its own.
 `tools/block_clicks.py`, `click_diff.py` and `noise_blocks.py` are its prototypes made into
@@ -522,6 +535,190 @@ keeps a catch-up jump from ending a block the guest hasn't queued after, and its
 that as the cause of such replays. Both builds still caught up on the clock, over 197 blocks at
 current and 165 at next, with 2 clicks on them at current and none at next.
 
+## Pass 6, 3a8d154 against dac449e
+
+Pass 6 ran on 2026-10-25 at Dragoon `3f0f8c3`, in three plays of about 22 minutes that each ran
+the tool over the five routes, real-time and unpaced, as pass 5 did. Plays 1 and 3 played
+`3a8d154` first on each route, and play 2 played `dac449e` first. This section names its builds
+by gcn-recomp commit, since current and next above are other builds.
+
+`3a8d154` is the engine pin before `8ef3887`, and `dac449e` is the pin on main now. The 27
+commits between them include a frame pacer that sleeps in steps, user-interactive QoS for the
+guest threads, a memory card write after a quiet period, port memory and DVD music held through
+a pause (`status.md`). Dragoon `3f0f8c3` differs from `5d01033`, the commit before the pin moved,
+only in two docs and the pin.
+
+The `dac449e` build is this clone's own `build/`, and the `3a8d154` build is in `build/current/`.
+That directory holds copies of `CMakeLists.txt`, `src/`, `analysis/`, `recomp/` and `tools/` from
+`3f0f8c3` and a `git worktree` of the engine at `3a8d154`. It was configured with the clone's
+options and SDL3's source from `build/_deps/`, and `ninja` ran 445 steps.
+
+The generated C and the DOL match the clone's `build/` file for file, and each build's
+`gcn_engine_sha.h` names its own engine commit. The runs' `commits.json` name Dragoon `3f0f8c3`
+for both, because `build/current/` isn't a clone and `git describe` there reads this one.
+
+The tool is `3f0f8c3`'s. Against pass 5's `2b98e17` it changes `audio_clicks.py`,
+`audio_scorecard.py`, `probe.sh`, `probe_dirs.py` and `scorecard_runs.py`. `clip_signs.py` is
+new.
+
+The unpaced mixer stage scored the same at both builds in every play. It also matches pass 5's
+next on every cell below, which pass 5 scored on gcn-recomp `b97c019` with its own tool.
+
+| Five routes, unpaced | `3a8d154` | `dac449e` |
+|---|---|---|
+| Mixer seconds | 324.00 | 324.00 |
+| Mixer clicks | 94 | 94 |
+| Mixer clicks a minute | 17.4 | 17.4 |
+| Mixer clicks within 2 samples of a block join (by chance) | 7 (2.9) | 7 (2.9) |
+| Mixer gaps | 8 | 8 |
+| Mixer clipped runs (samples) | 28 (564) | 28 (564) |
+| Highest main L peak before the clamp | 63,634 | 63,634 |
+| Samples the clamp changed | 574 | 574 |
+
+| Pass 6, unpaced, both builds, every play | Clicks (a minute) | On a block join (by chance) | Gaps | Clipped runs (samples) | Main L peak | Clamped samples |
+|---|---|---|---|---|---|---|
+| Title, 31 s | 7 (13.5) | 0 (0.2) | 1 | 0 (0) | 33,117 | 2 |
+| Mode select, 35 s | 9 (15.4) | 0 (0.3) | 1 | 0 (0) | 17,099 | 0 |
+| Air Ride race, 115 s | 28 (14.6) | 5 (0.9) | 2 | 28 (564) | 63,634 | 572 |
+| City Trial, 70 s | 15 (12.9) | 1 (0.5) | 2 | 0 (0) | 23,117 | 0 |
+| City Trial, four players, 73 s | 35 (28.8) | 1 (1.1) | 2 | 0 (0) | 28,843 | 0 |
+
+The last frame each unpaced run dumped hashes the same at both builds, on all five routes in
+all three plays. Play 3's unpaced recordings of the two builds are byte for byte the same up to
+the end of the shorter of each pair, which is 217.8 s on the title, 205.6 s on the mode select,
+2,574.1 s on the race, 813.1 s on City Trial and 680.3 s on four players. The scored seconds and
+the 91 s and 170 s read below all fall inside those lengths.
+
+Past the cut, rescored with `--no-run` from each play's unpaced recordings, the two builds read
+the same in every play too.
+
+| Past the cut, unpaced | `3a8d154` | `dac449e` |
+|---|---|---|
+| Title, first 91 s, clicks | 16 | 16 |
+| Title, clicks on a block join (by chance) | 2 (0.5) | 2 (0.5) |
+| Title, clipped runs (samples) | 4 (26) | 4 (26) |
+| Mode select, first 170 s, clicks | 11 | 11 |
+| Mode select, clicks on a block join (by chance) | 2 (0.3) | 2 (0.3) |
+| Mode select, clipped runs (samples) | 9 (31) | 9 (31) |
+
+These are pass 5's next rows as well. `clip_signs.py` splits the mixer's clipped runs by sign, and
+it reads the same at both builds in every play.
+
+| Mixer clipped runs, by sign | Runs at +32,767 (samples) | Runs at -32,768 (samples) | Samples at -32,767 | Lowest, highest sample |
+|---|---|---|---|---|
+| Title, 91 s | 4 (26) | 0 (0) | 0 | -32,768, 32,767 |
+| Mode select, 170 s | 6 (19) | 3 (12) | 0 | -32,768, 32,767 |
+| Air Ride race, 115 s | 22 (367) | 6 (197) | 0 | -32,768, 32,767 |
+
+In the seconds the scorecard scores, the title, the mode select, City Trial and four players
+have no mixer clipped run at either end, at either build.
+
+The device stage is one real-time run a route, so each cell below is plays 1, 2 and 3 in order.
+
+| Five routes, real-time | `3a8d154` | `dac449e` |
+|---|---|---|
+| Device seconds | 325.72, 326.31, 326.39 | 326.11, 326.05, 326.13 |
+| Device clicks | 77, 96, 74 | 63, 72, 81 |
+| Device clicks a minute | 14.2, 17.7, 13.6 | 11.6, 13.2, 14.9 |
+| Device gaps | 8, 8, 9 | 8, 8, 8 |
+| Device clipped runs (samples) | 35 (899), 33 (843), 38 (893) | 27 (792), 30 (867), 27 (833) |
+| Ring cuts | 0, 0, 0 | 0, 0, 0 |
+| Ring underruns | 0, 0, 0 | 0, 0, 0 |
+
+| Device clicks a minute | `3a8d154` | `dac449e` |
+|---|---|---|
+| Title | 7.8, 11.6, 5.8 | 9.7, 5.8, 5.8 |
+| Mode select | 17.1, 15.4, 11.9 | 10.3, 6.8, 13.7 |
+| Air Ride race | 13.4, 19.1, 15.0 | 11.9, 16.6, 16.6 |
+| City Trial | 5.1, 7.7, 7.7 | 9.4, 7.7, 16.2 |
+| City Trial, four players | 25.3, 28.6, 21.2 | 14.7, 19.6, 15.5 |
+
+The device stage's totals overlap, with `dac449e` below `3a8d154` in plays 1 and 2 (63 against
+77, and 72 against 96) and above it in play 3 (81 against 74). By route, four
+players made fewer at `dac449e` in all three plays (18, 24 and 19 clicks against 31, 35 and 26),
+and City Trial made as many or more (11, 9 and 19 against 6, 9 and 9). The title, the mode select
+and the race changed order between plays.
+
+The real-time mixer stage is each real-time run's whole `GCN_AIDWAV` recording, read with
+`block_clicks.py`, which also counts the blocks the DMA played twice and the blocks delivered
+while the clock caught up. Passes 1 and 2 scored the mixer stage from real-time runs the same
+way. The recordings aren't cut to the route's seconds.
+
+| Five routes, real-time mixer stage | `3a8d154` | `dac449e` |
+|---|---|---|
+| Mixer seconds | 323.04, 323.59, 323.67 | 323.39, 323.33, 323.42 |
+| Mixer clicks | 94, 87, 86 | 83, 81, 81 |
+| Mixer clicks a minute | 17.5, 16.1, 15.9 | 15.4, 15.0, 15.0 |
+| Blocks played twice | 0, 0, 0 | 0, 0, 0 |
+| Blocks delivered catching up | 247, 254, 255 | 51, 67, 61 |
+| Clicks on blocks delivered catching up | 0, 0, 0 | 0, 0, 0 |
+
+| Real-time mixer clicks (blocks caught up) | `3a8d154` | `dac449e` |
+|---|---|---|
+| Title | 7 (14), 8 (20), 7 (11) | 7 (4), 7 (2), 7 (1) |
+| Mode select | 9 (1), 9 (4), 9 (3) | 9 (0), 9 (0), 9 (0) |
+| Air Ride race | 31 (175), 26 (178), 28 (177) | 30 (5), 26 (13), 26 (11) |
+| City Trial | 15 (28), 15 (31), 15 (30) | 15 (20), 15 (26), 15 (23) |
+| City Trial, four players | 32 (29), 29 (21), 27 (34) | 22 (22), 24 (26), 24 (26) |
+
+`dac449e` made fewer real-time mixer clicks than `3a8d154` in all three plays, by 11, 6 and 5.
+Four players holds most of it (22, 24 and 24 against 32, 29 and 27). None of the 30 recordings
+has a block played twice or a click on a block delivered catching up, where pass 5's current had
+13 replayed blocks with 2 clicks on them.
+
+The blocks delivered while the clock caught up fell from 247 to 255 a play at `3a8d154` to 51 to
+67 at `dac449e`, and the race went from 175 to 178 to 5 to 13. Counted as stretches of
+consecutive blocks in play 3's logs, `3a8d154` caught up in 195 stretches over the five routes
+(158 on the race) and `dac449e` in 16 (6 on the race). The race recording holds 23,093 blocks at
+`3a8d154` in each play and 22,979 at `dac449e`.
+
+The last dumped frame of a real-time run is the route's last checkpoint, and it didn't always
+match the unpaced run's frame there. It matched in 3 of the 15 comparisons at `3a8d154` and 7 of
+15 at `dac449e`.
+
+| Real-time last frame equals the unpaced run's | `3a8d154` | `dac449e` |
+|---|---|---|
+| Title | 2 of 3 plays | 3 of 3 |
+| Mode select | 1 of 3 | 3 of 3 |
+| Air Ride race | 0 of 3 | 0 of 3 |
+| City Trial | 0 of 3 | 1 of 3 |
+| City Trial, four players | 0 of 3 | 0 of 3 |
+
+`clip_signs.py` over each play's real-time recording gives the race's device stage by sign.
+
+| Race device, by sign | Runs at +32,767 (samples) | Runs at -32,768 (samples) | Samples at -32,767 | Highest main L peak in the log |
+|---|---|---|---|---|
+| `3a8d154`, play 1 | 20 (564) | 13 (327) | 0 | 62,445 |
+| `3a8d154`, play 2 | 25 (547) | 6 (290) | 0 | 62,363 |
+| `3a8d154`, play 3 | 17 (538) | 14 (312) | 1 | 62,834 |
+| `dac449e`, play 1 | 20 (516) | 6 (274) | 1 | 60,871 |
+| `dac449e`, play 2 | 17 (567) | 13 (300) | 2 | 60,432 |
+| `dac449e`, play 3 | 16 (531) | 11 (302) | 0 | 61,165 |
+
+All six real-time races reached the loud stretch, so pass 5's mismatch between its two races
+didn't recur. The race's device clipped runs were 33 (891 samples), 31 (837) and 31 (850) at
+`3a8d154` and 26 (790), 30 (867) and 27 (833) at `dac449e`. Outside the race the device stage
+clipped at `3a8d154` on the title in every play and on four players in play 3 (6 runs, 38
+samples, at +32,767), and at `dac449e` once, 1 run of 2 samples on the title in play 1.
+
+What pass 6 doesn't explain:
+
+- Why `3a8d154` caught up on 175 to 178 blocks of the race, in 158 stretches in play 3, and
+  `dac449e` on 5 to 13. The 27 commits hold the pacer, its QoS change, the card flush, port
+  memory and the held music, and no run here played an engine between the two, so the runs
+  don't say which of them did it.
+- Why the device stage's clicks moved as much between plays as between builds. City Trial at
+  `dac449e` made 11, 9 and 19.
+- Why four players' real-time mixer clicks are fewer than its unpaced 35 at both builds (22 to 24
+  at `dac449e`, 27 to 32 at `3a8d154`). The last frame of its real-time runs differs from the
+  unpaced run's at both builds in every play.
+- Why the race's highest main L peak in the log is lower at `dac449e` in every play (60,432 to
+  61,165 against 62,363 to 62,834), when the unpaced run's is 63,634 at both. The title's real-time
+  peaks are above its unpaced 33,117 at `3a8d154` (35,708, 36,401 and 34,418), and at `dac449e`
+  they are 33,599, 33,117 and 33,117.
+- Why 3 of the 6 race device recordings hold 1 or 2 samples at -32,767, where the mixer stage has
+  none.
+
 ## What the numbers don't show
 
 - The mixer stage's before and after is one unpaced run of each build, pass 4 and pass 3, made
@@ -567,6 +764,21 @@ current and 165 at next, with 2 clicks on them at current and none at next.
 - Pass 5's device stage is one real-time run of each build, and the race went differently in the
   two. The race's device clipped runs and device clicks would need another real-time race of
   each build to compare.
+- Pass 6 played each build three times, and the device stage's totals overlap at 74 to 96 clicks
+  for `3a8d154` and 63 to 81 for `dac449e`. The real-time mixer stage's don't overlap, at 86 to 94
+  and 81 to 83. Three plays on one machine can't say how often a fourth would fall outside those
+  ranges.
+- Pass 6's plays ran back to back on a machine with other work on it, with a one-minute load
+  average of 4.0, 2.9 and 2.6 as they began. Play 1 began right after a run of the tools' tests
+  was stopped. No tests or builds ran during a play, and the rescoring between plays played no
+  game.
+- Pass 6's tool differs from pass 5's in the files named under Pass 6, and pass 6 didn't rescore
+  pass 5's recordings with it. That its unpaced cells match pass 5's next is the one check across
+  the two versions, and pass 5 scored another engine build.
+- The byte comparison of the unpaced recordings and the stretches of caught-up blocks are from
+  play 3 alone, since each play replaces the last one's recordings. The hashes of the last
+  frames, the block counts and the readings by sign were taken from all three plays before the
+  next began.
 - Underruns are as of each run's last `[ring] fill` line, which comes every 400 pulls of the
   device.
 - Nobody listened to any of it, and nothing was compared with a real console. One machine, an
@@ -638,6 +850,36 @@ md5 /path/to/dragoon-current/build/probe/scorecard-air-ride-race/frame_06000.png
   build/probe/scorecard-unpaced-air-ride-race/frame_06000.png
 ```
 
+Pass 6 kept both builds inside this clone's `build/`. The `3a8d154` build is a copy of the
+sources in `build/current/` with the engine checked out there as a worktree, and the tool takes
+it as `current=build/current/build`. Removing `build/current/` and running
+`git -C gcn-recomp worktree prune` puts the clone back as it was.
+
+```sh
+mkdir build/current
+cp CMakeLists.txt build/current/
+cp -R src analysis recomp tools build/current/
+git -C gcn-recomp worktree add --detach "$PWD/build/current/gcn-recomp" 3a8d154
+cmake -S build/current -B build/current/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk -DDRAGOON_WARMUP=OFF \
+  -DFETCHCONTENT_SOURCE_DIR_SDL3="$PWD/build/_deps/sdl3-src" -DGAME_ISO=/path/to/game.iso
+ninja -C build/current/build
+tools/audio_scorecard.py current=build/current/build next=build \
+  --routes title,menu,air-ride-race,city-trial,city-trial-4p
+```
+
+Playing a build again deletes its earlier recordings, so pass 6 read each play before the next
+began. It used the rescoring and the split by sign above with `current=build/current/build`, and
+ran `block_clicks.py` on each real-time run's `mixer.raw`. The `md5` command took each route's
+last dumped frame (`frame_00960.png` for the title, then 1200, 6000, 3300 and 3480) from the
+route's four runs.
+
+```sh
+tools/block_clicks.py build/probe/scorecard-air-ride-race/mixer.raw
+md5 build/probe/scorecard-air-ride-race/frame_06000.png \
+  build/probe/scorecard-unpaced-air-ride-race/frame_06000.png
+```
+
 | | Commit |
 |---|---|
 | Baseline Dragoon | `6b81b6e` |
@@ -653,3 +895,6 @@ md5 /path/to/dragoon-current/build/probe/scorecard-air-ride-race/frame_06000.png
 | The tool, past the cut | `8aaae9a` |
 | The tool, pass 5 and its rescoring | `2b98e17` |
 | `clip_signs.py`, the split by sign | `0268d8a` |
+| Pass 6 Dragoon | `3f0f8c3` |
+| Pass 6 gcn-recomp | `3a8d154` and `dac449e` |
+| The tool, pass 6 and its rescoring | `3f0f8c3` |
