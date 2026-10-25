@@ -43,7 +43,7 @@ from pathlib import Path
 
 import export_source
 
-ROOT =Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE = ROOT / "launcher" / "kit" / "Makefile"
 HEADERS = ("recomp.h", "compat.h")
 OBJECT_LINE = re.compile(r"^build (CMakeFiles/runtime_check\.dir/\S+\.o): ", re.M)
