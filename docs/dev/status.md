@@ -145,7 +145,7 @@ need `--pads=4`.
 
 Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
 frame 25,800. That's from gcn-recomp `deac351` with the aspect change (`widescreen.md`), and
-it showed 1:12.60 when this was first written, at `7d30377`. At the pin, `3a8d154`, its
+it showed 1:12.60 when this was first written, at `7d30377`. At `3a8d154`, its
 results frame is the same at 4:3 and at 16:9 with `DRAGOON_WIDEN=1`.
 
 City Trial with nobody steering drives into the sea and stays there while the clock runs. The

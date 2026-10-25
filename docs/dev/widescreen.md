@@ -6,7 +6,7 @@ from runs of the routes in `tests/routes/` through `tools/probe.sh`, read with
 `tools/drawlog.py`.
 
 The numbers were taken against gcn-recomp `deac351` with `--aspect` and `--dump-output`
-added, the change `6575c67` makes on the fork's `dragoon` branch. At the pin, `3a8d154`, the
+added, the change `6575c67` makes on the fork's `dragoon` branch. At `3a8d154`, the
 race's census at 4:3 and the kept widening's aspects and draws in the race, City Trial, 2P
 and 4P came out the same.
 
