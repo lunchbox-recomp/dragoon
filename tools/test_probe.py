@@ -169,6 +169,19 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual((self.root / "build" / "probe" / NAME / "census.txt").read_text(), "1")
 
+    def test_gcn_setting_reaches_the_game_environment(self):
+        self.add_game("dragoon", "printf '%s' \"$GCN_FRAMETIME\" > frametime.txt\n")
+        r = probe(NAME, "1", "", "60", "GCN_FRAMETIME=1", script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.root / "build" / "probe" / NAME / "frametime.txt").read_text(), "1")
+
+    def test_setting_of_another_prefix_exits_2_naming_it(self):
+        self.add_game("dragoon", "")
+        r = probe(NAME, "1", "", "60", "FOO_BAR=1", script=self.script)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("FOO_BAR=1", r.stderr)
+        self.assertFalse((self.root / "build" / "probe").exists())
+
     def test_frame_count_leaves_out_output_dumps(self):
         self.add_game("dragoon", "touch frame_00060.png output_00060.png\n")
         r = probe(NAME, "1", "", "60", "--output", script=self.script)
