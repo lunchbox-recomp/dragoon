@@ -130,7 +130,7 @@ class RecipeTestCase(unittest.TestCase):
         for name in ("Makefile", "engine.o", "libSDL3.a", "include/recomp.h"):
             write_file(self.kit, name, f"a fake {name}\n")
         self.kit_mk(f"MACOSX_MIN := 14.0\nENGINE_COMMIT := {ENGINE}\n{self.src_line()}")
-        self.data =self.dir / "Application Support" / "Dragoon"
+        self.data = self.dir / "Application Support" / "Dragoon"
         self.cache = self.dir / "Caches" / "Dragoon"
         self.log = self.dir / "Logs" / "build 1.log"
         patch = mock.patch.object(launcher_build, "CODESIGN", str(codesign))
