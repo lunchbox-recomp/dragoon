@@ -18,7 +18,7 @@ stdout.txt. It prints:
   pacing   the guest's interval between frames and the renderer's time from frame 300 (mean,
            p95, p99, worst) and the frames over 33 ms, as frametime.py reads them
   shaders  the programs compiled while it ran, on the render thread and in the background
-  crashes  every panic, FATAL or FAULT line
+  crashes  every FATAL or FAULT line, which a guest panic ends in
 
 --system-log also counts the Core Audio overloads macOS logged over the session's wall-clock
 window, through a read-only `log show` (core_audio_log.py says how they're matched).

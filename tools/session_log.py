@@ -20,7 +20,7 @@ UNDERRUN = re.compile(r"^\[audio\] underrun at output frame (\d+) frames=(\d+)$"
 POSITION = re.compile(r"^\[audio\] output frame (\d+) plays DMA frame (\d+)$")
 CUT = re.compile(r"^\[ring\] cut (\d+) frames at output frame (\d+)$")
 BACKGROUND = re.compile(r"^\[shaders\] built program \d+ in the background in ([\d.]+) ms")
-FATAL = re.compile(r"^(FATAL|FAULT):|guest panic:")
+FATAL = re.compile(r"^(FATAL|FAULT):")
 SESSION = re.compile(r"^\[session\] (?!can't write )(.+)$")  # a process's directory, not a write that failed
 RESET = re.compile(r"^\[reset\] ")
 RUN_DIR = re.compile(r"run-(\d+)")

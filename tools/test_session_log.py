@@ -49,11 +49,16 @@ class ParseTest(unittest.TestCase):
                     "[audio] device driver=coreaudio rate=48000 channels=2\n")
         self.assertEqual((log.late, log.underruns, log.device), ([], [], None))
 
-    def test_panics_fatal_and_fault_lines_are_crashes(self):
-        lines = ["FATAL: guest panic: game.c:12: oops", "FAULT: host address 0x0 (code 1)",
-                 "guest panic: game.c:12: oops"]
+    def test_fatal_and_fault_lines_are_crashes(self):
+        lines = ["FATAL: out of memory", "FAULT: host address 0x0 (code 1)"]
         log = parse("\n".join(["[audio] output frame 0 plays DMA frame 0", *lines, "[ft] FATAL is a word"]))
         self.assertEqual(log.fatal, lines)
+
+    def test_one_guest_panic_is_one_crash(self):
+        # The game prints the panic's report, then the FATAL line that ends the process.
+        log = parse("guest panic: game.c:12: oops\nguest backtrace (innermost first):\n"
+                    "FATAL: guest panic: game.c:12: oops\n")
+        self.assertEqual(log.fatal, ["FATAL: guest panic: game.c:12: oops"])
 
     def test_a_reset_line_ends_the_run(self):
         self.assertTrue(parse("[reset] the game reset the console (hot reset, code 0)\n").reset)
