@@ -1,6 +1,7 @@
 """The routes in tests/hashes/manifest.txt, and the route files in tests/routes/ they play."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "hashes" / "manifest.txt"
 ROUTES = ROOT / "tests" / "routes"
 WARM = "warm="  # the manifest's one setting for warm_shaders.py, which probe.sh never sees
+FRAME = re.compile(r"[1-9][0-9]*")  # ASCII digits only, with no sign, underscore or leading 0
 
 
 @dataclass
@@ -21,18 +23,43 @@ class Route:
     warm: Optional[int] = None  # the frame warm_shaders.py plays the route to, if the manifest says
 
 
+def warm_frame(settings: list[str], required: list[int]) -> Optional[int]:
+    """The frame the one warm=N in SETTINGS names, or None when there's none.
+
+    Raises ValueError for a second warm=, for an N that isn't a whole number past the last of
+    REQUIRED, and for a setting that looks like a misspelled warm=, such as WARM= or warm:.
+    """
+    found = None
+    for s in settings:
+        if not s.startswith(WARM):
+            if s.lstrip("-").lower().startswith("warm"):
+                raise ValueError(f"{s} isn't a setting, and the warm-up's is warm=N")
+            continue
+        if found is not None:
+            raise ValueError(f"{s} is a second warm=")
+        value = s[len(WARM):]
+        if not FRAME.fullmatch(value) or int(value) <= max(required):
+            raise ValueError(f"{s} isn't a whole frame number past the last required frame, "
+                             f"{max(required)}")
+        found = int(value)
+    return found
+
+
 def parse_manifest(text: str) -> list[Route]:
+    """The routes TEXT lists. A bad warm= raises ValueError naming the route and the line."""
     routes = []
-    for line in text.splitlines():
+    for number, line in enumerate(text.splitlines(), 1):
         line = line.split("#", 1)[0].strip()
         if not line:
             continue
         name, seconds, every, required, *settings = line.split()
-        warm = [s.removeprefix(WARM) for s in settings if s.startswith(WARM)]
-        routes.append(Route(name, int(seconds), int(every),
-                            [int(f) for f in required.split(",")],
-                            [s for s in settings if not s.startswith(WARM)],
-                            int(warm[-1]) if warm else None))
+        frames = [int(f) for f in required.split(",")]
+        try:
+            warm = warm_frame(settings, frames)
+        except ValueError as e:
+            raise ValueError(f"manifest line {number}, route {name}: {e}") from None
+        routes.append(Route(name, int(seconds), int(every), frames,
+                            [s for s in settings if not s.startswith(WARM)], warm))
     return routes
 
 

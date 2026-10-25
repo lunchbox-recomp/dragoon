@@ -26,11 +26,10 @@ FOUR_EXIT = f"--exit-after={FOUR_FRAMES}"
 # frames to key numbers) go in unless the cache holds them, each an 8-byte key, an 8-byte source
 # hash that is the same number and no binary, as on macOS. It prints the lines the real game
 # prints once it has built what the cache held and under GCN_FRAMETIME=1 for each program built
-# in play, and [ft] lines giving frames 2000, 2001 and 3401 0.1, 0.2 and 0.4 s. FAKE_SLEEP_ON
-# and FAKE_FAIL_ON name the runs (by a part of the line logged) that hang or exit 1, and
-# FAKE_MEET makes each wait until another run has started too. FAKE_HOLD_ON names a run that
-# waits until every other run is done (FAKE_RELEASE is the file they make) and then half a
-# second more, so it ends last.
+# in play. FAKE_SLEEP_ON and FAKE_FAIL_ON name the runs (by a part of the line logged) that hang
+# or exit 1, and FAKE_MEET makes each wait until another run has started too. FAKE_HOLD_ON
+# names a run that waits until every other run is done (FAKE_RELEASE is the file they make)
+# and then half a second more, so it ends last.
 FAKE_GAME = f"""#!{sys.executable}
 import json, os, struct, sys, time
 os.makedirs("saves", exist_ok=True)
@@ -55,8 +54,6 @@ with open(path, "ab") as f:
             f.write(key + key + struct.pack("<II", 0, 0))
             print(f"[shaders] compiled program {{n}} in 1.0 ms")
             print(f"[rt] f{{500 + n}} render   1.00ms")
-for frame, ms in ((1999, 100), (2000, 200), (3400, 400)):  # frames 2000, 2001 and 3401
-    print(f"[ft] f{{frame}} guest {{ms}}.00ms  fe   0.01ms (tex  0.00)  draws    1/   1  verts      3  idx      3  states    0")
 with open("saves/memcard_a.raw", "wb") as f:
     f.write(b"scratch card")
 if os.environ.get("FAKE_MEET"):
@@ -157,8 +154,8 @@ class PassesTest(unittest.TestCase):
         self.assertEqual(ps[0].route_file, routes.ROUTES / "title.txt")
 
     def test_a_warm_frame_in_the_manifest_sets_the_pass_s_length(self):
-        ps = warm_shaders.passes(routes.parse_manifest("sky 25 60 4200 warm=14400\nmeadows 30 60 6000 warm=5000\n"))
-        self.assertEqual([p.exit_after for p in ps], [14400, 5000])
+        ps = warm_shaders.passes(routes.parse_manifest("sky 25 60 4200 warm=14400\nmeadows 30 60 6000\n"))
+        self.assertEqual([p.exit_after for p in ps], [14400, 6000 + warm_shaders.ROUTE_TAIL_FRAMES])
 
 
 class LastCompileFrameTest(unittest.TestCase):
@@ -448,6 +445,14 @@ class WarmTest(WarmTestCase):
         self.assertIn("city-trial-4p.txt", err)
         self.assertFalse(self.saves.exists())
 
+    def test_a_warm_frame_short_of_the_route_s_own_frames_exits_2_before_any_pass(self):
+        write_file(self.dir, "manifest.txt", MANIFEST + "meadows 30 60 6000 warm=5000\n")
+        code, _, err = self.warm()
+        self.assertEqual(code, 2)
+        self.assertIn("manifest line 4, route meadows: warm=5000", err)
+        self.assertEqual(self.game_lines(), [])
+        self.assertFalse(self.saves.exists())
+
     def test_game_that_writes_no_cache_fails(self):
         write_file(self.dir, "fake_game", f"#!{sys.executable}\n")
         code, _, err = self.warm()
@@ -565,21 +570,14 @@ class ReportTest(WarmTestCase):
         self.assertEqual([line.split()[0] for line in out.splitlines()[-4:-1]],
                          ["title", "city-trial-4p", "all"])
 
-    def test_the_last_four_columns_split_each_pass_s_seconds(self):
-        self.assertEqual(self.warm("--report", str(self.report))[0], 0)
-        for row in self.rows():
-            # start, frames to 2,000, 2,001 to 3,400 and the rest, from the fake's [ft] lines
-            self.assertEqual(row[11:], ["0.1", "0.2", "0.4"])
-            self.assertAlmostEqual(float(row[10]), float(row[2]) - 0.7, delta=0.11)
-
-    def test_the_all_row_adds_up_the_frames_the_seconds_and_the_splits(self):
+    def test_untimed_passes_split_nothing_and_the_all_row_adds_up_their_frames(self):
+        # The fake prints no [ft] lines, as the game doesn't without GCN_FRAMETIME=1.
         self.assertEqual(self.warm("--report", str(self.report))[0], 0)
         title, four, total = self.lines()
+        for row in (title, four):
+            self.assertEqual(row[10:], ["0.0"] * 4)
         self.assertEqual(total[:2], ["all", str(TITLE_FRAMES + FOUR_FRAMES)])
-        self.assertAlmostEqual(float(total[2]), float(title[2]) + float(four[2]), delta=0.11)
-        self.assertEqual(total[3:10], ["-"] * 7)
-        self.assertEqual(total[11:], ["0.2", "0.4", "0.8"])
-        self.assertAlmostEqual(float(total[10]), float(total[2]) - 1.4, delta=0.11)
+        self.assertEqual(total[3:], ["-"] * 7 + ["0.0"] * 4)
 
     def test_keys_the_players_cache_held_are_not_new_or_the_pass_s_own(self):
         self.saves.mkdir()
@@ -600,6 +598,46 @@ class ReportTest(WarmTestCase):
     def test_without_the_flag_nothing_is_kept(self):
         self.assertEqual(self.warm()[0], 0)
         self.assertFalse(self.report.exists())
+
+
+class WriteReportTest(unittest.TestCase):
+    """write_report on two passes whose logs and seconds the test picks."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def report(self, seconds: list[float]) -> list[str]:
+        plan, scratch = [], []
+        for name, frames in (("title", 1860), ("meadows", 6900)):
+            plan.append(warm_shaders.Pass(name, frames, 1, self.dir / f"{name}.txt"))
+            d = self.dir / name
+            (d / "saves").mkdir(parents=True)
+            # 0.1 s in frames to 2,000, 0.2 s in 2,001 to 3,400 and 0.4 s past 3,400
+            write_file(d, "stdout.txt", ft_line(1999, 100) + ft_line(2000, 200) + ft_line(3400, 400))
+            scratch.append(d)
+        text = warm_shaders.write_report(self.dir / "report", plan, seconds, scratch,
+                                         self.dir / "no-cache.bin")
+        return text.splitlines()
+
+    def test_the_splits_and_the_all_row_add_up_the_seconds(self):
+        _, title, meadows, total = self.report([1.0, 2.5])
+        self.assertEqual(title.split()[10:], ["0.3", "0.1", "0.2", "0.4"])
+        self.assertEqual(meadows.split()[10:], ["1.8", "0.1", "0.2", "0.4"])
+        self.assertEqual(total.split(), ["all", "8760", "3.5", *["-"] * 7, "2.1", "0.2", "0.4", "0.8"])
+
+    def test_every_line_lines_up_under_the_header(self):
+        lines = self.report([1.0, 2.5])
+        self.assertEqual(lines[0].split(), ["pass", "frames", "s", "boot", "boot", "ms", "own", "+keys",
+                                            "+progs", "keys", "last", "start", "0-2k", "2k-3.4k", "rest"])
+        self.assertEqual({len(line) for line in lines}, {len(lines[0])})
+
+    def test_the_table_has_a_column_for_each_share_a_pass_s_seconds_split_into(self):
+        shares = warm_shaders.stretches(ft_line(1, 1), 1.0)
+        self.assertEqual(len(warm_shaders.REPORT_COLUMNS), 10 + len(shares))
+        self.assertEqual([label for label, _ in warm_shaders.REPORT_COLUMNS[10:]],
+                         ["start", "0-2k", "2k-3.4k", "rest"])
 
 
 if __name__ == "__main__":

@@ -76,8 +76,9 @@ OWN_ENV = ("GCN_INPUT", "GCN_WAV", "GCN_PROFILE", "GCN_FEED_DUMP", "GCN_SESSION"
 PRINT_LOCK = threading.Lock()
 TAIL_LINES = 15
 ROUTE_TAIL_FRAMES = 900  # past the last frame a route must reach, to build what follows it
-# The --report columns' frame stretches end here. Every pass replays the first 2,000 frames from
-# a blank card, and the Air Ride routes' races are under way by 3,400.
+# The --report columns' frame stretches end here. Up to frame 2,000 every route is in the boot,
+# the title and the menus, which each pass plays from a blank card, though the title pass stops at
+# 1,860. The Air Ride routes' races are under way by 3,400.
 STRETCH_ENDS = (2000, 3400)
 # The line each finished pass prints, which the launcher's build counts as progress.
 PASS_LINE = re.compile(r"\S+: \d+ frames, \d+\.\d s")
@@ -108,8 +109,11 @@ def route_pads(route: Route) -> int:
 
 
 def pass_frames(route: Route) -> int:
-    """The manifest's warm= frame for ROUTE, or ROUTE_TAIL_FRAMES past its last required one."""
-    return route.warm if route.warm is not None else max(route.required) + ROUTE_TAIL_FRAMES
+    """The manifest's warm= frame for ROUTE, or ROUTE_TAIL_FRAMES past its last required one.
+
+    parse_manifest only takes a warm= frame past the last required one, so it's never 0.
+    """
+    return route.warm or max(route.required) + ROUTE_TAIL_FRAMES
 
 
 def passes(routes: list[Route]) -> list[Pass]:
@@ -233,13 +237,19 @@ def stretches(log: str, seconds: float) -> list[float]:
     return [seconds - sum(spans), *spans]
 
 
-REPORT_HEADER = (f"{'pass':<28}{'frames':>7}{'s':>7}{'boot':>6}{'boot ms':>8}{'own':>5}{'+keys':>6}"
-                 f"{'+progs':>7}{'keys':>6}{'last':>7}{'start':>7}{'0-2k':>7}{'2k-3.4k':>8}{'rest':>7}")
-STRETCH_COLUMNS = (7, 7, 8, 7)  # the widths of start, 0-2k, 2k-3.4k and rest
+# The --report table's columns, each a label and a width. The last four are stretches' shares.
+REPORT_COLUMNS = (("pass", 28), ("frames", 7), ("s", 7), ("boot", 6), ("boot ms", 8), ("own", 5),
+                  ("+keys", 6), ("+progs", 7), ("keys", 6), ("last", 7),
+                  ("start", 7), ("0-2k", 7), ("2k-3.4k", 8), ("rest", 7))
 
 
-def stretch_cells(shares: list[float]) -> str:
-    return "".join(f"{s:>{w}.1f}" for s, w in zip(shares, STRETCH_COLUMNS))
+def report_line(cells: list[str]) -> str:
+    """CELLS under REPORT_COLUMNS, the first left-aligned and the rest right-aligned."""
+    (_, first), *rest = REPORT_COLUMNS
+    return f"{cells[0]:<{first}}" + "".join(f"{c:>{w}}" for c, (_, w) in zip(cells[1:], rest))
+
+
+REPORT_HEADER = report_line([label for label, _ in REPORT_COLUMNS])
 
 
 def write_report(directory: Path, plan: list[Pass], seconds: list[float], scratch: list[Path],
@@ -250,10 +260,10 @@ def write_report(directory: Path, plan: list[Pass], seconds: list[float], scratc
     programs the game built from the cache before its first frame and how long that took,
     the keys the pass built itself (own), and the keys and programs (distinct generated
     sources) it adds that START and the passes before it in the plan lack. Under
-    GCN_FRAMETIME=1 the last column is the frame the pass built its last program in, which is
-    the frame it had to reach, and the four after it split the pass's seconds (see stretches).
-    Without it those columns are 0. A closing "all" row adds up the frames, the seconds and
-    the four splits.
+    GCN_FRAMETIME=1 the "last" column is the frame the pass built its last program in, which
+    is the frame it had to reach, and the four after it split the pass's seconds (see
+    stretches). Without it those columns are 0. A closing "all" row adds up the frames, the
+    seconds and the four splits.
     """
     directory.mkdir(parents=True, exist_ok=True)
     keys: set[bytes] = set()
@@ -263,7 +273,7 @@ def write_report(directory: Path, plan: list[Pass], seconds: list[float], scratc
         keys, programs = set(held.keys), set(held.hashes)
     held_keys = set(keys)
     rows = [REPORT_HEADER]
-    totals = [0.0] * len(STRETCH_COLUMNS)
+    totals = [0.0] * (len(STRETCH_ENDS) + 2)
     for p, secs, d in zip(plan, seconds, scratch):
         log = (d / "stdout.txt").read_text(errors="replace")
         (directory / f"{p.name}.log").write_text(log)
@@ -279,11 +289,12 @@ def write_report(directory: Path, plan: list[Pass], seconds: list[float], scratc
             programs |= set(made.hashes)
         shares = stretches(log, secs)
         totals = [t + s for t, s in zip(totals, shares)]
-        rows.append(f"{p.name:<28}{p.exit_after:>7}{secs:>7.1f}{boot[1] if boot else 0:>6}"
-                    f"{boot[2] if boot else 0:>8}{own:>5}{new_keys:>6}{new_programs:>7}{len(keys):>6}"
-                    f"{last_compile_frame(log):>7}{stretch_cells(shares)}")
-    rows.append(f"{'all':<28}{sum(p.exit_after for p in plan):>7}{sum(seconds):>7.1f}"
-                f"{'-':>6}{'-':>8}{'-':>5}{'-':>6}{'-':>7}{'-':>6}{'-':>7}{stretch_cells(totals)}")
+        rows.append(report_line([p.name, str(p.exit_after), f"{secs:.1f}",
+                                 boot[1] if boot else "0", boot[2] if boot else "0", str(own),
+                                 str(new_keys), str(new_programs), str(len(keys)),
+                                 str(last_compile_frame(log)), *(f"{s:.1f}" for s in shares)]))
+    rows.append(report_line(["all", str(sum(p.exit_after for p in plan)), f"{sum(seconds):.1f}",
+                             *["-"] * 7, *(f"{t:.1f}" for t in totals)]))
     text = "\n".join(rows) + "\n"
     (directory / "report.txt").write_text(text)
     return text

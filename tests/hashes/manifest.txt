@@ -3,8 +3,13 @@
 # to. Seconds are wall-clock with --fast.
 #
 # warm=N has tools/warm_shaders.py play the route to frame N instead of 900 frames past its last
-# required frame. The Sky Sands pass also builds the programs Fantasy Meadows, Celestial Valley and
-# Beanstalk Park first draw past their own passes' ends.
+# required frame. N is a whole number past that frame, and a route has one at most.
+#
+# air-ride-race, air-ride-celestial-valley and air-ride-beanstalk-park get the programs they first
+# draw past their own passes' ends, at frames 5,649 to 12,068, from the air-ride-sky-sands pass,
+# which draws them by frame 14,186. Shortening, chaining or dropping that pass means running
+# the eight air-ride routes unpaced to frame 16,000 again, as the 16,000-frame row under "Longer
+# course passes" in docs/dev/status.md was.
 title          20 60 60,960
 menu           20 60 1200
 air-ride-race  30 60 4200,6000
