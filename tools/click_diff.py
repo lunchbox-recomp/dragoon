@@ -7,10 +7,11 @@ Usage: click_diff.py A B [--seconds S] [--list N] [--json]
 A and B are GCN_AIDWAV recordings (aid_blocks.py) of one route from unpaced runs of two builds.
 An unpaced run's game time doesn't follow the host's, so the two line up sample for sample and
 differ only where the builds made different sound. Both are cut to the shorter one, or to S
-seconds when both are that long. Clicks are found in each with audio_clicks.py's functions, and
-a click is shared when the other recording has one within 1 ms. It prints how many each has,
-how many only one has and the share of samples that are the same in both, then for each click
-only one has (the first N, 20 by default):
+seconds when both are that long, and with S only the first S seconds of each are read. Clicks
+are found in each with audio_clicks.py's functions, and a click is shared when the other
+recording has one within 1 ms. It prints how many each has, how many only one has and the share
+of samples that are the same in both, rounded down so that 100.0% means every sample, then for
+each click only one has (the first N, 20 by default):
 
   where    its time, the build that has it, its size in dB and its offset in its 160-sample
            block
@@ -113,7 +114,8 @@ def describe(i: int, build: str, db: float, a: Recording, b: Recording, diffs: l
 
 
 def diff(a_path: Path, b_path: Path, seconds: float | None = None) -> Diff:
-    a, b = cut(read_raw(a_path, RATE), read_raw(b_path, RATE), seconds, (a_path, b_path))
+    frames = None if seconds is None else round(seconds * RATE)  # all that's read, so a long run stays cheap
+    a, b = cut(read_raw(a_path, RATE, frames), read_raw(b_path, RATE, frames), seconds, (a_path, b_path))
     found = {}
     for name, rec in (("A", a), ("B", b)):
         found[name] = {round(c.at * RATE): c.db for c in analyse(rec, 0).clicks}
@@ -129,7 +131,8 @@ def diff(a_path: Path, b_path: Path, seconds: float | None = None) -> Diff:
 
 
 def print_diff(d: Diff, limit: int) -> None:
-    print(f"{d.seconds:.2f} s compared, {d.same_samples:.1%} of samples the same")
+    same = math.floor(d.same_samples * 1000) / 1000  # rounded down, so 100.0% means every sample
+    print(f"{d.seconds:.2f} s compared, {same:.1%} of samples the same")
     print(f"clicks   A {d.a_clicks}, B {d.b_clicks}, only A {d.only_a}, only B {d.only_b}")
     print(f"of those one-sided, the other build silent {d.other_silent}, the same edge in both "
           f"{d.same_edge}, B-A stepping at a join {d.join_steps}")

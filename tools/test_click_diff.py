@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from array import array
 from pathlib import Path
+from unittest import mock
 
 import click_diff
 from audio_clicks import Recording
@@ -88,6 +89,22 @@ class DiffTest(unittest.TestCase):
         self.assertEqual(self.diff(b, b, 0.8).b_clicks, 1)
         with self.assertRaisesRegex(ValueError, r"a.raw: 0.50 s recorded, short of 0.8 s"):
             self.diff(a, b, 0.8)
+
+    def test_the_seconds_given_are_all_that_is_read_of_each_recording(self):
+        a, b = tone(64000, RATE), tone(64000, RATE)
+        b[60000] += 5000  # past the 1.5 s compared, so it can't show
+        pa, pb = write_file(self.dir, "a.raw", pcm(a, a)), write_file(self.dir, "b.raw", pcm(b, b))
+        with mock.patch.object(click_diff, "read_raw", wraps=click_diff.read_raw) as read:
+            got = click_diff.diff(pa, pb, 1.5)
+        self.assertEqual([c.args[2] for c in read.call_args_list], [48000, 48000])
+        self.assertEqual((got.seconds, got.same_samples), (1.5, 1.0))
+
+    def test_the_whole_of_each_recording_is_read_when_no_seconds_are_given(self):
+        a = tone(64000, RATE)
+        pa, pb = write_file(self.dir, "a.raw", pcm(a, a)), write_file(self.dir, "b.raw", pcm(a, a))
+        with mock.patch.object(click_diff, "read_raw", wraps=click_diff.read_raw) as read:
+            click_diff.diff(pa, pb)
+        self.assertEqual([c.args[2] for c in read.call_args_list], [None, None])
 
     def test_a_sample_is_the_same_only_when_every_channel_is(self):
         # The right channel is one step off in the second half and the left is the same throughout.
@@ -176,6 +193,15 @@ class MainTest(unittest.TestCase):
         self.assertIn("clicks   A 0, B 1, only A 0, only B 1", out)
         self.assertIn("the other build silent 1", out)
         self.assertRegex(out, r"0\.500 s only B, .* A silent, B sounding, B-A steps at a join\n")
+
+    def test_the_share_of_samples_reads_100_only_when_every_sample_is_the_same(self):
+        for same, text in ((1.0, "100.0%"), (31999 / 32000, "99.9%"), (0.5, "50.0%"), (0.9996, "99.9%")):
+            with self.subTest(same=same):
+                shown = click_diff.Diff(1.0, 0, 0, 0, 0, same, 0, 0, 0, [])
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    click_diff.print_diff(shown, 20)
+                self.assertIn(f"1.00 s compared, {text} of samples the same\n", out.getvalue())
 
     def test_an_offset_of_one_sample_reads_in_the_singular(self):
         for offset, text in ((0, "0 samples into its block"), (1, "1 sample into its block"),
