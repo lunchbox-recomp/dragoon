@@ -126,6 +126,8 @@ sed -n -E 's/^\[ring\] cut .* frame ([0-9]+)$/\1/p' build/probe/title-cuts/stdou
 tools/audio_clicks.py build/probe/title-cuts/out.wav --marks build/probe/title-cuts/cuts.txt
 ```
 
+`analyse_long`, for other tools to call, works through a recording 30 seconds at a time instead of holding every sample's second difference at once, which for an hour of stereo is gigabytes. It finds what one pass would, and its tests check that.
+
 ## audio_scorecard.py
 
 How does each build's sound measure, route by route? It plays every route in `tests/hashes/manifest.txt` on one or more Dragoon builds and counts clicks, gaps and clipping at two stages, with nobody listening. Each build is a clone's `build/` directory with a label. A route plays on each build in turn before the next route starts, through that clone's own probe.sh, hidden, with SDL's dummy audio driver and `GCN_AXSTATS=1`. It plays twice on each build, once `--real-time` and once unpaced. The route files come from this clone, so every build plays the same presses.
