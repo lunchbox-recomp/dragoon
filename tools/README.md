@@ -12,7 +12,7 @@ Every tool takes `--help`, which prints its usage and what it reads. Results go 
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py and ax_stats.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py, ax_stats.py and session_report.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -29,6 +29,29 @@ tools/probe.sh demo 20 tests/routes/title.txt 60 GCN_FRAMETIME=1
 ```
 
 That prints the run's directory as an absolute path, then a frame count (140 on an M4 Max). It exits 2 when the game isn't built. Run it again with a different NAME to get a second run to compare. Runs pile up in `build/probe/`, and prune_runs.py clears the old ones.
+
+## session_report.py
+
+What did the sound and the pacing do in a playtest, and which stage made each click? It reads a session's directory and nothing else, so nobody has to listen.
+
+```
+tools/session_report.py build/playtest/20261022-161851
+```
+
+It prints these:
+
+- the session's length, start, host and display, with the engine commit it ran on
+- the sound device's driver, rate, channels and buffer, then each late callback, each stretch of pulls the ring couldn't fill and each ring cut, with its time
+- clicks, gaps and clipped runs a minute in `out.wav` (the device stage) and in `aid.raw` (the mixer stage), through audio_clicks.py
+- each device-stage click put down to a stage
+- the frame pacing from frame 300 through frametime.py, with the frames over 33 ms
+- the shaders compiled while it ran, and every panic, `FATAL` or `FAULT` line
+
+A click is the mixer's when `aid.raw` clicks within 2 ms of the moment that output frame was made from. The `[audio] output frame F plays DMA frame D` lines find that moment to within about 1.3 ms. Otherwise it's the ring's when the ring cut, or a stretch of pulls it couldn't fill began or ended, within 5 ms of it. Failing that it's the device's when a callback came late within 5 ms, and if nothing explains it, it's unexplained. Music streamed from the disc is mixed in after the ring, so a click in that music is unexplained. So is a sharp onset that the click finder flags in the 48 kHz device stage and not in the 32 kHz mixer stage. A late callback can starve the device without a mark in `out.wav`, which holds what was handed over and not when, so the late callbacks are listed on their own too.
+
+`--system-log` also counts the Core Audio overloads macOS logged from the session's start to 5 s past the end of `out.wav`. Core Audio logs one when an IO cycle misses its deadline. It runs `/usr/bin/log show --style compact` over that window with the predicate `subsystem == "com.apple.coreaudio" AND eventMessage CONTAINS[c] "overload"`, which only reads the log. It counts the lines from that subsystem whose message holds the word in any letter case, by process. The unified log doesn't keep messages long, so an old session's window can come back empty.
+
+`--json` prints the whole result, and `--list N` caps the times printed for each list (default 10). A run-N directory, made when the game reset the console, reads its own part of the session's `stdout.txt`. A file that's missing or empty leaves its sections out and is named on stderr. It exits 2 only when the directory has no readable `session.json`.
 
 ## frametime.py
 
@@ -241,6 +264,22 @@ What happens to a probe run and its directory? It holds `remove_run`, which dele
 ## aid_blocks.py
 
 What does `GCN_AIDWAV` write? It holds the DMA's rate, its 160-sample block and the reader for the block log beside each recording, for block_clicks.py, click_diff.py, noise_blocks.py and scorecard_measure.py. It has no command line.
+
+## session_log.py
+
+What does a session's log say about its sound device, its ring and its crashes? It reads the `[audio]`, `[ring]`, `[shaders]` and `[session]` lines of a session's `stdout.txt`, with its panic, `FATAL` and `FAULT` lines, for session_report.py. It splits the log at its `[session]` lines, so a run-N directory gets its own part. It has no command line.
+
+## click_stages.py
+
+Which stage made each click the sound device got? It puts each device-stage click down to the mixer, the ring, the device or nothing, by the rules under session_report.py. It has no command line.
+
+## core_audio_log.py
+
+How many Core Audio overloads did macOS log while a session ran? It builds the read-only `log show` command and counts the matching lines by process. Its tests read lines captured from a Mac's log, with overload lines written in their layout, never live output. It has no command line.
+
+## session_text.py
+
+How does session_report.py's result read as text? It has no command line.
 
 ## check_no_game_data.py
 
