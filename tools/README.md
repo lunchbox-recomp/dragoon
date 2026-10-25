@@ -319,7 +319,7 @@ It writes nothing and exits 2 when:
 
 `--repo` names a checkout other than the one holding the tool. A missing OUT is made. git comes from `PATH` and tar is `/usr/bin/tar`.
 
-Its `src_digest` is the SHA-256 of `src/`'s lines in a `source-manifest.txt`, and it comes out the same from a checkout or a snapshot. engine_kit.py writes it to the kit, and launcher_build.py checks it.
+Its `src_digest` is the SHA-256 of `src/`'s lines in a `source-manifest.txt`. It comes out the same from a snapshot and from a clean checkout of its commit, one with nothing untracked, ignored or changed in `src/`. engine_kit.py writes it to the kit, and launcher_build.py checks it.
 
 ## launcher_build.py
 
@@ -357,6 +357,8 @@ A first build on an M4 Max, with the Command Line Tools' make 3.81, clang 21 and
 What does a player's Mac need to build the game without CMake, Ninja or SDL's source? engine_kit.py packs it from a build configured with no disc and a deployment target, once `runtime_check` and `SDL3-static` are built. The kit holds `engine.o` (runtime_check's objects joined by `ld -r`, so the link takes all of them), `libSDL3.a`, `recomp.h` and `compat.h`, `kit.mk`, the Makefile from `launcher/kit/` and the licenses of gcn-recomp, SDL and the hidapi inside SDL. `kit.mk` takes `GAME_CFLAGS` from the `game_cflags.txt` gcn-recomp's configure wrote to the build directory, `LINK_FLAGS` from its `game_ldflags.txt` and `GAME_LIBS`, the frameworks and libraries, from its `game_libs.txt`. It also holds `MACOSX_MIN`, the build's deployment target. Its `ENGINE_COMMIT` is the gcn-recomp commit in the `gcn_engine_sha.h` that runtime_check was compiled with. So every flag and framework the game gets comes from CMake, and launcher_build.py can tell which snapshots the kit builds.
 
 runtime_check compiles Dragoon's `src/` too, so `engine.o` has the hooks the generated C calls, and the player's Mac never compiles `src/`. The kit's `SRC_SHA256` is export_source.py's `src_digest` of the build's `src/`. launcher_build.py pairs a kit with a snapshot by both `ENGINE_COMMIT` and `SRC_SHA256`.
+
+That digest names what `engine.o` holds only when `src/` is a clean checkout that runtime_check compiled. So engine_kit.py refuses a `src/` where `git status --ignored` shows anything, and one with a file newer than runtime_check's objects of `src/`.
 
 ```
 cmake -S . -B build-kit -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DGAME_ISO=

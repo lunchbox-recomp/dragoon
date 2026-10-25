@@ -16,7 +16,11 @@ game besides Apple's Command Line Tools and the recompiler's inputs. OUT gets:
               CMAKE_OSX_DEPLOYMENT_TARGET; ENGINE_COMMIT, the gcn-recomp commit in the
               gcn_engine_sha.h runtime_check was compiled with; and SRC_SHA256, the
               src_digest export_source.py gives the build's src/, which runtime_check
-              compiles too. launcher_build.py checks both against the source snapshot's
+              compiles too. launcher_build.py checks both against the source snapshot's.
+              The digest matches a snapshot's only from a clean checkout, so a src/ with
+              anything untracked, ignored or changed is refused (by `git status`, with git
+              from PATH), and so is one with a file newer than runtime_check's objects of
+              src/
   Makefile    launcher/kit/Makefile, which compiles gen/*.c and links the game
   licenses/   gcn-recomp's, SDL's and that of the hidapi inside SDL
 `ld -r` turns the objects' DWARF into a debug map naming the build's own .o files, which a
@@ -47,6 +51,10 @@ ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE = ROOT / "launcher" / "kit" / "Makefile"
 HEADERS = ("recomp.h", "compat.h")
 OBJECT_LINE = re.compile(r"^build (CMakeFiles/runtime_check\.dir/\S+\.o): ", re.M)
+# The same lines with the source each object is compiled from, after the rule's name. Ninja
+# writes a space, a colon or a dollar sign in a path with a dollar sign before it.
+SOURCE_LINE = re.compile(r"^build (CMakeFiles/runtime_check\.dir/\S+\.o): \S+ ((?:\$.|\S)+)", re.M)
+NINJA_ESCAPE = re.compile(r"\$(.)")
 CACHE_LINE = re.compile(r"([A-Za-z0-9_.+-]+):[A-Z]+=(.*)")
 VERSION = re.compile(r"\d+(\.\d+)*")
 # What gcn-recomp's gcn_engine_sha target writes for runtime_check, and the commit a kit names.
@@ -122,6 +130,30 @@ def engine_objects(build: Path) -> list[Path]:
     return objects
 
 
+def check_src(build: Path, dragoon: Path) -> None:
+    """Refuses a src/ under DRAGOON other than the one runtime_check compiled from a commit,
+    so that its digest names what engine.o holds."""
+    src = dragoon / "src"
+    done = subprocess.run(["git", "-C", str(dragoon), "status", "--porcelain", "--ignored", "--", "src"],
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        raise KitError(f"git can't say whether {src} is clean: {done.stderr.strip()}")
+    if done.stdout:
+        line = done.stdout.splitlines()[0]
+        raise KitError(f"git status shows {line!r} in {src}: make the kit from a clean checkout, with"
+                       " nothing untracked, ignored or changed in src/")
+    ninja = (build / "build.ninja").read_text()
+    objects = [build / name for name, source in SOURCE_LINE.findall(ninja)
+               if (build / NINJA_ESCAPE.sub(r"\1", source)).is_relative_to(src)]
+    if not objects:
+        raise KitError(f"runtime_check compiles nothing in {src}, so engine.o would have no hooks")
+    built = min(o.stat().st_mtime_ns for o in objects)
+    newer = sorted(p for p in src.rglob("*") if p.is_file() and p.stat().st_mtime_ns > built)
+    if newer:
+        raise KitError(f"{newer[0]} is newer than runtime_check's objects of src/: build runtime_check"
+                       " again")
+
+
 def engine_commit(build: Path) -> str:
     """The gcn-recomp commit runtime_check was compiled with, which has to be a clean one."""
     path = build / ENGINE_SHA
@@ -174,6 +206,7 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
     for src in copies:
         if not src.is_file():
             raise KitError(f"{src} is missing")
+    check_src(build, dragoon_src)
     src_sha = export_source.src_digest(dragoon_src)
 
     tmp = Path(tempfile.mkdtemp(prefix=f".{out.name}.", dir=out.parent))

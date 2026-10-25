@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import stat
 import subprocess
 import sys
@@ -12,11 +13,12 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import engine_kit
 import export_source
 import launcher_build
-from testutil import archive, compile_c, run_main, write_file
+from testutil import GIT_ENV, archive, commit, compile_c, run_main, write_file
 
 NM = "/usr/bin/nm"
 MAKE = "/usr/bin/make"
@@ -26,21 +28,26 @@ LDFLAGS = "-O2 -g -DNDEBUG -Wl,-search_paths_first -Wl,-headerpad_max_install_na
 LIBS = "-framework OpenGL -lm -Xlinker -weak_framework -Xlinker CoreHaptics -lpthread"
 SDK = "/Applications/Xcode 26.5.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 RUNTIME = "CMakeFiles/runtime_check.dir/gcn-recomp/runtime"
+SRC_OBJECT = "CMakeFiles/runtime_check.dir/src/hooks.cpp.o"
 ENGINE = "5ca1ab1e" * 5
 NINJA = f"""build {RUNTIME}/a.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo a.cpp
   FLAGS = -O2 -g
 build {RUNTIME}/hw/b.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo b.cpp
 build CMakeFiles/gcn_core.dir/gcn-recomp/runtime/a.cpp.o: CXX_COMPILER__gcn_core a.cpp
 """
+# The Dragoon checkout the build was configured from. Ninja writes the space in its path as "$ ".
+CHECKOUT = "dragoon checkout"
 
 
 def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
-    """A no-disc build as CMake and Ninja leave it, runtime_check's two objects compiled from
-    one-line C with debug info, beside the Dragoon, gcn-recomp and SDL sources its cache names."""
-    build, dragoon, engine, sdl = root / "build", root / "dragoon", root / "gcn-recomp", root / "sdl"
+    """A no-disc build as CMake and Ninja leave it, runtime_check's three objects compiled from
+    one-line C with debug info, beside the Dragoon, gcn-recomp and SDL sources its cache names.
+    The Dragoon checkout is a git repository with src/ committed and older than the objects."""
+    build, dragoon, engine, sdl = root / "build", root / CHECKOUT, root / "gcn-recomp", root / "sdl"
     sdl_build = build / "_deps" / "sdl3-build"
-    for path, text in {dragoon / "src" / "hooks.cpp": "// hooks\n",
-                       engine / "LICENSE": "MIT gcn-recomp\n",
+    if not (dragoon / ".git").exists():
+        commit(dragoon, {"src/hooks.cpp": "int hook(void);\n"})
+    for path, text in {engine / "LICENSE": "MIT gcn-recomp\n",
                        engine / "runtime" / "recomp.h": "/* recomp */\n",
                        engine / "runtime" / "compat.h": "/* compat */\n",
                        sdl / "LICENSE.txt": "zlib SDL\n",
@@ -49,13 +56,16 @@ def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
         path.write_text(text)
     compile_c("int engine_a(int x) { return x + 1; }\n", build / RUNTIME / "a.cpp.o")
     compile_c("int engine_b(int x) { return x * 2; }\n", build / RUNTIME / "hw" / "b.cpp.o")
+    compile_c("int hook(void) { return 0; }\n", build / SRC_OBJECT)
     archive(sdl_build / "libSDL3.a", compile_c("int SDL_Fake(void) { return 3; }\n", sdl_build / "fake.o"))
     write_file(build, "CMakeCache.txt",
                f"GAME_ISO:FILEPATH={disc}\nCMAKE_OSX_DEPLOYMENT_TARGET:STRING={target}\n"
                f"dragoon_SOURCE_DIR:STATIC={dragoon}\n"
                f"gcn_recomp_SOURCE_DIR:STATIC={engine}\nSDL3_SOURCE_DIR:STATIC={sdl}\n"
                f"SDL3_BINARY_DIR:STATIC={sdl_build}\n")
-    write_file(build, "build.ninja", NINJA)
+    hooks = str(dragoon / "src" / "hooks.cpp").replace(" ", "$ ")
+    write_file(build, "build.ninja",
+               NINJA + f"build {SRC_OBJECT}: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo {hooks}\n")
     write_file(build, "game_cflags.txt", FLAGS + "\n")
     write_file(build, "game_ldflags.txt", LDFLAGS + "\n")
     write_file(build, "game_libs.txt", LIBS + "\n")
@@ -75,6 +85,10 @@ class EngineKitTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name).resolve()
         self.out = self.root / "the kit"
+        # engine_kit.py's git status, like the fixture's commit, reads none of the user's config.
+        patch = mock.patch.dict(os.environ, GIT_ENV)
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def kit(self, build: Path, *extra: str) -> tuple[int, str, str]:
         return run_main(engine_kit.main, "--build", str(build), "--out", str(self.out), *extra)
@@ -83,7 +97,7 @@ class EngineKitTest(unittest.TestCase):
         code, _, err = self.kit(build)
         self.assertEqual(code, 2)
         self.assertIn(message, err)
-        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["build", "dragoon", "gcn-recomp", "sdl"])
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["build", CHECKOUT, "gcn-recomp", "sdl"])
 
     def test_kit_holds_the_engine_sdl_headers_flags_makefile_and_licenses(self) -> None:
         build = fake_build(self.root)
@@ -93,7 +107,7 @@ class EngineKitTest(unittest.TestCase):
         defined = subprocess.run([NM, "-g", "--defined-only", str(self.out / "engine.o")],
                                  capture_output=True, text=True, check=True).stdout
         self.assertEqual(sorted(line.split()[-1] for line in defined.splitlines()),
-                         ["_engine_a", "_engine_b"])
+                         ["_engine_a", "_engine_b", "_hook"])
         copies = {"libSDL3.a": build / "_deps/sdl3-build/libSDL3.a",
                   "Makefile": engine_kit.MAKEFILE,
                   "include/recomp.h": self.root / "gcn-recomp/runtime/recomp.h",
@@ -104,7 +118,7 @@ class EngineKitTest(unittest.TestCase):
         for rel, src in copies.items():
             self.assertEqual((self.out / rel).read_bytes(), src.read_bytes(), rel)
         mk = (self.out / "kit.mk").read_text().splitlines()
-        src_sha = export_source.src_digest(self.root / "dragoon")
+        src_sha = export_source.src_digest(self.root / CHECKOUT)
         self.assertEqual(mk[-6:], [f"GAME_CFLAGS := {FLAGS}", f"LINK_FLAGS := {LDFLAGS}",
                                    f"GAME_LIBS := {LIBS}", "MACOSX_MIN := 14.0", f"ENGINE_COMMIT := {ENGINE}",
                                    f"SRC_SHA256 := {src_sha}"])
@@ -114,11 +128,44 @@ class EngineKitTest(unittest.TestCase):
 
     def test_the_recipe_takes_the_kit_for_its_own_gcn_recomp_commit_and_src_only(self) -> None:
         self.assertEqual(self.kit(fake_build(self.root))[0], 0)
-        source = self.root / "dragoon"
+        source = self.root / CHECKOUT
         self.assertIsNone(launcher_build.kit_problem(self.out, ENGINE, source))
         self.assertIn(f"the kit is from gcn-recomp {ENGINE}", launcher_build.kit_problem(self.out, "f" * 40, source))
         write_file(source / "src", "hooks.cpp", "// other hooks\n")
         self.assertIn("the kit's src/ has SHA-256", launcher_build.kit_problem(self.out, ENGINE, source))
+
+    def test_refuses_a_src_git_doesnt_call_clean(self) -> None:
+        build = fake_build(self.root)
+        dragoon = self.root / CHECKOUT
+        commit(dragoon, {".gitignore": "*.orig\n"})
+        src = dragoon / "src"
+        for name, path in (("untracked", src / "new.cpp"), ("ignored", src / "hooks.cpp.orig"),
+                           ("changed", src / "hooks.cpp")):
+            with self.subTest(name):
+                kept = path.read_text() if path.exists() else None
+                path.write_text("int hook(void) { return 1; }\n")
+                self.assert_refused(build, f"src/{path.name}' in {src}: make the kit from a clean checkout")
+                if kept is None:
+                    path.unlink()
+                else:
+                    path.write_text(kept)
+
+    def test_refuses_a_src_newer_than_runtime_checks_objects(self) -> None:
+        build = fake_build(self.root)
+        hooks = self.root / CHECKOUT / "src" / "hooks.cpp"
+        later = (build / SRC_OBJECT).stat().st_mtime + 10
+        os.utime(hooks, (later, later))
+        self.assert_refused(build, f"{hooks} is newer than runtime_check's objects of src/")
+
+    def test_refuses_a_runtime_check_that_compiles_nothing_in_src(self) -> None:
+        build = fake_build(self.root)
+        write_file(build, "build.ninja", NINJA)
+        self.assert_refused(build, "runtime_check compiles nothing in")
+
+    def test_refuses_a_src_outside_a_git_checkout(self) -> None:
+        build = fake_build(self.root)
+        shutil.rmtree(self.root / CHECKOUT / ".git")
+        self.assert_refused(build, "git can't say whether")
 
     def test_refuses_a_build_without_a_clean_gcn_recomp_commit(self) -> None:
         for sha in ("", ENGINE + "-dirty", ENGINE[:12]):
@@ -200,7 +247,7 @@ class EngineKitTest(unittest.TestCase):
     def test_refuses_runtime_check_unbuilt(self) -> None:
         build = fake_build(self.root)
         (build / RUNTIME / "hw" / "b.cpp.o").unlink()
-        self.assert_refused(build, "1 of 2 objects are missing")
+        self.assert_refused(build, "1 of 3 objects are missing")
 
     def test_refuses_an_out_that_exists(self) -> None:
         build = fake_build(self.root)
@@ -215,7 +262,7 @@ class EngineKitTest(unittest.TestCase):
         code, _, err = self.kit(build, "--ld", "/usr/bin/false")
         self.assertEqual(code, 1)
         self.assertIn("false exited 1", err)
-        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["build", "dragoon", "gcn-recomp", "sdl"])
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["build", CHECKOUT, "gcn-recomp", "sdl"])
 
 
 # Stands in for clang and clang++: records its arguments, then writes its -o.
