@@ -10,6 +10,7 @@ from pathlib import Path
 import audio_clicks
 import core_audio_log
 import session_report
+import session_text
 from testutil import pcm, run_main, tone, write_file, write_wav
 
 OUT, DMA = 48000, 32000
@@ -189,6 +190,35 @@ class ReportTest(Session):
         self.dir = run2.parent
         _, r, _ = self.report()
         self.assertTrue(r["session"]["reset"])
+
+    def test_the_run_after_a_reset_is_named_from_this_one(self):
+        reset = "[reset] the game reset the console (hot reset, code 0)\n"
+        write_file(self.dir, "stdout.txt", LOG + reset + "[session] x/run-2\n" + reset)
+        _, r, _ = self.report()
+        self.assertEqual(r["session"]["next_run"], "run-2")
+        run2 = make_session(self.dir / "run-2")
+        (run2 / "stdout.txt").unlink()
+        self.dir = run2
+        _, r, _ = self.report()
+        self.assertEqual(r["session"]["next_run"], "run-3")
+
+    def test_a_shutdown_ends_the_run_with_none_after_it(self):
+        write_file(self.dir, "stdout.txt", LOG + "[reset] the game reset the console (shutdown, code 0)\n")
+        _, r, _ = self.report()
+        self.assertEqual((r["session"]["reset"], r["session"]["next_run"]), (True, None))
+        _, out, _ = run_main(lambda argv: session_report.main(argv, Fake()), str(self.dir))
+        self.assertIn("the game shut the console down, which ended this run", out)
+        self.assertNotIn("the next is in", out)
+
+    def test_the_text_names_the_run_a_reset_goes_on_in(self):
+        write_file(self.dir, "stdout.txt", LOG + "[reset] the game reset the console (restart, code 0)\n")
+        _, out, _ = run_main(lambda argv: session_report.main(argv, Fake()), str(self.dir))
+        self.assertIn("the game reset the console, which ended this run, and the next is in run-2/", out)
+
+    def test_a_length_just_under_a_minute_boundary_rounds_before_it_is_split(self):
+        info = {"dir": "d", "seconds": 119.6, "start": None, "host": None, "engine_sha": None, "missing": [],
+                "reset": False, "next_run": None}
+        self.assertIn("  length  119.6 s (2 min 0 s), started None", session_text.session(info))
 
 
 class SystemLogTest(Session):

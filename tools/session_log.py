@@ -23,6 +23,7 @@ BACKGROUND = re.compile(r"^\[shaders\] built program \d+ in the background in ([
 FATAL = re.compile(r"^(FATAL|FAULT):")
 SESSION = re.compile(r"^\[session\] (?!can't write )(.+)$")  # a process's directory, not a write that failed
 RESET = re.compile(r"^\[reset\] ")
+SHUTDOWN = "(shutdown,"
 RUN_DIR = re.compile(r"run-(\d+)")
 
 
@@ -54,6 +55,7 @@ class SessionLog:
     background_ms: list[float] = field(default_factory=list)  # shaders built off the render thread
     fatal: list[str] = field(default_factory=list)
     reset: bool = False  # the game reset the console, which ends this run
+    relaunched: bool = False  # and the frontend started the game again, in the next run directory
 
 
 def runs(lines: list[str]) -> list[list[str]]:
@@ -93,6 +95,7 @@ def parse(lines: list[str]) -> SessionLog:
             log.fatal.append(line)
         elif RESET.match(line):
             log.reset = True
+            log.relaunched = SHUTDOWN not in line  # the one kind the frontend doesn't start again
     return log
 
 

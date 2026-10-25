@@ -19,16 +19,18 @@ def _stats(name: str, s: dict, over: int) -> str:
 def session(s: dict) -> list[str]:
     lines = [f"session  {s['dir']}"]
     if s["seconds"] is not None:
-        minutes, secs = divmod(s["seconds"], 60)
-        lines.append(f"  length  {s['seconds']:.1f} s ({int(minutes)} min {secs:.0f} s), started {s['start']}")
+        minutes, secs = divmod(round(s["seconds"]), 60)
+        lines.append(f"  length  {s['seconds']:.1f} s ({minutes} min {secs} s), started {s['start']}")
     host = s["host"] or {}
     display = f"a {host['refresh_hz']:g} Hz display" if host.get("refresh_hz") else "display rate unknown"
     lines.append(f"  host    {host.get('os') or 'OS unknown'}, {host.get('cpu') or 'CPU unknown'}, {display}")
     lines.append(f"  engine  {s['engine_sha'] or 'unknown'}")
     if s["missing"]:
         lines.append(f"  missing or empty  {', '.join(s['missing'])}")
-    if s["reset"]:
-        lines.append("  the game reset the console, which ended this run, and the next is in run-2/")
+    if s["next_run"]:
+        lines.append(f"  the game reset the console, which ended this run, and the next is in {s['next_run']}/")
+    elif s["reset"]:
+        lines.append("  the game shut the console down, which ended this run")
     return lines
 
 

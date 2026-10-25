@@ -111,6 +111,12 @@ def system_log(start_epoch: int, seconds: float, run=subprocess.run) -> dict:
     return {**result, "overloads": sum(found.values()), "by_process": dict(found)}
 
 
+def next_run(directory: Path) -> str:
+    """The run directory a game that reset the console and relaunched goes on in."""
+    m = session_log.RUN_DIR.fullmatch(directory.name)
+    return f"run-{int(m[1]) + 1 if m else 2}"
+
+
 def build(directory: Path, with_system_log: bool, run=subprocess.run) -> dict:
     """Everything the report says, as one dict."""
     info = read_session(directory)
@@ -129,7 +135,8 @@ def build(directory: Path, with_system_log: bool, run=subprocess.run) -> dict:
         "session": {"dir": str(directory), "seconds": seconds, "start": info.get("start"),
                     "host": info.get("host"), "engine_sha": info.get("engine_sha"),
                     "command_line": info.get("command_line"), "log": str(log_path) if log_path else None,
-                    "reset": log.reset, "missing": missing},
+                    "reset": log.reset, "next_run": next_run(directory) if log.relaunched else None,
+                    "missing": missing},
         "device": {"device": device, "callbacks": asdict(log.callbacks) if log.callbacks else None,
                    "late": [{"at": f / out_rate, "gap_ms": g} for f, g in log.late],
                    "short_pulls": len(log.underruns),
