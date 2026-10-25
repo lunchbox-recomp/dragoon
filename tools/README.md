@@ -59,7 +59,7 @@ Which cameras does a frame draw through, and what aspect does each hold? It read
 `aspects` lists each perspective camera's stored aspect from one frame to another, with the frames it held it. It exits 1 when one changed within its viewport, which is how a widening that compounds frame on frame would show.
 
 ```
-tools/probe.sh race 25 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
+tools/probe.sh race 30 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
 tools/drawlog.py cameras build/probe/race/stdout.txt --frame 4200 --symbols analysis/symbols.txt
 tools/drawlog.py aspects build/probe/race/stdout.txt --from 3600 --to 4199
 ```
