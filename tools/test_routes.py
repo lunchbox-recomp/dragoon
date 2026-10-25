@@ -96,14 +96,15 @@ def press_frame(press: str) -> int:
 class RealManifestTest(unittest.TestCase):
     """tests/hashes/manifest.txt itself."""
 
-    # The last frame each route compiled a program in, played unpaced to frame 16,000 from a
-    # warm-up whose passes stopped 900 frames past their last required frames. Sky Sands draws the
-    # late programs of air-ride-race, air-ride-celestial-valley and air-ride-beanstalk-park by its
-    # own last one. docs/dev/status.md has the runs, under "Longer course passes". Checker Knights
-    # compiled none there. Its frame is the last compile of its own pass from an empty cache, since
-    # raced after Magma Flows it missed three programs ("Chained course passes").
+    # The last frame each route compiled a program in. Sky Sands and Magma Flows did at these when
+    # played unpaced to frame 16,000 from a warm-up whose passes stopped 900 frames past their last
+    # required frames, and Sky Sands draws the late programs of air-ride-race,
+    # air-ride-celestial-valley and air-ride-beanstalk-park by its own last one. docs/dev/status.md
+    # has the runs, under "Longer course passes". Frozen Hillside's and Checker Knights' frames are
+    # the last compiles of their own passes from an empty cache, since raced after another course
+    # each missed programs ("Chained course passes").
     LAST_COMPILE = {"air-ride-sky-sands": 14186, "air-ride-magma-flows": 12525,
-                    "air-ride-frozen-hillside": 5752, "air-ride-checker-knights": 5005}
+                    "air-ride-frozen-hillside": 5835, "air-ride-checker-knights": 5005}
 
     def setUp(self):
         self.routes = routes.parse_manifest(routes.MANIFEST.read_text())
@@ -127,6 +128,14 @@ class RealManifestTest(unittest.TestCase):
                 self.assertEqual(played[:len(own)], own)
                 self.assertEqual([p for p in played[len(own):] if press_frame(p) <= frame], [])
                 self.assertGreater(warm_shaders.pass_frames(source), frame)
+
+    def test_a_route_and_the_pass_that_plays_it_have_as_many_pads(self):
+        # A pass with another number of pads plays other menus, as the four-player routes show.
+        for r in self.routes:
+            if r.warm_from is not None:
+                with self.subTest(route=r.name):
+                    self.assertEqual(warm_shaders.route_pads(self.by_name[r.warm_from]),
+                                     warm_shaders.route_pads(r))
 
 
 class SelectRoutesTest(unittest.TestCase):
