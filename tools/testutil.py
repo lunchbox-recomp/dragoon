@@ -5,6 +5,7 @@ import contextlib
 import io
 import math
 import os
+import random
 import subprocess
 import sys
 import wave
@@ -63,6 +64,12 @@ def archive(out: Path, *objects: Path) -> Path:
 def tone(n: int, rate: int, freq: float = 440, amp: float = 20000) -> list[int]:
     """N samples of a sine at RATE Hz."""
     return [round(amp * math.sin(2 * math.pi * freq * i / rate)) for i in range(n)]
+
+
+def noise(n: int, amp: int, seed: int) -> list[int]:
+    """N samples of white noise between -AMP and AMP."""
+    r = random.Random(seed)
+    return [r.randint(-amp, amp) for _ in range(n)]
 
 
 def spliced(x: list[int], *cuts: int, skip: int = 37) -> list[int]:

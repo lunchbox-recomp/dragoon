@@ -1,5 +1,4 @@
 import json
-import random
 import tempfile
 import unittest
 from array import array
@@ -8,12 +7,7 @@ from pathlib import Path
 import noise_blocks
 from audio_clicks import Recording
 from aid_blocks import RATE
-from testutil import pcm, run_main, tone, write_file
-
-
-def noise(n: int, amp: int, seed: int) -> list[int]:
-    r = random.Random(seed)
-    return [r.randint(-amp, amp) for _ in range(n)]
+from testutil import noise, pcm, run_main, tone, write_file
 
 
 def interpolated(x: list[int], rate: int) -> list[int]:
