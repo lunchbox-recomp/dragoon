@@ -88,9 +88,9 @@ def find(rec: Recording) -> Noise:
 
 def find_source(src: Source, part_blocks: int = PART_BLOCKS) -> Noise:
     """What find(the recording) finds, read part_blocks blocks at a time, so what it holds is
-    about one part and not the recording. A part is whole blocks, so none straddles an edge, and
-    the blocks found are numbered from the start of the recording, so a stretch that crosses an
-    edge joins as it does in one pass."""
+    about one part and not the recording. A part is whole blocks, so none straddles an edge. The
+    blocks found are numbered from the start of the recording, so a stretch that crosses an edge
+    joins as it does in one pass."""
     blocks = src.frames // BLOCK
     found: list[int] = []
     for first in range(0, blocks, part_blocks):

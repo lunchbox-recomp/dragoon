@@ -81,8 +81,7 @@ def stage_sound(path: Path, raw_rate: int | None) -> audio_clicks.Report | None:
 
 def stage_noise(path: Path) -> noise_blocks.Noise | None:
     """The noise-like stretches of aid.raw, or None when it's missing or has no samples. It
-    reads the DMA's 32 kHz as noise_blocks does, a part at a time as the click stage does, and
-    is never given out.wav."""
+    reads the DMA's 32 kHz a part at a time, as the click stage does. It's never given out.wav."""
     if not path.is_file():
         return None
     try:

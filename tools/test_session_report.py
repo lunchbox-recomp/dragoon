@@ -244,7 +244,7 @@ def noisy_mixer() -> list[int]:
 
 
 def section(out: str, name: str) -> list[str]:
-    """The report's lines for one section: its first line and the indented ones after it."""
+    """One section's first line and the indented lines after it."""
     lines = out.splitlines()
     start = next(i for i, line in enumerate(lines) if line.startswith(name))
     end = next((i for i in range(start + 1, len(lines)) if not lines[i].startswith(" ")), len(lines))
