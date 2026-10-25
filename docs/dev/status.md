@@ -729,7 +729,9 @@ and 1,500). Frame 1,200 hashes to `ba0a9f9b` on all nine, as it does on the menu
 
 ## gcn-recomp `dac449e`
 
-The pin moved from `3a8d154` to `dac449e`, 27 commits. They write the memory card after a quiet second and not after each page. They also sleep two thirds of each pacer wait and spin the last 100 us, with the guest and front end threads at user-interactive QoS, remember which gamepad was on each port in `saves/ports.txt` and hold DVD streamed music through a pause.
+The pin moved from `3a8d154` to `dac449e`, 27 commits. They write the memory card after a quiet second and not after each page. They also remember which gamepad was on each port in `saves/ports.txt`.
+
+The pacer sleeps two thirds of each wait and spins the last 100 us, with the guest threads at user-interactive QoS on Apple platforms. DVD streamed music is held through a pause.
 
 Built on Dragoon `4602fa1` with the pin moved to `dac449e`, the game ran `tools/frame_hashes.py check` and `tools/audio_hashes.py check` against the goldens on `main`. Every route matched, all 1,297 frames and all 42 audio rows, so no golden was recorded. The frame check took about 10 min 10 s and the audio check about 10 min 40 s.
 
