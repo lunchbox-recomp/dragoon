@@ -27,7 +27,7 @@ class ManifestTest(unittest.TestCase):
         return str(caught.exception)
 
     def test_a_warm_frame_that_isnt_plain_ascii_digits_is_refused(self):
-        for value in ("", "abc", "-5", "0", "+7000", "1_000", "７０００", "07000"):
+        for value in ("", "abc", "-5", "0", "+7000", "7_000", "７０００", "7０００", "07000", "7000x"):
             with self.subTest(value=value):
                 self.assertIn(f"warm={value} isn't a whole frame number", self.refused(f"warm={value}"))
 

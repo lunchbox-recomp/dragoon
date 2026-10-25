@@ -629,8 +629,8 @@ class WriteReportTest(unittest.TestCase):
 
     def test_every_line_lines_up_under_the_header(self):
         lines = self.report([1.0, 2.5])
-        self.assertEqual(lines[0].split(), ["pass", "frames", "s", "boot", "boot", "ms", "own", "+keys",
-                                            "+progs", "keys", "last", "start", "0-2k", "2k-3.4k", "rest"])
+        self.assertEqual(lines[0], "pass" + " " * 24 + " frames      s  boot boot ms  own +keys +progs"
+                                   "  keys   last  start   0-2k 2k-3.4k   rest")
         self.assertEqual({len(line) for line in lines}, {len(lines[0])})
 
     def test_the_table_has_a_column_for_each_share_a_pass_s_seconds_split_into(self):
