@@ -325,16 +325,34 @@ class AnalyseFileTest(unittest.TestCase):
         self.assertGreater(len(asked), 10)
 
     def test_refuses_what_it_cannot_read_as_read_wav_and_read_raw_do(self):
-        short = write_wav(self.dir, "short.wav", [1, 2, 3, 4], [-1, -2, -3, -4])
-        short.write_bytes(short.read_bytes()[:-8])
+        no_frames = write_wav(self.dir, "f.wav", [1, 2], [-1, -2])
+        no_frames.write_bytes(no_frames.read_bytes()[:-8])  # the header says 2 frames and none are there
         for name, path, rate, msg in (
                 ("8-bit", write_wav(self.dir, "b.wav", [0, 0], width=1), None, "8-bit samples"),
                 ("not wav", write_file(self.dir, "c.wav", "hello"), None, "not a PCM WAV file"),
                 ("empty wav", write_wav(self.dir, "d.wav", []), None, "no samples"),
-                ("cut short", short, None, "ends before its header says"),
+                ("no frames there", no_frames, None, "no samples"),
                 ("empty raw", write_file(self.dir, "e.raw", b"\0\0\0"), 32000, "no samples")):
-            with self.subTest(name), self.assertRaisesRegex(ValueError, f"{path}: {msg}"):
-                audio_clicks.analyse_file(path, rate, part_s=0.1)
+            with self.subTest(name):
+                with self.assertRaisesRegex(ValueError, f"{path}: {msg}") as whole:
+                    if rate is None:
+                        audio_clicks.read_wav(path)
+                    else:
+                        audio_clicks.read_raw(path, rate)
+                with self.assertRaises(ValueError) as parts:
+                    audio_clicks.analyse_file(path, rate, part_s=0.1)
+                self.assertEqual(str(parts.exception), str(whole.exception))
+
+    def test_a_wav_that_ends_before_its_header_says_has_the_frames_that_are_there(self):
+        left, right = self.recording()
+        path = write_wav(self.dir, "out.wav", left, right)
+        path.write_bytes(path.read_bytes()[:-8003])  # the last 2,000 frames and three bytes of the one before
+        whole = audio_clicks.read_wav(path)
+        self.assertEqual(whole.frames, len(left) - 2001)
+        got = audio_clicks.analyse_file(path, part_s=0.1)
+        self.assertEqual(got, audio_clicks.analyse(whole, 0))
+        self.assertEqual(got.seconds, whole.frames / RATE)
+
 
 
 class ReadTest(unittest.TestCase):

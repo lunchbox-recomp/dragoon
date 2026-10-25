@@ -166,6 +166,14 @@ class ReportTest(Session):
         self.assertEqual(r["session"]["missing"], ["out.wav"])
         self.assertEqual(r["session"]["seconds"], 2.0)
 
+    def test_a_device_recording_that_ends_before_its_header_says_keeps_its_stage(self):
+        wav = self.dir / "out.wav"
+        wav.write_bytes(wav.read_bytes()[:-4 * OUT // 2])  # the last half second
+        _, r, _ = self.report()
+        self.assertEqual(r["session"]["missing"], [])
+        self.assertEqual((r["sound"]["device"]["seconds"], r["sound"]["device"]["clicks"]), (1.5, 2))
+        self.assertEqual(r["session"]["seconds"], 1.5)
+
     def test_the_device_comes_from_session_json_without_a_device_line(self):
         write_file(self.dir, "stdout.txt", "\n".join(line for line in LOG.splitlines() if "device driver" not in line))
         _, r, _ = self.report()

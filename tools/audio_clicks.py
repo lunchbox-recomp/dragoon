@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import wave
 from array import array
@@ -287,26 +288,28 @@ class Source:
 
 @contextmanager
 def wav_source(path: Path) -> Iterator[Source]:
-    """A 16-bit PCM WAV as a Source, refused with the ValueError read_wav gives."""
-    try:
-        w = wave.open(str(path), "rb")
-    except (wave.Error, EOFError) as e:
-        raise ValueError(f"{path}: not a PCM WAV file ({e})") from None
-    with closing(w):
-        if w.getsampwidth() != 2:
-            raise ValueError(f"{path}: {8 * w.getsampwidth()}-bit samples; only 16-bit PCM is read")
-        n, total = w.getnchannels(), w.getnframes()
-        if not total:
-            raise ValueError(f"{path}: no samples")
+    """A 16-bit PCM WAV as a Source, refused with the ValueError read_wav gives. One that ends
+    before its header says has the frames that are there, as read_wav reads it."""
+    with path.open("rb") as f:
+        try:
+            w = wave.open(f, "rb")
+        except (wave.Error, EOFError) as e:
+            raise ValueError(f"{path}: not a PCM WAV file ({e})") from None
+        with closing(w):
+            if w.getsampwidth() != 2:
+                raise ValueError(f"{path}: {8 * w.getsampwidth()}-bit samples; only 16-bit PCM is read")
+            n = w.getnchannels()
+            # wave has just read the header, so the file is at the first frame.
+            there = (os.fstat(f.fileno()).st_size - f.tell()) // (2 * n)
+            total = min(w.getnframes(), there)
+            if not total:
+                raise ValueError(f"{path}: no samples")
 
-        def read(lo: int, hi: int) -> list[array]:
-            w.setpos(lo)
-            raw = w.readframes(hi - lo)
-            if len(raw) < 2 * n * (hi - lo):
-                raise ValueError(f"{path}: ends before its header says")
-            return deinterleave(raw, n)
+            def read(lo: int, hi: int) -> list[array]:
+                w.setpos(lo)
+                return deinterleave(w.readframes(hi - lo), n)
 
-        yield Source(w.getframerate(), n, total, read)
+            yield Source(w.getframerate(), n, total, read)
 
 
 @contextmanager
