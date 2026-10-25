@@ -1,33 +1,45 @@
-# route seconds dump_every required_frames [warm=N] [probe settings]
+# route seconds dump_every required_frames [warm=N or warm-from=ROUTE] [probe settings]
 # Required frames are the frames a route must reach, and docs/dev/status.md lists the checkpoints it plays
 # to. Seconds are wall-clock with --fast.
 #
 # warm=N has tools/warm_shaders.py play the route to frame N instead of 900 frames past its last
 # required frame. N is a whole number past that frame, and a route has one at most.
 #
-# air-ride-race, air-ride-celestial-valley and air-ride-beanstalk-park get the programs they first
-# draw past their own passes' ends, at frames 5,649 to 12,068, from the air-ride-sky-sands pass,
-# which draws them by frame 14,186. Shortening, chaining or dropping that pass means running
-# the eight air-ride routes unpaced to frame 16,000 again, as the 16,000-frame row under "Longer
-# course passes" in docs/dev/status.md was.
+# warm-from=ROUTE gives the route no warm-up pass of its own, because ROUTE's pass plays what the
+# route does. ROUTE has a pass of its own, and every program the route's own pass built has to
+# come from one pass or another.
+#
+# The three -courses routes race one course after another, each for as long as its own route's
+# pass played it. A race that follows another starts from another state of the game, and there
+# Sky Sands, Magma Flows, Frozen Hillside and Checker Knights each missed programs their own
+# passes built late. So Sky Sands and Magma Flows open the two air-ride-courses routes as their
+# own routes race them, to frames 14,400 and 12,700, while the other two keep passes of their
+# own. air-ride-race, air-ride-celestial-valley and air-ride-beanstalk-park get the
+# programs they first draw past their own stretches from Sky Sands, which draws them by frame
+# 14,186. Changing what the -courses routes race means diffing the warm-up's cache against the
+# last one and running the eight air-ride routes unpaced to frame 16,000 again, as under
+# "Chained course passes" in docs/dev/status.md.
 title          20 60 60,960
-menu           20 60 1200
-air-ride-race  30 60 4200,6000
-city-trial     25 60 3300
-city-trial-4p  30 60 2700,3480 --pads=4
-air-ride-celestial-valley  25 60 4200
-air-ride-sky-sands         25 60 4200 warm=14400
+menu           20 60 1200 warm-from=city-trial-stadium
+air-ride-race  30 60 4200,6000 warm-from=air-ride-courses-1
+city-trial     25 60 3300 warm-from=city-trial-stadium
+city-trial-4p  30 60 2700,3480 --pads=4 warm-from=city-trial-stadium-4p
+air-ride-celestial-valley  25 60 4200 warm-from=air-ride-courses-1
+air-ride-sky-sands         25 60 4200 warm-from=air-ride-courses-1
 air-ride-frozen-hillside   25 60 4200 warm=6000
-air-ride-magma-flows       25 60 4200 warm=12700
-air-ride-beanstalk-park    25 60 4200
-air-ride-machine-passage   25 60 4200
+air-ride-magma-flows       25 60 4200 warm-from=air-ride-courses-2
+air-ride-beanstalk-park    25 60 4200 warm-from=air-ride-courses-2
+air-ride-machine-passage   25 60 4200 warm-from=air-ride-courses-2
 air-ride-checker-knights   25 60 4200
-top-ride-grass 30 60 3600
-top-ride-sand  30 60 3600
-top-ride-sky   30 60 3600
-top-ride-fire  30 60 3600
-top-ride-light 30 60 3600
-top-ride-water 30 60 3600
-top-ride-metal 30 60 3600
+air-ride-courses-1         80 100 4200,17300,19100,22900 warm=23800
+air-ride-courses-2         70 100 4200,15600,19400 warm=20300
+top-ride-grass 30 60 3600 warm-from=top-ride-courses
+top-ride-sand  30 60 3600 warm-from=top-ride-courses
+top-ride-sky   30 60 3600 warm-from=top-ride-courses
+top-ride-fire  30 60 3600 warm-from=top-ride-courses
+top-ride-light 30 60 3600 warm-from=top-ride-courses
+top-ride-water 30 60 3600 warm-from=top-ride-courses
+top-ride-metal 30 60 3600 warm-from=top-ride-courses
+top-ride-courses      75 100 3600,6100,8600,11100,13600,16100,18600 warm=19500
 city-trial-stadium    60 300 4800,15600,17100,20400
 city-trial-stadium-4p 70 300 4200,4800,15600,17100,21000 --pads=4

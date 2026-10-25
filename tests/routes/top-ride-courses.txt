@@ -1,0 +1,30 @@
+# Blank memory card through Top Ride races on all seven courses in turn, Grass, Sand, Sky, Metal,
+# Water, Light and Fire, one player and three CPUs.
+# top-ride-grass.txt to its race, then each course is left from the pause menu for the next.
+# 4500 START: pause. 4600 DOWN, 4650 DOWN, 4700 A: End Game, back to the Top Ride menu. 4800 A:
+# Start Game, straight to the course select with the cursor on the course just raced. 4900
+# RIGHT: Sand. 5100 A to 5700 START as in top-ride-grass.txt, 2500 frames later. Each course
+# after it is one press from the last, RIGHT to Sky, DOWN to Metal and LEFT to Water, Light and
+# Fire, and follows the same way 2500 frames after the one before.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:DOWN:5,1400:A:5,1700:A:5,2000:A:5,
+2600:A:5,2900:A:5,3200:START:5,
+4500:START:5,4600:DOWN:5,4650:DOWN:5,4700:A:5,4800:A:5,
+4900:RIGHT:5,
+5100:A:5,5400:A:5,5700:START:5,
+7000:START:5,7100:DOWN:5,7150:DOWN:5,7200:A:5,7300:A:5,
+7400:RIGHT:5,
+7600:A:5,7900:A:5,8200:START:5,
+9500:START:5,9600:DOWN:5,9650:DOWN:5,9700:A:5,9800:A:5,
+9900:DOWN:5,
+10100:A:5,10400:A:5,10700:START:5,
+12000:START:5,12100:DOWN:5,12150:DOWN:5,12200:A:5,12300:A:5,
+12400:LEFT:5,
+12600:A:5,12900:A:5,13200:START:5,
+14500:START:5,14600:DOWN:5,14650:DOWN:5,14700:A:5,14800:A:5,
+14900:LEFT:5,
+15100:A:5,15400:A:5,15700:START:5,
+17000:START:5,17100:DOWN:5,17150:DOWN:5,17200:A:5,17300:A:5,
+17400:LEFT:5,
+17600:A:5,17900:A:5,18200:START:5

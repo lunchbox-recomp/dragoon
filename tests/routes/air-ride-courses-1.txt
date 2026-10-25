@@ -1,0 +1,20 @@
+# Blank memory card through Air Ride races on Sky Sands, Fantasy Meadows and Celestial Valley in
+# turn, one player and three CPUs.
+# air-ride-sky-sands.txt to frame 14400, where every racer has finished and the replay plays.
+# 14400 START: out of the replay to the results. 14700 START: past them, to the course select
+# with the cursor on the course just raced. 15100 LEFT, 15150 LEFT: Fantasy Meadows. 15300 A to
+# 16200 START as in air-ride-race.txt, 13100 frames later. 20000 START: pause. 20100 DOWN,
+# 20150 DOWN, 20200 A: End Game, back to the Air Ride menu after a checklist box Fantasy Meadows
+# earned. 20600 A: Start Game, straight to the course select. 20700 RIGHT: Celestial Valley.
+# 20900 A to 21800 START as before.
+120:A:5,300:A:5,900:A:5,
+1000:START:5,
+1300:A:5,1600:A:5,1900:A:5,
+2000:RIGHT:5,2050:RIGHT:5,
+2200:A:5,2500:A:5,2800:A:5,3100:START:5,
+14400:START:5,14700:START:5,
+15100:LEFT:5,15150:LEFT:5,
+15300:A:5,15600:A:5,15900:A:5,16200:START:5,
+20000:START:5,20100:DOWN:5,20150:DOWN:5,20200:A:5,20600:A:5,
+20700:RIGHT:5,
+20900:A:5,21200:A:5,21500:A:5,21800:START:5

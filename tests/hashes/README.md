@@ -2,7 +2,7 @@
 
 Each golden in `gl/` holds the SHA-1 of every frame a scripted route dumps, up to the route's last checkpoint. A matching golden shows the renderer drew the same pixels in every dumped frame, on the machine that recorded it, so a renderer refactor that leaves the output alone shows up as all `OK`.
 
-`manifest.txt` lists the routes, how long to run them and which frames they must reach. The routes themselves are in `tests/routes/`. A route's `warm=N` setting is for `tools/warm_shaders.py` alone, which then plays that route to frame N.
+`manifest.txt` lists the routes, how long to run them and which frames they must reach. The routes themselves are in `tests/routes/`. A route's `warm=N` and `warm-from=ROUTE` settings are for `tools/warm_shaders.py` alone. The first has it play that route to frame N, and the second gives the route no pass of its own.
 
 ```sh
 python3 tools/frame_hashes.py check

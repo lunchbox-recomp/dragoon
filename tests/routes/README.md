@@ -19,6 +19,8 @@ the rest is joined into one script.
 | `air-ride-beanstalk-park.txt` | An Air Ride race on Beanstalk Park, past the countdown | 4200 |
 | `air-ride-machine-passage.txt` | An Air Ride race on Machine Passage, past the countdown | 4200 |
 | `air-ride-checker-knights.txt` | An Air Ride race on Checker Knights, past the countdown | 4200 |
+| `air-ride-courses-1.txt` | Air Ride races on Sky Sands, Fantasy Meadows and Celestial Valley in turn, each past its countdown | 22900 |
+| `air-ride-courses-2.txt` | The same on Magma Flows, Machine Passage and Beanstalk Park | 19400 |
 | `city-trial.txt` | City Trial, one player, the clock running | 3300 |
 | `city-trial-4p.txt` | City Trial, four players on ports 1 to 4, each steering its own way | 3480 |
 | `city-trial-2p.txt` | City Trial, two players on ports 1 and 2, in two views | 3480 |
@@ -31,6 +33,7 @@ the rest is joined into one script.
 | `top-ride-light.txt` | The same on Light | 3600 |
 | `top-ride-water.txt` | The same on Water | 3600 |
 | `top-ride-metal.txt` | The same on Metal | 3600 |
+| `top-ride-courses.txt` | Top Ride races on all seven courses in turn, each past its countdown | 18600 |
 
 Each Air Ride course route is `air-ride-race.txt` with up to four presses on the course
 select, between frames 2000 and 2120, where the cursor starts on Fantasy Meadows. The grid
@@ -43,6 +46,23 @@ has two rows of five.
 
 The locked slot is Nebula Belt, the ninth course. A blank memory card can't pick it, so it
 has no route. `docs/dev/status.md` says what the game checks before it opens.
+
+The three `-courses` routes race one course after another, so the shader warm-up builds every
+course's programs in fewer passes. They leave most courses from the pause menu, where START
+pauses and two DOWN and an A pick End Game.
+
+End Game goes back to the mode's own menu with Start Game under the cursor. An A there goes
+straight to the course select, with no movie this time and the cursor on the course just raced,
+so the next course's presses start from there. Each course is raced for as long after its START
+as its own route's warm-up pass played it.
+
+On the way out a race can earn a box on the checklist, which shows for about 160 frames and
+drops any press made meanwhile. So the Air Ride routes wait 400 frames between End Game and
+Start Game.
+
+Sky Sands and Magma Flows open the two Air Ride routes and are raced until every racer has
+finished and the replay plays. Their first START leaves the replay for the results, and a
+second goes from the results straight to the course select.
 
 Run one with `tools/probe.sh`, which takes a route file in place of a script.
 
