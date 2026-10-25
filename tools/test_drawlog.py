@@ -167,6 +167,14 @@ class CamerasCommandTest(unittest.TestCase):
                          "no draws: persp fov 25.0 vp 523,35 107x80  cams 81431D80  stored 1.2593"
                          "  drawn by 8011500C")
 
+    def test_without_frame_every_census_line_of_a_drawn_camera_counts_as_drawn(self):
+        later = CENSUS_HUD.replace("f=4200", "f=4201")
+        code, out, _ = run_main(drawlog.main, "cameras", self.log(HUD, FULL_VP, CENSUS_MAP, CENSUS_HUD, later))
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            "ortho frame 64x48  vp 0,0 640x480  ratio 1.000  draws 1  cams 812C5260  drawn by 8011F8F4",
+            "no draws: persp fov 25.0 vp 523,35 107x80  cams 81431D80  stored 1.2593  drawn by 8011500C"])
+
     def test_camera_set_outside_any_object_says_so(self):
         text = CENSUS_HUD.replace("cb=8011F8F4", "cb=00000000").replace("via=draw", "via=set")
         code, out, _ = run_main(drawlog.main, "cameras", self.log(HUD, FULL_VP, text))

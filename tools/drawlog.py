@@ -234,7 +234,8 @@ def cameras(args) -> int:
     used: set[int] = set()
     for g in group(draws):
         found = matching(g, cams)
-        used.update(id_ for id_, c in enumerate(cams) if any(c is f for f in found))
+        ids = {id(f) for f in found}
+        used.update(i for i, c in enumerate(cams) if id(c) in ids)
         print(group_line(g, found, names))
     for line in unmatched_lines(cams, used, names):
         print(line)
