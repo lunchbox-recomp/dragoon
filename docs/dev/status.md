@@ -16,12 +16,13 @@ there (under gcn-recomp `e1016b8` below). The Top Ride and stadium pacing number
 Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen findings were
 checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed at `2e6e6f8`
 and `0059fce` on gcn-recomp `e1016b8`, and with three course passes longer at `529f40c` on
-`dac449e` (under Player targets). The eight-pass warm-up was timed at `2fc9285` on `dac449e`,
-and the three `-courses` routes' goldens were recorded on the same pin just before it.
+`dac449e` (under Player targets).
 
 The pin was `3a8d154`, where on Dragoon `84d68bd` all twenty-one routes' frames and audio still
 matched with the widescreen hooks built in and switched off. It's now `dac449e`, and on Dragoon
 `4602fa1` with the pin moved all twenty-one still match there (under gcn-recomp `dac449e` below).
+The eight-pass warm-up was timed on it at `2fc9285`, and the three `-courses` routes' goldens
+were recorded on it just before.
 
 | Feature | Status | Note |
 |---|---|---|
@@ -613,7 +614,8 @@ started from the cache of the 74.8 s warm-up, 328 keys from `tools/warm_shaders.
 an empty cache, and began at loads of 8.56, 6.66, 4.84, 2.58 and 1.90 in the order above.
 
 They were measured once more at Dragoon `2fc9285`, after the courses were chained, from the
-cache of the 63.6 s eight-pass warm-up. Those runs began at loads of 1.98, 2.25, 1.63, 1.27 and 1.20 in the same order.
+cache of the 63.6 s eight-pass warm-up. Those runs began at loads of 1.98, 2.25, 1.63, 1.27 and
+1.20 in the same order.
 
 The 47.1 s and 120.5 s are later warm-ups at Dragoon `788571c` and gcn-recomp `b848158`, each
 `tools/warm_shaders.py --force` from an empty cache under `/usr/bin/time -p`, with the manifest
@@ -787,10 +789,14 @@ manifest's `warm-from=` setting.
 | Compiles in 130 s real-time runs of those routes (0) | 0 | 0 on all eight, to frames 7,673 to 7,676 |
 | Goldens for the new routes | | Frames and audio for all three, each matched by a check run after the record |
 
-The 55 s bar isn't met, and the four-player stadium pass sets the floor. It took 62.7 s in the
-`--report` run below and 49.3 s alone (one pass at a time, above), so no warm-up of five at once
-ends before it. Shortening it would lose keys, since it builds its last at frame 20,604 and 15
-of its keys no other pass builds.
+The 55 s bar isn't met. The eight passes add up to 291.4 s of play in the `--report` run below,
+which is 58.3 s for five at once even if none ever waits for another. The four-player stadium
+pass ends last at 62.7 s in that run and can't be dropped, since 15 of its keys come from no
+other pass.
+
+That pass builds its last key at frame 20,604 and plays on to 21,900, 900 frames past its
+route's last required frame, the margin every pass keeps. Cutting that margin wouldn't bring the
+warm-up under 55 s, since the eight passes' total alone sets 58.3 s.
 
 A race that follows another starts from another state of the game. In the first order tried,
 Sky Sands, Magma Flows and Frozen Hillside each missed one key their own passes built late, and
