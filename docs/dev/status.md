@@ -17,8 +17,9 @@ Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen find
 checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed at `2e6e6f8`
 and `0059fce` on gcn-recomp `e1016b8` (under Player targets).
 
-The pin is now `3a8d154`. On Dragoon `84d68bd` at that pin, all twenty-one routes' frames and
-audio still match with the widescreen hooks built in and switched off.
+The pin was `3a8d154`, where on Dragoon `84d68bd` all twenty-one routes' frames and audio still
+matched with the widescreen hooks built in and switched off. It's now `dac449e`, and all
+twenty-one still match there (under gcn-recomp `dac449e` below).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -700,6 +701,14 @@ The nine routes' goldens at `b848158` aren't in this branch. Against them, every
 the nine differs at `e1016b8`, all 18. Each Top Ride route's frames differ at 7 of 60, the
 ones at 1,020 to 1,380, and each stadium route's at 4 (the stats frames above and frames 1,200
 and 1,500). Frame 1,200 hashes to `ba0a9f9b` on all nine, as it does on the menu route.
+
+## gcn-recomp `dac449e`
+
+The pin moved from `3a8d154` to `dac449e`, 27 commits. They write the memory card after a quiet second and not after each page. They also sleep two thirds of each pacer wait and spin the last 100 us, with the guest and front end threads at user-interactive QoS, remember which gamepad was on each port in `saves/ports.txt` and hold DVD streamed music through a pause.
+
+Built at `dac449e`, the game ran `tools/frame_hashes.py check` and `tools/audio_hashes.py check` against the goldens on `main`. Every route matched, all 1,297 frames and all 42 audio rows, so no golden was recorded. The frame check took about 10 min 10 s and the audio check about 10 min 40 s.
+
+The frame hashes run with `--fast`, where `clock_pace` returns before it waits. The audio hashes read the AX output of `dragoon_bench`, which opens no gamepad and stubs the audio subsystem that holds the music. The card's file is written later now, and the guest still reads the card from memory.
 
 ## Fixes on the way
 
