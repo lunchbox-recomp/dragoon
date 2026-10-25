@@ -251,6 +251,13 @@ class AnalyseFileTest(unittest.TestCase):
         got = self.check(x, tone(330, 1, 10000), part_s=0.1)
         self.assertEqual([c.samples for c in got.clipped], [400, 3, 3])
 
+    def test_a_clipped_run_on_the_right_channel_is_followed_on_that_channel(self):
+        # The left channel is a tone that never sits at full scale, so following it would end the run at the edge.
+        y = tone(440, 1, 10000)
+        y[9500:9900] = [-32768] * 400
+        got = self.check(tone(330, 1, 10000), y, part_s=0.1)
+        self.assertEqual([c.samples for c in got.clipped], [400])
+
     def test_a_gap_and_a_clipped_run_that_end_the_recording_end_with_it(self):
         x = tone(440, 1, 10000)
         x[-3000:] = [0] * 3000
