@@ -24,6 +24,12 @@ CENSUS_HUD = ("[census] f=4200 cam=812C5260 type=ortho p=0,-48,0,64 vp=0,640,0,4
               "cb=8011F8F4 cls=27 via=draw")
 CENSUS_MAP = ("[census] f=4200 cam=81431D80 type=persp p=25,1.2593 vp=523,630,35,115 "
               "cb=8011500C cls=27 via=draw")
+# The HUD's 3D camera, with the world's viewport and the minimap's field of view, and an
+# orthographic camera framing the whole screen.
+CENSUS_HUD3D = ("[census] f=4200 cam=812C51C0 type=persp p=25,1.25538 vp=0,640,0,480 "
+                "cb=80114F1C cls=27 via=draw")
+CENSUS_SCREEN = ("[census] f=4200 cam=812C5300 type=ortho p=0,-480,0,640 vp=0,640,0,480 "
+                 "cb=8011F8F4 cls=27 via=draw")
 
 SYMBOLS = """\
 kar_objalloc__near_800b04a8 = .text:0x800B04A8; // type:function size:0x314
@@ -100,6 +106,21 @@ class MatchTest(unittest.TestCase):
         self.assertEqual({c.cam for c in world}, {0x81424A80})
         self.assertEqual({c.cam for c in hud}, {0x812C5260})
         self.assertEqual({c.cam for c in minimap}, {0x81431D80})
+
+    def test_camera_with_another_fov_in_the_same_viewport_is_left_out(self):
+        _, cams = drawlog.parse([CENSUS_WORLD, CENSUS_HUD3D])
+        world = drawlog.matching(self.groups[0], cams)
+        self.assertEqual({c.cam for c in world}, {0x81424A80})
+
+    def test_camera_with_the_same_fov_in_another_viewport_is_left_out(self):
+        _, cams = drawlog.parse([CENSUS_HUD3D, CENSUS_MAP])
+        minimap = drawlog.matching(self.groups[2], cams)
+        self.assertEqual({c.cam for c in minimap}, {0x81431D80})
+
+    def test_orthographic_camera_with_another_frame_is_left_out(self):
+        _, cams = drawlog.parse([CENSUS_SCREEN, CENSUS_HUD])
+        hud = drawlog.matching(self.groups[1], cams)
+        self.assertEqual({c.cam for c in hud}, {0x812C5260})
 
     def test_widened_projection_still_matches_its_camera_by_fov(self):
         widened = WORLD.replace("p,0.9838,", "p,0.7378,")
