@@ -15,7 +15,8 @@ recorded at `e1016b8` on Dragoon `1a88f62`, and all twenty-one routes' frames an
 there (under gcn-recomp `e1016b8` below). The Top Ride and stadium pacing numbers are from
 Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen findings were
 checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed at `2e6e6f8`
-and `0059fce` on gcn-recomp `e1016b8` (under Player targets).
+and `0059fce` on gcn-recomp `e1016b8`, and with three course passes longer at `529f40c` on
+`dac449e` (under Player targets).
 
 The pin was `3a8d154`, where on Dragoon `84d68bd` all twenty-one routes' frames and audio still
 matched with the widescreen hooks built in and switched off. It's now `dac449e`, and on Dragoon
@@ -577,10 +578,10 @@ What a player's first session looks like after the warm-up, against the bars set
 
 | Target | Bar | Measured | Result |
 |---|---|---|---|
-| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five to the frames those runs reached (6,900 on the race), worst render frame 11.1 ms. Run to 130 s, the race had one at frame 7110, 41.57 ms, with a compile | Fail |
-| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five to the end of those runs. 1 on the race at frame 7110, past the warm-up's 6,900, and 1 each on Frozen Hillside (5752), Beanstalk Park (5648) and Machine Passage (6007), past 5,100 | Fail |
+| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five, worst render frame 14.6 ms, with the race run 130 s to frame 7,706 (Dragoon `529f40c`) | Pass |
+| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five, with the race run to frame 7,706 (Dragoon `529f40c`). The eight Air Ride course routes compiled none, unpaced to frame 16,000 or in 130 s real-time runs, as "Longer course passes" below shows | Pass |
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
-| Time added to the first build | 90 s or less | 47.1 s for the five routes' 191 keys. 120.5 s for all twelve routes' 222 keys. 252.8 s for all twenty-one routes' 318 keys, one pass at a time. 67.7 s and 68.9 s on an M4 Max for the same 318 keys, five passes at a time (Dragoon `0059fce`, table below) | Pass |
+| Time added to the first build | 90 s or less | 74.8 s at a load of 1.22 for all twenty-one routes' 328 keys, five passes at a time on an M4 Max (Dragoon `529f40c`), and 73.7 s to 76.1 s under "Longer course passes". Before three of those passes grew, 67.7 s and 68.9 s for 318 keys five at a time (Dragoon `0059fce`, table below). One pass at a time, 47.1 s for the five routes' 191 keys, 120.5 s for the twelve routes' 222 and 252.8 s for the twenty-one routes' 318 | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
 | Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there | Pass |
 
@@ -599,6 +600,11 @@ read from the `[shaders] ... programs from cache ... in N ms` line the game prin
 row's earlier figure, 42.6 s at `62b114b`, was one warm-up timed with `/usr/bin/time -p`.
 Apple's own shader cache was warm from earlier runs. Whether the warm-up fills it on a fresh Mac
 wasn't checked.
+
+The stalls and compiles rows were measured again the same way at Dragoon `529f40c` and
+gcn-recomp `dac449e`, except that the race ran 130 s so it would pass frame 7110. The runs
+started from the cache of the 74.8 s warm-up, 328 keys from `tools/warm_shaders.py --force` and
+an empty cache, and began at loads of 8.56, 6.66, 4.84, 2.58 and 1.90 in the order above.
 
 The 47.1 s and 120.5 s are later warm-ups at Dragoon `788571c` and gcn-recomp `b848158`, each
 `tools/warm_shaders.py --force` from an empty cache under `/usr/bin/time -p`, with the manifest
@@ -694,7 +700,8 @@ no key on any of the 21 routes.
 The 362 to 387 ms boots are from the Air Ride pacing runs above, which also went past the frames
 the warm-up plays and compiled one program each on four courses. On Fantasy Meadows that
 compile came with a 41.57 ms render frame at frame 7110, over the 33 ms stall bar, at 640x480
-rather than the scale 2 the rows above used.
+rather than the scale 2 the rows above used. The warm-up builds those programs now, as "Longer
+course passes" shows.
 
 An earlier warm-up left 35 compiles in City Trial, 33 in four-player, 9 in the race and 3 in the
 title. Starting each pass from a blank card, with 900 frames (15 s) past the last checkpoint,
