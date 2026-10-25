@@ -273,9 +273,11 @@ Compiles are the `[shaders] compiled program` lines after boot. Boot is the `pro
 | Machine Passage | 4,295 | 16.68 ms | 0.065 ms | 16.77 ms | 16.95 ms | 17.00 ms | 0 | 0.52 ms | 0.92 ms | 3.16 ms | 0 | 491 ms |
 | Checker Knights | 4,289 | 16.68 ms | 0.106 ms | 16.85 ms | 16.99 ms | 17.99 ms | 0 | 0.62 ms | 1.10 ms | 2.73 ms | 0 | 491 ms |
 
-Every course averaged 16.68 ms a guest frame, as before. The 99th percentile fell from under 18.4 ms to under 17.0 ms. The worst guest frame on any course was 18.06 ms, and no course had a guest interval over 25 ms.
+Every course averaged 16.68 ms a guest frame, against 16.68 to 16.70 ms before. The 99th percentile was under 17.0 ms where it was under 18.4 ms before, but the earlier rows used a 222-program cache and ran beside two or three other copies of Dragoon, so the two sets aren't like for like. The worst guest frame on any course was 18.06 ms, and no course had a guest interval over 25 ms.
 
-Six of the eight had an sd of 0.064 to 0.071 ms. Celestial Valley's was 0.092 ms and Checker Knights' was 0.106 ms. The log doesn't say what widened them.
+Six of the eight had an sd of 0.064 to 0.071 ms. Celestial Valley's was 0.092 ms and Checker Knights' was 0.106 ms. Repeat runs kept them wide, at 0.107 ms for Celestial Valley and 0.105 and 0.097 ms for Checker Knights, against 0.072 ms for Machine Passage.
+
+The log doesn't say what widened them. The `[rt]` columns vary from run to run, as repeat runs of Checker Knights (twice), Celestial Valley and Machine Passage read a mean of 0.79 to 0.86 ms and a 99th of 2.20 to 2.51 ms, where the rows above read 0.52 to 0.62 ms and 0.92 to 1.10 ms for those courses.
 
 Three courses compiled one program each in play, at the frames in the Compiles column. Each compile took 1.9 to 3.0 ms, and the render frame that first drew with it took 3.97 to 6.14 ms.
 
