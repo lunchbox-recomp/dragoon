@@ -29,7 +29,7 @@ python3 -m unittest discover -s tools -p 'test_*.py'
 The C++ in `src/` has unit tests too. They need no disc, and the configure downloads GoogleTest the first time. `ninja unit` builds and runs them with gcn-recomp's own checks.
 
 ```sh
-cmake -S . -B build-tests -G Ninja -DDRAGOON_TESTS=ON
+cmake -S . -B build-tests -G Ninja -DDRAGOON_TESTS=ON -DGAME_ISO=
 ninja -C build-tests unit
 ```
 
