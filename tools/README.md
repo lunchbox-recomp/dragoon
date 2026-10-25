@@ -78,7 +78,7 @@ Failing that it's the device's when a callback came late within 5 ms, and if not
 
 A late callback can starve the device without a mark in `out.wav`, which holds what was handed over and not when, so the late callbacks are listed on their own too.
 
-The noise check reads `aid.raw` only, at the DMA's 32 kHz. The ring interpolates to 48 kHz for the device, so `out.wav` isn't a fair input, as the noise_blocks.py section says. A stretch is a place to look, since the game's own bright sounds make short ones too, and it never changes the exit code.
+The noise check reads `aid.raw` only, at the DMA's 32 kHz and 10 seconds at a time. The ring interpolates to 48 kHz for the device, so `out.wav` isn't a fair input, as the noise_blocks.py section says. A stretch is a place to look, since the game's own bright sounds make short ones too, and it never changes the exit code.
 
 `--system-log` also counts the Core Audio overloads macOS logged from the session's start to 5 s past the end of `out.wav`. Core Audio logs one when an IO cycle misses its deadline. It runs `/usr/bin/log show --style compact` over that window with the predicate `subsystem == "com.apple.coreaudio" AND eventMessage CONTAINS[c] "overload"`, which only reads the log.
 
@@ -245,7 +245,7 @@ Where do the DMA's blocks turn to loud noise? It weighs each 160-sample block of
 tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw
 ```
 
-session_report.py runs it on a playtest session's `aid.raw`.
+session_report.py runs it on a playtest session's `aid.raw` through `find_source`, which reads 10 seconds at a time instead of holding the recording. It finds what one pass would, including a stretch that crosses a part's edge, and its tests check that. The command above still reads the whole file.
 
 ## clip_signs.py
 

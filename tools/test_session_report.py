@@ -4,14 +4,18 @@ import json
 import subprocess
 import tempfile
 import unittest
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import audio_clicks
 import core_audio_log
 import noise_blocks
 import session_report
 import session_text
+from aid_blocks import BLOCK
 from testutil import noise, pcm, run_main, tone, write_file, write_wav
 
 OUT, DMA = 48000, 32000
@@ -303,6 +307,31 @@ class NoiseTest(Session):
         code, out, _ = run_main(noise_blocks.main, str(self.dir / "aid.raw"), "--json")
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out), self.report()[1]["noise"])
+
+    def test_it_reads_10_seconds_at_a_time_and_finds_what_one_pass_finds(self):
+        # 25 s, with a stretch across the edge at 10 s and two noisy blocks 100 ms apart across the edge at 20 s.
+        blocks = 25 * DMA // BLOCK
+        x = tone(blocks * BLOCK, DMA, amp=1000)
+        for k in [*range(1900, 2100), 3999, 4019]:
+            x[k * BLOCK:(k + 1) * BLOCK] = noise(BLOCK, 30000, k)
+        path = write_file(self.dir, "aid.raw", pcm(x, x) + pcm([1] * 100, [1] * 100))  # then a part of a block
+        asked: list[tuple[int, int]] = []
+        real = audio_clicks.raw_source
+
+        @contextmanager
+        def spy(path: Path, rate: int, frames: int | None = None) -> Iterator[audio_clicks.Source]:
+            with real(path, rate, frames) as src:
+                def read(lo: int, hi: int) -> list:
+                    asked.append((lo, hi))
+                    return src.read(lo, hi)
+
+                yield audio_clicks.Source(src.rate, src.channels, src.frames, read)
+
+        with mock.patch.object(audio_clicks, "raw_source", spy):
+            got = session_report.stage_noise(path)
+        self.assertEqual(got, noise_blocks.find(audio_clicks.read_raw(path, DMA)))
+        self.assertEqual([(s.start, s.end, s.blocks) for s in got.stretches], [(9.5, 10.5, 200), (19.995, 20.1, 2)])
+        self.assertEqual(asked, [(0, 320000), (320000, 640000), (640000, 800000)])
 
     def test_a_recording_cut_off_mid_frame_reads_its_whole_frames(self):
         self.write_mixer(noisy_mixer(), extra=b"\x01\x02\x03")
