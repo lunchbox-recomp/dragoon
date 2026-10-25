@@ -582,7 +582,7 @@ What a player's first session looks like after the warm-up, against the bars set
 | Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five, with the race run to frame 7,706 (Dragoon `529f40c`). The eight Air Ride course routes compiled none, unpaced to frame 16,000 or in 130 s real-time runs, as "Longer course passes" below shows | Pass |
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 74.8 s at a load of 1.22 for all twenty-one routes' 328 keys, five passes at a time on an M4 Max (Dragoon `529f40c`), and 73.7 s to 76.1 s under "Longer course passes". Before three of those passes grew, 67.7 s and 68.9 s for 318 keys five at a time (Dragoon `0059fce`, table below). One pass at a time, 47.1 s for the five routes' 191 keys, 120.5 s for the twelve routes' 222 and 252.8 s for the twenty-one routes' 318 | Pass |
-| Time added to every boot on macOS GL | 1,000 ms or less | 270 to 298 ms for 191 programs. 362 to 387 ms for 222 | Pass |
+| Time added to every boot on macOS GL | 1,000 ms or less | 461 to 509 ms for 328 programs at loads of 1.90 to 8.56 (Dragoon `529f40c`). Earlier, 270 to 298 ms for 191 programs and 362 to 387 ms for 222 | Pass |
 | Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
@@ -601,7 +601,7 @@ row's earlier figure, 42.6 s at `62b114b`, was one warm-up timed with `/usr/bin/
 Apple's own shader cache was warm from earlier runs. Whether the warm-up fills it on a fresh Mac
 wasn't checked.
 
-The stalls and compiles rows were measured again the same way at Dragoon `529f40c` and
+The stall, compile and boot time rows were measured again the same way at Dragoon `529f40c` and
 gcn-recomp `dac449e`, except that the race ran 130 s so it would pass frame 7110. The runs
 started from the cache of the 74.8 s warm-up, 328 keys from `tools/warm_shaders.py --force` and
 an empty cache, and began at loads of 8.56, 6.66, 4.84, 2.58 and 1.90 in the order above.
