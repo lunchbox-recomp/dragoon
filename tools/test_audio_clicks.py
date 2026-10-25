@@ -243,6 +243,14 @@ class AnalyseFileTest(unittest.TestCase):
             got = self.check(*self.recording(), part_s=0.1)
         self.assertAlmostEqual(got.gaps[0].ms, 8500 / 48)
 
+    def test_a_clipped_run_is_counted_once_wherever_it_starts_in_the_stretch_past_an_edge(self):
+        x = tone(440, 1, 10000)
+        x[9500:9900] = [32767] * 400    # starts in a part and runs on past what was read for it
+        x[19205:19208] = [-32768] * 3   # starts just after an edge, inside the stretch read past it
+        x[28800:28803] = [32767] * 3    # starts on one
+        got = self.check(x, tone(330, 1, 10000), part_s=0.1)
+        self.assertEqual([c.samples for c in got.clipped], [400, 3, 3])
+
     def test_a_gap_and_a_clipped_run_that_end_the_recording_end_with_it(self):
         x = tone(440, 1, 10000)
         x[-3000:] = [0] * 3000
