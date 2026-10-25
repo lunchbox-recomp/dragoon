@@ -116,8 +116,8 @@ class RealManifestTest(unittest.TestCase):
 
     def test_the_routes_that_compile_late_are_raced_first_and_past_their_last_compile(self):
         # A race that follows another starts from another state of the game, and such races
-        # missed programs these three built late. So the pass that builds a route's programs
-        # opens with that route's own presses, and presses nothing more until it's past the frame.
+        # missed programs these four built late. So the pass that plays one of them opens with
+        # that route's own presses, and presses nothing more until it's past the frame.
         for name, frame in self.LAST_COMPILE.items():
             with self.subTest(route=name):
                 source = self.by_name[self.by_name[name].warm_from or name]
