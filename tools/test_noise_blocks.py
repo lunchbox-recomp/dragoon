@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import tempfile
 import unittest
@@ -5,8 +7,8 @@ from array import array
 from pathlib import Path
 
 import noise_blocks
-from audio_clicks import Recording
-from aid_blocks import RATE
+from audio_clicks import Recording, Source
+from aid_blocks import BLOCK, RATE
 from testutil import noise, pcm, run_main, tone, write_file
 
 
@@ -87,6 +89,76 @@ class FindTest(unittest.TestCase):
         blocks = [array("h", y[k * 240:(k + 1) * 240]) for k in range(len(y) // 240)]
         self.assertLess(sum(noise_blocks.noisy(b) for b in blocks), len(blocks) / 2)
 
+
+def bursts(at: list[int], blocks: int, tail: int = 0) -> list[int]:
+    """BLOCKS blocks of a quiet tone with loud noise in each block of AT, then TAIL samples of
+    noise that don't make a whole block."""
+    x = tone(blocks * BLOCK, RATE, amp=1000)
+    for k in at:
+        x[k * BLOCK:(k + 1) * BLOCK] = noise(BLOCK, 30000, k)
+    return x + noise(tail, 30000, 99)
+
+
+def source(left: list[int], right: list[int], asked: list[tuple[int, int]] | None = None) -> Source:
+    """The channels as a Source, with each read it is asked for added to ASKED."""
+    def read(lo: int, hi: int) -> list[array]:
+        if asked is not None:
+            asked.append((lo, hi))
+        return [array("h", left[lo:hi]), array("h", right[lo:hi])]
+
+    return Source(RATE, 2, len(left), read)
+
+
+class FindSourceTest(unittest.TestCase):
+    PARTS = (1, 2, 3, 7, 10, 20, 21, 41, 60, 61, 140, 6000)  # in blocks, edges falling in every stretch and gap
+
+    def setUp(self):
+        # The quiet right channel and the loud left one show that noise on one is enough.
+        self.left = bursts([8, 9, 10, 11, 12, 40, 60, 81, 130, 131], 140, tail=100)
+        self.right = tone(len(self.left), RATE, amp=1000)
+
+    def whole(self) -> noise_blocks.Noise:
+        return noise_blocks.find(rec(self.left, self.right))
+
+    def test_finds_what_one_pass_finds_at_any_part_size(self):
+        whole = self.whole()
+        self.assertEqual([(s.start, s.end, s.blocks) for s in whole.stretches],
+                         [(0.04, 0.065, 5), (0.2, 0.305, 2), (0.405, 0.41, 1), (0.65, 0.66, 2)])
+        for part in self.PARTS:
+            with self.subTest(part_blocks=part):
+                self.assertEqual(noise_blocks.find_source(source(self.left, self.right), part), whole)
+
+    def test_a_stretch_across_a_parts_edge_is_one_stretch(self):
+        # Blocks 8 to 12 have the edge at 10 across them, and 40 and 60 are one stretch with an edge
+        # at 41 between them, which is the 100 ms the rule allows.
+        got = noise_blocks.find_source(source(self.left, self.right), 10)
+        self.assertEqual([(s.blocks, s.start) for s in got.stretches][:2], [(5, 0.04), (2, 0.2)])
+        got = noise_blocks.find_source(source(self.left, self.right), 41)
+        self.assertEqual([(s.blocks, s.start) for s in got.stretches][:2], [(5, 0.04), (2, 0.2)])
+
+    def test_a_gap_of_exactly_100_ms_across_an_edge_joins_and_one_block_more_doesnt(self):
+        for gap, stretches in ((20, 1), (21, 2)):
+            for part in (5, 10, 15, 20, 21, 25):
+                with self.subTest(gap=gap, part_blocks=part):
+                    x = bursts([9, 9 + gap], 60)
+                    got = noise_blocks.find_source(source(x, x), part)
+                    self.assertEqual(len(got.stretches), stretches)
+                    self.assertEqual(got.noisy_blocks, 2)
+
+    def test_a_part_is_whole_blocks_and_every_block_is_read_once(self):
+        asked: list[tuple[int, int]] = []
+        noise_blocks.find_source(source(self.left, self.right, asked), 8)
+        self.assertEqual(asked, [(k * BLOCK, min(140, k + 8) * BLOCK) for k in range(0, 140, 8)])
+        self.assertLessEqual(max(hi for _, hi in asked), 140 * BLOCK)  # the 100 samples past it are never read
+
+    def test_the_length_counts_the_partial_last_block_as_one_pass_does(self):
+        got = noise_blocks.find_source(source(self.left, self.right), 8)
+        self.assertEqual((got.seconds, got.blocks), (len(self.left) / RATE, 140))
+
+    def test_a_recording_under_a_block_has_none(self):
+        x = tone(100, RATE)
+        self.assertEqual(noise_blocks.find_source(source(x, x), 8), noise_blocks.find(rec(x, x)))
+        self.assertEqual(noise_blocks.find_source(source(x, x), 8).blocks, 0)
 
 
 class MainTest(unittest.TestCase):

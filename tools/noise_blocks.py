@@ -29,11 +29,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from aid_blocks import BLOCK, RATE, plural
-from audio_clicks import Recording, read_raw
+from audio_clicks import Recording, Source, read_raw
 
 NOISE_RATIO = 1.0   # RMS first difference over RMS above which a block is noise-like
 NOISE_PEAK = 8000   # the peak a noise-like block must pass, so quiet hiss doesn't count
 JOIN_BLOCKS = 20    # noise-like blocks this close (100 ms) are one stretch
+PART_BLOCKS = 2000  # how many blocks find_source reads at once (10 s)
 
 
 @dataclass
@@ -77,10 +78,26 @@ def stretches(found: list[int]) -> list[Stretch]:
     return [Stretch(r[0] * BLOCK / RATE, (r[-1] + 1) * BLOCK / RATE, len(r)) for r in runs]
 
 
+def summarise(frames: int, found: list[int]) -> Noise:
+    return Noise(frames / RATE, frames // BLOCK, len(found), len(found) * BLOCK / RATE, stretches(found))
+
+
 def find(rec: Recording) -> Noise:
-    found = noisy_blocks(rec)
-    return Noise(rec.frames / RATE, rec.frames // BLOCK, len(found), len(found) * BLOCK / RATE,
-                 stretches(found))
+    return summarise(rec.frames, noisy_blocks(rec))
+
+
+def find_source(src: Source, part_blocks: int = PART_BLOCKS) -> Noise:
+    """What find(the recording) finds, read part_blocks blocks at a time, so what it holds is
+    about one part and not the recording. A part is whole blocks, so none straddles an edge, and
+    the blocks found are numbered from the start of the recording, so a stretch that crosses an
+    edge joins as it does in one pass."""
+    blocks = src.frames // BLOCK
+    found: list[int] = []
+    for first in range(0, blocks, part_blocks):
+        last = min(blocks, first + part_blocks)
+        part = Recording(src.rate, src.read(first * BLOCK, last * BLOCK))
+        found += [first + k for k in noisy_blocks(part)]
+    return summarise(src.frames, found)
 
 
 def print_noise(path: Path, n: Noise, limit: int) -> None:
