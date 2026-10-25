@@ -1,6 +1,8 @@
 """How session_report.py's result reads as text. It has no command line."""
 from __future__ import annotations
 
+from aid_blocks import plural
+
 
 def _times(items: list[str], limit: int) -> list[str]:
     shown = [f"    {item}" for item in items[:limit]]
@@ -74,6 +76,17 @@ def stages(st: dict | None, limit: int) -> list[str]:
     return lines
 
 
+def noise(n: dict | None, limit: int) -> list[str]:
+    if n is None:
+        return ["noise    aid.raw missing"]
+    if not n["stretches"]:
+        return ["noise    none in aid.raw"]
+    lines = [f"noise    {plural(len(n['stretches']), 'stretch', 'stretches')} in aid.raw, "
+             f"{n['noisy_seconds']:.2f} s of {n['seconds']:.2f} s noise-like"]
+    return lines + _times([f"{s['start']:.3f} s to {s['end']:.3f} s, {plural(s['blocks'], 'block')}"
+                           for s in n["stretches"]], limit)
+
+
 def pacing(p: dict | None) -> list[str]:
     if p is None:
         return ["pacing   no [ft] or [rt] lines in stdout.txt"]
@@ -104,5 +117,5 @@ def system_log(s: dict | None) -> list[str]:
 
 def render(r: dict, limit: int) -> list[str]:
     return [*session(r["session"]), *device(r["device"], limit), *sound(r["sound"]), *stages(r["stages"], limit),
-            *pacing(r["pacing"]), *shaders(r["pacing"], r["shaders_background"]), *crashes(r["crashes"], limit),
-            *system_log(r["system_log"])]
+            *noise(r["noise"], limit), *pacing(r["pacing"]), *shaders(r["pacing"], r["shaders_background"]),
+            *crashes(r["crashes"], limit), *system_log(r["system_log"])]

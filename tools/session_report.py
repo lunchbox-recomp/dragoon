@@ -15,6 +15,8 @@ stdout.txt. It prints:
            (the mixer stage), as audio_clicks.py finds them
   stages   each device-stage click put down to the mixer, the ring, the device or nothing,
            as click_stages.py explains
+  noise    each stretch of aid.raw that turns to loud noise, with where it starts and ends, as
+           noise_blocks.py finds them at the DMA's 32 kHz, so out.wav isn't read for it
   pacing   the guest's interval between frames and the renderer's time from frame 300 (mean,
            p95, p99, worst) and the frames over 33 ms, as frametime.py reads them
   shaders  the programs compiled while it ran, on the render thread and in the background
@@ -28,7 +30,9 @@ A run-N directory inside a session, made when the game reset the console and rel
 reads its own part of the session's stdout.txt.
 
 Exits 0 once it has read the session, 2 on a bad argument or a directory without a readable
-session.json. A section whose file is missing or empty says so, and the rest still print.
+session.json. A section whose file is missing or empty says so, and the rest still print. A
+stretch of noise doesn't change the exit code, since the game's own bright sounds make short
+ones too.
 """
 from __future__ import annotations
 
@@ -44,6 +48,7 @@ import audio_clicks
 import click_stages
 import core_audio_log
 import frametime
+import noise_blocks
 import session_log
 import session_text
 from aid_blocks import RATE as DMA_RATE  # aid.raw's rate
@@ -70,6 +75,17 @@ def stage_sound(path: Path, raw_rate: int | None) -> audio_clicks.Report | None:
         return None
     try:
         return audio_clicks.analyse_file(path, raw_rate)
+    except ValueError:
+        return None
+
+
+def stage_noise(path: Path) -> noise_blocks.Noise | None:
+    """The noise-like stretches of aid.raw, or None when it's missing or has no samples. It
+    reads the DMA's 32 kHz as noise_blocks does, and is never given out.wav."""
+    if not path.is_file():
+        return None
+    try:
+        return noise_blocks.find(audio_clicks.read_raw(path, DMA_RATE))
     except ValueError:
         return None
 
@@ -122,6 +138,7 @@ def build(directory: Path, with_system_log: bool, run=subprocess.run) -> dict:
     info = read_session(directory)
     device_sound = stage_sound(directory / "out.wav", None)
     mixer_sound = stage_sound(directory / "aid.raw", DMA_RATE)
+    noise = stage_noise(directory / "aid.raw")
     found = session_log.run_lines(directory)
     lines, log_path = found if found else ([], None)
     missing = [name for name, there in (("out.wav", device_sound), ("aid.raw", mixer_sound), ("stdout.txt", found))
@@ -145,6 +162,7 @@ def build(directory: Path, with_system_log: bool, run=subprocess.run) -> dict:
         "sound": {"device": sound_summary(device_sound) if device_sound else None,
                   "mixer": sound_summary(mixer_sound) if mixer_sound else None},
         "stages": None,
+        "noise": asdict(noise) if noise else None,
         "pacing": pacing(lines),
         "shaders_background": len(log.background_ms),
         "crashes": log.fatal,

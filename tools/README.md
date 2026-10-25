@@ -68,6 +68,7 @@ It prints these:
 - the sound device's driver, rate, channels and buffer, then each late callback, each stretch of pulls the ring couldn't fill and each ring cut, with its time
 - clicks, gaps and clipped runs a minute in `out.wav` (the device stage) and in `aid.raw` (the mixer stage), through audio_clicks.py
 - each device-stage click put down to a stage
+- each stretch of `aid.raw` that turns to loud noise, with where it starts and ends, through noise_blocks.py
 - the frame pacing from frame 300 through frametime.py, with the frames over 33 ms
 - the shaders compiled while it ran, and every `FATAL` or `FAULT` line, which a guest panic ends in
 
@@ -76,6 +77,8 @@ A click is the mixer's when `aid.raw` clicks within 2 ms of the moment that outp
 Failing that it's the device's when a callback came late within 5 ms, and if nothing explains it, it's unexplained. Music streamed from the disc is mixed in after the ring, so a click in that music is unexplained. So is a sharp onset that the click finder flags in the 48 kHz device stage and not in the 32 kHz mixer stage.
 
 A late callback can starve the device without a mark in `out.wav`, which holds what was handed over and not when, so the late callbacks are listed on their own too.
+
+The noise check reads `aid.raw` only, at the DMA's 32 kHz. The ring interpolates to 48 kHz for the device, so `out.wav` isn't a fair input, as the noise_blocks.py section says. A stretch is a place to look, since the game's own bright sounds make short ones too, and it never changes the exit code.
 
 `--system-log` also counts the Core Audio overloads macOS logged from the session's start to 5 s past the end of `out.wav`. Core Audio logs one when an IO cycle misses its deadline. It runs `/usr/bin/log show --style compact` over that window with the predicate `subsystem == "com.apple.coreaudio" AND eventMessage CONTAINS[c] "overload"`, which only reads the log.
 
@@ -241,6 +244,8 @@ Where do the DMA's blocks turn to loud noise? It weighs each 160-sample block of
 ```
 tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw
 ```
+
+session_report.py runs it on a playtest session's `aid.raw`.
 
 ## clip_signs.py
 

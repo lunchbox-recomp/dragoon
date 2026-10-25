@@ -9,9 +9,10 @@ from pathlib import Path
 
 import audio_clicks
 import core_audio_log
+import noise_blocks
 import session_report
 import session_text
-from testutil import pcm, run_main, tone, write_file, write_wav
+from testutil import noise, pcm, run_main, tone, write_file, write_wav
 
 OUT, DMA = 48000, 32000
 EPOCH = 1792710000
@@ -227,6 +228,110 @@ class ReportTest(Session):
         info = {"dir": "d", "seconds": 119.6, "start": None, "host": None, "engine_sha": None, "missing": [],
                 "reset": False, "next_run": None}
         self.assertIn("  length  119.6 s (2 min 0 s), started None", session_text.session(info))
+
+
+def noisy_mixer() -> list[int]:
+    """Two seconds at 32 kHz of a tone with full-scale noise from 0.5 s to 1.0 s and again from
+    1.5 s to 1.6 s."""
+    x = tone(2 * DMA, DMA)
+    x[DMA // 2:DMA] = noise(DMA // 2, 32767, 1)
+    x[3 * DMA // 2:3 * DMA // 2 + DMA // 10] = noise(DMA // 10, 32767, 2)
+    return x
+
+
+def section(out: str, name: str) -> list[str]:
+    """The report's lines for one section: its first line and the indented ones after it."""
+    lines = out.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(name))
+    end = next((i for i in range(start + 1, len(lines)) if not lines[i].startswith(" ")), len(lines))
+    return lines[start:end]
+
+
+class NoiseTest(Session):
+    def write_mixer(self, x: list[int], extra: bytes = b"") -> None:
+        write_file(self.dir, "aid.raw", pcm(x, x) + extra)
+
+    def text(self, *args: str) -> tuple[int, str, str]:
+        return run_main(lambda argv: session_report.main(argv, Fake()), str(self.dir), *args)
+
+    def test_names_each_noise_like_stretch_with_where_it_starts_and_ends(self):
+        self.write_mixer(noisy_mixer())
+        code, r, err = self.report()
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(r["noise"], {"seconds": 2.0, "blocks": 400, "noisy_blocks": 120, "noisy_seconds": 0.6,
+                                      "stretches": [{"start": 0.5, "end": 1.0, "blocks": 100},
+                                                    {"start": 1.5, "end": 1.6, "blocks": 20}]})
+        code, out, err = self.text()
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(section(out, "noise"), ["noise    2 stretches in aid.raw, 0.60 s of 2.00 s noise-like",
+                                                 "    0.500 s to 1.000 s, 100 blocks",
+                                                 "    1.500 s to 1.600 s, 20 blocks"])
+
+    def test_list_caps_the_stretches_printed(self):
+        self.write_mixer(noisy_mixer())
+        _, out, _ = self.text("--list", "1")
+        self.assertEqual(section(out, "noise")[1:], ["    0.500 s to 1.000 s, 100 blocks", "    and 1 more"])
+
+    def test_one_stretch_of_one_block_reads_in_the_singular(self):
+        x = tone(2 * DMA, DMA)
+        x[DMA // 2:DMA // 2 + 160] = noise(160, 32767, 3)
+        self.write_mixer(x)
+        _, out, _ = self.text()
+        self.assertEqual(section(out, "noise"), ["noise    1 stretch in aid.raw, 0.01 s of 2.00 s noise-like",
+                                                 "    0.500 s to 0.505 s, 1 block"])
+
+    def test_a_session_without_noise_says_none(self):
+        code, r, err = self.report()
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(r["noise"], {"seconds": 2.0, "blocks": 400, "noisy_blocks": 0, "noisy_seconds": 0.0,
+                                      "stretches": []})
+        code, out, err = self.text()
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(section(out, "noise"), ["noise    none in aid.raw"])
+
+    def test_it_reads_aid_raw_and_never_the_device_recording(self):
+        write_wav(self.dir / "out.wav", noise(2 * OUT, 32767, 5), noise(2 * OUT, 32767, 6))
+        _, r, _ = self.report()
+        self.assertEqual(r["noise"]["stretches"], [])
+        self.write_mixer(noisy_mixer())
+        write_wav(self.dir / "out.wav", tone(2 * OUT, OUT), tone(2 * OUT, OUT))
+        _, r, _ = self.report()
+        self.assertEqual(len(r["noise"]["stretches"]), 2)
+
+    def test_aid_raw_is_a_recording_noise_blocks_reads_and_gives_the_same_result(self):
+        self.write_mixer(noisy_mixer())
+        code, out, _ = run_main(noise_blocks.main, str(self.dir / "aid.raw"), "--json")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out), self.report()[1]["noise"])
+
+    def test_a_recording_cut_off_mid_frame_reads_its_whole_frames(self):
+        self.write_mixer(noisy_mixer(), extra=b"\x01\x02\x03")
+        _, r, _ = self.report()
+        self.assertEqual((r["noise"]["blocks"], len(r["noise"]["stretches"])), (400, 2))
+
+    def test_a_missing_or_empty_aid_raw_is_left_out_as_the_other_stages_are(self):
+        for name, data in (("missing", None), ("empty", b""), ("under a frame", b"\0\0\0")):
+            with self.subTest(name):
+                if data is None:
+                    (self.dir / "aid.raw").unlink()
+                else:
+                    write_file(self.dir, "aid.raw", data)
+                code, r, err = self.report()
+                self.assertEqual(code, 0)
+                self.assertEqual((r["noise"], r["session"]["missing"]), (None, ["aid.raw"]))
+                self.assertEqual((r["sound"]["mixer"], r["stages"]), (None, None))
+                self.assertEqual(r["sound"]["device"]["clicks"], 4)
+                self.assertIn("aid.raw: missing or empty", err)
+                code, out, _ = self.text()
+                self.assertEqual(code, 0)
+                self.assertEqual(section(out, "noise"), ["noise    aid.raw missing"])
+
+    def test_a_stretch_of_noise_doesnt_change_the_exit_code(self):
+        self.write_mixer(noisy_mixer())
+        for args in ((), ("--json",), ("--list", "0")):
+            with self.subTest(args=args):
+                code, _, err = self.text(*args)
+                self.assertEqual((code, err), (0, ""))
 
 
 class SystemLogTest(Session):
