@@ -290,12 +290,16 @@ interval over 25 ms.
 
 Six of the eight had an sd of 0.064 to 0.071 ms. Celestial Valley's was 0.092 ms and Checker
 Knights' was 0.106 ms. Repeat runs kept them wide, at 0.107 ms for Celestial Valley and 0.105
-and 0.097 ms for Checker Knights, against 0.072 ms for Machine Passage.
+and 0.097 ms for Checker Knights.
 
-The log doesn't say what widened them. The `[rt]` columns vary from run to run, as repeat runs
-of Checker Knights (twice), Celestial Valley and Machine Passage read a mean of 0.79 to 0.86 ms
-and a 99th of 2.20 to 2.51 ms, where the rows above read 0.52 to 0.62 ms and 0.92 to 1.10 ms for
-those courses.
+The repeat runs were made in a later session, in real time, hidden and silent, with `--from 3400`.
+They started at load 5.80 and 1.47 for Checker Knights, 1.92 for Celestial Valley and 1.38 for
+Machine Passage, against 2.4 to 4.1 for seven of the eight rows. Machine Passage's 0.072 ms
+repeats a course the table has at 0.065 ms.
+
+The log doesn't say what widened them. The `[rt]` columns didn't repeat in the later session. The
+four runs agree with each other, at a mean of 0.79 to 0.86 ms and a 99th of 2.20 to 2.51 ms,
+where this table reads 0.52 to 0.62 ms and 0.92 to 1.10 ms for those courses.
 
 Three courses compiled one program each in play, at the frames in the Compiles column. Each
 compile took 1.9 to 3.0 ms, and the render frame that first drew with it took 3.97 to 6.14 ms.
@@ -754,8 +758,9 @@ The pin moved from `3a8d154` to `dac449e`, 27 commits. They write the memory car
 second and not after each page. They also remember which gamepad was on each port in
 `saves/ports.txt`.
 
-The pacer sleeps two thirds of each wait and spins the last 100 us, with the guest threads at
-user-interactive QoS on Apple platforms. DVD streamed music is held through a pause.
+The pacer sleeps in steps of two thirds of the wait left beyond a 100 us spin, at most 1 ms each,
+and spins the rest. The guest threads run at user-interactive QoS on Apple platforms. DVD streamed
+music is held through a pause.
 
 Built on Dragoon `4602fa1` with the pin moved to `dac449e`, the game ran
 `tools/frame_hashes.py check` and `tools/audio_hashes.py check` against the goldens on `main`.
@@ -763,8 +768,7 @@ Every route matched, all 1,297 frames and all 42 audio rows, so no golden was re
 check took about 10 min 10 s and the audio check about 10 min 40 s.
 
 Main has since moved to `5d01033`, and `4602fa1..5d01033` changes only files under `tools/`. The
-game and the hash tools aren't among them, so the build and these results are the same on the new
-head.
+game and the hash tools aren't among them, so the build is the same on the new head.
 
 The frame hashes run with `--fast`, where `clock_pace` returns before it waits. The audio hashes
 read the AX output of `dragoon_bench`, which opens no gamepad and stubs the audio subsystem that
