@@ -47,8 +47,8 @@ has two rows of five.
 The locked slot is Nebula Belt, the ninth course. A blank memory card can't pick it, so it
 has no route. `docs/dev/status.md` says what the game checks before it opens.
 
-The three `-courses` routes race one course after another, so the shader warm-up builds every
-course's programs in fewer passes. They leave most courses from the pause menu, where START
+The three `-courses` routes race one course after another, so the shader warm-up plays most
+courses in fewer passes. They leave most courses from the pause menu, where START
 pauses and two DOWN and an A pick End Game.
 
 End Game goes back to the mode's own menu with Start Game under the cursor. An A there goes
