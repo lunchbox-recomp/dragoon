@@ -39,6 +39,9 @@ class PlaceTest(unittest.TestCase):
     def counts(self, result: block_clicks.Result) -> dict[str, tuple[int, int, float]]:
         return {c.kind: (c.blocks, c.clicks_on, c.by_chance) for c in result.counts}
 
+    def stretches(self, result: block_clicks.Result) -> dict[str, int]:
+        return {c.kind: c.stretches for c in result.counts}
+
     def test_a_replayed_block_clicks_where_it_starts_and_counts_on_it(self):
         x, log = dma(100, replays={40})
         got = block_clicks.place(self.write(x, log))
@@ -57,6 +60,42 @@ class PlaceTest(unittest.TestCase):
         blocks, on, chance = self.counts(block_clicks.place(self.write(x, log)))["caught up"]
         self.assertEqual((blocks, on), (3, 0))
         self.assertAlmostEqual(chance, (3 * BLOCK + 5) / len(x))
+
+    def test_blocks_in_a_row_are_one_stretch_and_blocks_apart_are_each_one(self):
+        x, log = dma(100, replays={60, 80}, caught_up={10, 11, 12, 30, 32})
+        got = block_clicks.place(self.write(x, log))
+        self.assertEqual(self.counts(got)["caught up"][0], 5)
+        self.assertEqual(self.stretches(got)["caught up"], 3)  # 10 to 12, 30 and 32
+        self.assertEqual(self.counts(got)["replayed"][0], 2)
+        self.assertEqual(self.stretches(got)["replayed"], 2)
+
+    def test_a_stretch_of_either_kind_joins_neighbours_of_both(self):
+        # The replay makes log block 41 the same buffer as 40, and 42 and 20 are caught up.
+        x, log = dma(100, replays={40}, caught_up={42, 20})
+        got = block_clicks.place(self.write(x, log))
+        self.assertEqual(self.stretches(got), {"replayed": 1, "caught up": 2, "either": 2})
+        self.assertEqual(self.counts(got)["either"][0], 3)
+
+    def test_a_run_with_no_marked_blocks_has_no_stretches(self):
+        x, log = dma(50)
+        self.assertEqual(self.stretches(block_clicks.place(self.write(x, log))),
+                         {"replayed": 0, "caught up": 0, "either": 0})
+
+    def test_a_marked_block_past_the_recording_is_in_no_stretch(self):
+        x, log = dma(100, caught_up={20})
+        log += f"{len(x) + 800} {BLOCK} 21223426 1 00571E00 1\n"
+        got = block_clicks.place(self.write(x, log))
+        self.assertEqual((self.counts(got)["caught up"][0], self.stretches(got)["caught up"]), (2, 1))
+
+    def test_a_last_line_cut_short_is_left_out_of_the_blocks_and_the_stretches(self):
+        for cut in ("15840 160 21", "15840 160 21223426 1 0057"):
+            with self.subTest(cut=cut):
+                x, log = dma(100, caught_up={97, 98, 99})
+                lines = log.splitlines(keepends=True)
+                got = block_clicks.place(self.write(x, "".join(lines[:-1]) + cut))
+                self.assertEqual(got.blocks, 99)
+                self.assertEqual(self.counts(got)["caught up"][0], 2)
+                self.assertEqual(self.stretches(got)["caught up"], 1)
 
     def test_a_block_of_both_kinds_counts_once_in_either(self):
         x, log = dma(100, replays={40}, caught_up={41, 60})
@@ -163,9 +202,17 @@ class MainTest(unittest.TestCase):
         code, out, _ = run_main(block_clicks.main, str(self.path))
         self.assertEqual(code, 0)
         self.assertIn("101 blocks, 1 click\n", out)
-        self.assertRegex(out, r"replayed +1 block, 1 click on them \(0\.0 by chance\)")
-        self.assertRegex(out, r"caught up +1 block, 1 click on them")
+        self.assertRegex(out, r"replayed +1 block in 1 stretch, 1 click on them \(0\.0 by chance\)")
+        self.assertRegex(out, r"caught up +1 block in 1 stretch, 1 click on them")
         self.assertRegex(out, r"samples into its block, replayed and caught up\n")
+
+    def test_prints_stretches_in_the_plural(self):
+        x, log = dma(100, caught_up={10, 11, 30})
+        write_file(self.dir, "mixer.raw.txt", log)
+        self.path = write_file(self.dir, "mixer.raw", pcm(x, x))
+        _, out, _ = run_main(block_clicks.main, str(self.path))
+        self.assertRegex(out, r"caught up +3 blocks in 2 stretches, 0 clicks on them")
+        self.assertRegex(out, r"replayed +0 blocks in 0 stretches, 0 clicks on them")
 
     def test_list_0_prints_no_clicks(self):
         _, out, _ = run_main(block_clicks.main, str(self.path), "--list", "0")
@@ -176,6 +223,7 @@ class MainTest(unittest.TestCase):
         _, out, _ = run_main(block_clicks.main, str(self.path), "--json")
         got = json.loads(out)
         self.assertEqual([c["kind"] for c in got["counts"]], ["replayed", "caught up", "either"])
+        self.assertEqual([c["stretches"] for c in got["counts"]], [1, 1, 1])
         self.assertEqual(got["placed"][0]["kinds"], ["replayed", "caught up"])
 
     def test_a_recording_with_no_block_log_exits_2_with_one_line(self):

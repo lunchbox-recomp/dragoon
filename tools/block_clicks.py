@@ -12,12 +12,15 @@ audio_clicks.py's functions. Two kinds of block are marked.
   caught up  delivered while the clock caught up with the host
 
 A click is on a marked block when its first sample is in the block or within 2 samples of
-either end. For each kind, and for the two together, it prints the marked blocks, the clicks on
-them and the count chance would put there, which is the clicks times the share of the recording
-those blocks and their 2 samples either side cover. A --real-time run's clock catches up where
-the host falls behind, and an unpaced run's never does. --list N prints the first N clicks on a
-marked block (default 20), each with its offset in its block and the kinds it's on. --json
-prints the whole result.
+either end. For each kind, and for the two together, it prints the marked blocks, the stretches
+they come in, the clicks on them and the count chance would put there, which is the clicks times
+the share of the recording those blocks and their 2 samples either side cover. A stretch is a
+run of marked blocks that follow one another in the log, so 5 caught-up blocks in a row are 1
+stretch and 5 with unmarked blocks between are 5. A block past the recording's end is in no
+stretch, and a last log line a killed run cut short is skipped. A --real-time run's clock
+catches up where the host falls behind, and an unpaced run's never does. --list N prints the
+first N clicks on a marked block (default 20), each with its offset in its block and the kinds
+it's on. --json prints the whole result.
 
 Exits 0 once it has read both files, 2 on a bad argument, a file it can't read or a block log
 whose last block ends more than a second from the recording's end, which can't be that
@@ -44,6 +47,7 @@ LOG_SLACK = RATE  # samples a log's end may be from its recording's. 4096 bytes 
 class OnBlocks:
     kind: str
     blocks: int
+    stretches: int  # runs of neighbouring marked blocks, which cover their samples as one span
     clicks_on: int
     by_chance: float
 
@@ -106,7 +110,7 @@ def place(path: Path) -> Result:
     clicks = [round(c.at * RATE) for c in report.clicks]
     kinds = marked(blocks)
     covered = {kind: spans(found, rec.frames) for kind, found in kinds.items()}
-    counts = [OnBlocks(kind, len(found), sum(inside(i, covered[kind]) for i in clicks),
+    counts = [OnBlocks(kind, len(found), len(covered[kind]), sum(inside(i, covered[kind]) for i in clicks),
                        len(clicks) * sum(hi - lo for lo, hi in covered[kind]) / rec.frames)
               for kind, found in kinds.items()]
     starts = [b.start for b in blocks]
@@ -122,8 +126,8 @@ def place(path: Path) -> Result:
 def print_result(path: Path, r: Result, limit: int) -> None:
     print(f"{path}: {r.seconds:.2f} s, {plural(r.blocks, 'block')}, {plural(r.clicks, 'click')}")
     for c in r.counts:
-        print(f"{c.kind:10} {plural(c.blocks, 'block')}, {plural(c.clicks_on, 'click')} on them "
-              f"({c.by_chance:.1f} by chance)")
+        print(f"{c.kind:10} {plural(c.blocks, 'block')} in {plural(c.stretches, 'stretch', 'stretches')}, "
+              f"{plural(c.clicks_on, 'click')} on them ({c.by_chance:.1f} by chance)")
     for p in r.placed[:limit]:
         print(f"  {p.at:.3f} s, {p.db:.1f} dB, {plural(p.offset, 'sample')} into its block, {' and '.join(p.kinds)}")
     if len(r.placed) > limit:
