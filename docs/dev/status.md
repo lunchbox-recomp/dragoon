@@ -18,8 +18,8 @@ checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed 
 and `0059fce` on gcn-recomp `e1016b8` (under Player targets).
 
 The pin was `3a8d154`, where on Dragoon `84d68bd` all twenty-one routes' frames and audio still
-matched with the widescreen hooks built in and switched off. It's now `dac449e`, and all
-twenty-one still match there (under gcn-recomp `dac449e` below).
+matched with the widescreen hooks built in and switched off. It's now `dac449e`, and on Dragoon
+`4602fa1` with the pin moved all twenty-one still match there (under gcn-recomp `dac449e` below).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -256,7 +256,7 @@ to 2.0 ms. The render frame that first drew with it took 41.57 ms on Fantasy Mea
 
 ### At gcn-recomp `dac449e`
 
-The rows above are from Dragoon `788571c` at gcn-recomp `b848158`. At gcn-recomp `dac449e` the same eight routes ran once more, as `tools/probe.sh pace-ROUTE 130 tests/routes/ROUTE.txt 100000 --real-time GCN_FRAMETIME=1`, hidden and silent. Each started with the cache from one warm-up of all twenty-one manifest routes copied to its `saves/shaders.bin`, so boot loaded 318 programs.
+These rows are from Dragoon `4602fa1` with the pin moved to `dac449e`, and the rows above are from Dragoon `788571c` at gcn-recomp `b848158`. The same eight routes ran once more, as `tools/probe.sh pace-ROUTE 130 tests/routes/ROUTE.txt 100000 --real-time GCN_FRAMETIME=1`, hidden and silent. Each started with the cache from one warm-up of all twenty-one manifest routes copied to its `saves/shaders.bin`, so boot loaded 318 programs.
 
 The load average when each run began was 2.4 to 4.1, except the first run's 11.0, which started right after the warm-up. The rows are `tools/frametime.py build/probe/pace-ROUTE/stdout.txt --from 3400 --slow 16.7 --late 25`. The sd is the population standard deviation of the guest's frame interval, and Late counts guest intervals over 25 ms.
 
@@ -731,7 +731,9 @@ and 1,500). Frame 1,200 hashes to `ba0a9f9b` on all nine, as it does on the menu
 
 The pin moved from `3a8d154` to `dac449e`, 27 commits. They write the memory card after a quiet second and not after each page. They also sleep two thirds of each pacer wait and spin the last 100 us, with the guest and front end threads at user-interactive QoS, remember which gamepad was on each port in `saves/ports.txt` and hold DVD streamed music through a pause.
 
-Built at `dac449e`, the game ran `tools/frame_hashes.py check` and `tools/audio_hashes.py check` against the goldens on `main`. Every route matched, all 1,297 frames and all 42 audio rows, so no golden was recorded. The frame check took about 10 min 10 s and the audio check about 10 min 40 s.
+Built on Dragoon `4602fa1` with the pin moved to `dac449e`, the game ran `tools/frame_hashes.py check` and `tools/audio_hashes.py check` against the goldens on `main`. Every route matched, all 1,297 frames and all 42 audio rows, so no golden was recorded. The frame check took about 10 min 10 s and the audio check about 10 min 40 s.
+
+Main has since moved to `5d01033`, and `4602fa1..5d01033` changes only files under `tools/`. The game and the hash tools aren't among them, so the build and these results are the same on the new head.
 
 The frame hashes run with `--fast`, where `clock_pace` returns before it waits. The audio hashes read the AX output of `dragoon_bench`, which opens no gamepad and stubs the audio subsystem that holds the music. The card's file is written later now, and the guest still reads the card from memory.
 
