@@ -100,7 +100,7 @@ def bursts(at: list[int], blocks: int, tail: int = 0) -> list[int]:
 
 
 def source(left: list[int], right: list[int], asked: list[tuple[int, int]] | None = None) -> Source:
-    """The channels as a Source, with each read it is asked for added to ASKED."""
+    """The channels as a Source, with each read it's asked for added to ASKED."""
     def read(lo: int, hi: int) -> list[array]:
         if asked is not None:
             asked.append((lo, hi))
@@ -113,9 +113,10 @@ class FindSourceTest(unittest.TestCase):
     PARTS = (1, 2, 3, 7, 10, 20, 21, 41, 60, 61, 140, 6000)  # in blocks, edges falling in every stretch and gap
 
     def setUp(self):
-        # The quiet right channel and the loud left one show that noise on one is enough.
-        self.left = bursts([8, 9, 10, 11, 12, 40, 60, 81, 130, 131], 140, tail=100)
-        self.right = tone(len(self.left), RATE, amp=1000)
+        # Each channel is quiet in the blocks where the other has the noise, so a block counts when either does.
+        # The last whole block is noisy, which a part of one block starts on.
+        self.left = bursts([8, 9, 10, 40, 60, 130], 140, tail=100)
+        self.right = bursts([11, 12, 81, 131, 139], 140, tail=100)
 
     def whole(self) -> noise_blocks.Noise:
         return noise_blocks.find(rec(self.left, self.right))
@@ -123,7 +124,7 @@ class FindSourceTest(unittest.TestCase):
     def test_finds_what_one_pass_finds_at_any_part_size(self):
         whole = self.whole()
         self.assertEqual([(s.start, s.end, s.blocks) for s in whole.stretches],
-                         [(0.04, 0.065, 5), (0.2, 0.305, 2), (0.405, 0.41, 1), (0.65, 0.66, 2)])
+                         [(0.04, 0.065, 5), (0.2, 0.305, 2), (0.405, 0.41, 1), (0.65, 0.7, 3)])
         for part in self.PARTS:
             with self.subTest(part_blocks=part):
                 self.assertEqual(noise_blocks.find_source(source(self.left, self.right), part), whole)
