@@ -14,6 +14,7 @@ import unittest
 from pathlib import Path
 
 import engine_kit
+import export_source
 import launcher_build
 from testutil import archive, compile_c, run_main, write_file
 
@@ -35,10 +36,11 @@ build CMakeFiles/gcn_core.dir/gcn-recomp/runtime/a.cpp.o: CXX_COMPILER__gcn_core
 
 def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
     """A no-disc build as CMake and Ninja leave it, runtime_check's two objects compiled from
-    one-line C with debug info, beside the gcn-recomp and SDL sources its cache names."""
-    build, engine, sdl = root / "build", root / "gcn-recomp", root / "sdl"
+    one-line C with debug info, beside the Dragoon, gcn-recomp and SDL sources its cache names."""
+    build, dragoon, engine, sdl = root / "build", root / "dragoon", root / "gcn-recomp", root / "sdl"
     sdl_build = build / "_deps" / "sdl3-build"
-    for path, text in {engine / "LICENSE": "MIT gcn-recomp\n",
+    for path, text in {dragoon / "src" / "hooks.cpp": "// hooks\n",
+                       engine / "LICENSE": "MIT gcn-recomp\n",
                        engine / "runtime" / "recomp.h": "/* recomp */\n",
                        engine / "runtime" / "compat.h": "/* compat */\n",
                        sdl / "LICENSE.txt": "zlib SDL\n",
@@ -50,6 +52,7 @@ def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
     archive(sdl_build / "libSDL3.a", compile_c("int SDL_Fake(void) { return 3; }\n", sdl_build / "fake.o"))
     write_file(build, "CMakeCache.txt",
                f"GAME_ISO:FILEPATH={disc}\nCMAKE_OSX_DEPLOYMENT_TARGET:STRING={target}\n"
+               f"dragoon_SOURCE_DIR:STATIC={dragoon}\n"
                f"gcn_recomp_SOURCE_DIR:STATIC={engine}\nSDL3_SOURCE_DIR:STATIC={sdl}\n"
                f"SDL3_BINARY_DIR:STATIC={sdl_build}\n")
     write_file(build, "build.ninja", NINJA)
@@ -80,7 +83,7 @@ class EngineKitTest(unittest.TestCase):
         code, _, err = self.kit(build)
         self.assertEqual(code, 2)
         self.assertIn(message, err)
-        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["build", "gcn-recomp", "sdl"])
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["build", "dragoon", "gcn-recomp", "sdl"])
 
     def test_kit_holds_the_engine_sdl_headers_flags_makefile_and_licenses(self) -> None:
         build = fake_build(self.root)
@@ -101,16 +104,21 @@ class EngineKitTest(unittest.TestCase):
         for rel, src in copies.items():
             self.assertEqual((self.out / rel).read_bytes(), src.read_bytes(), rel)
         mk = (self.out / "kit.mk").read_text().splitlines()
-        self.assertEqual(mk[-5:], [f"GAME_CFLAGS := {FLAGS}", f"LINK_FLAGS := {LDFLAGS}",
-                                   f"GAME_LIBS := {LIBS}", "MACOSX_MIN := 14.0", f"ENGINE_COMMIT := {ENGINE}"])
+        src_sha = export_source.src_digest(self.root / "dragoon")
+        self.assertEqual(mk[-6:], [f"GAME_CFLAGS := {FLAGS}", f"LINK_FLAGS := {LDFLAGS}",
+                                   f"GAME_LIBS := {LIBS}", "MACOSX_MIN := 14.0", f"ENGINE_COMMIT := {ENGINE}",
+                                   f"SRC_SHA256 := {src_sha}"])
         self.assertEqual(sorted(str(p.relative_to(self.out)) for p in self.out.rglob("*") if p.is_file()),
                          sorted(["engine.o", "kit.mk", *copies]))
         self.assertEqual(stat.S_IMODE(self.out.stat().st_mode), 0o755)
 
-    def test_the_recipe_takes_the_kit_for_its_own_gcn_recomp_commit_only(self) -> None:
+    def test_the_recipe_takes_the_kit_for_its_own_gcn_recomp_commit_and_src_only(self) -> None:
         self.assertEqual(self.kit(fake_build(self.root))[0], 0)
-        self.assertIsNone(launcher_build.kit_problem(self.out, ENGINE))
-        self.assertIn(f"the kit is from gcn-recomp {ENGINE}", launcher_build.kit_problem(self.out, "f" * 40))
+        source = self.root / "dragoon"
+        self.assertIsNone(launcher_build.kit_problem(self.out, ENGINE, source))
+        self.assertIn(f"the kit is from gcn-recomp {ENGINE}", launcher_build.kit_problem(self.out, "f" * 40, source))
+        write_file(source / "src", "hooks.cpp", "// other hooks\n")
+        self.assertIn("the kit's src/ has SHA-256", launcher_build.kit_problem(self.out, ENGINE, source))
 
     def test_refuses_a_build_without_a_clean_gcn_recomp_commit(self) -> None:
         for sha in ("", ENGINE + "-dirty", ENGINE[:12]):
@@ -207,7 +215,7 @@ class EngineKitTest(unittest.TestCase):
         code, _, err = self.kit(build, "--ld", "/usr/bin/false")
         self.assertEqual(code, 1)
         self.assertIn("false exited 1", err)
-        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["build", "gcn-recomp", "sdl"])
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["build", "dragoon", "gcn-recomp", "sdl"])
 
 
 # Stands in for clang and clang++: records its arguments, then writes its -o.

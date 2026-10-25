@@ -92,6 +92,11 @@ class ExportTest(ExportTestCase):
                        for p in self.files() if p != export_source.MANIFEST)
         self.assertEqual((self.out / export_source.MANIFEST).read_text(), want)
 
+    def test_the_snapshots_src_digest_is_the_checkouts(self):
+        commit(self.repo, {"src/hooks.cpp": "void hook(void) {}\n", "src/hooks.h": "void hook(void);\n"})
+        self.assertEqual(self.export()[0], 0)
+        self.assertEqual(export_source.src_digest(self.out), export_source.src_digest(self.repo))
+
     def test_an_untracked_file_neither_refuses_nor_ships(self):
         write_file(self.repo, "notes.txt", "mine")
         self.assertEqual(self.export()[0], 0)
@@ -249,6 +254,29 @@ class ManifestTest(unittest.TestCase):
             ("a.txt", hashlib.sha256(b"ay").hexdigest()),
             ("link", hashlib.sha256(b"/nowhere/game.iso").hexdigest()),
         ])
+
+
+class SrcDigestTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        (self.root / "src" / "a dir").mkdir(parents=True)
+        write_file(self.root / "src", "hooks.cpp", b"hooks")
+        write_file(self.root / "src" / "a dir", "b.h", b"bee")
+        write_file(self.root, "README.md", b"read me")
+
+    def test_is_the_sha256_of_srcs_manifest_lines(self):
+        lines = (f"{hashlib.sha256(b'bee').hexdigest()}  src/a dir/b.h\n"
+                 f"{hashlib.sha256(b'hooks').hexdigest()}  src/hooks.cpp\n")
+        self.assertEqual(export_source.src_digest(self.root), hashlib.sha256(lines.encode()).hexdigest())
+
+    def test_changes_with_a_file_in_src_and_not_with_one_outside(self):
+        before = export_source.src_digest(self.root)
+        write_file(self.root, "README.md", b"read me again")
+        self.assertEqual(export_source.src_digest(self.root), before)
+        write_file(self.root / "src", "hooks.cpp", b"other hooks")
+        self.assertNotEqual(export_source.src_digest(self.root), before)
 
 
 if __name__ == "__main__":

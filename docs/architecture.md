@@ -36,7 +36,9 @@ declares the function it calls inside its own braces. A function listed in `hle.
 called as `hle_<name>(CPU*)`, and its original body stays callable as `orig_<name>`.
 `gcn_add_game`'s `SOURCES` compiles `src/` into every game target, the benchmark included.
 `runtime_check` compiles it too, so the engine kit's `engine.o` carries the hooks for a game
-the launcher links from the kit.
+the launcher links from the kit. The kit's `kit.mk` names the gcn-recomp commit and the
+SHA-256 of the `src/` it was built from, and the launcher takes it only for a source snapshot
+with the same two.
 
 The hooks read guest memory through the runtime's `mem_r32` and friends, and the output
 aspect through `gx::output_aspect()`. Each one does nothing unless its `DRAGOON_*`

@@ -18,8 +18,8 @@ made if it's missing. The app is built under a temporary name in DIR and renamed
 failed run removes the app's temporary directory and the directories it made for DIR, so it
 leaves nothing behind. A directory that another run has put something in stays.
 
-It refuses a kit from another gcn-recomp commit than the snapshot's, as launcher_build.py does,
-since the kit's engine.o and headers wouldn't match the generated C. It refuses a kit that
+It refuses a kit from another gcn-recomp commit or another src/ than the snapshot's, as
+launcher_build.py does, since the kit's engine.o and headers wouldn't match the generated C. It refuses a kit that
 lacks a file the manifest lists or holds one it doesn't. It refuses a snapshot that lacks its
 source-info.json, source-manifest.txt or LICENSE, and one whose files aren't what
 source-manifest.txt lists, whether a file is missing, extra or edited. It refuses a DIR that is
@@ -144,7 +144,7 @@ def bad_argument(a: argparse.Namespace, manifest: bundle_manifest.BundleManifest
     if problem:
         return problem
     info = source_info.read(a.source / source_info.NAME)
-    return kit_problem(a.kit, info["gcn-recomp"])
+    return kit_problem(a.kit, info["gcn-recomp"], a.source)
 
 
 def assemble(app: Path, a: argparse.Namespace, manifest: bundle_manifest.BundleManifest) -> None:

@@ -102,13 +102,14 @@ def children(files: dict[str, object], parent: str) -> list[str]:
     return sorted(p for p in files if p.startswith(prefix) and "/" not in p[len(prefix):])
 
 
-def make_kit(path: Path, commit: str = ENGINE) -> Path:
-    """A kit holding what the manifest lists, with a kit.mk that names COMMIT."""
+def make_kit(path: Path, commit: str = ENGINE, src_sha: str = "0" * 64) -> Path:
+    """A kit holding what the manifest lists, with a kit.mk that names COMMIT and the src/
+    digest SRC_SHA."""
     for rel in KIT_FILES:
         file = path / rel
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_bytes(b"\xcf\xfa\xed\xfe " + rel.encode() + b"\0\xff")
-    (path / "kit.mk").write_text(f"GAME_CFLAGS := -O2\nENGINE_COMMIT := {commit}\n")
+    (path / "kit.mk").write_text(f"GAME_CFLAGS := -O2\nENGINE_COMMIT := {commit}\nSRC_SHA256 := {src_sha}\n")
     return path
 
 
@@ -116,7 +117,8 @@ def make_source(path: Path, engine: str = ENGINE) -> Path:
     """A snapshot as export_source.py writes one: files, a symlink, source-info.json for ENGINE
     and source-manifest.txt."""
     files = {"LICENSE": LICENSE, "README.md": b"read me\n", "tools/with space.py": b"print('hi')\n",
-             "gcn-recomp/LICENSE": b"the engine's license\n", "analysis/table.dat": bytes(range(256))}
+             "gcn-recomp/LICENSE": b"the engine's license\n", "analysis/table.dat": bytes(range(256)),
+             "src/hooks.cpp": b"// the game's hooks\n"}
     for rel, data in files.items():
         file = path / rel
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -157,8 +159,8 @@ class AppTestCase(unittest.TestCase):
         self.launcher = self.dir / "built launcher"
         self.launcher.write_bytes(LAUNCHER)
         self.launcher.chmod(0o644)
-        self.kit = make_kit(self.dir / "engine kit")
         self.source = make_source(self.dir / "dragoon source")
+        self.kit = make_kit(self.dir / "engine kit", src_sha=export_source.src_digest(self.source))
 
     def switch(self, *names: str) -> None:
         for name in names:
@@ -444,6 +446,10 @@ class RefusalTest(AppTestCase):
     def test_a_kit_that_names_no_commit(self):
         (self.kit / "kit.mk").write_text("GAME_CFLAGS := -O2\n")
         self.assert_refused("kit.mk")
+
+    def test_a_kit_built_from_another_src(self):
+        self.kit = make_kit(self.dir / "other kit")
+        self.assert_refused("the kit's src/ has SHA-256 " + "0" * 64)
 
     def test_a_snapshot_missing_any_of_its_own_files(self):
         for rel in (source_info.NAME, export_source.MANIFEST, "LICENSE", "README.md",

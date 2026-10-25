@@ -72,6 +72,13 @@ def format_manifest(entries: list[tuple[str, str]]) -> str:
     return "".join(f"{sha}  {path}\n" for path, sha in entries)
 
 
+def src_digest(root: Path) -> str:
+    """The SHA-256 that pairs an engine kit with the src/ under ROOT, a checkout or a snapshot.
+    It's taken over src/'s lines as source-manifest.txt gives them."""
+    entries = [(f"src/{path}", sha) for path, sha in manifest(root / "src")]
+    return hashlib.sha256(format_manifest(entries).encode()).hexdigest()
+
+
 def game_ids(cmake_text: str) -> tuple[str, str]:
     """The DISC_ID and DOL_SHA1 of the one gcn_add_game call in a CMakeLists.txt."""
     text = re.sub(r"#[^\n]*", "", cmake_text)

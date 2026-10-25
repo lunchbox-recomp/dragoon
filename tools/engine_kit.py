@@ -13,9 +13,10 @@ game besides Apple's Command Line Tools and the recompiler's inputs. OUT gets:
   kit.mk      what gcn-recomp's configure wrote to <build>: GAME_CFLAGS from
               game_cflags.txt, LINK_FLAGS from game_ldflags.txt and GAME_LIBS, the
               frameworks and libraries, from game_libs.txt; MACOSX_MIN, the build's
-              CMAKE_OSX_DEPLOYMENT_TARGET; and ENGINE_COMMIT, the gcn-recomp commit in the
-              gcn_engine_sha.h runtime_check was compiled with, which launcher_build.py
-              checks against the source snapshot's
+              CMAKE_OSX_DEPLOYMENT_TARGET; ENGINE_COMMIT, the gcn-recomp commit in the
+              gcn_engine_sha.h runtime_check was compiled with; and SRC_SHA256, the
+              src_digest export_source.py gives the build's src/, which runtime_check
+              compiles too. launcher_build.py checks both against the source snapshot's
   Makefile    launcher/kit/Makefile, which compiles gen/*.c and links the game
   licenses/   gcn-recomp's, SDL's and that of the hidapi inside SDL
 `ld -r` turns the objects' DWARF into a debug map naming the build's own .o files, which a
@@ -40,7 +41,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+import export_source
+
+ROOT =Path(__file__).resolve().parents[1]
 MAKEFILE = ROOT / "launcher" / "kit" / "Makefile"
 HEADERS = ("recomp.h", "compat.h")
 OBJECT_LINE = re.compile(r"^build (CMakeFiles/runtime_check\.dir/\S+\.o): ", re.M)
@@ -157,6 +160,7 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
     objects = engine_objects(build)
     engine = engine_commit(build)
     try:
+        dragoon_src = Path(cache["dragoon_SOURCE_DIR"])
         engine_src = Path(cache["gcn_recomp_SOURCE_DIR"])
         sdl_src = Path(cache["SDL3_SOURCE_DIR"])
         sdl_lib = Path(cache["SDL3_BINARY_DIR"]) / "libSDL3.a"
@@ -170,6 +174,7 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
     for src in copies:
         if not src.is_file():
             raise KitError(f"{src} is missing")
+    src_sha = export_source.src_digest(dragoon_src)
 
     tmp = Path(tempfile.mkdtemp(prefix=f".{out.name}.", dir=out.parent))
     try:
@@ -179,9 +184,9 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
             shutil.copyfile(src, tmp / rel)
         (tmp / "kit.mk").write_text(
             f"# Written by tools/engine_kit.py from {build.name}'s game_cflags.txt, game_ldflags.txt,\n"
-            "# game_libs.txt, CMakeCache.txt and gcn_engine_sha.h. Make a new kit rather than editing it.\n"
+            "# game_libs.txt, CMakeCache.txt, gcn_engine_sha.h and src/. Make a new kit rather than editing it.\n"
             f"GAME_CFLAGS := {flags}\nLINK_FLAGS := {ldflags}\nGAME_LIBS := {libs}\n"
-            f"MACOSX_MIN := {target}\nENGINE_COMMIT := {engine}\n")
+            f"MACOSX_MIN := {target}\nENGINE_COMMIT := {engine}\nSRC_SHA256 := {src_sha}\n")
         if strip_debug:
             run([str(strip), "-S", str(tmp / "engine.o"), str(tmp / "libSDL3.a")])
         tmp.chmod(0o755)  # mkdtemp made it 0700

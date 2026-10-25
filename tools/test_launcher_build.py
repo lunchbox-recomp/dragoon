@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import export_source
 import launcher_build
 import source_info
 from testutil import run_main, write_file
@@ -128,8 +129,8 @@ class RecipeTestCase(unittest.TestCase):
         (self.kit / "include").mkdir(parents=True)
         for name in ("Makefile", "engine.o", "libSDL3.a", "include/recomp.h"):
             write_file(self.kit, name, f"a fake {name}\n")
-        self.kit_mk(f"MACOSX_MIN := 14.0\nENGINE_COMMIT := {ENGINE}\n")
-        self.data = self.dir / "Application Support" / "Dragoon"
+        self.kit_mk(f"MACOSX_MIN := 14.0\nENGINE_COMMIT := {ENGINE}\n{self.src_line()}")
+        self.data =self.dir / "Application Support" / "Dragoon"
         self.cache = self.dir / "Caches" / "Dragoon"
         self.log = self.dir / "Logs" / "build 1.log"
         patch = mock.patch.object(launcher_build, "CODESIGN", str(codesign))
@@ -146,12 +147,17 @@ class RecipeTestCase(unittest.TestCase):
     def kit_mk(self, text: str) -> None:
         write_file(self.kit, "kit.mk", "GAME_CFLAGS := -O2\n" + text)
 
+    def src_line(self) -> str:
+        """The kit.mk line engine_kit.py writes for the snapshot's src/."""
+        return f"SRC_SHA256 := {export_source.src_digest(self.source)}\n"
+
     def fail_marker(self, tool: str) -> Path:
         return self.dir / f"fail {tool}"
 
     def make_snapshot(self, commit: str = COMMIT) -> None:
-        for d in ("gcn-recomp/recomp", "tools", "tests/hashes", "analysis", "recomp"):
+        for d in ("gcn-recomp/recomp", "tools", "tests/hashes", "analysis", "recomp", "src"):
             (self.source / d).mkdir(parents=True, exist_ok=True)
+        write_file(self.source / "src", "hooks.cpp", "// the game's hooks\n")
         self.fake("extract_dol", EXTRACT_DOL, self.source / "gcn-recomp" / "recomp", "extract_dol.py")
         self.fake("recomp", RECOMP, self.source / "gcn-recomp" / "recomp", "recomp.py")
         self.fake("warm_shaders", WARM, self.source / "tools", "warm_shaders.py")
@@ -516,7 +522,8 @@ class LockTest(RecipeTestCase):
 
 
 class KitTest(RecipeTestCase):
-    """The kit's engine.o and headers come from the gcn-recomp commit its kit.mk names."""
+    """The kit's engine.o and headers come from the gcn-recomp commit its kit.mk names, and
+    engine.o's hooks from the src/ whose SHA-256 it names."""
 
     def setUp(self):
         super().setUp()
@@ -556,6 +563,32 @@ class KitTest(RecipeTestCase):
                 events = self.refused()
                 self.assertEqual(events[0]["message"], f"{self.kit / 'kit.mk'} doesn't name one gcn-recomp"
                                                        " commit, as engine_kit.py writes it")
+
+    def test_a_kit_of_another_src_exits_2_naming_both(self):
+        kit_src = self.src_line()
+        write_file(self.source / "src", "hooks.cpp", "// hooks the kit doesn't have\n")
+        self.kit_mk(f"ENGINE_COMMIT := {ENGINE}\n{kit_src}")
+        events = self.refused()
+        self.assertEqual(events[0]["message"],
+                         f"the kit's src/ has SHA-256 {kit_src.split()[-1]} and the source snapshot's"
+                         f" {export_source.src_digest(self.source)}: the hooks in the kit's engine.o"
+                         " wouldn't match the generated C")
+
+    def test_a_kit_naming_no_src_digest_exits_2(self):
+        line = self.src_line()
+        for name, text in (("no line", ""), ("a short one", line[:-2] + "\n"), ("two", line + line)):
+            with self.subTest(name):
+                self.kit_mk(f"ENGINE_COMMIT := {ENGINE}\n{text}")
+                events = self.refused()
+                self.assertEqual(events[0]["message"], f"{self.kit / 'kit.mk'} doesn't name one src/ digest,"
+                                                       " as engine_kit.py writes it")
+
+    def test_a_snapshot_with_no_src_exits_2(self):
+        for file in (self.source / "src").iterdir():
+            file.unlink()
+        (self.source / "src").rmdir()
+        events = self.refused()
+        self.assertEqual(events[0]["message"], f"{self.source / 'src'}: can't read it (No such file or directory)")
 
     def test_a_kit_with_no_kit_mk_exits_2(self):
         (self.kit / "kit.mk").unlink()

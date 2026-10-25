@@ -315,6 +315,8 @@ It writes nothing and exits 2 when:
 
 `--repo` names a checkout other than the one holding the tool. A missing OUT is made. git comes from `PATH` and tar is `/usr/bin/tar`.
 
+Its `src_digest` is the SHA-256 of `src/`'s lines in a `source-manifest.txt`, and it comes out the same from a checkout or a snapshot. engine_kit.py writes it to the kit, and launcher_build.py checks it.
+
 ## launcher_build.py
 
 How does the launcher build the game? launcher_build.py is its recipe, and a developer can run it from a shell. Given a snapshot from export_source.py, a kit from engine_kit.py, the player's disc and every tool by full path, it builds `<data>/game/<id>/Dragoon.app` and points `<data>/game/current` at it. The player's Mac runs no CMake or Ninja and never builds SDL. It prints one JSON event per line on stdout (the format is in `--help`). It writes every line the tools print to `--log`, with each command, each step's time and how much `--data` and `--cache` hold after it. That measurement never fails a step. A file removed while it's measured counts as nothing, and any other error is written to the log in its place.
@@ -329,7 +331,7 @@ How does the launcher build the game? launcher_build.py is its recipe, and a dev
 
 The tools run with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and four other variables, listed in `--help`, so nothing Homebrew or MacPorts installed reaches the build. The snapshot and the kit are only read, and Python runs with `-B`, so a build leaves the launcher's seal as it was.
 
-Before the swap nothing in `<data>` changes but the new `game/<id>`. A failed or killed build leaves the old game current and `saves/` as it was, and a package step that fails removes its `game/<id>`. Earlier builds stay in `<data>/game` for the launcher to delete. A second build while one runs exits 3 at `<cache>/build.lock` without touching anything, its `--log` included. A kit whose `kit.mk` names a gcn-recomp commit other than the one in the snapshot's `source-info.json`, or names none, exits 2 the same way, with an error event at step `kit`. Its `engine.o` and headers wouldn't match the generated C.
+Before the swap nothing in `<data>` changes but the new `game/<id>`. A failed or killed build leaves the old game current and `saves/` as it was, and a package step that fails removes its `game/<id>`. Earlier builds stay in `<data>/game` for the launcher to delete. A second build while one runs exits 3 at `<cache>/build.lock` without touching anything, its `--log` included. A kit whose `kit.mk` names a gcn-recomp commit other than the one in the snapshot's `source-info.json` or a `src/` digest other than the snapshot's, or names none, exits 2 the same way, with an error event at step `kit`. Its `engine.o` and headers wouldn't match the generated C.
 
 ```
 tools/launcher_build.py --source /tmp/dragoon-source --kit /tmp/engine-kit \
@@ -348,7 +350,9 @@ A first build on an M4 Max, with the Command Line Tools' make 3.81, clang 21 and
 
 ## engine_kit.py
 
-What does a player's Mac need to build the game without CMake, Ninja or SDL's source? engine_kit.py packs it from a build configured with no disc and a deployment target, once `runtime_check` and `SDL3-static` are built. The kit holds `engine.o` (runtime_check's objects joined by `ld -r`, so the link takes all of them), `libSDL3.a`, `recomp.h` and `compat.h`, `kit.mk`, the Makefile from `launcher/kit/` and the licenses of gcn-recomp, SDL and the hidapi inside SDL. runtime_check compiles Dragoon's `src/` too, so `engine.o` has the hooks the generated C calls. `kit.mk` takes `GAME_CFLAGS` from the `game_cflags.txt` gcn-recomp's configure wrote to the build directory, `LINK_FLAGS` from its `game_ldflags.txt` and `GAME_LIBS`, the frameworks and libraries, from its `game_libs.txt`. It also holds `MACOSX_MIN`, the build's deployment target. Its `ENGINE_COMMIT` is the gcn-recomp commit in the `gcn_engine_sha.h` that runtime_check was compiled with. So every flag and framework the game gets comes from CMake, and launcher_build.py can tell which snapshots the kit builds. `ENGINE_COMMIT` names only the gcn-recomp commit, so nothing checks that the kit's `src/` is the snapshot's.
+What does a player's Mac need to build the game without CMake, Ninja or SDL's source? engine_kit.py packs it from a build configured with no disc and a deployment target, once `runtime_check` and `SDL3-static` are built. The kit holds `engine.o` (runtime_check's objects joined by `ld -r`, so the link takes all of them), `libSDL3.a`, `recomp.h` and `compat.h`, `kit.mk`, the Makefile from `launcher/kit/` and the licenses of gcn-recomp, SDL and the hidapi inside SDL. `kit.mk` takes `GAME_CFLAGS` from the `game_cflags.txt` gcn-recomp's configure wrote to the build directory, `LINK_FLAGS` from its `game_ldflags.txt` and `GAME_LIBS`, the frameworks and libraries, from its `game_libs.txt`. It also holds `MACOSX_MIN`, the build's deployment target. Its `ENGINE_COMMIT` is the gcn-recomp commit in the `gcn_engine_sha.h` that runtime_check was compiled with. So every flag and framework the game gets comes from CMake, and launcher_build.py can tell which snapshots the kit builds.
+
+runtime_check compiles Dragoon's `src/` too, so `engine.o` has the hooks the generated C calls, and the player's Mac never compiles `src/`. The kit's `SRC_SHA256` is export_source.py's `src_digest` of the build's `src/`. launcher_build.py pairs a kit with a snapshot by both `ENGINE_COMMIT` and `SRC_SHA256`.
 
 ```
 cmake -S . -B build-kit -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DGAME_ISO=
@@ -437,7 +441,7 @@ It exits 0 when the app is there and prints its path. A step that failed, such a
 - `OUT/Dragoon.app` already exists
 - the kit lacks a file that `launcher/bundle-manifest.txt` lists, or holds one it doesn't
 - the snapshot lacks `source-info.json`, `source-manifest.txt` or `LICENSE`, or its files aren't the ones `source-manifest.txt` lists with their hashes, because one is missing, extra or edited
-- the kit is from another gcn-recomp commit than the snapshot's, which `kit_problem` in `launcher_build.py` decides for both tools
+- the kit is from another gcn-recomp commit or another `src/` than the snapshot's, which `kit_problem` in `launcher_build.py` decides for both tools
 
 The tests fake codesign with a script that records its call, so they sign nothing. Every path in them has a space.
 
