@@ -13,12 +13,16 @@
 # pass played it. A race that follows another starts from another state of the game, and there
 # Sky Sands, Magma Flows, Frozen Hillside and Checker Knights each missed programs their own
 # passes built late. So Sky Sands and Magma Flows open the two air-ride-courses routes as their
-# own routes race them, to frames 14,400 and 12,700, while the other two keep passes of their
-# own. air-ride-race, air-ride-celestial-valley and air-ride-beanstalk-park get the
-# programs they first draw past their own stretches from Sky Sands, which draws them by frame
-# 14,186. Changing what the -courses routes race means diffing the warm-up's cache against the
-# last one and running the eight air-ride routes unpaced to frame 16,000 again, as under
-# "Chained course passes" in docs/dev/status.md.
+# own routes race them, to frames 14,400 and 12,700, while the other two keep passes of their own.
+#
+# air-ride-race, air-ride-celestial-valley and air-ride-beanstalk-park get the programs they first
+# draw past their own stretches from Sky Sands, which draws them by frame 14,186. Of the keys
+# air-ride-race's own pass built, 8 come from passes other than air-ride-courses-1.
+#
+# Only shader_cache.py diff shows the passes still build every key, so any change to a pass or the
+# route it plays means diffing the new warm-up's cache against the last one both ways. A change to
+# what the -courses routes race also means running the eight air-ride routes unpaced to frame
+# 16,000 again, as under "Chained course passes" in docs/dev/status.md.
 title          20 60 60,960
 menu           20 60 1200 warm-from=city-trial-stadium
 air-ride-race  30 60 4200,6000 warm-from=air-ride-courses-1
