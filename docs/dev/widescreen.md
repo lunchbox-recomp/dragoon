@@ -69,9 +69,9 @@ module scales the camera library's 2.86082 by 0.78, a factor that comes from
 During play the camera module sets the world cameras' aspect through two calls to
 `HSD_CObjSetAspect` that return to `0x800C2884` in `kar_cmreplay__near_800c24e8` and to
 `0x800C9820` in `kar_cmreplay__near_800c9790`. The HUD, minimap and menu cameras get theirs
-from calls elsewhere, and that's the rule `src/cameras.h` keys on. After the race's finish
-the world cameras keep the aspect `CObjLoad` (`0x80402FC0`) copies from their description,
-and neither call runs for them.
+from calls elsewhere, and that's the rule `src/cameras.h` keys on. At gcn-recomp `3a8d154`,
+from frame 8,183 after the race's finish to 13,062, the full-screen world cameras store
+1.25538 with `DRAGOON_WIDEN=1`, and neither of the two calls sets them.
 
 A camera's address won't do as a rule, because one address can hold different cameras over a
 run. In the race, the address of a HUD 3D camera at frame 4200 belonged to a world camera at
@@ -157,7 +157,7 @@ with `DRAGOON_WIDEN=1`, and from the race's census after its finish.
   off to judge, so the world-to-screen check still needs doing there.
 - No object is cut off at a side edge in these dumps, and the world drew more at 16:9 in
   both. Pop-in while moving still needs a person to watch.
-- After the race's finish line the world cameras are back at 4:3. From frame 8,183 to 13,062
-  the full-screen world cameras store 1.25538 with `DRAGOON_WIDEN=1`, because `CObjLoad` sets
-  their aspect straight from their description and neither hooked call runs for them.
+- After the race's finish line the world cameras are back at 4:3. At gcn-recomp `3a8d154`,
+  from frame 8,183 to 13,062, the full-screen world cameras store 1.25538 with
+  `DRAGOON_WIDEN=1`, and neither of the two hooked calls sets them.
 - The widening stays behind `DRAGOON_WIDEN=1`.
