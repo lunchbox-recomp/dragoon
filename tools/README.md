@@ -53,6 +53,16 @@ A click is the mixer's when `aid.raw` clicks within 2 ms of the moment that outp
 
 `--json` prints the whole result, and `--list N` caps the times printed for each list (default 10). A run-N directory, made when the game reset the console, reads its own part of the session's `stdout.txt`. A file that's missing or empty leaves its sections out and is named on stderr. It exits 2 only when the directory has no readable `session.json`.
 
+## replay_session.py
+
+Does a session replay faithfully? It plays a session's input log back through probe.sh in a hidden window with no sound, with `--replay`, `GCN_AIDWAV`, `GCN_AXSTATS=1` and SDL's dummy driver, as `build/probe/replay-<name>/`. Guest time is virtual, so a faithful replay hands the mixer the same blocks the session did. It compares the SHA-1 of the session's `aid.raw` with that of as much of the replay's, says where they first differ when they do and lists the mixer clicks in the replay over the session's length. It also shows each line where the game said the replay parted from its recording, and warns when the session ran on another engine commit than the one built.
+
+```
+tools/replay_session.py build/playtest/20261022-161851
+```
+
+The replay runs to 600 frames more than 60 for each second of the session's mixer audio. probe.sh gives it twice the session's length plus two minutes. The input log is copied into the replay's directory first, since a replay keeps a scratch copy of the memory card beside the log it reads, so the session stays as it was. An earlier replay's directory is deleted first. It exits 0 when the mixer audio matches, 1 when it differs or the replay stops short, and 2 on a bad argument, a session without `inputs/` or `aid.raw`, or a probe.sh run that failed.
+
 ## frametime.py
 
 How steady is the frame pacing, and what made the slow frames slow? It reads the log of a run made with `GCN_FRAMETIME=1`, prints the guest's and the renderer's mean, population standard deviation, p95, p99 and worst times from a given frame on, and lists each frame whose render time went over a limit with its batch shape and the shaders compiled in it. Then it lists each frame whose guest interval went over `--late` (25 ms unless you give it).
@@ -259,7 +269,7 @@ What does a source snapshot hold? Its `source-info.json` names the Dragoon and g
 
 What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error.
 
-`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py and the scorecard use both. It has no command line.
+`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py, replay_session.py and the scorecard use both. It has no command line.
 
 ## aid_blocks.py
 
