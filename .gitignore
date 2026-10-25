@@ -15,6 +15,12 @@ frame_*.png
 output_*.png
 stdout.txt
 panic.txt
+# What a playtest session records, wherever GCN_SESSION puts it
+*.raw
+*.raw.txt
+*.wav
+session.json
+inputs.txt
 .DS_Store
 
 # Local Claude settings and notes

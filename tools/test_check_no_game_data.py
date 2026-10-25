@@ -18,6 +18,16 @@ class ViolationsTest(unittest.TestCase):
         paths = ["build/gen/recomp_0.c", "build-nodisc/x.o", "saves/memcard_a.raw"]
         self.assertEqual(check_no_game_data.violations(paths), paths)
 
+    def test_playtest_sessions_fail(self):
+        session = "build/playtest/20261022-160000/"
+        paths = [session + name for name in ("session.json", "out.wav", "aid.raw", "aid.raw.txt", "stdout.txt",
+                                             "inputs/inputs.txt", "inputs/memcard_a.raw", "run-2/out.wav")]
+        self.assertEqual(check_no_game_data.violations(paths), paths)
+
+    def test_a_session_written_outside_build_fails(self):
+        paths = ["session.json", "x/AID.RAW.TXT", "x/inputs/inputs.txt", "x/inputs/sram.raw", "x/run-2/session.json"]
+        self.assertEqual(check_no_game_data.violations(paths), paths)
+
     def test_anything_else_in_rom_fails(self):
         self.assertEqual(check_no_game_data.violations(["rom/notes.txt"]), ["rom/notes.txt"])
 
@@ -32,7 +42,8 @@ class ViolationsTest(unittest.TestCase):
 
     def test_lookalikes_pass(self):
         paths = ["x/frame_00060.png.bak", "x/xframe_00060.png", "x/output_00060.png.bak",
-                 "x/xoutput_00060.png", "x/saves.txt", "x/stdout.txt.md"]
+                 "x/xoutput_00060.png", "x/saves.txt", "x/stdout.txt.md", "x/session.json.md", "x/inputs.txt.md",
+                 "x/aid.raw.txt.md", "x/my-session.json", "x/inputs/inputs.txt.bak"]
         self.assertEqual(check_no_game_data.violations(paths), [])
 
 

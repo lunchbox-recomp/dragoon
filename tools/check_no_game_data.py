@@ -10,6 +10,8 @@ like game data:
   - anything under a top-level build*/ or rom/ (except rom/README.md), or under a saves/
     at any depth
   - a frame dump (frame_NNNNN.png or output_NNNNN.png), stdout.txt or panic.txt anywhere
+  - a playtest session's session.json, the input log's inputs.txt and an aid.raw.txt block
+    log, wherever GCN_SESSION put them
 Other .png files are fine. The rules mirror .gitignore, so a file added with `git add -f`
 still fails CI. It prints nothing when the tree is clean.
 
@@ -26,8 +28,9 @@ from frame_dumps import FRAME_NAME, OUTPUT_NAME
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_SUFFIXES = (".iso", ".gcm", ".ciso", ".rvz", ".gcz", ".wbfs", ".dol", ".rel", ".gci", ".raw",
-                 ".wav", ".bin")
+                 ".wav", ".bin", ".raw.txt")
 LOG_NAMES = ("stdout.txt", "panic.txt")
+SESSION_NAMES = ("session.json", "inputs.txt")
 
 
 def is_frame_dump(name: str) -> bool:
@@ -37,7 +40,7 @@ def is_frame_dump(name: str) -> bool:
 def is_game_data(path: str) -> bool:
     parts = PurePosixPath(path).parts
     base = parts[-1]
-    if path.lower().endswith(DATA_SUFFIXES) or base in LOG_NAMES or is_frame_dump(base):
+    if path.lower().endswith(DATA_SUFFIXES) or base in LOG_NAMES + SESSION_NAMES or is_frame_dump(base):
         return True
     if "saves" in parts[:-1]:
         return True
