@@ -12,11 +12,13 @@ twelve audio-hash routes pass at `fe0c0bf`. At gcn-recomp `b97c019` eleven route
 all twelve routes' audio changed, and both sets of goldens were recorded again there. At
 `e1016b8` all twelve matched them. The goldens of the nine Top Ride and stadium routes were
 recorded at `e1016b8` on Dragoon `1a88f62`, and all twenty-one routes' frames and audio match
-there (under gcn-recomp `e1016b8` below). The pin is now `3a8d154`, where all twenty-one still
-match with the widescreen hooks built in and switched off. The Top Ride and stadium pacing
-numbers are from Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen
-findings were checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed
-at `2e6e6f8` and `0059fce` on gcn-recomp `e1016b8` (under Player targets).
+there (under gcn-recomp `e1016b8` below). The Top Ride and stadium pacing numbers are from
+Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen findings were
+checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed at `2e6e6f8`
+and `0059fce` on gcn-recomp `e1016b8` (under Player targets).
+
+The pin is now `3a8d154`. On Dragoon `84d68bd` at that pin, all twenty-one routes' frames and
+audio still match with the widescreen hooks built in and switched off.
 
 | Feature | Status | Note |
 |---|---|---|
