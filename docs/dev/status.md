@@ -16,7 +16,8 @@ there (under gcn-recomp `e1016b8` below). The Top Ride and stadium pacing number
 Dragoon `788571c` at gcn-recomp `b848158`. The memory card and stats screen findings were
 checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed at `2e6e6f8`
 and `0059fce` on gcn-recomp `e1016b8`, and with three course passes longer at `529f40c` on
-`dac449e` (under Player targets).
+`dac449e` (under Player targets). The eight-pass warm-up was timed at `2fc9285` on `dac449e`,
+and the three `-courses` routes' goldens were recorded on the same pin just before it.
 
 The pin was `3a8d154`, where on Dragoon `84d68bd` all twenty-one routes' frames and audio still
 matched with the widescreen hooks built in and switched off. It's now `dac449e`, and on Dragoon
@@ -132,6 +133,10 @@ need `--pads=4`.
 | Beanstalk Park | `air-ride-beanstalk-park.txt` | 4200 | Lap 1 of 2, 0:14, first, on a grass slope with beanstalks against the clouds |
 | Machine Passage | `air-ride-machine-passage.txt` | 4200 | Lap 1 of 2, 0:14, fourth, stopped against a dark metal wall |
 | Checker Knights | `air-ride-checker-knights.txt` | 4200 | Lap 1 of 2, 0:14, fourth, beside the sea with checkered blocks overhead |
+| Fantasy Meadows after Sky Sands | `air-ride-courses-1.txt` | 17300 | Lap 1 of 3, 0:14, fourth, at a tunnel mouth with a CPU in it |
+| Celestial Valley after Fantasy Meadows | `air-ride-courses-1.txt` | 22900 | Lap 1 of 2, 0:14, third, on a grass ledge over the night clouds |
+| Machine Passage after Magma Flows | `air-ride-courses-2.txt` | 15600 | Lap 1 of 2, 0:14, fourth, stopped against a dark metal wall |
+| Beanstalk Park after Machine Passage | `air-ride-courses-2.txt` | 19400 | Lap 1 of 2, 0:14, fourth, on a grass slope with balloons and rings off to the right |
 | City Trial | `city-trial.txt` | 3300 | The city, 4:54 left |
 | Four-player entry | `city-trial-4p.txt` | 2700 | P1 OK to P4 OK under READY?, each player joined from its own port |
 | Four-player City Trial | `city-trial-4p.txt` | 3480 | Four views, 4:51 left, ports 1 and 3 steering left and 2 and 4 right |
@@ -143,6 +148,7 @@ need `--pads=4`.
 | Four-player stadium | `city-trial-stadium-4p.txt` | 17100 | Drag Race 3 in four views, 0:06 on the clock |
 | Four-player results | `city-trial-stadium-4p.txt` | 21000 | P3 first in 0:53.31, then P2, P4 and P1 in 1:00.15, under confetti |
 | Top Ride race | `top-ride-<course>.txt` | 3600 | Each course 3.62 s into the race. Seven laps on Grass and Sand, six on Sky, Fire and Light, five on Water and Metal |
+| Top Ride courses in turn | `top-ride-courses.txt` | 6100 to 18600 | Sand, Sky, Metal, Water, Light and then Fire, every 2,500 frames, each race under way after the one before |
 
 Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
 frame 25,800. That's from gcn-recomp `deac351` with the aspect change (`widescreen.md`), and
@@ -578,12 +584,12 @@ What a player's first session looks like after the warm-up, against the bars set
 
 | Target | Bar | Measured | Result |
 |---|---|---|---|
-| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five, worst render frame 14.6 ms, with the race run 130 s to frame 7,706 (Dragoon `529f40c`) | Pass |
-| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five, with the race run to frame 7,706 (Dragoon `529f40c`). The eight Air Ride course routes compiled none, unpaced to frame 16,000 or in 130 s real-time runs, as "Longer course passes" below shows | Pass |
+| Stalls in a fresh install's first session | 0 frames over 33 ms after frame 300 on all five routes | 0 frames on all five after the eight-pass warm-up, worst render frame 15.45 ms, with the race run 130 s to frame 7,701 (Dragoon `2fc9285`). At `529f40c`, before the courses were chained, 0 on all five with the worst at 14.6 ms | Pass |
+| Shaders compiled during play after the warm-up | 0 `[shaders] compiled program` lines on the five routes | 0 on all five after the eight-pass warm-up, with the race run to frame 7,701 (Dragoon `2fc9285`), as at `529f40c`. The eight Air Ride course routes compiled none, unpaced to frame 16,000 or in 130 s real-time runs, as "Longer course passes" and "Chained course passes" below show | Pass |
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
-| Time added to the first build | 90 s or less | 74.8 s at a load of 1.22 for all twenty-one routes' 328 keys, five passes at a time on an M4 Max (Dragoon `529f40c`), and 73.7 s to 76.1 s under "Longer course passes". Before three of those passes grew, 67.7 s and 68.9 s for 318 keys five at a time (Dragoon `0059fce`, table below). One pass at a time, 47.1 s for the five routes' 191 keys, 120.5 s for the twelve routes' 222 and 252.8 s for the twenty-one routes' 318 | Pass |
-| Time added to every boot on macOS GL | 1,000 ms or less | 461 to 509 ms for 328 programs at loads of 1.90 to 8.56 (Dragoon `529f40c`). Earlier, 270 to 298 ms for 191 programs and 362 to 387 ms for 222 | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there | Pass |
+| Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, "Chained course passes" below). In 21 passes, 74.8 s at a load of 1.22 for 328 keys (Dragoon `529f40c`), and 73.7 s to 76.1 s under "Longer course passes". Before three of those passes grew, 67.7 s and 68.9 s for 318 keys five at a time (Dragoon `0059fce`, table below). One pass at a time, 47.1 s for the five routes' 191 keys, 120.5 s for the twelve routes' 222 and 252.8 s for the twenty-one routes' 318 | Pass |
+| Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`). At `529f40c`, 461 to 509 ms for 328 programs at loads of 1.90 to 8.56. Earlier, 270 to 298 ms for 191 programs and 362 to 387 ms for 222 | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there. The three `-courses` routes' goldens were recorded at `dac449e` on the tree that became Dragoon `2ae3277`, and all three routes' 609 frames matched a check run straight after | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
@@ -606,13 +612,16 @@ gcn-recomp `dac449e`, except that the race ran 130 s so it would pass frame 7110
 started from the cache of the 74.8 s warm-up, 328 keys from `tools/warm_shaders.py --force` and
 an empty cache, and began at loads of 8.56, 6.66, 4.84, 2.58 and 1.90 in the order above.
 
+They were measured once more at Dragoon `2fc9285`, after the courses were chained, from the
+cache of the 63.6 s eight-pass warm-up. Those runs began at loads of 1.98, 2.25, 1.63, 1.27 and 1.20 in the same order.
+
 The 47.1 s and 120.5 s are later warm-ups at Dragoon `788571c` and gcn-recomp `b848158`, each
 `tools/warm_shaders.py --force` from an empty cache under `/usr/bin/time -p`, with the manifest
 at five routes and then at twelve. Other copies of Dragoon were running the game on the same
 machine that afternoon, so neither is an idle machine's time. Each of the seven new passes
 played 5,100 frames in 9.4 to 11.2 s.
 
-The warm-up now plays all twenty-one manifest routes, nine more than the 120.5 s one. It
+The warm-up then played all twenty-one manifest routes, nine more than the 120.5 s one. It
 took 252.8 s at Dragoon `2e6e6f8`, and 252.7 s and 253.2 s on the tree that became `c621106`,
 which only added `warm_shaders.py --report`. All three are `tools/warm_shaders.py --force`
 from an empty cache at gcn-recomp `e1016b8`, one pass at a time in the manifest's order, on an
@@ -751,6 +760,69 @@ added 43.1 pass-seconds, and the frames past 3,400 took all of it.
 | The rest | 173.9 s | 220.2 s |
 | All 21 passes | 313.6 s | 356.7 s |
 | Warm-up, with the load when it began | 66.1 s at 2.62 | 75.0 s at 11.16 |
+
+### Chained course passes
+
+The warm-up now plays 8 passes where it played 21. Three new routes race one course after
+another, each for as long as its own route's pass played it, and the other five passes are the
+ones they were. Each route that another route's pass plays has no pass of its own, through the
+manifest's `warm-from=` setting.
+
+| Pass | Frames | What it plays |
+|---|---|---|
+| `title` | 1,860 | The title |
+| `air-ride-frozen-hillside` | 6,000 | Frozen Hillside |
+| `air-ride-checker-knights` | 5,100 | Checker Knights |
+| `air-ride-courses-1` | 23,800 | Sky Sands to frame 14,400, then Fantasy Meadows (`air-ride-race`) and Celestial Valley |
+| `air-ride-courses-2` | 20,300 | Magma Flows to 12,700, then Machine Passage and Beanstalk Park |
+| `top-ride-courses` | 19,500 | The seven Top Ride courses |
+| `city-trial-stadium` | 21,300 | City Trial and the stadium, for `menu` and `city-trial` too |
+| `city-trial-stadium-4p` | 21,900 | The same with four players, for `city-trial-4p` too |
+
+| Bar | Before | After |
+|---|---|---|
+| Warm-up, five passes at once (55 s or less) | 75.2 s, 77.0 s and 76.8 s at loads of 0.85, 9.77 and 11.84 | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 |
+| Keys the warm-up's cache lost, by `shader_cache.py diff` (0) | | 0 of 328. It gained 6, so it holds 334 |
+| Compiles on the eight course routes, unpaced to 16,000 frames (0) | 0 | 0 on all eight |
+| Compiles in 130 s real-time runs of those routes (0) | 0 | 0 on all eight, to frames 7,673 to 7,676 |
+| Goldens for the new routes | | Frames and audio for all three, each matched by a check run after the record |
+
+The 55 s bar isn't met, and the four-player stadium pass sets the floor. It took 62.7 s in the
+`--report` run below and 49.3 s alone (one pass at a time, above), so no warm-up of five at once
+ends before it. Shortening it would lose keys, since it builds its last at frame 20,604 and 15
+of its keys no other pass builds.
+
+A race that follows another starts from another state of the game. In the first order tried,
+Sky Sands, Magma Flows and Frozen Hillside each missed one key their own passes built late, and
+in the next Checker Knights missed 3. So Sky Sands and Magma Flows open the Air Ride routes as
+their own routes race them, while Frozen Hillside and Checker Knights keep passes of their own.
+
+Each old pass's `--report` cache was diffed with the new pass that plays its route, and all but
+one hold no key the new pass lacks. Fantasy Meadows' own pass built 8 keys that
+`air-ride-courses-1`'s doesn't, and other passes build all 8, so the merged cache keeps them.
+
+Before is the manifest at Dragoon `3ce889a` and after is `2fc9285`, both at gcn-recomp `dac449e`
+on an M4 Max. Each warm-up was `tools/warm_shaders.py --force` from an empty cache, and the load
+is the 1-minute average when it began. The three after runs left byte-identical caches, and the
+diff compares theirs with the 75.2 s run's, both ways.
+
+The course runs were made as under "Longer course passes", four at once from a copy of the
+after runs' 334-key cache. The 130 s runs reached frames 7,673 to 7,676. All sixteen boots
+loaded the cache's 334 programs in 521 to 532 ms, four games at once.
+
+The `--report` runs under `GCN_FRAMETIME=1` split the pass time, both with this tree's tool and
+the before one on `3ce889a`'s manifest. Chaining took 75.2 pass-seconds off. The starts and the
+first 3,400 frames fell by 91.0 s, since 13 fewer passes boot and replay the opening, and the
+rest grew by 15.8 s, since each later race's menus and start now come past frame 3,400.
+
+| Stretch | Before | After |
+|---|---|---|
+| Starting the game | 8.4 s | 2.9 s |
+| Frames to 2,000 | 99.6 s | 35.9 s |
+| Frames 2,001 to 3,400 | 33.7 s | 11.9 s |
+| The rest | 224.9 s | 240.7 s |
+| All passes | 366.6 s for 21 | 291.4 s for 8 |
+| Warm-up, with the load when it began | 76.8 s at 2.36 | 63.2 s at 1.58 |
 
 ## gcn-recomp `e1016b8`
 
