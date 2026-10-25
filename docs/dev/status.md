@@ -254,6 +254,31 @@ that route stops (6,900 for Fantasy Meadows and 5,100 for the others). Each comp
 to 2.0 ms. The render frame that first drew with it took 41.57 ms on Fantasy Meadows and under
 4 ms on the other three.
 
+### At gcn-recomp `dac449e`
+
+The rows above are from Dragoon `788571c` at gcn-recomp `b848158`. At gcn-recomp `dac449e` the same eight routes ran once more, as `tools/probe.sh pace-ROUTE 130 tests/routes/ROUTE.txt 100000 --real-time GCN_FRAMETIME=1`, hidden and silent. Each started with the cache from one warm-up of all twenty-one manifest routes copied to its `saves/shaders.bin`, so boot loaded 318 programs.
+
+The load average when each run began was 2.4 to 4.1, except the first run's 11.0, which started right after the warm-up. The rows are `tools/frametime.py build/probe/pace-ROUTE/stdout.txt --from 3400 --slow 16.7 --late 25`. The sd is the population standard deviation of the guest's frame interval, and Late counts guest intervals over 25 ms.
+
+Compiles are the `[shaders] compiled program` lines after boot. Boot is the `programs from cache` line's time for 318 programs.
+
+| Course | Frames | Guest mean | sd | 95th | 99th | Worst | Late | `[rt]` mean | `[rt]` 99th | `[rt]` worst | Compiles | Boot |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Fantasy Meadows | 4,295 | 16.68 ms | 0.064 ms | 16.77 ms | 16.95 ms | 16.99 ms | 0 | 0.66 ms | 1.22 ms | 6.39 ms | 1 (7111) | 498 ms |
+| Celestial Valley | 4,293 | 16.68 ms | 0.092 ms | 16.84 ms | 16.98 ms | 17.56 ms | 0 | 0.61 ms | 1.04 ms | 2.48 ms | 0 | 486 ms |
+| Sky Sands | 4,288 | 16.68 ms | 0.071 ms | 16.78 ms | 16.95 ms | 18.06 ms | 0 | 0.63 ms | 1.10 ms | 2.87 ms | 0 | 495 ms |
+| Frozen Hillside | 4,291 | 16.68 ms | 0.066 ms | 16.78 ms | 16.94 ms | 16.99 ms | 0 | 0.60 ms | 1.35 ms | 3.97 ms (5752) | 1 (5752) | 495 ms |
+| Magma Flows | 4,289 | 16.68 ms | 0.068 ms | 16.79 ms | 16.95 ms | 16.99 ms | 0 | 0.78 ms | 1.53 ms | 4.93 ms | 0 | 493 ms |
+| Beanstalk Park | 4,300 | 16.68 ms | 0.068 ms | 16.78 ms | 16.95 ms | 17.00 ms | 0 | 0.69 ms | 1.92 ms | 6.14 ms (5649) | 1 (5649) | 473 ms |
+| Machine Passage | 4,295 | 16.68 ms | 0.065 ms | 16.77 ms | 16.95 ms | 17.00 ms | 0 | 0.52 ms | 0.92 ms | 3.16 ms | 0 | 491 ms |
+| Checker Knights | 4,289 | 16.68 ms | 0.106 ms | 16.85 ms | 16.99 ms | 17.99 ms | 0 | 0.62 ms | 1.10 ms | 2.73 ms | 0 | 491 ms |
+
+Every course averaged 16.68 ms a guest frame, as before. The 99th percentile fell from under 18.4 ms to under 17.0 ms. The worst guest frame on any course was 18.06 ms, and no course had a guest interval over 25 ms.
+
+Six of the eight had an sd of 0.064 to 0.071 ms. Celestial Valley's was 0.092 ms and Checker Knights' was 0.106 ms. The log doesn't say what widened them.
+
+Three courses compiled one program each in play, at the frames in the Compiles column. Each compile took 1.9 to 3.0 ms, and the render frame that first drew with it took 3.97 to 6.14 ms.
+
 ## Memory card
 
 Three runs at gcn-recomp `e1016b8` under one probe NAME, so each launch found the card the
