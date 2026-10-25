@@ -84,7 +84,7 @@ def parse_manifest(text: str) -> list[Route]:
         if r.warm_from is None:
             continue
         source = by_name.get(r.warm_from)
-        if source is None or source is r:
+        if source is None or r.warm_from == r.name:
             why = "names no other route in the manifest"
         elif source.warm_from is not None:
             why = f"names a route that {source.warm_from}'s pass plays"

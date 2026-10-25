@@ -73,6 +73,8 @@ class ManifestTest(unittest.TestCase):
                   "warm-from=nowhere names no other route in the manifest"),
                  ("# c\nvalley 25 60 4200 warm-from=valley\n", 2, "valley",
                   "warm-from=valley names no other route in the manifest"),
+                 ("valley 25 60 4200 warm-from=valley\nvalley 30 60 6000\n", 1, "valley",
+                  "warm-from=valley names no other route in the manifest"),
                  ("tour 90 60 9000\nsky 25 60 4200 warm-from=tour\nvalley 25 60 4200 warm-from=sky\n",
                   3, "valley", "warm-from=sky names a route that tour's pass plays"))
         for text, line, name, why in cases:
