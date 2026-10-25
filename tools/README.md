@@ -197,7 +197,7 @@ sed -n -E 's/^\[ring\] cut .* frame ([0-9]+)$/\1/p' build/probe/title-cuts/stdou
 tools/audio_clicks.py build/probe/title-cuts/out.wav --marks build/probe/title-cuts/cuts.txt
 ```
 
-`analyse_file`, for other tools to call, reads a recording from disc 10 seconds at a time instead of holding every sample's second difference at once, which for an hour of stereo is tens of gigabytes. It finds what one pass would, and its tests check that. A gap or a clipped run that goes on past a part is followed to its end, and a WAV that ends before its header says is read as far as it goes.
+`analyse_file`, for other tools to call, reads a recording from disk 10 seconds at a time instead of holding every sample's second difference at once, which at 48 kHz stereo is about 5.4 MiB a second, or about 19 GiB an hour. It finds what one pass would, and its tests check that. A gap or a clipped run that goes on past a part is followed to its end, and a WAV that ends before its header says is read as far as it goes.
 
 ## audio_scorecard.py
 

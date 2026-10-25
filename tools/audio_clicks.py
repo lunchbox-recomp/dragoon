@@ -340,11 +340,11 @@ def run_end(src: Source, end: int, same: Callable[[tuple[int, ...]], bool]) -> i
 
 def analyse_source(src: Source, part_s: float = PART_S) -> Report:
     """What analyse(the recording, 0) finds, worked out part_s seconds at a time. One pass holds
-    every sample's second difference as a Python int, about 30 MB for each second of 48 kHz
-    stereo, so an hour of sound would need tens of gigabytes. This reads a part with the
-    stretch either side of it that every sample in it is judged on, so what it holds is about
-    one part. A gap or a clipped run that starts in a part and goes on past what was read is
-    followed to its end."""
+    every sample's second difference as a Python int, about 5.4 MiB for each second of 48 kHz
+    stereo, which comes to about 19 GiB an hour. This reads a part with the stretch either
+    side of it that every sample in it is judged on, so what it holds is about one part. A
+    gap or a clipped run that starts in a part and goes on past what was read is followed to
+    its end."""
     n, rate = src.frames, src.rate
     part = max(1, round(part_s * rate))
     # The stretch a sample is judged on, and the one sample past it that a second difference reaches.
