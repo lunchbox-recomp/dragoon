@@ -11,9 +11,9 @@
 # build/playtest/<date>-<time>/. That directory gets what went to the sound device
 # (out.wav), the mixer's blocks before it (aid.raw), the inputs, the frame times, the sound
 # device's timing and session.json (gcn-recomp's docs/diagnostics.md lists them). All the
-# game prints goes to the terminal and to stdout.txt there as well. Quit the game the usual
-# way, or with Ctrl+C in this terminal, and the directory is printed. tools/session_report.py
-# reads it where it is; it stays in build/, which git ignores, and isn't sent anywhere.
+# game prints goes to the terminal and to stdout.txt there as well. Quit the game as usual
+# or press Ctrl+C in this terminal, and playtest.sh prints the directory. The directory stays
+# in build/, which git ignores. tools/session_report.py reads it there.
 # Exits with the game's status, or 2 on a bad argument, when GCN_SESSION is already set or
 # when build/dragoon isn't built.
 set -e
