@@ -23,7 +23,8 @@ COMMIT = "d" * 40
 ENGINE = "e" * 40
 DOL_SHA1 = "a" * 40
 OLD = "20260101-000000-old"
-ROUTES = "title 20 60 960\ncity-trial-4p 30 60 3480 --pads=4\n"
+# Three routes and two passes, since the title's pass plays the menu too.
+ROUTES = "title 20 60 960\nmenu 20 60 1200 warm-from=title\ncity-trial-4p 30 60 3480 --pads=4\n"
 STEPS = ["recompile", "compile", "warmup", "package", "swap"]
 
 # Each fake appends what it was given to RECORDS, then does its job unless FAIL exists.

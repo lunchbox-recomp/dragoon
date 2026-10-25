@@ -9,7 +9,9 @@ from typing import Optional
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "hashes" / "manifest.txt"
 ROUTES = ROOT / "tests" / "routes"
-WARM = "warm="  # the manifest's one setting for warm_shaders.py, which probe.sh never sees
+# The manifest's two settings for warm_shaders.py, which probe.sh never sees
+WARM = "warm="
+WARM_FROM = "warm-from="
 FRAME = re.compile(r"[1-9][0-9]*")  # ASCII digits only, with no sign, underscore or leading 0
 
 
@@ -21,33 +23,48 @@ class Route:
     required: list[int]
     extra: list[str]  # probe.sh settings
     warm: Optional[int] = None  # the frame warm_shaders.py plays the route to, if the manifest says
+    warm_from: Optional[str] = None  # the route whose warm-up pass plays what this one does
 
 
-def warm_frame(settings: list[str], required: list[int]) -> Optional[int]:
-    """The frame the one warm=N in SETTINGS names, or None when there's none.
+def warm_settings(settings: list[str], required: list[int]) -> tuple[Optional[int], Optional[str]]:
+    """The frame the one warm=N in SETTINGS names and the route its one warm-from=ROUTE names,
+    each None when there's none.
 
-    Raises ValueError for a second warm=, for an N that isn't a whole number past the last of
-    REQUIRED, and for a setting that looks like a misspelled warm=, such as WARM= or warm:.
+    Raises ValueError for a second warm= or warm-from=, for both on one route, for an N that
+    isn't a whole number past the last of REQUIRED, and for a setting that looks like a
+    misspelled one, such as WARM= or warm:.
     """
-    found = None
+    frame, source = None, None
     for s in settings:
+        if s.startswith(WARM_FROM):
+            if source is not None:
+                raise ValueError(f"{s} is a second warm-from=")
+            source = s[len(WARM_FROM):]
+            if not source:
+                raise ValueError(f"{s} names no route")
+            continue
         if not s.startswith(WARM):
             if s.lstrip("-").lower().startswith("warm"):
-                raise ValueError(f"{s} isn't a setting, and the warm-up's is warm=N")
+                raise ValueError(f"{s} isn't a setting, and the warm-up's are warm=N and "
+                                 f"warm-from=ROUTE")
             continue
-        if found is not None:
+        if frame is not None:
             raise ValueError(f"{s} is a second warm=")
         value = s[len(WARM):]
         if not FRAME.fullmatch(value) or int(value) <= max(required):
             raise ValueError(f"{s} isn't a whole frame number past the last required frame, "
                              f"{max(required)}")
-        found = int(value)
-    return found
+        frame = int(value)
+    if frame is not None and source is not None:
+        raise ValueError(f"warm={frame} and warm-from={source} together, but a route with "
+                         f"warm-from= has no pass of its own to play to frame {frame}")
+    return frame, source
 
 
 def parse_manifest(text: str) -> list[Route]:
-    """The routes TEXT lists. A bad warm= raises ValueError naming the route and the line."""
-    routes = []
+    """The routes TEXT lists. A bad warm= or warm-from= raises ValueError naming the route and
+    the line. A warm-from= has to name another route in TEXT that has a pass of its own."""
+    routes, lines = [], []
     for number, line in enumerate(text.splitlines(), 1):
         line = line.split("#", 1)[0].strip()
         if not line:
@@ -55,11 +72,25 @@ def parse_manifest(text: str) -> list[Route]:
         name, seconds, every, required, *settings = line.split()
         frames = [int(f) for f in required.split(",")]
         try:
-            warm = warm_frame(settings, frames)
+            warm, warm_from = warm_settings(settings, frames)
         except ValueError as e:
             raise ValueError(f"manifest line {number}, route {name}: {e}") from None
         routes.append(Route(name, int(seconds), int(every), frames,
-                            [s for s in settings if not s.startswith(WARM)], warm))
+                            [s for s in settings if not s.startswith((WARM, WARM_FROM))],
+                            warm, warm_from))
+        lines.append(number)
+    by_name = {r.name: r for r in routes}
+    for r, number in zip(routes, lines):
+        if r.warm_from is None:
+            continue
+        source = by_name.get(r.warm_from)
+        if source is None or source is r:
+            why = "names no other route in the manifest"
+        elif source.warm_from is not None:
+            why = f"names a route that {source.warm_from}'s pass plays"
+        else:
+            continue
+        raise ValueError(f"manifest line {number}, route {r.name}: warm-from={r.warm_from} {why}")
     return routes
 
 

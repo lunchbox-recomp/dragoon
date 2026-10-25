@@ -157,6 +157,12 @@ class PassesTest(unittest.TestCase):
         ps = warm_shaders.passes(routes.parse_manifest("sky 25 60 4200 warm=14400\nmeadows 30 60 6000\n"))
         self.assertEqual([p.exit_after for p in ps], [14400, 6000 + warm_shaders.ROUTE_TAIL_FRAMES])
 
+    def test_a_route_another_pass_plays_gets_no_pass(self):
+        ps = warm_shaders.passes(routes.parse_manifest(
+            "valley 25 60 4200 warm-from=tour\ntour 90 60 4200,9000 warm=12000\nmeadows 30 60 6000\n"))
+        self.assertEqual([(p.name, p.exit_after) for p in ps],
+                         [("tour", 12000), ("meadows", 6000 + warm_shaders.ROUTE_TAIL_FRAMES)])
+
 
 class LastCompileFrameTest(unittest.TestCase):
     def test_a_program_belongs_to_the_next_render_line(self):
@@ -248,6 +254,13 @@ class WarmTest(WarmTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(self.cache_keys(), [fake_key(1), fake_key(2)])
         self.assertIn("2 passes", out)
+
+    def test_a_route_another_pass_plays_runs_no_game_of_its_own(self):
+        write_file(self.dir, "manifest.txt", MANIFEST + "menu 20 60 1200 warm-from=title\n")
+        code, out, _ = self.warm()
+        self.assertEqual(code, 0)
+        self.assertEqual([l.split()[4] for l in self.game_lines()], [TITLE_EXIT, FOUR_EXIT])
+        self.assertIn("warm: 2 passes", out)
 
     def test_each_pass_prints_one_pass_line(self):
         code, out, _ = self.warm()
@@ -562,11 +575,12 @@ class ReportTest(WarmTestCase):
         code, out, _ = self.warm("--report", str(self.report))
         self.assertEqual(code, 0)
         title, four = self.rows()
-        # name, frames, s, boot programs, boot ms, own, +keys, +programs, keys, last frame built in
-        self.assertEqual([title[0], title[1], *title[3:10]],
-                         ["title", str(TITLE_FRAMES), "0", "0", "2", "2", "2", "2", "502"])
-        self.assertEqual([four[0], four[1], *four[3:10]],
-                         ["city-trial-4p", str(FOUR_FRAMES), "0", "0", "3", "2", "2", "4", "504"])
+        # name, frames, s, boot programs, boot ms, own, only, +keys, +programs, keys, last frame
+        # built in. Key 2 is both passes', so it's neither's only.
+        self.assertEqual([title[0], title[1], *title[3:11]],
+                         ["title", str(TITLE_FRAMES), "0", "0", "2", "1", "2", "2", "2", "502"])
+        self.assertEqual([four[0], four[1], *four[3:11]],
+                         ["city-trial-4p", str(FOUR_FRAMES), "0", "0", "3", "2", "2", "2", "4", "504"])
         self.assertEqual([line.split()[0] for line in out.splitlines()[-4:-1]],
                          ["title", "city-trial-4p", "all"])
 
@@ -575,17 +589,27 @@ class ReportTest(WarmTestCase):
         self.assertEqual(self.warm("--report", str(self.report))[0], 0)
         title, four, total = self.lines()
         for row in (title, four):
-            self.assertEqual(row[10:], ["0.0"] * 4)
+            self.assertEqual(row[11:], ["0.0"] * 4)
         self.assertEqual(total[:2], ["all", str(TITLE_FRAMES + FOUR_FRAMES)])
-        self.assertEqual(total[3:], ["-"] * 7 + ["0.0"] * 4)
+        self.assertEqual(total[3:], ["-"] * 8 + ["0.0"] * 4)
 
-    def test_keys_the_players_cache_held_are_not_new_or_the_pass_s_own(self):
+    def test_keys_the_players_cache_held_are_not_new_or_the_pass_s_own_or_only(self):
         self.saves.mkdir()
         write_file(self.saves, "shaders.bin", fake_cache([1]))
         self.assertEqual(self.warm("--report", str(self.report))[0], 0)
         title, four = self.rows()
-        self.assertEqual([title[3], title[4], title[5], title[6], title[8]], ["1", "12", "1", "1", "2"])
-        self.assertEqual([four[5], four[6], four[8]], ["3", "2", "4"])
+        # Both passes hold key 1 from the start, which leaves the title only key 2, also four's.
+        self.assertEqual([title[3], title[4], title[5], title[6], title[7], title[9]],
+                         ["1", "12", "1", "0", "1", "2"])
+        self.assertEqual([four[5], four[6], four[7], four[9]], ["3", "2", "2", "4"])
+
+    def test_only_counts_the_keys_no_other_pass_built_whatever_the_order(self):
+        keys = {str(TITLE_FRAMES): [1, 2, 3], str(FOUR_FRAMES): [3]}
+        with mock.patch.dict(os.environ, {"FAKE_KEYS": json.dumps(keys)}):
+            self.assertEqual(self.warm("--report", str(self.report))[0], 0)
+        title, four = self.rows()
+        # The four-player pass comes later and adds nothing, yet key 3 is the title's too.
+        self.assertEqual([title[5], title[6], four[5], four[6], four[7]], ["3", "2", "1", "0", "0"])
 
     def test_each_pass_keeps_its_output_and_its_cache(self):
         self.assertEqual(self.warm("--report", str(self.report), "--jobs", "2")[0], 0)
@@ -623,20 +647,25 @@ class WriteReportTest(unittest.TestCase):
 
     def test_the_splits_and_the_all_row_add_up_the_seconds(self):
         _, title, meadows, total = self.report([1.0, 2.5])
-        self.assertEqual(title.split()[10:], ["0.3", "0.1", "0.2", "0.4"])
-        self.assertEqual(meadows.split()[10:], ["1.8", "0.1", "0.2", "0.4"])
-        self.assertEqual(total.split(), ["all", "8760", "3.5", *["-"] * 7, "2.1", "0.2", "0.4", "0.8"])
+        self.assertEqual(title.split()[11:], ["0.3", "0.1", "0.2", "0.4"])
+        self.assertEqual(meadows.split()[11:], ["1.8", "0.1", "0.2", "0.4"])
+        self.assertEqual(total.split(), ["all", "8760", "3.5", *["-"] * 8, "2.1", "0.2", "0.4", "0.8"])
+
+    def test_passes_that_left_no_cache_built_no_keys(self):
+        _, title, meadows, _ = self.report([1.0, 2.5])
+        for row in (title, meadows):
+            self.assertEqual(row.split()[5:10], ["0"] * 5)
 
     def test_every_line_lines_up_under_the_header(self):
         lines = self.report([1.0, 2.5])
-        self.assertEqual(lines[0], "pass" + " " * 24 + " frames      s  boot boot ms  own +keys +progs"
-                                   "  keys   last  start   0-2k 2k-3.4k   rest")
+        self.assertEqual(lines[0], "pass" + " " * 24 + " frames      s  boot boot ms  own only +keys"
+                                   " +progs  keys   last  start   0-2k 2k-3.4k   rest")
         self.assertEqual({len(line) for line in lines}, {len(lines[0])})
 
     def test_the_table_has_a_column_for_each_share_a_pass_s_seconds_split_into(self):
         shares = warm_shaders.stretches(ft_line(1, 1), 1.0)
-        self.assertEqual(len(warm_shaders.REPORT_COLUMNS), 10 + len(shares))
-        self.assertEqual([label for label, _ in warm_shaders.REPORT_COLUMNS[10:]],
+        self.assertEqual(len(warm_shaders.REPORT_COLUMNS), 11 + len(shares))
+        self.assertEqual([label for label, _ in warm_shaders.REPORT_COLUMNS[11:]],
                          ["start", "0-2k", "2k-3.4k", "rest"])
 
 

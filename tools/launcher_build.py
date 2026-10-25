@@ -213,7 +213,7 @@ def warm_up(b: Build, a: argparse.Namespace, game: Path, warm: Path) -> None:
         if (a.data / "saves" / name).is_file():
             shutil.copy2(a.data / "saves" / name, warm / name)
     manifest = a.source / routes.MANIFEST.relative_to(routes.ROOT)
-    total = len(routes.parse_manifest(manifest.read_text()))
+    total = len(warm_shaders.passes(routes.parse_manifest(manifest.read_text())))
     done = itertools.count(1)
 
     def progress(line: str) -> Optional[tuple]:

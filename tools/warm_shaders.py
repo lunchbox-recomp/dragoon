@@ -4,7 +4,8 @@
 Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--disc FILE] [--force]
                        [--jobs N] [--report DIR]
 
-Runs the game, one pass per route in tests/hashes/manifest.txt, each in a scratch directory
+Runs the game, one pass per route in tests/hashes/manifest.txt but the warm-from= ones (see
+below), each in a scratch directory
 of its own with a blank memory card as a fresh install has. (A route that finds the card an
 earlier pass made takes other menus and builds other keys.) Every pass is --hidden --fast
 --no-input-log with SDL's dummy audio driver, so nothing shows or sounds, and the caller's
@@ -25,7 +26,8 @@ it left in DIR, and prints a table of what each pass added and where its time we
 write_report).
 
 A pass plays to the frame its route's warm= setting in the manifest names, or else 900
-frames past the route's last required frame.
+frames past the route's last required frame. A route with a warm-from=ROUTE setting gets no
+pass, since ROUTE's pass plays what it does.
 
 Prints one line per pass and a closing line with the cache's size. A failed pass prints
 the game's last output to stderr.
@@ -117,7 +119,9 @@ def pass_frames(route: Route) -> int:
 
 
 def passes(routes: list[Route]) -> list[Pass]:
-    return [Pass(r.name, pass_frames(r), route_pads(r), route_file(r.name)) for r in routes]
+    """A pass for each of ROUTES but the ones a warm-from= gives to another route's pass."""
+    return [Pass(r.name, pass_frames(r), route_pads(r), route_file(r.name))
+            for r in routes if r.warm_from is None]
 
 
 def stamp(engine_rev: str, inputs_text: str, tool_sha: str) -> str:
@@ -239,7 +243,7 @@ def stretches(log: str, seconds: float) -> list[float]:
 
 # The --report table's columns, each a label and a width. The last four are stretches' shares.
 REPORT_COLUMNS = (("pass", 28), ("frames", 7), ("s", 7), ("boot", 6), ("boot ms", 8), ("own", 5),
-                  ("+keys", 6), ("+progs", 7), ("keys", 6), ("last", 7),
+                  ("only", 5), ("+keys", 6), ("+progs", 7), ("keys", 6), ("last", 7),
                   ("start", 7), ("0-2k", 7), ("2k-3.4k", 8), ("rest", 7))
 
 
@@ -258,8 +262,9 @@ def write_report(directory: Path, plan: list[Pass], seconds: list[float], scratc
 
     NAME.log is the game's output and NAME.bin the cache the pass left. A row gives the
     programs the game built from the cache before its first frame and how long that took,
-    the keys the pass built itself (own), and the keys and programs (distinct generated
-    sources) it adds that START and the passes before it in the plan lack. Under
+    the keys the pass built itself (own), the ones of those no other pass built (only),
+    and the keys and programs (distinct generated sources) it adds that START and the
+    passes before it in the plan lack. Under
     GCN_FRAMETIME=1 the "last" column is the frame the pass built its last program in, which
     is the frame it had to reach, and the four after it split the pass's seconds (see
     stretches). Without it those columns are 0. A closing "all" row adds up the frames, the
@@ -272,29 +277,32 @@ def write_report(directory: Path, plan: list[Pass], seconds: list[float], scratc
         held = shader_cache.load(start)
         keys, programs = set(held.keys), set(held.hashes)
     held_keys = set(keys)
+    caches = [d / "saves" / CACHE for d in scratch]
+    made = [shader_cache.load(c) if c.exists() else None for c in caches]
+    built = [set(m.keys) - held_keys if m else set() for m in made]
     rows = [REPORT_HEADER]
     totals = [0.0] * (len(STRETCH_ENDS) + 2)
-    for p, secs, d in zip(plan, seconds, scratch):
+    for i, (p, secs, d) in enumerate(zip(plan, seconds, scratch)):
         log = (d / "stdout.txt").read_text(errors="replace")
         (directory / f"{p.name}.log").write_text(log)
         boot = BOOT_LINE.search(log)
-        own = new_keys = new_programs = 0
-        cache = d / "saves" / CACHE
-        if cache.exists():
-            shutil.copyfile(cache, directory / f"{p.name}.bin")
-            made = shader_cache.load(cache)
-            own = len(set(made.keys) - held_keys)
-            new_keys, new_programs = len(set(made.keys) - keys), len(set(made.hashes) - programs)
-            keys |= set(made.keys)
-            programs |= set(made.hashes)
+        new_keys = new_programs = 0
+        others = set().union(*built[:i], *built[i + 1:])
+        if made[i]:
+            shutil.copyfile(caches[i], directory / f"{p.name}.bin")
+            new_keys = len(set(made[i].keys) - keys)
+            new_programs = len(set(made[i].hashes) - programs)
+            keys |= set(made[i].keys)
+            programs |= set(made[i].hashes)
         shares = stretches(log, secs)
         totals = [t + s for t, s in zip(totals, shares)]
         rows.append(report_line([p.name, str(p.exit_after), f"{secs:.1f}",
-                                 boot[1] if boot else "0", boot[2] if boot else "0", str(own),
+                                 boot[1] if boot else "0", boot[2] if boot else "0",
+                                 str(len(built[i])), str(len(built[i] - others)),
                                  str(new_keys), str(new_programs), str(len(keys)),
                                  str(last_compile_frame(log)), *(f"{s:.1f}" for s in shares)]))
     rows.append(report_line(["all", str(sum(p.exit_after for p in plan)), f"{sum(seconds):.1f}",
-                             *["-"] * 7, *(f"{t:.1f}" for t in totals)]))
+                             *["-"] * 8, *(f"{t:.1f}" for t in totals)]))
     text = "\n".join(rows) + "\n"
     (directory / "report.txt").write_text(text)
     return text
@@ -407,7 +415,7 @@ def main(argv: list[str]) -> int:
             return 1
         stamp_path.write_text(want + "\n")
         size = (args.saves / CACHE).stat().st_size
-        print(f"warm: {len(routes)} passes, {args.saves / CACHE} is {size} bytes, "
+        print(f"warm: {len(plan)} passes, {args.saves / CACHE} is {size} bytes, "
               f"{time.monotonic() - start:.1f} s")
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
