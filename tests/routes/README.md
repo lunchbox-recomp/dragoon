@@ -62,9 +62,11 @@ A route gives byte-identical frames from run to run on the same build, because g
 applies each press where the game reads the controller, at the frame the game has reached.
 Frames 4200 and 6000 of `air-ride-race.txt` matched across three runs in a row. Frames 3300
 and 4500 of `city-trial.txt` matched across two runs nine minutes apart, and frames 2700 and
-3300 of `city-trial-4p.txt` across two runs. Frame 3480 of `city-trial-2p.txt` matched across
-two runs in a row. Every dumped frame of the seven Top Ride routes and the two stadium routes
-matched between a `tools/frame_hashes.py record` run and the `check` run after it.
+3300 of `city-trial-4p.txt` across two runs. Every dumped frame of the seven Top Ride routes
+and the two stadium routes matched between a `tools/frame_hashes.py record` run and the
+`check` run after it.
+
+Frame 3480 of `city-trial-2p.txt` matched across two runs in a row.
 
 Before gcn-recomp fda6926 they didn't. Each press landed wherever the game was when the
 frontend's loop next looked, and two runs of `city-trial.txt` showed 4:54:10 and 4:54:11
