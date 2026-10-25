@@ -1,6 +1,6 @@
 # Tools
 
-Each tool answers one question. Start with probe.sh, which makes the runs the others read. Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`. The launcher's own helpers live in `launcher/tools/` with their tests beside them, so run those with `python3 -m unittest discover -s launcher/tools -p 'test_*.py'` too. Both run under the Command Line Tools' Python 3.9 and under a newer one.
+Each tool answers one question. Start with probe.sh, which makes the runs the others read. To playtest with sound, run playtest.sh. session_report.py explains the session afterwards. Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`. The launcher's own helpers live in `launcher/tools/` with their tests beside them, so run those with `python3 -m unittest discover -s launcher/tools -p 'test_*.py'` too. Both run under the Command Line Tools' Python 3.9 and under a newer one.
 
 ## Conventions
 
@@ -29,6 +29,18 @@ tools/probe.sh demo 20 tests/routes/title.txt 60 GCN_FRAMETIME=1
 ```
 
 That prints the run's directory as an absolute path, then a frame count (140 on an M4 Max). It exits 2 when the game isn't built. Run it again with a different NAME to get a second run to compare. Runs pile up in `build/probe/`, and prune_runs.py clears the old ones.
+
+## playtest.sh
+
+What happened while I played? It runs the game in its window with sound, as `build/dragoon` runs for a player. It sets `GCN_SESSION` to `build/playtest/<date>-<time>/` ("Playtest sessions" in gcn-recomp's `docs/diagnostics.md`). The game records into that one directory what went to the sound device (`out.wav`), the mixer's blocks before the audio ring (`aid.raw`), the input log with the memory card it started from (`inputs/`) and `session.json`. Everything it prints goes to the terminal and to `stdout.txt` there, the frame times and the sound device's timing lines among it. Quit the game as usual or press Ctrl+C in the terminal, and playtest.sh prints the directory.
+
+```
+tools/playtest.sh
+```
+
+That's all a playtester runs. It runs from the repository's root, so it plays on the card and shader cache in `saves/` as `build/dragoon` does. Nothing needs sending back. The session stays in `build/playtest/`, which git ignores. session_report.py and replay_session.py read it there. The recordings, the input log and the card snapshot are the player's own game data. They're never committed, and check_no_game_data.py fails on any of them.
+
+`--pads=N` plugs in more controllers and `--scale=N` sets the render scale. `GCN_*=value` sets any other switch, and one the session sets itself, like `GCN_WAV`, takes the value given instead. `--dry-run` prints the directory and the command without running anything, which is how its tests check it. It exits with the game's status, or 2 when `GCN_SESSION` is already set or the game isn't built. Without `GCN_SESSION` the game records none of this.
 
 ## session_report.py
 
