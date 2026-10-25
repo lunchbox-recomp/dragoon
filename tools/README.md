@@ -80,6 +80,8 @@ A late callback can starve the device without a mark in `out.wav`, which holds w
 
 The noise check reads `aid.raw` only, at the DMA's 32 kHz and 10 seconds at a time. The ring interpolates to 48 kHz for the device, so `out.wav` isn't a fair input, as the noise_blocks.py section says. A stretch is a place to look, since the game's own bright sounds make short ones too, and it never changes the exit code.
 
+In `--json` the stretches are under `noise` in noise_blocks.py's own `--json` shape, and the value is null when `aid.raw` is missing or empty. The text says `aid.raw missing` for that and `none in aid.raw` when it finds no stretch, and it gives a count with a line for each stretch otherwise.
+
 `--system-log` also counts the Core Audio overloads macOS logged from the session's start to 5 s past the end of `out.wav`. Core Audio logs one when an IO cycle misses its deadline. It runs `/usr/bin/log show --style compact` over that window with the predicate `subsystem == "com.apple.coreaudio" AND eventMessage CONTAINS[c] "overload"`, which only reads the log.
 
 It counts the lines from that subsystem whose message holds the word in any letter case, by process. The unified log doesn't keep messages long, so an old session's window can come back empty.
