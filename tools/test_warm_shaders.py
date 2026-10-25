@@ -257,6 +257,7 @@ class WarmTest(WarmTestCase):
 
     def test_a_route_another_pass_plays_runs_no_game_of_its_own(self):
         write_file(self.dir, "manifest.txt", MANIFEST + "menu 20 60 1200 warm-from=title\n")
+        write_file(self.routes, "menu.txt", "1:A:1\n")
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
         self.assertEqual([l.split()[4] for l in self.game_lines()], [TITLE_EXIT, FOUR_EXIT])
@@ -385,6 +386,14 @@ class WarmTest(WarmTestCase):
         self.assertEqual(self.warm()[0], 0)
         self.assertEqual(len(self.game_lines()), 4)
         self.assertIn("INPUT=120:A:5,300:A:5,500:B:5", self.game_lines()[2].split())
+
+    def test_edited_route_file_of_a_route_another_pass_plays_runs_again(self):
+        write_file(self.dir, "manifest.txt", MANIFEST + "menu 20 60 1200 warm-from=title\n")
+        write_file(self.routes, "menu.txt", "1:A:1\n")
+        self.warm_until_current()
+        write_file(self.routes, "menu.txt", "1:A:1, 2:B:1\n")
+        self.assertEqual(self.warm()[0], 0)
+        self.assertEqual(len(self.game_lines()), 4)
 
     def test_comment_only_edit_to_a_route_file_stays_current(self):
         self.warm_until_current()

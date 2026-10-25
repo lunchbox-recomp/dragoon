@@ -5,25 +5,24 @@ Usage: warm_shaders.py [--game build/dragoon] [--saves saves] [--disc FILE] [--f
                        [--jobs N] [--report DIR]
 
 Runs the game, one pass per route in tests/hashes/manifest.txt but the warm-from= ones (see
-below), each in a scratch directory
-of its own with a blank memory card as a fresh install has. (A route that finds the card an
-earlier pass made takes other menus and builds other keys.) Every pass is --hidden --fast
---no-input-log with SDL's dummy audio driver, so nothing shows or sounds, and the caller's
-GCN_INPUT, GCN_WAV, GCN_PROFILE, GCN_FEED_DUMP and GCN_SESSION are dropped. A pass's
-saves/shaders.bin starts as a copy of <saves>/shaders.bin and gains the keys its route
-builds. --jobs passes play at once (by default a third of the cores, 6 at most), the longest
-first. Once every pass has succeeded their caches are merged, each key once, in the
-manifest's order, and the merge replaces the player's cache. Nothing else in <saves> is read
-or written except the stamp, <saves>/.shader-warmup. It holds the gcn-recomp commit (from
-git, or from source-info.json in a source snapshot), a SHA-1 of the manifest with the route
-files' text and a SHA-1 of this script. If all three
-match and shaders.bin exists, the run is skipped. A pass that outlasts twice its real-time
-length plus 30 s is killed and fails, and the others are stopped. --force runs anyway. --game
-and --saves default to build/dragoon and saves under the repository, wherever the tool is
-run from. --disc names the disc image every pass plays. A game built from the engine kit
-has no disc of its own, so it needs one. --report DIR keeps each pass's output and the cache
-it left in DIR, and prints a table of what each pass added and where its time went (see
-write_report).
+below), each in a scratch directory of its own with a blank memory card as a fresh install
+has. (A route that finds the card an earlier pass made takes other menus and builds other
+keys.) Every pass is --hidden --fast --no-input-log with SDL's dummy audio driver, so nothing
+shows or sounds, and the caller's GCN_INPUT, GCN_WAV, GCN_PROFILE, GCN_FEED_DUMP and
+GCN_SESSION are dropped. A pass's saves/shaders.bin starts as a copy of <saves>/shaders.bin
+and gains the keys its route builds. --jobs passes play at once (by default a third of the
+cores, 6 at most), the longest first. Once every pass has succeeded their caches are merged,
+each key once, in the manifest's order, and the merge replaces the player's cache. Nothing
+else in <saves> is read or written except the stamp, <saves>/.shader-warmup. It holds the
+gcn-recomp commit (from git, or from source-info.json in a source snapshot), a SHA-1 of the
+manifest with the text of every route file it lists (the warm-from= ones' too) and a SHA-1
+of this script. If all three match and shaders.bin exists, the run is skipped. A pass that
+outlasts twice its real-time length plus 30 s is killed and fails, and the others are
+stopped. --force runs anyway. --game and --saves default to build/dragoon and saves under
+the repository, wherever the tool is run from. --disc names the disc image every pass plays.
+A game built from the engine kit has no disc of its own, so it needs one. --report DIR keeps
+each pass's output and the cache it left in DIR, and prints a table of what each pass added
+and where its time went (see write_report).
 
 A pass plays to the frame its route's warm= setting in the manifest names, or else 900
 frames past the route's last required frame. A route with a warm-from=ROUTE setting gets no
@@ -398,7 +397,7 @@ def main(argv: list[str]) -> int:
         manifest_text = MANIFEST.read_text()
         routes = parse_manifest(manifest_text)
         plan = passes(routes)
-        inputs_text = manifest_text + "".join(script_text(p.route_file) for p in plan)
+        inputs_text = manifest_text + "".join(script_text(route_file(r.name)) for r in routes)
         want = stamp(engine_rev(), inputs_text, tool_sha())
         stamp_path = args.saves / STAMP
         if not args.force and stamp_path.exists() \
