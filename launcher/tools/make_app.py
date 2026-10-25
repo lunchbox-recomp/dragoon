@@ -19,11 +19,11 @@ failed run removes the app's temporary directory and the directories it made for
 leaves nothing behind. A directory that another run has put something in stays.
 
 It refuses a kit from another gcn-recomp commit or another src/ than the snapshot's, as
-launcher_build.py does, since the kit's engine.o and headers wouldn't match the generated C. It refuses a kit that
-lacks a file the manifest lists or holds one it doesn't. It refuses a snapshot that lacks its
-source-info.json, source-manifest.txt or LICENSE, and one whose files aren't what
-source-manifest.txt lists, whether a file is missing, extra or edited. It refuses a DIR that is
-the kit or the snapshot or below one, however its name is spelled.
+launcher_build.py does, since the kit's engine.o and headers wouldn't match the generated C.
+It refuses a kit that lacks a file the manifest lists or holds one it doesn't. It refuses a
+snapshot that lacks its source-info.json, source-manifest.txt or LICENSE, and one whose files
+aren't what source-manifest.txt lists, whether a file is missing, extra or edited. It refuses
+a DIR that is the kit or the snapshot or below one, however its name is spelled.
 
 Exits 0 when the app is there and prints its path. Exits 1 when a step failed, such as codesign,
 and 2 on a bad argument or an input it can't use, with one line on stderr saying why and

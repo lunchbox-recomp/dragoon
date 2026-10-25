@@ -2,9 +2,10 @@
 
 Dragoon is the Kirby Air Ride side of a static recompilation. gcn-recomp, the submodule in
 `gcn-recomp/`, reads the DOL from the player's disc at build time, translates each function
-to C and links it with a runtime that stands in for the GameCube. Everything that knows
-about Kirby Air Ride lives in this repository. Everything that would help any game goes to
-the fork.
+to C and links it with a runtime that stands in for the GameCube.
+
+Everything that knows about Kirby Air Ride lives in this repository. Everything that would
+help any game goes to the fork.
 
 ## Where things live
 
