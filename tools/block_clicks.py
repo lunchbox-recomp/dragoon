@@ -47,7 +47,7 @@ LOG_SLACK = RATE  # samples a log's end may be from its recording's. 4096 bytes 
 class OnBlocks:
     kind: str
     blocks: int
-    stretches: int  # runs of neighbouring marked blocks, which cover their samples as one span
+    stretches: int  # runs of neighboring marked blocks, which cover their samples as one span
     clicks_on: int
     by_chance: float
 

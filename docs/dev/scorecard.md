@@ -66,8 +66,9 @@ cell. The recordings of play 4, the one play that was compared, are the same sam
 over the shorter of each pair.
 
 In real time, over the five routes, the mixer stage made 81 to 94 clicks a play at `3a8d154` and
-81 to 83 at `dac449e`, and the blocks delivered while the clock caught up fell from 247 to 255 a
-play to 51 to 67. The runs don't say which commit cut the catch-up.
+81 to 83 at `dac449e`, which the four plays didn't separate. The blocks delivered while the clock
+caught up fell from 247 to 255 a play to 51 to 67. The runs don't say which commit cut the
+catch-up.
 
 The device stage made 74 to 96 clicks at `3a8d154` and 63 to 81 at `dac449e`, and the four plays
 didn't separate them.
@@ -92,7 +93,8 @@ didn't separate them.
 | Byte comparison, pass 6 | `3a8d154` and `dac449e` | Play 4's unpaced `mixer.raw`, compared with `click_diff.py` | `0b34199` |
 
 All but passes 4 to 6 ran on 2026-10-22. The rescoring and the split by sign play no game.
-Pass 5's were done on 2026-10-23 and pass 6's on 2026-10-25.
+The rescoring of passes 3 and 4 and pass 5's were done on 2026-10-23, and pass 6's on
+2026-10-25.
 
 The bisect's notes aren't in this repository, so its numbers are quoted below and named as its
 own.
@@ -579,8 +581,9 @@ The tool is `3f0f8c3`'s in plays 1 to 3. Against pass 5's `2b98e17` it changes
 `scorecard_runs.py`, and `clip_signs.py` is new. In `frame_dumps.py` it's a pattern constant and
 a docstring only.
 
-Play 4's tool is `0b34199`'s. It adds the stretch count to `block_clicks.py` and a bounded read
-to `click_diff.py`, and no other tool differs from `3f0f8c3`'s.
+Play 4's tool is `0b34199`'s. It adds the stretch count to `block_clicks.py` and, to
+`click_diff.py`, a bounded read and a share rounded down. No other tool differs from
+`3f0f8c3`'s.
 
 The unpaced mixer stage scored the same at both builds in every play. It also matches pass 5's
 next on every cell below, which pass 5 scored on gcn-recomp `b97c019` with its own tool.
@@ -616,6 +619,8 @@ below all fall inside those lengths.
 | Air Ride race | 2,545.18 | every one | 36 | 0 |
 | City Trial | 804.58 | every one | 24 | 0 |
 | City Trial, four players | 681.66 | every one | 40 | 0 |
+
+The share of samples rounds down, so every one means every sample.
 
 Past the cut, rescored with `--no-run` from each play's unpaced recordings, the two builds read
 the same in every play too.
@@ -813,9 +818,9 @@ What pass 6 doesn't explain:
   to 94 and 81 to 83, though its caught-up blocks don't, at 247 to 255 and 51 to 67. Four plays
   on one machine can't say how often a fifth would fall outside those ranges.
 - Pass 6's plays ran on a machine with other work on it, plays 1 to 3 back to back and play 4
-  later, with a one-minute load average of 4.0, 2.9, 2.6 and 1.3 as they began. Play 1 began
-  right after a run of the tools' tests was stopped, and play 4 after a run of the tools'
-  mutants ended. No tests or builds ran during a play, and the rescoring between plays played no
+  later, with a one-minute load average of 4.0, 2.9 and 2.6 as plays 1 to 3 began and 1.4 a
+  minute or two before play 4. Play 1 began right after a run of the tools' tests was stopped,
+  and play 4 after a run of the tools' mutants ended. No tests or builds ran during a play, and the rescoring between plays played no
   game.
 - Pass 6's tool differs from pass 5's in the files named under Pass 6, and pass 6 didn't rescore
   pass 5's recordings with it. That its unpaced cells match pass 5's next is the one check across

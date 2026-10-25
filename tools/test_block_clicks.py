@@ -69,7 +69,7 @@ class PlaceTest(unittest.TestCase):
         self.assertEqual(self.counts(got)["replayed"][0], 2)
         self.assertEqual(self.stretches(got)["replayed"], 2)
 
-    def test_a_stretch_of_either_kind_joins_neighbours_of_both(self):
+    def test_a_stretch_of_either_kind_joins_neighbors_of_both(self):
         # The replay makes log block 41 the same buffer as 40, and 42 and 20 are caught up.
         x, log = dma(100, replays={40}, caught_up={42, 20})
         got = block_clicks.place(self.write(x, log))

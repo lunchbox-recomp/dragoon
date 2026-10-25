@@ -225,7 +225,9 @@ scorecard_runs.py plays a route on a build and scorecard_measure.py scores a rou
 
 ## block_clicks.py
 
-Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivered catching up? It reads a `GCN_AIDWAV` recording and the block log gcn-recomp writes beside it (`<file>.txt`). A replayed block has the same address as the block before, because the guest hadn't queued the next buffer. A caught-up block came while the clock caught up with the host, which only a `--real-time` run does. For each kind and for the two together it prints the blocks, the stretches they come in, the clicks in them or within 2 samples of either end, and the count chance would put there. A stretch is a run of marked blocks that follow one another in the log, so 5 caught-up blocks in a row are 1 stretch. A block past the recording's end is in no stretch, and a last log line a killed run cut short is skipped. A block log whose last block ends more than a second from the recording's end can't be that recording's, and stops it with exit 2. That check tells logs apart by length only. A log from another run of the same route ends about where this recording does, so it passes. The baseline's real-time title recording paired with current's title log printed counts and exited 0.
+Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivered catching up? It reads a `GCN_AIDWAV` recording and the block log gcn-recomp writes beside it (`<file>.txt`). A replayed block has the same address as the block before, because the guest hadn't queued the next buffer. A caught-up block came while the clock caught up with the host, which only a `--real-time` run does. For each kind and for the two together it prints the blocks, the clicks in them or within 2 samples of either end, and the count chance would put there. A block log whose last block ends more than a second from the recording's end can't be that recording's, and stops it with exit 2. That check tells logs apart by length only. A log from another run of the same route ends about where this recording does, so it passes. The baseline's real-time title recording paired with current's title log printed counts and exited 0.
+
+It also prints the stretches the marked blocks come in. A stretch is a run of marked blocks that follow one another in the log, so 5 caught-up blocks in a row are 1 stretch. A block past the recording's end is in no stretch, and a last log line a killed run cut short is skipped.
 
 ```
 tools/block_clicks.py build/probe/scorecard-menu/mixer.raw
@@ -233,7 +235,9 @@ tools/block_clicks.py build/probe/scorecard-menu/mixer.raw
 
 ## click_diff.py
 
-Which clicks does one build's unpaced recording of a route have that another's doesn't? Unpaced, the two recordings line up sample for sample, so B minus A is what the builds did differently. For each click only one has, it prints the largest B minus A within 5 ms, B minus A's second difference at the click, whether each build is silent there and whether B minus A steps at the nearest block join. A second difference of 0 means both builds have the same edge, and only the sound around it differs. `--seconds S` cuts both to S and reads no more than that from each, so a route's scored seconds can be compared without reading an unpaced run that went on for tens of minutes. It prints the share of samples that are the same in both rounded down, so 100.0% means every sample.
+Which clicks does one build's unpaced recording of a route have that another's doesn't? Unpaced, the two recordings line up sample for sample, so B minus A is what the builds did differently. For each click only one has, it prints the largest B minus A within 5 ms, B minus A's second difference at the click, whether each build is silent there and whether B minus A steps at the nearest block join. A second difference of 0 means both builds have the same edge, and only the sound around it differs. `--seconds S` cuts both to S.
+
+`--seconds S` also reads no more than S seconds of each recording, so a route's scored seconds can be compared without reading an unpaced run that went on for tens of minutes. The share of samples that are the same in both is rounded down, so 100.0% means every sample.
 
 ```
 tools/click_diff.py /path/to/old-clone/build/probe/scorecard-unpaced-title/mixer.raw build/probe/scorecard-unpaced-title/mixer.raw
