@@ -157,23 +157,36 @@ public final class BuildRunner: @unchecked Sendable {
 
     /// Starts the build, which runs whether or not anyone is iterating yet. The stream ends
     /// normally once the new game is current, and with a `BuildFailure` when it isn't. Dropping
-    /// or cancelling the stream cancels the build, as `cancel()` does.
+    /// or cancelling the stream cancels the build, as `cancel()` does. While a build is running
+    /// this starts nothing: its stream throws `alreadyRunning` and `cancel()` still stops the
+    /// build that is running.
     ///
     /// The recipe's `--log` is `build-<time>.log` in the log directory. Its stdout lines that
     /// aren't events and everything on its stderr go in that log too, beside what the recipe
     /// writes, and the newest `keptLogs` logs stay.
     public func run(_ request: BuildRequest) -> AsyncThrowingStream<BuildEvent, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task {
-                let failure = await perform(request, continuation)
-                continuation.finish(throwing: failure)
+            // The task is made under the lock, so it can't end before it is recorded.
+            let started: Task<Void, Never>? = lock.withLock {
+                guard current == nil else { return nil }
+                let task = Task {
+                    let failure = await perform(request, continuation)
+                    // Cleared before the stream ends, so a run right after it is accepted.
+                    lock.withLock { current = nil }
+                    continuation.finish(throwing: failure)
+                }
+                current = task
+                return task
+            }
+            guard let task = started else {
+                continuation.finish(throwing: BuildFailure.alreadyRunning)
+                return
             }
             continuation.onTermination = { _ in task.cancel() }
-            lock.withLock { current = task }
         }
     }
 
-    /// Stops the latest build's process group with SIGTERM, then with SIGKILL 10 seconds later if
+    /// Stops the running build's process group with SIGTERM, then with SIGKILL 10 seconds later if
     /// anything is left. The stream ends with `BuildFailure.cancelled` once the group is gone,
     /// unless the recipe finished first.
     public func cancel() {
