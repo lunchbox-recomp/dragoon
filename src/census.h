@@ -69,8 +69,7 @@ inline std::string aspect_line(uint32_t frame, uint32_t cam, uint32_t lr, uint32
 }
 
 // Logs a call to HSD_CObjSetAspect as an aspect_line, with DRAGOON_CENSUS=1 (src/census.cpp).
-// sp is r1 on entry to the call, the caller's stack frame.
-void census_aspect(uint32_t cam, uint32_t lr, uint32_t sp, float given);
+void census_aspect(uint32_t cam, uint32_t lr, uint32_t lr2, float given);
 
 // Lets each distinct line through once a frame.
 class OncePerFrame {
