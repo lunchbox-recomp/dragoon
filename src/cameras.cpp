@@ -9,11 +9,13 @@
 #include "gx/render.h"
 #include <cmath>
 
-// recomp/hle.txt lists HSD_CObjSetAspect (0x80402C94) and HSD_CObjLoadDesc (0x804031EC), so
-// their calls come here and their own bodies are orig_HSD_CObjSetAspect and
-// orig_HSD_CObjLoadDesc.
+// recomp/hle.txt lists HSD_CObjSetAspect (0x80402C94), HSD_CObjLoadDesc (0x804031EC),
+// CObjRelease (0x80403324) and CObjAmnesia (0x804034A8), so their calls come here and their
+// own bodies are orig_ and the name.
 extern "C" void orig_HSD_CObjSetAspect(CPU* c);
 extern "C" void orig_HSD_CObjLoadDesc(CPU* c);
+extern "C" void orig_CObjRelease(CPU* c);
+extern "C" void orig_CObjAmnesia(CPU* c);
 
 namespace {
 
@@ -75,6 +77,25 @@ extern "C" void hle_HSD_CObjLoadDesc(CPU* c) {
         g_set_once.add(cobj, loaded, output, stored_aspect);
     }
     dragoon::census_aspect(cobj, lr, lr2, loaded);
+}
+
+// CObjRelease(cobj in r3) is the camera class's release, which the game calls, directly or
+// through the class, as it frees a camera within a scene. The memory keeps what it held, so the
+// camera is forgotten here, before a camera made at its address could be taken for it. The
+// census logs the release.
+extern "C" void hle_CObjRelease(CPU* c) {
+    g_set_once.forget(c->r[3]);
+    dragoon::census_release(c->r[3]);
+    orig_CObjRelease(c);
+}
+
+// CObjAmnesia(class info in r3) is the camera class's amnesia, which the game calls at a change
+// of scene as it forgets the memory its objects were in. The world cameras go this way, with
+// no release of their own. The census logs it.
+extern "C" void hle_CObjAmnesia(CPU* c) {
+    g_set_once.forget_all();
+    dragoon::census_amnesia();
+    orig_CObjAmnesia(c);
 }
 
 // HSD_CObjSetCurrent (0x80401150) on entry, from recomp/patches.txt, before the camera's

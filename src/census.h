@@ -72,8 +72,30 @@ inline std::string aspect_line(uint32_t frame, uint32_t cam, uint32_t lr, uint32
     return line;
 }
 
+// One line for a camera the game releases, such as
+//   [release] f=13063 cam=814338E0
+inline std::string release_line(uint32_t frame, uint32_t cam) {
+    char line[48];
+    snprintf(line, sizeof(line), "[release] f=%u cam=%08X", frame, cam);
+    return line;
+}
+
 // Logs a call to HSD_CObjSetAspect as an aspect_line, with DRAGOON_CENSUS=1 (src/census.cpp).
 void census_aspect(uint32_t cam, uint32_t lr, uint32_t lr2, float given);
+
+// One line for the game forgetting the memory its cameras were in, such as
+//   [amnesia] f=13063
+inline std::string amnesia_line(uint32_t frame) {
+    char line[32];
+    snprintf(line, sizeof(line), "[amnesia] f=%u", frame);
+    return line;
+}
+
+// Logs a camera's release as a release_line, with DRAGOON_CENSUS=1 (src/census.cpp).
+void census_release(uint32_t cam);
+
+// Logs the camera class's amnesia as an amnesia_line, with DRAGOON_CENSUS=1 (src/census.cpp).
+void census_amnesia();
 
 // Lets each distinct line through once a frame.
 class OncePerFrame {

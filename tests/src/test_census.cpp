@@ -57,6 +57,11 @@ TEST(AspectLine, ACameraThatIsntPerspectiveStoresNone) {
               "[aspect] f=4200 cam=812C5260 lr=80066E4C lr2=8011590C given=1.25538 stored=none");
 }
 
+TEST(ReleaseLine, ShowsTheFrameAndTheCamera) {
+    EXPECT_EQ(dragoon::release_line(13063, 0x814338E0), "[release] f=13063 cam=814338E0");
+    EXPECT_EQ(dragoon::release_line(7, 0x00D9B920), "[release] f=7 cam=00D9B920");
+}
+
 TEST(OncePerFrame, RepeatInAFrameIsDropped) {
     dragoon::OncePerFrame once;
     EXPECT_TRUE(once.first(5, "a"));

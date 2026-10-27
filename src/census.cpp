@@ -6,7 +6,8 @@
 // (0x8042A0B4) at its call of each object's render callback, which walks every object drawn
 // through the current camera. src/cameras.cpp also calls in after each HSD_CObjSetAspect and
 // each HSD_CObjLoadDesc of a perspective camera, with the camera, where the call and its
-// caller return to and the aspect it was given or loaded with. Off, each hook returns at once.
+// caller return to and the aspect it was given or loaded with, and at each CObjRelease with
+// the camera. Off, each hook returns at once.
 //
 // Addresses are this disc's (GKYE01), from analysis/symbols.txt. The HSD_CObj and HSD_GObj
 // layouts are the decomp's (sysdolphin's cobj.h and gobj.h).
@@ -76,4 +77,18 @@ void dragoon::census_aspect(uint32_t cam, uint32_t lr, uint32_t lr2, float given
     const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
     const std::string line = aspect_line(frame, cam, lr, lr2, given, read_camera(cam));
     if (g_once.first(frame, line)) fprintf(stderr, "%s\n", line.c_str());
+}
+
+// CObjRelease (0x80403324) as the game releases a camera, from src/cameras.cpp.
+void dragoon::census_release(uint32_t cam) {
+    if (!g_on) return;
+    const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
+    fprintf(stderr, "%s\n", release_line(frame, cam).c_str());
+}
+
+// CObjAmnesia (0x804034A8) as the game forgets its cameras' memory, from src/cameras.cpp.
+void dragoon::census_amnesia() {
+    if (!g_on) return;
+    const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
+    fprintf(stderr, "%s\n", amnesia_line(frame).c_str());
 }

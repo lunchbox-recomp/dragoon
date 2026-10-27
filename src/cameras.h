@@ -59,20 +59,38 @@ inline float widened_aspect(float aspect, float output) { return aspect * wideni
 // The world cameras widened once, as they're set up or loaded, which the game doesn't set
 // again each frame. Each is kept with its 4:3 aspect and the factor it was widened by. When the
 // output aspect changes, a camera that still holds the aspect it was given here is widened
-// again for the new output. One holding anything else has been set again or freed since, so
-// it's left alone and forgotten.
+// again for the new output. One holding anything else has been set again since, so it's left
+// alone and forgotten.
 //
-// read(cam) gives a camera's stored aspect, or NaN when it isn't a perspective camera, so a
-// freed camera never matches. write(cam, aspect) stores one.
+// The game frees a camera by releasing it within a scene, or at a change of scene by forgetting
+// the memory all its objects were in. Neither changes the camera's memory, so a camera made
+// later at its address holding the same aspect would pass for the kept one. src/cameras.cpp
+// forgets a camera as it's released, and every camera as their memory is forgotten. At most
+// kMaxKept are kept, the oldest forgotten first, so the list can't grow without end.
+//
+// read(cam) gives a camera's stored aspect, or NaN when it isn't a perspective camera in RAM.
+// write(cam, aspect) stores one.
 class SetOnceCameras {
 public:
+    static constexpr size_t kMaxKept = 32;
+
     // Keeps `cam`, widened from `aspect` at output aspect `output` and holding that now. Forgets
-    // its older entry and every camera that no longer holds what it was given.
+    // its older entry, every camera that no longer holds what it was given and, at kMaxKept,
+    // the oldest.
     template <class Read>
     void add(uint32_t cam, float aspect, float output, Read read) {
         std::erase_if(kept_, [&](const Kept& k) { return k.cam == cam || !holds_its_own(k, read); });
+        if (kept_.size() == kMaxKept) kept_.erase(kept_.begin());
         kept_.push_back({cam, aspect, widening(output)});
     }
+
+    // Forgets `cam`, which the game is releasing.
+    void forget(uint32_t cam) {
+        std::erase_if(kept_, [&](const Kept& k) { return k.cam == cam; });
+    }
+
+    // Forgets every camera, when the game forgets the memory they're in.
+    void forget_all() { kept_.clear(); }
 
     // At output aspect `output`, widens each camera kept at another factor again, when it still
     // holds what it was given, and forgets the rest of those.

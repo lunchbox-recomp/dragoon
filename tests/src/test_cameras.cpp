@@ -132,7 +132,8 @@ TEST(SetOnceCameras, ACameraTheGameSetSinceIsLeftAloneAndForgotten) {
     EXPECT_EQ(kept.size(), 1u);
 }
 
-TEST(SetOnceCameras, AFreedCameraIsForgotten) {
+// A camera whose memory no longer reads as a perspective camera reads NaN.
+TEST(SetOnceCameras, ACameraThatIsntPerspectiveAnyMoreIsForgotten) {
     dragoon::SetOnceCameras kept;
     Aspects mem;
     widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
@@ -140,6 +141,64 @@ TEST(SetOnceCameras, AFreedCameraIsForgotten) {
     kept.follow(4.0f / 3.0f, mem.reader(), mem.writer());
     EXPECT_EQ(mem.writes, 0);
     EXPECT_EQ(kept.size(), 0u);
+}
+
+// Releasing a camera leaves its memory as it was.
+TEST(SetOnceCameras, AReleasedCameraIsForgottenThoughItsMemoryIsUnchanged) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    kept.forget(kCam);
+    kept.follow(4.0f / 3.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.writes, 0);
+    EXPECT_EQ(mem.stored[kCam], dragoon::widened_aspect(1.25538f, kWide));
+    EXPECT_EQ(kept.size(), 0u);
+}
+
+// Kept at 4:3, a world camera holds 1.25538, as a HUD camera made later at its address does.
+TEST(SetOnceCameras, ACameraMadeWhereAReleasedOneWasIsLeftAlone) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, 4.0f / 3.0f);
+    kept.forget(kCam);
+    mem.stored[kCam] = 1.25538f;
+    kept.follow(kWide, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.writes, 0);
+    EXPECT_EQ(mem.stored[kCam], 1.25538f);
+}
+
+TEST(SetOnceCameras, ForgettingACameraThatIsntKeptLeavesTheRest) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    kept.forget(kOther);
+    EXPECT_EQ(kept.size(), 1u);
+    kept.follow(4.0f / 3.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.stored[kCam], 1.25538f);
+}
+
+// At a change of scene the game forgets its cameras' memory, and the cameras in it.
+TEST(SetOnceCameras, ForgettingThemAllLeavesNothingToRewrite) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    widen_and_keep(kept, mem, kOther, 1.18f, kWide);
+    kept.forget_all();
+    kept.follow(4.0f / 3.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.writes, 0);
+    EXPECT_EQ(kept.size(), 0u);
+}
+
+TEST(SetOnceCameras, PastItsBoundTheOldestIsForgotten) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    const size_t n = dragoon::SetOnceCameras::kMaxKept + 1;
+    for (uint32_t i = 0; i < n; i++) widen_and_keep(kept, mem, 0x81000000u + 0x100u * i, 1.25538f, kWide);
+    EXPECT_EQ(kept.size(), dragoon::SetOnceCameras::kMaxKept);
+    kept.follow(4.0f / 3.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.stored[0x81000000u], dragoon::widened_aspect(1.25538f, kWide));
+    EXPECT_EQ(mem.stored[0x81000100u], 1.25538f);
+    EXPECT_EQ(mem.writes, static_cast<int>(dragoon::SetOnceCameras::kMaxKept));
 }
 
 TEST(SetOnceCameras, AnUnchangedOutputWritesNothing) {
