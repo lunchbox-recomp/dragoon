@@ -18,11 +18,12 @@ checked again at `e1016b8` on `1a88f62`. The twenty-one-route warm-up was timed 
 and `0059fce` on gcn-recomp `e1016b8`, and with three course passes longer at `529f40c` on
 `dac449e` (under Player targets).
 
-The pin was `3a8d154`, where on Dragoon `84d68bd` all twenty-one routes' frames and audio still
-matched with the widescreen hooks built in and switched off. It's now `dac449e`, and on Dragoon
-`4602fa1` with the pin moved all twenty-one still match there (under gcn-recomp `dac449e` below).
-The eight-pass warm-up was timed on it at `2fc9285`, and the three `-courses` routes' goldens
-were recorded on it just before.
+The pin was `dac449e`, where on Dragoon `4602fa1` all twenty-one routes' frames and audio
+matched (under gcn-recomp `dac449e` below). The eight-pass warm-up was timed on it at `2fc9285`,
+and the three `-courses` routes' goldens were recorded on it just before.
+
+It's now `5e49451`, and on Dragoon `31da7e5` with the pin moved all twenty-four frame-hash
+routes still match (under gcn-recomp `5e49451` below).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -35,7 +36,7 @@ were recorded on it just before.
 | Top Ride | Runs | All seven courses a fresh save offers (Grass, Sand, Sky, Fire, Light, Water and Metal) race past the countdown with one player and three CPUs (`top-ride-<course>.txt`) |
 | Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in the DMA's blocks fell from 928 to 19 (table under Audio). Since gcn-recomp `b97c019` source type 0, 98.9% of the voice time in twelve unpaced runs, resamples through a polyphase filter whose coefficients the runtime works out, because the console's are in the DSP's ROM. None of those runs turned the low-pass filter on, and the runtime doesn't apply it. It was listened to once, before the type 2 fix. It crackled. Nobody has listened since. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. [`scorecard.md`](scorecard.md) runs the routes on gcn-recomp `caf12a2` (before any of the audio work) and on `b848158`. On the title route played to 91 s in real time the clicks in the DMA's blocks fell from 1,097 and 979 to 22 and 22. Over the five routes the device stage's clicks a minute fell from 57.9 to 36.3 and from 45.1 to 33.1. Unpaced, over those routes' 324 s, the DMA's blocks went from 132 clicks to 136 and from 208 clipped runs to 25, and a bisect on 2026-10-22 agrees with 131 to 135 and 203 to 25. The audio work up to `b848158` didn't reduce the clicks over those seconds. Rescored with `audio_scorecard.py --no-run`, the title's first 91 s (`--margin 75`) went from 1,085 clicks to 19 and the mode select's first 170 s (`--margin 150`) from 118 to 16, so on those two routes the clicks that fell are past the scored seconds, in the same recordings (`scorecard.md`). In the scored seconds what it cut was clipping. Real-time runs showed the DMA's clicks rising, and the bisect found that most of that rise came from playing in real time. Pass 5 scored `b848158` against `b97c019`, and the pin `e1016b8` changes no audio file after it. Unpaced, over the same 324 s, the DMA's blocks went from 136 clicks to 94 and from 35 clicks on a block join to 7. In one real-time run of each build the device stage's clicks went from 191 to 70. Details in `audio.md` |
 | Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Nothing is saved between launches. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`: 42 port checks, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
-| Picture | 4:3 | gcn-recomp letterboxes the desktop window to 4:3 |
+| Picture | 4:3, or wider with the HUD stretched | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race, City Trial, 2P and 4P, before and after the race's finish. The HUD and the menus stretch with it (`widescreen.md`) |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
 | Build from the disc | Works | 23 s from an empty build directory: 3.5 s to configure, 19.5 s for Ninja |
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
@@ -153,8 +154,8 @@ need `--pads=4`.
 
 Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
 frame 25,800. That's from gcn-recomp `deac351` with the aspect change (`widescreen.md`), and
-it showed 1:12.60 when this was first written, at `7d30377`. At `3a8d154`, its
-results frame is the same at 4:3 and at 16:9 with `DRAGOON_WIDEN=1`.
+it showed 1:12.60 when this was first written, at `7d30377`. At `5e49451` its results frame
+at 16:9 on Dragoon `0ad99ed`, run at a load of 16, is the same as at 4:3 on `0178975`.
 
 City Trial with nobody steering drives into the sea and stays there while the clock runs. The
 opening movie, when it isn't skipped, plays to the end and hands over to the title and the
@@ -590,7 +591,7 @@ What a player's first session looks like after the warm-up, against the bars set
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, "Chained course passes" below). In 21 passes, 74.8 s at a load of 1.22 for 328 keys (Dragoon `529f40c`), and 73.7 s to 76.1 s under "Longer course passes". Before three of those passes grew, 67.7 s and 68.9 s for 318 keys five at a time (Dragoon `0059fce`, table below). One pass at a time, 47.1 s for the five routes' 191 keys, 120.5 s for the twelve routes' 222 and 252.8 s for the twenty-one routes' 318 | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`). At `529f40c`, 461 to 509 ms for 328 programs at loads of 1.90 to 8.56. Earlier, 270 to 298 ms for 191 programs and 362 to 387 ms for 222 | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there. The three `-courses` routes' goldens were recorded at `dac449e` on the tree that became Dragoon `2ae3277`, and all three routes' 609 frames matched a check run straight after | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there. The three `-courses` routes' goldens were recorded at `dac449e` on the tree that became Dragoon `2ae3277`, and all three routes' 609 frames matched a check run straight after. All twenty-four at `5e49451`, on Dragoon `31da7e5` and `0ad99ed` (under gcn-recomp `5e49451`) | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
@@ -900,6 +901,21 @@ The frame hashes run with `--fast`, where `clock_pace` returns before it waits. 
 read the AX output of `dragoon_bench`, which opens no gamepad and stubs the audio subsystem that
 holds the music. The card's file is written later now, and the guest still reads the card from
 memory.
+
+## gcn-recomp `5e49451`
+
+The pin moved from `dac449e` to `5e49451`, 11 commits. Nine let a game mark a draw to keep its
+shape at one side of a wider picture, and the GL renderer remaps the draws so marked. Dragoon
+marks none yet, and the other two commits add notes on the audio to the README.
+
+Built on Dragoon `31da7e5`, `tools/frame_hashes.py check` matched 23 of the twenty-four routes
+at loads of 4 to 11.7. `city-trial-stadium-4p` reached frame 20,700 of 21,000 before its time
+ran out, and its 70 frames matched on a rerun at a load of 7 to 9. That's all 1,906 frames, so
+no golden was recorded.
+
+On Dragoon `0ad99ed`, with the world cameras widened, the check matched 21 routes at loads of
+6.5 to 16. The race and the two `-courses` routes ran out of time under that load, and all
+three matched on a rerun at a load of 3.8 to 5.4, so all 1,906 frames match there too.
 
 ## Fixes on the way
 
