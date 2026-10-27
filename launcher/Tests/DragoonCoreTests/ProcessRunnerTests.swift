@@ -34,6 +34,35 @@ import Testing
             try await runner.run("/no/such/tool", [])
         }
     }
+
+    @Test func aProcessThatFinishesInTimeReturnsNormally() async throws {
+        let result = try await runner.run("/usr/bin/printf", ["%s", "done"], environment: nil, timeout: 30)
+        #expect(result == ProcessResult(status: 0, stdout: "done"))
+    }
+
+    @Test func aSleepingChildIsKilledAtItsTimeoutAndTheRunnerThrows() async {
+        let started = ContinuousClock.now
+        await #expect(throws: ProcessTimeout(executable: "/bin/sleep", seconds: 0.3)) {
+            try await runner.run("/bin/sleep", ["60"], environment: nil, timeout: 0.3)
+        }
+        #expect(ContinuousClock.now - started < .seconds(20))
+    }
+
+    @Test func aHelperHoldingThePipesOpenDoesNotKeepTheTimeoutWaiting() async {
+        // The shell starts a sleep that inherits both pipes, then waits for it.
+        let started = ContinuousClock.now
+        await #expect(throws: ProcessTimeout(executable: "/bin/sh", seconds: 0.3)) {
+            try await runner.run(
+                "/bin/sh", ["-c", "/bin/sleep 60 & wait"], environment: nil, timeout: 0.3)
+        }
+        #expect(ContinuousClock.now - started < .seconds(20))
+    }
+
+    @Test func aTimeoutDoesNotCutOutputShortOfIt() async throws {
+        let result = try await runner.run(
+            "/bin/dd", ["if=/dev/zero", "bs=65536", "count=32"], environment: nil, timeout: 60)
+        #expect(result.stdout.utf8.count == 2_097_152)
+    }
 }
 
 @Suite struct FakeProcessRunnerTests {
@@ -45,6 +74,16 @@ import Testing
         #expect(result.stdout == "/Library/Developer/CommandLineTools\n")
         #expect(runner.calls == [.init(executable: "/usr/bin/xcode-select", arguments: ["-p"],
                                        environment: ["A": "b"])])
+    }
+
+    @Test func recordsTheTimeoutAndThrowsTheErrorItWasToldTo() async {
+        let runner = FakeProcessRunner()
+        let timeout = ProcessTimeout(executable: "/bin/sleep", seconds: 5)
+        runner.fail("/bin/sleep", ["60"], with: timeout)
+        await #expect(throws: timeout) {
+            try await runner.run("/bin/sleep", ["60"], environment: nil, timeout: 5)
+        }
+        #expect(runner.calls == [.init(executable: "/bin/sleep", arguments: ["60"], timeout: 5)])
     }
 
     @Test func aCallOffTheScriptThrowsAndIsStillRecorded() async {
