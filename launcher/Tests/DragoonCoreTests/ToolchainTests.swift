@@ -181,6 +181,24 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         #expect(mac.probedSDKs == [named])
     }
 
+    @Test func xcodesAnswerIsTriedBeforeMacOSXSDKAndAloneWhenBothLink() async {
+        let mac = FakeMac(developer: xcode)
+        let named = xcode + "/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+        mac.runner.respond(
+            to: "/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], with: ok(named + "\n"))
+        mac.addSDK("MacOSX.sdk")
+        mac.setLinks(named, true)
+        mac.setLinks(xcode + "/SDKs/MacOSX.sdk", true)
+
+        let status = await mac.detect()
+        guard case .ready(let toolchain) = status else {
+            Issue.record("expected ready, got \(status)")
+            return
+        }
+        #expect(toolchain.sdk == named)
+        #expect(mac.probedSDKs == [named])
+    }
+
     @Test func xcrunIsOnlyAskedForAnSDKWhenXcodeIsSelected() async {
         let mac = FakeMac()
         mac.addSDK("MacOSX26.5.sdk")
