@@ -143,8 +143,8 @@ TEST(SetOnceCameras, ACameraThatIsntPerspectiveAnyMoreIsForgotten) {
     EXPECT_EQ(kept.size(), 0u);
 }
 
-// Releasing a camera leaves its memory as it was.
-TEST(SetOnceCameras, AReleasedCameraIsForgottenThoughItsMemoryIsUnchanged) {
+// Releasing a camera leaves its aspect in memory.
+TEST(SetOnceCameras, AReleasedCameraIsForgottenThoughItsAspectStays) {
     dragoon::SetOnceCameras kept;
     Aspects mem;
     widen_and_keep(kept, mem, kCam, 1.25538f, kWide);

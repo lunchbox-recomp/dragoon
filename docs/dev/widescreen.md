@@ -31,6 +31,9 @@ The census also logs each call to `HSD_CObjSetAspect`, and each perspective came
 `HSD_CObjLoadDesc` loads, as an `[aspect]` line. Each gives the camera, where the call returns
 to and where its caller returns to. `drawlog.py setters` lists them by camera and caller.
 
+Each camera the game releases gets a `[release]` line, and each time it forgets the memory its
+cameras were in gets an `[amnesia]` line. Both are under "A change of output aspect" below.
+
 ## The cameras
 
 Five kinds of camera draw at the six checkpoints.
@@ -191,7 +194,7 @@ way.
 tools/probe.sh wide 30 tests/routes/air-ride-race.txt 4200 --aspect=16:9 --output
 ```
 
-`src/cameras.cpp` holds the two hooks and `src/cameras.h` the rules, which
+`src/cameras.cpp` holds the hooks and `src/cameras.h` the rules, which
 `tests/src/test_cameras.cpp` checks. The widening is always on. At 4:3 it's the identity to
 the bit, so the game runs there as it did.
 
@@ -204,12 +207,23 @@ factor it was widened by.
 
 At each `HSD_CObjSetCurrent`, before the projection is built, a kept camera widened for another
 output aspect is widened again for the new one if it still holds what it was given. One holding
-anything else has been set again or freed since, so it's left alone and forgotten. While the
-output aspect holds steady nothing is written.
+anything else has been set again since, so it's left alone and forgotten. While the output
+aspect holds steady nothing is written.
+
+Freeing a camera leaves its aspect in memory, so a camera made later at a kept one's address,
+holding the same aspect, would pass for it. A camera is forgotten as `CObjRelease`
+(`0x80403324`) releases it, and every camera as `CObjAmnesia` (`0x804034A8`) forgets the
+memory they're in at a change of scene. At most 32 are kept, the oldest forgotten first.
+
+On Dragoon `a2ff7fd` at 16:9 and loads of 2.8 to 4.3, the census showed both. The race's world
+cameras were never released one by one, and an `[amnesia]` line came before each scene's
+cameras were set up, at frames 3,122, 8,092 and 13,063 among others. In `top-ride-courses.txt`
+each session's camera was released a frame before the amnesia that ends the session.
 
 A hidden probe window is never resized, so the output aspect can't change during a probe run
-and no run measures this. `tests/src/test_cameras.cpp` covers a resize, a camera the game set
-again since and a return to 4:3, where the aspect is the 4:3 one to the bit.
+and no run measures a resize. `tests/src/test_cameras.cpp` covers a resize, a camera the game
+set again since and a return to 4:3, where the aspect is the 4:3 one to the bit. It also covers
+a released camera, one made later at its address, forgetting every camera and the bound.
 
 ## World to screen and culling
 

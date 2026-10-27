@@ -62,6 +62,11 @@ TEST(ReleaseLine, ShowsTheFrameAndTheCamera) {
     EXPECT_EQ(dragoon::release_line(7, 0x00D9B920), "[release] f=7 cam=00D9B920");
 }
 
+TEST(AmnesiaLine, ShowsTheFrame) {
+    EXPECT_EQ(dragoon::amnesia_line(8092), "[amnesia] f=8092");
+    EXPECT_EQ(dragoon::amnesia_line(4294967295u), "[amnesia] f=4294967295");
+}
+
 TEST(OncePerFrame, RepeatInAFrameIsDropped) {
     dragoon::OncePerFrame once;
     EXPECT_TRUE(once.first(5, "a"));

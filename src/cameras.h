@@ -63,10 +63,10 @@ inline float widened_aspect(float aspect, float output) { return aspect * wideni
 // alone and forgotten.
 //
 // The game frees a camera by releasing it within a scene, or at a change of scene by forgetting
-// the memory all its objects were in. Neither changes the camera's memory, so a camera made
-// later at its address holding the same aspect would pass for the kept one. src/cameras.cpp
-// forgets a camera as it's released, and every camera as their memory is forgotten. At most
-// kMaxKept are kept, the oldest forgotten first, so the list can't grow without end.
+// the memory all its objects were in. Neither clears the camera's aspect, so a camera made later
+// at its address holding the same aspect would pass for the kept one. src/cameras.cpp forgets a
+// camera as it's released, and every camera as their memory is forgotten. At most kMaxKept are
+// kept, the oldest forgotten first, so the list can't grow without end.
 //
 // read(cam) gives a camera's stored aspect, or NaN when it isn't a perspective camera in RAM.
 // write(cam, aspect) stores one.

@@ -80,8 +80,8 @@ extern "C" void hle_HSD_CObjLoadDesc(CPU* c) {
 }
 
 // CObjRelease(cobj in r3) is the camera class's release, which the game calls, directly or
-// through the class, as it frees a camera within a scene. The memory keeps what it held, so the
-// camera is forgotten here, before a camera made at its address could be taken for it. The
+// through the class, as it frees a camera within a scene. Freeing leaves the aspect in memory, so
+// the camera is forgotten here, before a camera made at its address could be taken for it. The
 // census logs the release.
 extern "C" void hle_CObjRelease(CPU* c) {
     g_set_once.forget(c->r[3]);
