@@ -56,7 +56,7 @@ extension ProcessRunner {
 /// The real ProcessRunner. Each process leads a process group of its own, which is what a
 /// timeout or a cancelled task stops.
 public struct SystemProcessRunner: ProcessRunner {
-    private let killGrace: TimeInterval
+    let killGrace: TimeInterval
 
     /// `killGrace` is the seconds between the SIGTERM and the SIGKILL of a cancelled run, which
     /// is 10 unless a test shortens it.
