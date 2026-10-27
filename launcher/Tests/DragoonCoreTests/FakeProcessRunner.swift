@@ -27,6 +27,7 @@ final class FakeProcessRunner: ProcessRunner, @unchecked Sendable {
 
     private let lock = NSLock()
     private var script: [[String]: Result<ProcessResult, any Error>] = [:]
+    private var rules: [(matches: ([String]) -> Bool, answer: Result<ProcessResult, any Error>)] = []
     private var recorded: [Call] = []
 
     /// Every call so far, in order.
@@ -42,6 +43,17 @@ final class FakeProcessRunner: ProcessRunner, @unchecked Sendable {
         lock.withLock { script[[executable] + arguments] = .failure(error) }
     }
 
+    /// Answers a call that no exact answer was scripted for, when its whole command (executable
+    /// first) satisfies `matches`. The rule added last is tried first.
+    func respond(whenMatching matches: @escaping ([String]) -> Bool, with result: ProcessResult) {
+        lock.withLock { rules.insert((matches, .success(result)), at: 0) }
+    }
+
+    /// Like `respond(whenMatching:with:)`, but the call throws `error`.
+    func fail(whenMatching matches: @escaping ([String]) -> Bool, with error: any Error) {
+        lock.withLock { rules.insert((matches, .failure(error)), at: 0) }
+    }
+
     func run(
         _ executable: String, _ arguments: [String], environment: [String: String]?,
         timeout: TimeInterval?
@@ -50,9 +62,9 @@ final class FakeProcessRunner: ProcessRunner, @unchecked Sendable {
             recorded.append(
                 Call(executable: executable, arguments: arguments, environment: environment,
                      timeout: timeout))
-            guard let answer = script[[executable] + arguments] else {
-                throw Unscripted(command: [executable] + arguments)
-            }
+            let command = [executable] + arguments
+            guard let answer = script[command] ?? rules.first(where: { $0.matches(command) })?.answer
+            else { throw Unscripted(command: command) }
             return try answer.get()
         }
     }

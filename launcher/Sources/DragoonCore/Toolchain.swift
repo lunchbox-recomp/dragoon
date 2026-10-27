@@ -140,8 +140,11 @@ private struct Detection {
     let dataDirectory: String
     let cacheDirectory: String
 
+    /// Names this run's probe file, so two runs at once never share one.
+    let probeID = UUID().uuidString
+
     var choicePath: String { dataDirectory + "/toolchain.json" }
-    var probePath: String { cacheDirectory + "/toolchain-probe.cpp" }
+    var probePath: String { cacheDirectory + "/toolchain-probe-" + probeID + ".cpp" }
 
     func run() async -> ToolchainStatus {
         guard let developer = await output(Self.xcodeSelect, ["-p"]), fs.isDirectory(at: developer)

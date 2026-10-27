@@ -7,11 +7,15 @@ private let xcode = "/Applications/Xcode Beta.app/Contents/Developer"
 private let home = "/Users/Test Player"
 private let data = home + "/Library/Application Support/Dragoon"
 private let cache = home + "/Library/Caches/Dragoon"
-private let probeSource = cache + "/toolchain-probe.cpp"
 private let clang26_6 = "Apple clang version 21.0.0 (clang-2100.1.1.101)"
 private let clangNewer = "Apple clang version 21.0.1 (clang-2100.2.0.5)"
 
 private func ok(_ stdout: String) -> ProcessResult { ProcessResult(status: 0, stdout: stdout) }
+
+/// Whether `path` is a probe source in Caches, which has a name of its own for each run.
+private func isProbeSource(_ path: String) -> Bool {
+    path.hasPrefix(cache + "/toolchain-probe-") && path.hasSuffix(".cpp")
+}
 
 /// A Mac for `Toolchain.detect` to look at, as a fake runner and a fake file system. It starts
 /// with a developer directory selected and its four tools found, and the test adds SDKs.
@@ -59,25 +63,29 @@ private struct FakeMac {
         fs.addSymlink(developer + "/SDKs/" + name, to: target)
     }
 
-    /// The command that compiles and links the probe against `sdk`.
-    func probe(_ sdk: String) -> [String] {
-        [clangxx, "-isysroot", sdk, probeSource, "-o", "/dev/null"]
+    /// Whether `command` compiles and links a probe file in Caches against `sdk`. Each run names
+    /// its own probe file, so the file's name is only checked for its shape.
+    func isProbe(_ command: [String], against sdk: String) -> Bool {
+        command.count == 6 && command[0] == clangxx && command[1] == "-isysroot"
+            && command[2] == sdk && isProbeSource(command[3]) && command[4] == "-o"
+            && command[5] == "/dev/null"
     }
 
     func setLinks(_ sdk: String, _ links: Bool) {
-        let command = probe(sdk)
         runner.respond(
-            to: command[0], Array(command.dropFirst()),
+            whenMatching: { isProbe($0, against: sdk) },
             with: ProcessResult(status: links ? 0 : 1, stderr: links ? "" : "ld: library 'c++' not found"))
     }
 
     /// Makes the probe against `sdk` outlast its timeout.
     func setTimesOut(_ sdk: String) {
-        let command = probe(sdk)
         runner.fail(
-            command[0], Array(command.dropFirst()),
-            with: ProcessTimeout(executable: command[0], seconds: 60))
+            whenMatching: { isProbe($0, against: sdk) },
+            with: ProcessTimeout(executable: clangxx, seconds: 60))
     }
+
+    /// Every probe file written so far, which is one per probe run.
+    var probeWrites: [FakeFileSystem.Write] { fs.writes.filter { isProbeSource($0.path) } }
 
     func detect() async -> ToolchainStatus {
         await Toolchain.detect(runner: runner, fs: fs, dataDirectory: data, cacheDirectory: cache)
@@ -284,8 +292,13 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         let denied = CocoaError(.fileWriteNoPermission)
         mac.fs.failWrites(with: denied)
 
-        #expect(await mac.detect() == .cantWriteProbe(
-            path: probeSource, error: denied.localizedDescription))
+        let status = await mac.detect()
+        guard case .cantWriteProbe(let path, let error) = status else {
+            Issue.record("expected cantWriteProbe, got \(status)")
+            return
+        }
+        #expect(isProbeSource(path))
+        #expect(error == denied.localizedDescription)
         #expect(mac.probedSDKs.isEmpty)
     }
 
@@ -460,25 +473,54 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         mac.setLinks(tools + "/SDKs/MacOSX26.5.sdk", true)
         _ = await mac.detect()
 
-        let source = try #require(mac.fs.writes.first { $0.path == probeSource })
+        let source = try #require(mac.probeWrites.first)
         #expect(String(decoding: source.data, as: UTF8.self).contains("#include <cstdio>"))
-        #expect(mac.runner.calls.last?.arguments.contains(probeSource) == true)
+        #expect(mac.runner.calls.last?.arguments.contains(source.path) == true)
     }
 
-    @Test func theProbeSourceIsGoneOnceTheProbeIsOverWhateverItFound() async {
+    @Test func theProbeSourceIsGoneOnceTheProbeIsOverWhateverItFound() async throws {
         let linking = FakeMac()
         linking.addSDK("MacOSX26.5.sdk")
         linking.setLinks(tools + "/SDKs/MacOSX26.5.sdk", true)
         #expect(await linking.detect().isReady)
-        #expect(linking.fs.writes.contains { $0.path == probeSource })
-        #expect(!linking.fs.fileExists(at: probeSource))
+        let linked = try #require(linking.probeWrites.first)
+        #expect(!linking.fs.fileExists(at: linked.path))
 
         let failing = FakeMac()
         failing.addSDK("MacOSX26.5.sdk")
         failing.setLinks(tools + "/SDKs/MacOSX26.5.sdk", false)
         #expect(await failing.detect() == .noLinkableSDK(tried: [tools + "/SDKs/MacOSX26.5.sdk"]))
-        #expect(failing.fs.writes.contains { $0.path == probeSource })
-        #expect(!failing.fs.fileExists(at: probeSource))
+        let failed = try #require(failing.probeWrites.first)
+        #expect(!failing.fs.fileExists(at: failed.path))
+    }
+
+    @Test func eachRunNamesItsOwnProbeFile() async {
+        let mac = FakeMac()
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX26.5.sdk", false)
+        _ = await mac.detect()
+        _ = await mac.detect()
+
+        let paths = mac.probeWrites.map(\.path)
+        #expect(paths.count == 2)
+        #expect(Set(paths).count == 2)
+    }
+
+    @Test func twoRunsAtOnceBothFinishAndEachCompilesItsOwnProbeFile() async {
+        // The SDK doesn't link, so neither run caches a choice for the other to find.
+        let mac = FakeMac()
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX26.5.sdk", false)
+        async let first = mac.detect()
+        async let second = mac.detect()
+        let both = await [first, second]
+
+        let notLinking = ToolchainStatus.noLinkableSDK(tried: [tools + "/SDKs/MacOSX26.5.sdk"])
+        #expect(both == [notLinking, notLinking])
+        let written = Set(mac.probeWrites.map(\.path))
+        let compiled = Set(mac.runner.calls.filter { $0.executable == mac.clangxx }.map { $0.arguments[2] })
+        #expect(written.count == 2)
+        #expect(compiled == written)
     }
 
     @Test func nothingIsWrittenToDataOrCachesWhenTheToolsAreMissing() async {
@@ -503,7 +545,7 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
 
         #expect(await mac.detect() == first)
         #expect(mac.probedSDKs.count == 1)
-        #expect(mac.fs.writes.filter { $0.path == probeSource }.count == 1)
+        #expect(mac.probeWrites.count == 1)
 
         mac.setClangVersion(clangNewer)
         let third = await mac.detect()

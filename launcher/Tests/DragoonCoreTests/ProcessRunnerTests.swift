@@ -119,6 +119,20 @@ import Testing
                                        environment: ["A": "b"])])
     }
 
+    @Test func aRuleAnswersWhatNoExactAnswerCoversAndTheNewestRuleWins() async throws {
+        let runner = FakeProcessRunner()
+        runner.respond(whenMatching: { $0.first == "/usr/bin/cc" }, with: ProcessResult(status: 1))
+        runner.respond(whenMatching: { $0.contains("good") }, with: ProcessResult(status: 0))
+        runner.respond(to: "/usr/bin/cc", ["good", "exact"], with: ProcessResult(status: 7))
+
+        #expect(try await runner.run("/usr/bin/cc", ["good", "a"]).status == 0)
+        #expect(try await runner.run("/usr/bin/cc", ["bad"]).status == 1)
+        #expect(try await runner.run("/usr/bin/cc", ["good", "exact"]).status == 7)
+        await #expect(throws: FakeProcessRunner.Unscripted(command: ["/usr/bin/ld"])) {
+            try await runner.run("/usr/bin/ld", [])
+        }
+    }
+
     @Test func recordsTheTimeoutAndThrowsTheErrorItWasToldTo() async {
         let runner = FakeProcessRunner()
         let timeout = ProcessTimeout(executable: "/bin/sleep", seconds: 5)
