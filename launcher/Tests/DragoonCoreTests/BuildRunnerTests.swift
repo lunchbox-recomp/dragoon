@@ -267,6 +267,46 @@ import Testing
         #expect(await Processes.eventually { !Processes.exists(helper) })
     }
 
+    @Test func aSecondRunWhileOneIsRunningIsRefusedAndCancelStillStopsTheFirst() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.install(
+            hanging(fixture, before: "echo started >> \(shellWord(fixture.noteFile))"))
+        let runner = fixture.runner()
+        var pgid: pid_t?
+        defer { Processes.killGroup(pgid) }
+
+        var first = runner.run(fixture.request()).makeAsyncIterator()
+        #expect(try await first.next() == .step("compile"))
+        let leader = try #require(Processes.pid(inFile: fixture.pidFile))
+        pgid = leader
+
+        let second = await collect(runner.run(fixture.request()))
+        #expect(second.failure == .alreadyRunning)
+        #expect(second.events.isEmpty)
+        #expect(try lines(of: fixture.noteFile) == ["started"])
+        #expect(Processes.groupExists(leader))
+
+        runner.cancel()
+        await #expect(throws: BuildFailure.cancelled) {
+            while try await first.next() != nil {}
+        }
+        #expect(await Processes.eventually { !Processes.groupExists(leader) })
+    }
+
+    @Test func aRunStartedAfterTheLastOneEndedIsAccepted() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.install(
+            #"""
+            echo '{"event": "done", "game": "/g"}'
+            """#)
+        let runner = fixture.runner()
+        for _ in 0..<2 {
+            let finished = await collect(runner.run(fixture.request()))
+            #expect(finished.events == [.done(game: "/g")])
+            #expect(finished.failure == nil)
+        }
+    }
+
     @Test func cancelSendsSigtermFirstSoARecipeCanCleanUp() async throws {
         let fixture = try RecipeFixture()
         try fixture.install(

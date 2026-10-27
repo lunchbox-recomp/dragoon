@@ -69,6 +69,7 @@ The recipe's exit code decides how the stream ends.
 | 2 | Throws `refused`, with the kit's reason or the recipe's stderr, and yields no `error` event |
 | 3 | Throws `alreadyRunning`, "a build is already running", with no `error` event |
 | Anything else, or a signal | Throws `failed`, with the log's path |
+| `run(_:)` while a build is running | Throws `alreadyRunning` and starts nothing, so `cancel()` still reaches the running build |
 | `cancel()` | Throws `cancelled` unless the recipe exited 0 first |
 
 ## Why a wrapper runs the tests
