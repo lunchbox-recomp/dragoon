@@ -599,7 +599,7 @@ launcher/tools/swift_test.py --filter FileSystemTests
 
 The swift command prints on stderr as a `+` line before it runs, and `xcode-select` prints nothing. A signal that ends swift counts as 128 plus its number, and exit 2 means swift couldn't be started. Every argument goes to swift, `--help` included, so the tool has no help of its own and `swift_test.py --help` prints swift's.
 
-The tests fake `xcode-select` and swift with scripts that record their calls, and they build fake developer directories at paths with spaces. One test asks the real `xcode-select` through `DEVELOPER_DIR`. CI's launcher job runs the tool, and with Xcode on GitHub's runner it adds nothing there.
+The tests fake `xcode-select` and swift with scripts that record their calls, and they build fake developer directories at paths with spaces. Two of them run the tool as a script with the fake swift found on `PATH` and the real `xcode-select` answering from `DEVELOPER_DIR`, so they see what swift prints. CI's launcher job runs the tool, and with Xcode on GitHub's runner it adds nothing there.
 
 ## The engine's own tools
 
