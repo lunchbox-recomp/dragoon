@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 import check_no_game_data
-from testutil import GIT_ENV, git, run_main
+from testutil import GIT_ENV, run_main
 
 MOD_SUFFIXES = (".dat", ".hps", ".bnr", ".elf", ".gct")
 
@@ -81,15 +81,17 @@ class ViolationsTest(unittest.TestCase):
 
 class GitignoreTest(unittest.TestCase):
     """The mod rules in .gitignore, as git reads them. The repository's own .gitignore is
-    copied into a fresh repository, so nothing of the user's or the system's applies."""
+    copied into a fresh repository. Git runs with HOME and XDG_CONFIG_HOME pointing at that
+    repository's temporary directory and with the system and global config turned off, so
+    neither a config nor a global ignore file of the developer's applies."""
 
     def ignored(self, paths: list[str]) -> list[str]:
         with tempfile.TemporaryDirectory() as tmp:
-            git(Path(tmp), "init", "-q")
+            env = {**os.environ, **GIT_ENV, "HOME": tmp, "XDG_CONFIG_HOME": tmp}
+            subprocess.run(["git", "-C", tmp, "init", "-q"], env=env, check=True)
             shutil.copy(check_no_game_data.ROOT / ".gitignore", Path(tmp, ".gitignore"))
             done = subprocess.run(["git", "-C", tmp, "check-ignore", "--stdin", "-z"],
-                                  env={**os.environ, **GIT_ENV}, input="\0".join(paths),
-                                  capture_output=True, text=True)
+                                  env=env, input="\0".join(paths), capture_output=True, text=True)
         self.assertIn(done.returncode, (0, 1), done.stderr)
         return done.stdout.split("\0")[:-1]
 
@@ -104,6 +106,18 @@ class GitignoreTest(unittest.TestCase):
     def test_a_mods_folder_below_the_top_is_not(self):
         paths = ["tests/mods/patches.txt", "tests/mods/Some Mod/list.txt", "docs/mods/guide.md"]
         self.assertEqual(self.ignored(paths), [])
+
+    def test_the_developers_own_ignore_file_does_not_apply(self):
+        with tempfile.TemporaryDirectory() as home:
+            ignore = Path(home, ".config", "git", "ignore")
+            ignore.parent.mkdir(parents=True)
+            ignore.write_text("*.txt\n")
+            for xdg in (str(ignore.parents[1]), None):
+                with self.subTest(xdg_config_home=xdg), mock.patch.dict(os.environ, {"HOME": home}):
+                    os.environ.pop("XDG_CONFIG_HOME", None)
+                    if xdg:
+                        os.environ["XDG_CONFIG_HOME"] = xdg
+                    self.assertEqual(self.ignored(["tests/mods/patches.txt"]), [])
 
 
 class MainTest(unittest.TestCase):
