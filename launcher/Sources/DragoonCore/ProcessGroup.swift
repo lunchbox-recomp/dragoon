@@ -8,7 +8,7 @@ struct ProcessGroupOutcome: Equatable, Sendable {
     var signaled: Bool
     /// Whether the timeout ran out while the process, or something it started, was still running.
     var timedOut: Bool
-    /// Whether the task was cancelled while the process, or something it started, was still
+    /// Whether the task was canceled while the process, or something it started, was still
     /// running.
     var cancelled: Bool
 }
@@ -21,9 +21,9 @@ struct ProcessWaitFailure: Error, Equatable {
 
 /// Starts a process as the leader of a process group of its own, so one signal reaches it and
 /// every helper it starts. Both real runners start their children here, which is where a
-/// timeout or a cancelled task stops them.
+/// timeout or a canceled task stops them.
 enum ProcessGroup {
-    /// Seconds between SIGTERM and SIGKILL when the calling task is cancelled.
+    /// Seconds between SIGTERM and SIGKILL when the calling task is canceled.
     static let killGrace: TimeInterval = 10
 
     /// Seconds a pipe held open by something that outlived the SIGKILL is waited on before it is

@@ -106,7 +106,7 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         clangVersion: clangVersion)
 }
 
-/// The real runner as a cancelled task sees it. Once the task is cancelled every command throws
+/// The real runner as a canceled task sees it. Once the task is canceled every command throws
 /// `CancellationError`. The command that `trigger` picks cancels the task, and either throws too
 /// or, with `answerFirst`, gives its answer first.
 private final class CancellingRunner: ProcessRunner, @unchecked Sendable {

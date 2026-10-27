@@ -121,7 +121,7 @@ extension BuildFailure: LocalizedError {
         case .refused(let message, let log), .failed(_, let message, let log):
             return "\(message). The log is at \(log)."
         case .cancelled:
-            return "the build was cancelled"
+            return "the build was canceled"
         case .couldNotStart(let reason):
             return "the build couldn't be started: \(reason)"
         }
@@ -148,7 +148,7 @@ public final class BuildRunner: @unchecked Sendable {
     private let lock = NSLock()
     private var current: Task<Void, Never>?
 
-    /// `killGrace` is the seconds between the SIGTERM and the SIGKILL of a cancelled build, which
+    /// `killGrace` is the seconds between the SIGTERM and the SIGKILL of a canceled build, which
     /// is 10 unless a test shortens it.
     public init(
         fs: any FileSystem = SystemFileSystem(), logDirectory: String = BuildRunner.defaultLogDirectory,
@@ -162,7 +162,7 @@ public final class BuildRunner: @unchecked Sendable {
 
     /// Starts the build, which runs whether or not anyone is iterating yet. The stream ends
     /// normally once the new game is current, and with a `BuildFailure` when it isn't. Dropping
-    /// or cancelling the stream cancels the build, as `cancel()` does. While a build is running
+    /// or canceling the stream cancels the build, as `cancel()` does. While a build is running
     /// this starts nothing: its stream throws `alreadyRunning` and `cancel()` still stops the
     /// build that is running.
     ///

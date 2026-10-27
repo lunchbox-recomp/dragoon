@@ -347,6 +347,7 @@ import Testing
             while try await iterator.next() != nil {}
         }
         #expect(try fixture.currentGame() == "old")
+        #expect(BuildFailure.cancelled.message == "the build was canceled")
     }
 
     @Test func aCancelAfterTheSwapEndsWithTheNewGameDoneAndTellsTheLog() async throws {
