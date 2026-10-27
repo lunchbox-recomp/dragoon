@@ -121,6 +121,14 @@ class ScanTest(ModsCase):
         self.assertEqual(found, mods.Mod("Code Mod", {"a.bin": added}, dol,
                                          {"hook.bin": hook, "code/more.bin": more}))
 
+    def test_files_and_dol_txt_may_come_in_any_letter_case(self) -> None:
+        added = self.put("Big Mod/Files/a.bin")
+        dol = self.put("Code Mod/DOL.txt", DOL_TXT)
+        hook = self.put("Code Mod/hook.bin")
+        big, code = self.scan()
+        self.assertEqual(big, mods.Mod("Big Mod", {"a.bin": added}))
+        self.assertEqual(code, mods.Mod("Code Mod", {}, dol, {"hook.bin": hook}))
+
     def test_files_beside_a_mod_without_dol_txt_are_left_alone(self) -> None:
         self.put("Mod/readme.txt")
         self.link("Mod/a link", self.tmp)
@@ -159,6 +167,33 @@ class RefusalTest(ModsCase):
     def test_a_files_that_isnt_a_folder(self) -> None:
         self.put("Mod/files")
         self.refused("Mod", "files", "isn't a folder")
+
+    def test_two_spellings_of_files_or_dol_txt(self) -> None:
+        # A volume that ignores case can't hold both, so the second spelling is in another folder.
+        real = mods._entries
+        for n, (one, two, put) in enumerate((("files", "Files", "Files/b.bin"),
+                                             ("dol.txt", "DOL.TXT", "DOL.TXT"))):
+            with self.subTest(two=two):
+                self.mods = self.make({"Mod/files/a.bin": b"x", "Mod/dol.txt": DOL_TXT})
+                other = self.tmp / f"other {n}"
+                self.put(put, DOL_TXT, other)
+                mod = self.mods / "Mod"
+
+                def entries(folder: Path) -> list[os.DirEntry]:
+                    got = real(folder)
+                    if folder == mod:
+                        got = sorted(got + [e for e in real(other) if e.name == two],
+                                     key=lambda e: e.name)
+                    return got
+
+                with mock.patch.object(mods, "_entries", entries):
+                    self.refused("Mod", one, f"same name as {two} ignoring case")
+
+    def test_a_refusal_spells_files_and_dol_txt_as_the_mod_does(self) -> None:
+        for rel, why in (("Files/main.dol", "whole DOL"), ("DOL.txt", "no dol line")):
+            with self.subTest(rel=rel):
+                self.mods = self.make({f"Mod/{rel}": "# not yet\n"})
+                self.refused("Mod", rel, why)
 
     def test_a_dol_txt_that_isnt_a_file(self) -> None:
         (self.mods / "Mod" / "dol.txt").mkdir(parents=True)
