@@ -73,6 +73,6 @@ extern "C" void dragoon_census_draw(uint32_t gobj, uint32_t cb) {
 void dragoon::census_aspect(uint32_t cam, uint32_t lr, uint32_t lr2, float given) {
     if (!g_on || !in_ram(cam)) return;
     const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
-    const std::string line = aspect_line(frame, cam, lr, lr2, given, f32_at(cam + kCObjProjection + 4));
+    const std::string line = aspect_line(frame, cam, lr, lr2, given, read_camera(cam));
     if (g_once.first(frame, line)) fprintf(stderr, "%s\n", line.c_str());
 }

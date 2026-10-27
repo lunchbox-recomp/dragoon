@@ -40,8 +40,21 @@ TEST(CensusLine, UnknownTypeLeavesTheProjectionEmpty) {
 }
 
 TEST(AspectLine, ShowsTheCallerAndBothAspects) {
-    EXPECT_EQ(dragoon::aspect_line(4200, 0x8123A0C0, 0x800C2884, 0x800C1F00, 1.25538f, 1.67383f),
+    dragoon::Camera c;
+    c.type = dragoon::kPerspective;
+    c.proj[0] = 78.0f;
+    c.proj[1] = 1.67383f;
+    EXPECT_EQ(dragoon::aspect_line(4200, 0x8123A0C0, 0x800C2884, 0x800C1F00, 1.25538f, c),
               "[aspect] f=4200 cam=8123A0C0 lr=800C2884 lr2=800C1F00 given=1.25538 stored=1.67383");
+}
+
+TEST(AspectLine, ACameraThatIsntPerspectiveStoresNone) {
+    dragoon::Camera c;
+    c.type = dragoon::kOrtho;
+    c.proj[0] = 0.0f;
+    c.proj[1] = -48.0f;
+    EXPECT_EQ(dragoon::aspect_line(4200, 0x812C5260, 0x80066E4C, 0x8011590C, 1.25538f, c),
+              "[aspect] f=4200 cam=812C5260 lr=80066E4C lr2=8011590C given=1.25538 stored=none");
 }
 
 TEST(OncePerFrame, RepeatInAFrameIsDropped) {

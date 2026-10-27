@@ -23,8 +23,9 @@ frame M, with the frames it held each, a camera being one address in one viewpor
 setters prints who set each camera's aspect from frame N to frame M, from DRAGOON_CENSUS=1's
 [aspect] lines, one for each call to HSD_CObjSetAspect. Each line names a camera and where
 the call returns to, then where its caller returns to, by function and offset with
---symbols. It ends with the aspect the call was given, the one the camera held after and
-the frames. --cam ADDR keeps one camera's lines.
+--symbols. It ends with the aspect the call was given, the one the camera held after (none
+for a camera that isn't a perspective one) and the frames. --cam ADDR keeps one camera's
+lines.
 
 Exits 0 once it has read the log, 1 when aspects finds a camera whose stored aspect changed
 within its viewport, 2 on a bad argument or a log it can't read or that lacks the lines asked
@@ -49,7 +50,7 @@ VIEWPORT = re.compile(rf"^\s+viewport=({NUM}),({NUM}),{NUM} ({NUM}),({NUM}),{NUM
 CENSUS = re.compile(r"\[census\] f=(\d+) cam=([0-9A-F]{8}) type=(\w+) p=(\S*) vp=(\S+) "
                     r"cb=([0-9A-F]{8}) cls=(\d+) via=(set|draw)$")
 SETTER = re.compile(rf"\[aspect\] f=(\d+) cam=([0-9A-F]{{8}}) lr=([0-9A-F]{{8}}) lr2=([0-9A-F]{{8}}) "
-                    rf"given=({NUM}) stored=({NUM})$")
+                    rf"given=({NUM}) stored=({NUM}|none)$")
 SYMBOL = re.compile(r"^(\S+) = \.text:0x([0-9A-Fa-f]{8});")
 # The draw log prints the projection to four decimals, so an orthographic camera matches
 # within this. A perspective camera's y scale matches within PERSP_TOLERANCE of the cotangent
