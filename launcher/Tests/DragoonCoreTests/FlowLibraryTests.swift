@@ -1,0 +1,197 @@
+import DragoonCore
+import Foundation
+import Testing
+
+private let oldCommits = Commits(
+    dragoon: String(repeating: "7", count: 40), gcnRecomp: String(repeating: "6", count: 40))
+
+/// Library, rebuilds, the disc's bookmark, old builds and results that come late.
+@Suite struct FlowLibraryTests {
+    @Test(arguments: [
+        (Commits(dragoon: oldCommits.dragoon, gcnRecomp: sourceCommits.gcnRecomp), true),
+        (Commits(dragoon: sourceCommits.dragoon, gcnRecomp: oldCommits.gcnRecomp), true),
+        (nil, true),
+        (sourceCommits, false),
+    ])
+    func aRebuildIsOfferedWhenTheStampNamesOtherCommits(stamp: Commits?, offered: Bool) {
+        let run = launched(installed: InstalledGame(stamp: stamp))
+        #expect(run.screen == .library)
+        #expect(run.state.offersRebuild == offered)
+    }
+
+    @Test func aCancelledRebuildGoesBackToLibraryWithTheOldGame() {
+        let old = InstalledGame(stamp: oldCommits)
+        var run = launched(installed: old)
+        #expect(run.state.offersRebuild)
+        for (event, effects) in rebuildToRunning {
+            #expect(run.send(event) == effects)
+        }
+        run.send(.build(.step("compile")))
+        run.send(.build(.progress(step: "compile", done: 40, total: 135)))
+        #expect(run.send(.cancelBuildPressed) == [.cancelBuild])
+        #expect(run.send(.buildEnded(.cancelled)) == [.deleteOldBuilds])
+        #expect(run.screen == .library)
+        #expect(run.state.installed == old)
+        #expect(run.state.offersRebuild)
+        #expect(run.state.waiting == nil)
+        #expect(run.state.intent == nil)
+        #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
+    }
+
+    @Test func aRebuildThatFinishesStampsTheGameWithTheSourcesCommits() {
+        var run = launched(installed: InstalledGame(stamp: oldCommits))
+        for (event, _) in rebuildToRunning { run.send(event) }
+        #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
+        #expect(run.state.installed == InstalledGame(stamp: sourceCommits))
+        #expect(!run.state.offersRebuild)
+    }
+
+    @Test func aStaleBookmarkGoesBackToTheDiscStep() {
+        var run = launched()
+        run.send(.rebuildPressed)
+        run.send(.spaceChecked(enoughSpace))
+        #expect(run.send(.bookmarkResolved(.stale)) == [])
+        #expect(run.screen == .disc(.problem(.moved)))
+        #expect(run.state.step == .disc)
+        // The game stays, and Library is one press away.
+        #expect(run.state.installed == InstalledGame(stamp: sourceCommits))
+        #expect(run.state.canGoBackToLibrary)
+        // Picking it again carries the rebuild on.
+        let bookmark = Data("a fresh bookmark".utf8)
+        run.send(.discChosen(path: flowDisc, bookmark: bookmark))
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [
+            .saveSettings(LauncherSettings(welcomeSeen: true, disc: bookmark)), .detectTools,
+        ])
+        #expect(run.send(.toolsDetected(.ready(flowToolchain)))
+            == [.startBuild(toolchain: flowToolchain, disc: flowDisc)])
+    }
+
+    @Test func noBookmarkAtAllAsksForTheDisc() {
+        var run = launched(settings: LauncherSettings(welcomeSeen: true))
+        #expect(run.send(.playPressed) == [])
+        #expect(run.screen == .disc(.choose))
+    }
+
+    @Test(arguments: [Int64(2_000_000_000), 50_000_000_000])
+    func twoGBFreeIsEnoughToBuild(available: Int64) {
+        var run = launched()
+        run.send(.rebuildPressed)
+        let space = FreeSpace(available: available, volume: "Macintosh HD")
+        #expect(run.send(.spaceChecked(space)) == [.resolveBookmark(flowBookmark)])
+        #expect(run.screen == .build(.preparing))
+    }
+
+    @Test(arguments: [Int64(1_999_999_999), 0])
+    func lessThanTwoGBFreeStopsBeforeTheBuild(available: Int64) {
+        var run = launched()
+        run.send(.rebuildPressed)
+        let space = FreeSpace(available: available, volume: "Macintosh HD")
+        #expect(run.send(.spaceChecked(space)) == [])
+        #expect(run.screen == .build(.lowSpace(space)))
+    }
+
+    @Test func missingToolsDuringARebuildCarryItOnOnceTheyArrive() {
+        var run = launched()
+        _ = run.send([
+            .rebuildPressed, .spaceChecked(enoughSpace), .bookmarkResolved(.found(flowDisc)),
+            .discChecked(path: flowDisc, check: .ok),
+        ])
+        #expect(run.send(.toolsDetected(.missing)) == [.scheduleToolsCheck(after: 5)])
+        #expect(run.screen == .tools(.missing))
+        #expect(run.send(.toolsCheckDue) == [.detectTools])
+        // The tools took a while, so the rebuild starts over from the space.
+        #expect(run.send(.toolsDetected(.ready(flowToolchain))) == [.checkSpace])
+        #expect(run.screen == .build(.preparing))
+    }
+
+    @Test func backToLibraryGivesUpTheRebuildAndItsLateResults() {
+        var run = launched()
+        _ = run.send([
+            .rebuildPressed, .spaceChecked(enoughSpace), .bookmarkResolved(.found(flowDisc)),
+            .discChecked(path: flowDisc, check: .ok), .toolsDetected(.missing),
+        ])
+        #expect(run.state.canGoBackToLibrary)
+        #expect(run.send(.backToLibraryPressed) == [.deleteOldBuilds])
+        #expect(run.screen == .library)
+        #expect(run.state.intent == nil)
+        #expect(run.send(.toolsCheckDue) == [])
+        #expect(run.send(.toolsDetected(.ready(flowToolchain))) == [])
+        #expect(run.screen == .library)
+    }
+
+    @Test func aRunningBuildCantGoBackToLibrary() {
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        #expect(!run.state.canGoBackToLibrary)
+        #expect(run.send(.backToLibraryPressed) == [])
+        #expect(run.send(.playPressed) == [])
+        #expect(run.send(.changeDiscPressed) == [])
+    }
+
+    @Test func changingTheDiscKeepsTheNewBookmarkAndGoesBackToLibrary() {
+        let other = "/Volumes/Backup/Kirby Air Ride (USA).iso"
+        let bookmark = Data("a bookmark to the backup".utf8)
+        var run = launched()
+        #expect(run.send(.changeDiscPressed) == [.openDiscPanel])
+        #expect(run.screen == .library)
+        #expect(run.send(.discChosen(path: other, bookmark: bookmark))
+            == [.checkDisc(path: other, expected: flowSource.disc)])
+        #expect(run.send(.discChecked(path: other, check: .ok)) == [
+            .saveSettings(LauncherSettings(welcomeSeen: true, disc: bookmark)), .deleteOldBuilds,
+        ])
+        #expect(run.screen == .library)
+    }
+
+    @Test func resultsTheFlowIsntWaitingForChangeNothing() {
+        var run = launched()
+        let before = run.state
+        let late: [Flow.Event] = [
+            .spaceChecked(enoughSpace), .bookmarkResolved(.found(flowDisc)),
+            .discChecked(path: flowDisc, check: .ok), .toolsDetected(.ready(flowToolchain)),
+            .build(.step("compile")), .buildEnded(nil), .logTailRead(path: flowLog, lines: ["x"]),
+            .toolsCheckDue, .cancelBuildPressed, .copyLogPressed, .lookAgainPressed,
+        ]
+        for event in late {
+            #expect(run.send(event) == [], "\(event)")
+        }
+        #expect(run.state == before)
+    }
+
+    @Test func aDiscCheckOfAnotherPathIsIgnored() {
+        var run = launched()
+        run.send(.playPressed)
+        run.send(.bookmarkResolved(.found(flowDisc)))
+        #expect(run.send(.discChecked(path: "/elsewhere.iso", check: .ok)) == [])
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc)])
+    }
+
+    @Test func showSavesIsAnEffect() {
+        var run = launched()
+        #expect(run.send(.showSavesPressed) == [.showSaves])
+    }
+
+    @Test func oldBuildsWaitUntilTheGameHasExited() {
+        var run = launched()
+        run.send(.gameStarted)
+        run.send(.changeDiscPressed)
+        run.send(.discChosen(path: flowDisc, bookmark: flowBookmark))
+        #expect(!run.send(.discChecked(path: flowDisc, check: .ok)).contains(.deleteOldBuilds))
+        #expect(run.screen == .library)
+        #expect(run.send(.gameExited(status: 0, panic: nil)) == [.deleteOldBuilds])
+    }
+
+    @Test func oldBuildsWaitUntilTheBuildHasEnded() {
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        run.send(.gameStarted)
+        #expect(run.send(.gameExited(status: 0, panic: nil)) == [])
+        run.send(.gameStarted)
+        #expect(run.send(.buildEnded(nil)) == [])
+        #expect(run.send(.gameExited(status: 0, panic: nil)) == [.deleteOldBuilds])
+    }
+
+    @Test func noGameMeansNoOldBuildsToDelete() {
+        var run = launched(settings: LauncherSettings(welcomeSeen: true), installed: nil)
+        #expect(run.send(.gameExited(status: 0, panic: nil)) == [])
+    }
+}
