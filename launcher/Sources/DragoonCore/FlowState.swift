@@ -77,11 +77,12 @@ extension Flow {
             installed != nil && screen != .library && waiting != .build && waiting != .panel
         }
 
-        /// Whether Library offers a rebuild, because the installed game's stamp names other
-        /// commits than the app's source. The old game plays until a rebuild starts.
-        public var offersRebuild: Bool {
-            guard let installed, let source, !rebuildDeclined else { return false }
-            return installed.stamp != source.commits
+        /// Why Library offers a rebuild, or nil when it doesn't. The old game plays until a
+        /// rebuild starts.
+        public var rebuildOffer: RebuildOffer? {
+            guard let installed, let source, !rebuildDeclined else { return nil }
+            guard let stamp = installed.stamp else { return .unknownVersion }
+            return stamp == source.commits ? nil : .otherVersion
         }
 
         /// The step the window's list marks as current, or nil when it shows no list.
@@ -100,6 +101,14 @@ extension Flow {
             }
         }
     }
+}
+
+/// Why Library offers a rebuild.
+public enum RebuildOffer: Equatable, Sendable {
+    /// The installed game's stamp names other commits than the app's source.
+    case otherVersion
+    /// The installed game's stamp can't be read, so which version it is isn't known.
+    case unknownVersion
 }
 
 public enum ToolsScreen: Equatable, Sendable {

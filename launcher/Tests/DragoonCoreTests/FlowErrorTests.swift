@@ -247,14 +247,14 @@ import Testing
             dragoon: String(repeating: "7", count: 40), gcnRecomp: sourceCommits.gcnRecomp))
         var run = launched(installed: old)
         #expect(run.screen == .library)
-        #expect(run.state.offersRebuild)
+        #expect(run.state.rebuildOffer == .otherVersion)
         #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
         run.send(.bookmarkResolved(.found(flowDisc)))
         #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc)])
         #expect(run.state.installed == old)
         run.send(.gameExited(status: 0, panic: nil))
         #expect(run.send(.rebuildLaterPressed) == [])
-        #expect(!run.state.offersRebuild)
+        #expect(run.state.rebuildOffer == nil)
         #expect(run.send(.rebuildPressed) == [.checkSpace])
     }
 }

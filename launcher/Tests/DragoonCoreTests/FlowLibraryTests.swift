@@ -7,22 +7,23 @@ private let oldCommits = Commits(
 
 /// Library, rebuilds, the disc's bookmark, old builds and results that come late.
 @Suite struct FlowLibraryTests {
+    /// A stamp that can't be read gets its own offer, since which version it is isn't known.
     @Test(arguments: [
-        (Commits(dragoon: oldCommits.dragoon, gcnRecomp: sourceCommits.gcnRecomp), true),
-        (Commits(dragoon: sourceCommits.dragoon, gcnRecomp: oldCommits.gcnRecomp), true),
-        (nil, true),
-        (sourceCommits, false),
-    ])
-    func aRebuildIsOfferedWhenTheStampNamesOtherCommits(stamp: Commits?, offered: Bool) {
+        (Commits(dragoon: oldCommits.dragoon, gcnRecomp: sourceCommits.gcnRecomp), .otherVersion),
+        (Commits(dragoon: sourceCommits.dragoon, gcnRecomp: oldCommits.gcnRecomp), .otherVersion),
+        (nil, .unknownVersion),
+        (sourceCommits, nil),
+    ] as [(Commits?, RebuildOffer?)])
+    func aRebuildIsOfferedWhenTheStampNamesOtherCommits(stamp: Commits?, offer: RebuildOffer?) {
         let run = launched(installed: InstalledGame(stamp: stamp))
         #expect(run.screen == .library)
-        #expect(run.state.offersRebuild == offered)
+        #expect(run.state.rebuildOffer == offer)
     }
 
     @Test func aCancelledRebuildGoesBackToLibraryWithTheOldGame() {
         let old = InstalledGame(stamp: oldCommits)
         var run = launched(installed: old)
-        #expect(run.state.offersRebuild)
+        #expect(run.state.rebuildOffer == .otherVersion)
         for (event, effects) in rebuildToRunning {
             #expect(run.send(event) == effects)
         }
@@ -32,7 +33,7 @@ private let oldCommits = Commits(
         #expect(run.send(.buildEnded(.cancelled)) == [.deleteOldBuilds])
         #expect(run.screen == .library)
         #expect(run.state.installed == old)
-        #expect(run.state.offersRebuild)
+        #expect(run.state.rebuildOffer == .otherVersion)
         #expect(run.state.waiting == nil)
         #expect(run.state.intent == nil)
         #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
@@ -78,7 +79,7 @@ private let oldCommits = Commits(
         for (event, _) in rebuildToRunning { run.send(event) }
         #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
         #expect(run.state.installed == InstalledGame(stamp: sourceCommits))
-        #expect(!run.state.offersRebuild)
+        #expect(run.state.rebuildOffer == nil)
     }
 
     @Test func aStaleBookmarkGoesBackToTheDiscStep() {

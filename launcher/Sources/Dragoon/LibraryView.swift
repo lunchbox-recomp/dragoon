@@ -9,10 +9,10 @@ struct LibraryView: View {
     var body: some View {
         StepPage(Strings.libraryTitle) {
             Text(state.gameRunning ? Strings.gameRunning : Strings.libraryReady)
-            if state.offersRebuild {
+            if let offer = state.rebuildOffer {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(Strings.rebuildOffer)
+                        Text(Strings.rebuildOffer(offer))
                         HStack {
                             Spacer()
                             Button(Strings.later) { send(.rebuildLaterPressed) }

@@ -155,7 +155,14 @@ enum Strings {
     static let rebuild = "Rebuild"
     static let showSaves = "Show Saves"
     static let changeDisc = "Change Disc…"
-    static let rebuildOffer = "This copy of Dragoon builds a different version of the game than the one you have. You can rebuild now or later, and the game you have plays until a rebuild starts."
+    static func rebuildOffer(_ offer: RebuildOffer) -> String {
+        switch offer {
+        case .otherVersion:
+            return "This copy of Dragoon builds a different version of the game than the one you have. You can rebuild now or later, and the game you have plays until a rebuild starts."
+        case .unknownVersion:
+            return "Dragoon can't tell which version of the game you have. You can rebuild now or later, and the game you have plays until a rebuild starts."
+        }
+    }
     static let rebuildNow = "Rebuild Now"
     static let later = "Later"
     static let panicHeading = "The game wrote this in panic.txt"

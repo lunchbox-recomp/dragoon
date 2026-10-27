@@ -86,7 +86,7 @@ import Testing
         #expect(run.screen == .library)
         #expect(run.state.step == .library)
         #expect(run.state.installed == InstalledGame(stamp: sourceCommits))
-        #expect(!run.state.offersRebuild)
+        #expect(run.state.rebuildOffer == nil)
     }
 
     @Test func theStepsAreInTheOrderTheWindowListsThem() {

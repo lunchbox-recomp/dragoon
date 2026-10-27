@@ -87,7 +87,7 @@ From the `play` effect until the game exits or can't start, Library counts the g
 
 A launcher whose path holds `/AppTranslocation/`, or that's on a read-only volume, asks to be moved to Applications and does nothing else. So does one whose path holds a character the kit's Makefile refuses, which is `$`, `"`, a backtick, `:` or `;`. Finder shows a `:` in a folder's name as `/`, so that's how the window names it.
 
-Library offers a rebuild when the commits in the app's `source-info.json` differ from the ones in `game/current/stamp.json`, and the old game plays until a rebuild starts. A rebuild that fails or is canceled leaves the old game current. Builds other than the current one are deleted while no game or build is running.
+Library offers a rebuild when `game/current/stamp.json` names other commits than the app's `source-info.json` or can't be read, and the old game plays until a rebuild starts. A rebuild that fails or is canceled leaves the old game current. Builds other than the current one are deleted while no game or build is running.
 
 `launcher.json` in `~/Library/Application Support/Dragoon` keeps the disc's bookmark and whether Welcome was seen. Every string the window shows is in `Sources/Dragoon/Strings.swift`.
 
