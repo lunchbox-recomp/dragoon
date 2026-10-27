@@ -7,20 +7,23 @@ Each folder in MODS whose name doesn't start with a dot is one mod. A mod's file
 mirrors the disc's root, and its dol.txt is a patch list in the format of gcn-recomp's
 docs/dol-patches.md, whose dol line has to name SHA, the game's DOL. Either may be missing, and
 either name may come in any letter case. The other files beside dol.txt are the ones its
-section lines may name. Dotfiles and dot
+section lines may name, and in a mod without dol.txt they're left alone. Dotfiles and dot
 folders are skipped everywhere, and a loose file in MODS isn't a mod.
 
 check prints one JSON object with each mod's name, file count and bytes, in folder name order
-ignoring case, and the digest. The digest is the SHA-256 over every file's path in MODS, its
-size and its SHA-256, or "none" when no mod holds a file. A missing or empty MODS has no mods.
+ignoring case, and the digest. A mod holds the files under its files/, its dol.txt and the
+other files beside that. The digest is the SHA-256 over each file a mod holds, by the mod's
+name and its path in the mod, with its size and its SHA-256. It's "none" when no mod holds a
+file, and a missing or empty MODS has no mods.
 
-A refused mod prints one JSON object with the error, the mod and the path in it instead. A mod
-is refused for a link, for anything that isn't a file or a folder or that can't be read, and
-for a file of 4 GiB or more. Under files/ it's refused for a name that isn't ASCII or holds a
-control character, and for a main.dol at the top. A dol.txt that's over 1 MiB, isn't UTF-8 or
-doesn't start with a dol line naming SHA is refused too. So are two files that are one disc
-path ignoring case, in one mod or two, and a file where another needs a folder. A mod holding
-files or dol.txt in two letter cases is refused.
+A refused mod prints one JSON object with the error, the mod and the path in it instead. Under
+files/, or anywhere in a mod with a dol.txt, a mod is refused for a link, for anything that
+isn't a file or a folder or that can't be read, and for a file of 4 GiB or more. A link or an
+unreadable folder in place of the mod is refused too. Under files/ it's refused for a name
+that isn't ASCII or holds a control character, and for a main.dol at the top. A dol.txt that's
+over 1 MiB, isn't UTF-8 or doesn't start with a dol line naming SHA is refused too. So are two
+files that are one disc path ignoring case, in one mod or two, and a file where another needs a
+folder. A mod holding files or dol.txt in two letter cases is refused.
 
 Exits 0, 1 for a refused mod and 2 on a bad argument or a MODS that can't be read.
 
@@ -253,9 +256,9 @@ def _hash_file(path: Path) -> tuple[int, str]:
 
 
 def digest(mods: list[Mod]) -> str:
-    """The SHA-256 over each file's path in the mods folder, a NUL, its size in decimal, a NUL,
-    its SHA-256 in hex and a newline, mod by mod and file by file. "none" when no mod holds a
-    file."""
+    """The SHA-256 over each file a mod holds, as Mod.held() lists them, mod by mod. Each is
+    the mod's name, a slash and the file's path in the mod, then a NUL, its size in decimal, a
+    NUL, its SHA-256 in hex and a newline. "none" when no mod holds a file."""
     total = hashlib.sha256()
     held = 0
     for mod in mods:
