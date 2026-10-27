@@ -11,12 +11,15 @@
 // Addresses are this disc's (GKYE01), from analysis/symbols.txt. The HSD_CObj and HSD_GObj
 // layouts are the decomp's (sysdolphin's cobj.h and gobj.h).
 #include "census.h"
+#include "guest_memory.h"
 #include "gx/render.h"
-#include "runtime.h"
 #include <cstdlib>
 #include <cstring>
 
 namespace {
+
+using dragoon::f32_at;
+using dragoon::in_ram;
 
 constexpr uint32_t kCObjCurrent = 0x805DE22C;    // CObjCurrent, what HSD_CObjSetCurrent set last
 constexpr uint32_t kCurrentRender = 0x805DE31C;  // hsdGObj_current_render, the object drawing
@@ -31,15 +34,6 @@ const bool g_on = [] {
     return e && *e && strcmp(e, "0") != 0;
 }();
 dragoon::OncePerFrame g_once;
-
-bool in_ram(uint32_t a) { return a >= 0x80000000u && a - 0x80000000u < RAM_SIZE; }
-
-float f32_at(uint32_t a) {
-    const uint32_t u = mem_r32(a);
-    float f;
-    memcpy(&f, &u, sizeof(f));
-    return f;
-}
 
 dragoon::Camera read_camera(uint32_t cobj) {
     dragoon::Camera c;
