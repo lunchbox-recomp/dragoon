@@ -42,9 +42,13 @@ import Testing
     }
 
     @Test func aChildInheritsNoDescriptorBeyondItsThree() async throws {
-        // Opened without close-on-exec, as a descriptor of this process's own might be.
-        let descriptor = open("/dev/null", O_RDONLY)
+        // Opened without close-on-exec, as a descriptor of this process's own might be. It is
+        // moved above 9 first, since the child's `9<&9` would do nothing and read as open.
+        let opened = open("/dev/null", O_RDONLY)
+        let descriptor = fcntl(opened, F_DUPFD, 100)
+        close(opened)
         defer { close(descriptor) }
+        #expect(descriptor >= 100)
         let result = try await SystemProcessRunner().run(
             "/bin/sh",
             ["-c", "(exec 9<&\"$1\") 2>/dev/null && echo open || echo closed", "sh", String(descriptor)])
