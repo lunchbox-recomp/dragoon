@@ -4,10 +4,17 @@ import Foundation
 /// An in-memory FileSystem for tests. Add files, directories and symlinks, then hand it to the
 /// code under test. Symlink targets may be relative to the link's directory, as real ones are.
 final class FakeFileSystem: FileSystem, @unchecked Sendable {
+    struct Write: Equatable {
+        var path: String
+        var data: Data
+    }
+
     private let lock = NSLock()
     private var files: [String: Data] = [:]
     private var directories: Set<String> = ["/"]
     private var links: [String: String] = [:]
+    private var writeError: (any Error)?
+    private var written: [Write] = []
 
     func addDirectory(_ path: String) {
         lock.withLock { makeDirectories(path) }
@@ -64,12 +71,37 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
     }
 
     func writeData(_ data: Data, to path: String) throws {
-        lock.withLock {
+        try lock.withLock {
+            if let writeError { throw writeError }
             let resolved = resolve(path)
             makeDirectories(Self.parent(resolved))
             files[resolved] = data
+            written.append(Write(path: resolved, data: data))
         }
     }
+
+    func removeItem(at path: String) throws {
+        try lock.withLock {
+            if links[path] != nil {
+                links[path] = nil
+                return
+            }
+            let resolved = resolve(path)
+            guard exists(resolved) else { throw CocoaError(.fileNoSuchFile) }
+            let inside = resolved + "/"
+            files = files.filter { $0.key != resolved && !$0.key.hasPrefix(inside) }
+            directories = directories.filter { $0 != resolved && !$0.hasPrefix(inside) }
+            links = links.filter { !$0.key.hasPrefix(inside) }
+        }
+    }
+
+    /// Makes every later write throw `error`.
+    func failWrites(with error: any Error) {
+        lock.withLock { writeError = error }
+    }
+
+    /// Every write that went through, in order, even ones removed since.
+    var writes: [Write] { lock.withLock { written } }
 
     private func exists(_ path: String) -> Bool {
         files[path] != nil || directories.contains(path)
