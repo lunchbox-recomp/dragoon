@@ -669,6 +669,26 @@ class SigtermTest(RecipeTestCase):
         self.assertEqual((saves / ".shader-warmup").read_bytes(), b"old stamp\n")
         self.assertEqual((saves / "memcard_a.raw").read_bytes(), b"the player's card")
 
+    def test_a_sigterm_just_after_the_temp_file_is_made_leaves_no_temp_file(self):
+        """The temp file exists a moment before the cleanup that removes it does."""
+        self.old_game()
+        saves = self.data / "saves"
+        make = tempfile.mkstemp
+
+        def terminated(*args, **kwargs):
+            made = make(*args, **kwargs)
+            if kwargs.get("dir") == saves:
+                os.kill(os.getpid(), signal.SIGTERM)
+                time.sleep(0.2)  # the handler raises here, unless the SIGTERM is held
+            return made
+
+        with mock.patch.object(tempfile, "mkstemp", terminated):
+            code, events, _ = self.build()
+        self.assertEqual(code, 143)
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertEqual(sorted(p.name for p in saves.glob("*.tmp")), [])
+        self.assertEqual((saves / "shaders.bin").read_bytes(), b"old keys\n")
+
     def test_a_build_that_is_not_stopped_leaves_sigterm_as_it_found_it(self):
         handler = signal.getsignal(signal.SIGTERM)
         self.assertEqual(self.build()[0], 0)

@@ -44,6 +44,7 @@ import hashlib
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -161,20 +162,27 @@ def install(src: Path, dest: Path) -> None:
     """Replace DEST with a copy of SRC, whole or not at all.
 
     The copy goes to a temp file beside DEST and an os.replace puts it in place, so a reader
-    never sees half a file.
+    never sees half a file. The temp file is removed however the call ends, including by an
+    exception a SIGTERM handler raises. The calling thread holds a SIGTERM until that cleanup is
+    in place, since the file exists before it does.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=dest.name + ".", suffix=".tmp", dir=dest.parent)
+    held = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
     try:
-        with os.fdopen(fd, "wb") as out, src.open("rb") as f:
-            shutil.copyfileobj(f, out)
-            out.flush()
-            os.fsync(out.fileno())
-        shutil.copymode(src, tmp)
-        os.replace(tmp, dest)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+        fd, tmp = tempfile.mkstemp(prefix=dest.name + ".", suffix=".tmp", dir=dest.parent)
+        try:
+            signal.pthread_sigmask(signal.SIG_SETMASK, held)
+            with os.fdopen(fd, "wb") as out, src.open("rb") as f:
+                shutil.copyfileobj(f, out)
+                out.flush()
+                os.fsync(out.fileno())
+            shutil.copymode(src, tmp)
+            os.replace(tmp, dest)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, held)
 
 
 class PassFailed(Exception):
