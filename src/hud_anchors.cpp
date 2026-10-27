@@ -30,10 +30,10 @@ struct Entry {
     Placement placement;
 };
 constexpr Entry kTable[] = {
-    // fn_80114F1C: the race's position, lap count and speedometer, and a split view's player
-    // name. It scissors to its player's view.
+    // fn_80114F1C: the speedometer, and the race's lap count and position or a split view's
+    // player name. It scissors to its player's view.
     {0x80114F1C, Placement::Edge},
-    // fn_8011500C: the clock, the lap number and the minimap.
+    // fn_8011500C: the clock and the minimap.
     {0x8011500C, Placement::Edge},
     // fn_8011F114: City Trial's gauge beside the speedometer.
     {0x8011F114, Placement::Edge},
