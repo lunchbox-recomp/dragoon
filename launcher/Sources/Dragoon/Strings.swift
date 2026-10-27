@@ -74,13 +74,21 @@ enum Strings {
         case .wrongRevision(let found, let needed):
             return "This is another revision of the game. Its main.dol has SHA-1 \(found), and Dragoon needs \(needed)."
         case .needsConversion(let format):
-            return "This is a \(format.rawValue) image. Convert it to ISO in Dolphin first, then choose the ISO."
+            return "This is \(article(format)) \(format.rawValue) image. Convert it to ISO in Dolphin first, then choose the ISO."
         case .unreadable(let reason):
             return "Dragoon couldn't read this disc image. \(reason)"
         case .moved:
             return "Dragoon's record of where your disc image is has gone out of date, as it does when the file is moved or renamed. Choose the disc again."
         case .missing:
             return "Dragoon can't find your disc image where it was. If its drive is unplugged, plug it in and look again, or choose the disc again."
+        }
+    }
+
+    /// The article for an image kind as it's said aloud, so "an RVZ" and "a GCZ".
+    private static func article(_ format: UnsupportedDiscFormat) -> String {
+        switch format {
+        case .rvz: return "an"
+        case .gcz, .wia, .wbfs: return "a"
         }
     }
 
