@@ -75,6 +75,20 @@ The recipe's exit code decides how the stream ends.
 | `cancel()` before the swap | Throws `cancelled`, unless the recipe exits 0 anyway |
 | `cancel()` after the swap | Ends with `done`, since `game/current` is the new game by then. The warmed shader cache may not have been installed |
 
+## The window
+
+The window has the steps on the left and the current step on the right. What it does is `Flow`, a pure state machine in `DragoonCore` whose `reduce` takes a state and an event and gives the next state and a list of effects. The app carries out each effect and sends its result back as an event, so the tests drive every path with no window, the tools check's 5 second timer included.
+
+The first run walks the steps in order from Welcome down to Library, and every later launch with a built game opens on Library. While the tools are missing, the Tools step offers Apple's installer and looks for them again every 5 seconds. Before each build the launcher wants 2 GB free by `volumeAvailableCapacityForImportantUsage`, then resolves the disc's bookmark and checks the disc, then checks the tools.
+
+Play resolves the bookmark and checks the disc too. A stale bookmark or a disc that's gone goes back to the Disc step, and the game stays where it was. Play's `play` effect doesn't start the game in this version.
+
+A launcher whose path holds `/AppTranslocation/`, or that's on a read-only volume, asks to be moved to Applications and does nothing else. So does one whose path holds a character the kit's Makefile refuses, which is `$`, `"`, a backtick, `:` or `;`. Finder shows a `:` in a folder's name as `/`, so that's how the window names it.
+
+Library offers a rebuild when the commits in the app's `source-info.json` differ from the ones in `game/current/stamp.json`, and the old game plays until a rebuild starts. A rebuild that fails or is canceled leaves the old game current. Builds other than the current one are deleted while no game or build is running.
+
+`launcher.json` in `~/Library/Application Support/Dragoon` keeps the disc's bookmark and whether Welcome was seen. Every string the window shows is in `Sources/Dragoon/Strings.swift`.
+
 ## Why a wrapper runs the tests
 
 The Command Line Tools ship Swift Testing, but not where `swift test` looks. `Testing.framework` is in `/Library/Developer/CommandLineTools/Library/Developer/Frameworks` and `lib_TestingInterop.dylib` is in `.../Library/Developer/usr/lib`. The compiler needs the first as a framework search path, and the test runner needs both as rpaths.
