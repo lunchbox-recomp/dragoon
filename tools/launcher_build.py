@@ -7,8 +7,9 @@ Usage: launcher_build.py --source DIR --kit DIR --disc FILE --data DIR --cache D
 
 The launcher runs this, and a developer can run it from a shell. Every path is absolute and
 every tool is the one named, never one found on PATH. The tools get only PATH=/usr/bin:/bin:
-/usr/sbin:/sbin, HOME, TMPDIR, LANG and PYTHONDONTWRITEBYTECODE, so nothing from Homebrew or
-MacPorts reaches the build. Nothing downloads, and the snapshot and the kit are only read.
+/usr/sbin:/sbin, HOME, TMPDIR, LANG, PYTHONDONTWRITEBYTECODE and PYTHONNOUSERSITE, so nothing
+from Homebrew, MacPorts or the user's site-packages reaches the build. Nothing downloads, and the
+snapshot and the kit are only read.
 The kit's engine.o and headers have to match the generated C, so its kit.mk has to name the
 gcn-recomp commit the snapshot's source-info.json does and the SHA-256 of the snapshot's src/.
 The steps are:
@@ -103,7 +104,7 @@ class StepFailed(Exception):
 
 def tool_env() -> dict[str, str]:
     return {"PATH": TOOL_PATH, "HOME": str(Path.home()), "TMPDIR": tempfile.gettempdir(),
-            "LANG": "en_US.UTF-8", "PYTHONDONTWRITEBYTECODE": "1"}
+            "LANG": "en_US.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
 
 
 def emit(**event: object) -> None:
