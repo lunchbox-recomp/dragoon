@@ -1,4 +1,5 @@
 import DragoonCore
+import Foundation
 import Testing
 
 @Suite struct SystemProcessRunnerTests {
@@ -48,14 +49,36 @@ import Testing
         #expect(ContinuousClock.now - started < .seconds(20))
     }
 
-    @Test func aHelperHoldingThePipesOpenDoesNotKeepTheTimeoutWaiting() async {
-        // The shell starts a sleep that inherits both pipes, then waits for it.
-        let started = ContinuousClock.now
-        await #expect(throws: ProcessTimeout(executable: "/bin/sh", seconds: 0.3)) {
+    @Test func aTimeoutKillsTheHelpersTheChildStartedAndNotJustTheChild() async throws {
+        // The shell starts a sleep that inherits both pipes and writes its pid to a file, then
+        // waits for it. Killing only the shell would leave the sleep running for a minute.
+        let pidFile = Self.pidFile()
+        defer { try? FileManager.default.removeItem(atPath: pidFile) }
+        await #expect(throws: ProcessTimeout(executable: "/bin/sh", seconds: 0.5)) {
             try await runner.run(
-                "/bin/sh", ["-c", "/bin/sleep 60 & wait"], environment: nil, timeout: 0.3)
+                "/bin/sh", ["-c", "/bin/sleep 60 & echo $! > \"$1\"; wait", "sh", pidFile],
+                environment: nil, timeout: 0.5)
         }
-        #expect(ContinuousClock.now - started < .seconds(20))
+        #expect(await Self.helperIsGone(pidFile))
+    }
+
+    private static func pidFile() -> String {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("Dragoon helper \(UUID().uuidString).pid").path
+    }
+
+    /// Whether the process whose pid is in `pidFile` is gone, after giving init a moment to reap it.
+    /// A helper that is still there is killed so a failing test leaves nothing running.
+    private static func helperIsGone(_ pidFile: String) async -> Bool {
+        guard let text = try? String(contentsOfFile: pidFile, encoding: .utf8),
+            let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return false }
+        for _ in 0..<100 {
+            if kill(pid, 0) == -1 && errno == ESRCH { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        kill(pid, SIGKILL)
+        return false
     }
 
     @Test func aTimeoutDoesNotCutOutputShortOfIt() async throws {
