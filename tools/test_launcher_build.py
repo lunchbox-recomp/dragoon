@@ -14,6 +14,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from typing import TextIO
 from unittest import mock
 
 import export_source
@@ -114,6 +115,29 @@ def tree(root: Path) -> dict[str, object]:
     return found
 
 
+class FullLog:
+    """A build log on a full volume: it refuses each write that starts with one of REFUSED, and
+    its close fails too when CLOSE_FAILS."""
+
+    def __init__(self, log: TextIO, refused: tuple[str, ...], close_fails: bool):
+        self.log = log
+        self.refused = refused
+        self.close_fails = close_fails
+
+    def write(self, text: str) -> int:
+        if text.startswith(self.refused):
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return self.log.write(text)
+
+    def flush(self) -> None:
+        self.log.flush()
+
+    def close(self) -> None:
+        self.log.close()
+        if self.close_fails:
+            raise OSError(errno.ENOSPC, "No space left on device")
+
+
 class RecipeTestCase(unittest.TestCase):
     """Fake tools, a snapshot, a kit and the player's directories, all at paths with spaces,
     as the launcher's are."""
@@ -203,6 +227,18 @@ class RecipeTestCase(unittest.TestCase):
     def build(self, *extra: str) -> tuple[int, list[dict], str]:
         code, out, err = run_main(launcher_build.main, *self.argv(*extra))
         return code, [json.loads(line) for line in out.splitlines()], err
+
+    def build_on_a_full_log(self, *refused: str,
+                            close_fails: bool = False) -> tuple[int, list[dict], str]:
+        """build() with a log that refuses each write starting with one of REFUSED."""
+        opened = Path.open
+
+        def open_log(path: Path, *args, **kwargs):
+            file = opened(path, *args, **kwargs)
+            return FullLog(file, refused, close_fails) if path == self.log else file
+
+        with mock.patch.object(Path, "open", open_log):
+            return self.build()
 
     def records_of(self, tool: str) -> list[dict]:
         if not self.records.exists():
@@ -527,6 +563,40 @@ class FailureTest(RecipeTestCase):
         self.assertEqual(events[-1]["event"], "done")
         self.assertEqual((saves / "shaders.bin").read_bytes(), b"old keys\nwarm\n")
         self.assertEqual((saves / ".shader-warmup").read_bytes(), b"old stamp\n")  # warmed again next
+
+    def test_a_closing_note_the_log_cant_take_after_the_swap_is_lost_and_the_build_is_done(self):
+        self.old_game()
+        code, events, err = self.build_on_a_full_log("== swap took")
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertEqual(events[-1], {"event": "done",
+                                      "game": str(self.data / "game" / "current" / "Dragoon.app")})
+        self.assertNotEqual(self.current(), OLD)  # the new game is current
+        log = self.log.read_text()
+        self.assertIn("== swap\n", log)
+        self.assertEqual(re.findall(r"^== (\w+) took", log, re.M), STEPS[:-1])  # all but swap's
+
+    def test_a_log_that_stays_full_after_the_swap_still_ends_in_done(self):
+        self.old_game()
+        full = OSError(errno.ENOSPC, "No space left on device")
+        with mock.patch.object(launcher_build.warm_shaders, "install", side_effect=full):
+            code, events, err = self.build_on_a_full_log("== swap warning", "== swap took",
+                                                         close_fails=True)
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertEqual([e["event"] for e in events][-2:], ["warning", "done"])  # still printed
+        self.assertNotEqual(self.current(), OLD)
+        self.assertNotIn("== swap warning", self.log.read_text())
+
+    def test_a_line_the_log_cant_take_before_the_swap_fails_the_step(self):
+        self.old_game()
+        before = tree(self.data)
+        code, events, _ = self.build_on_a_full_log("== compile\n")
+        self.assertEqual(code, 1)
+        (error,) = self.of(events, "error")
+        self.assertEqual(error["step"], "compile")
+        self.assertIn("No space left on device", error["message"])
+        self.assertEqual(tree(self.data), before)
 
     def test_a_failed_package_removes_the_half_made_build(self):
         self.old_game()

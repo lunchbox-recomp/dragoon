@@ -35,7 +35,9 @@ Prints one JSON object per line on stdout:
   {"event": "error", "step": "compile", "message": "...", "log": "<file>"}
   {"event": "warning", "step": "swap", "message": "...", "log": "<file>"}
 --log gets every line every tool prints, with each command, and each step's time and what
-<data> and <cache> hold after it. A build that loses the lock doesn't open it.
+<data> and <cache> hold after it. A build that loses the lock doesn't open it. A step's closing
+note and a warning's note are lost if --log can't take them, so a full disk fails no build
+that has swapped.
 
 Exits 0 when the new game is current, 1 when a step failed before the swap, 2 on a bad argument
 and 3 when another build holds <cache>/build.lock. A kit of another gcn-recomp commit or another src/ is a
@@ -170,16 +172,21 @@ class Build:
         self.step = ""
         self.env = tool_env()
 
-    def note(self, line: str) -> None:
-        self.log.write(line + "\n")
-        self.log.flush()
+    def note(self, line: str, best_effort: bool = False) -> None:
+        """Write LINE to the log. A BEST_EFFORT line the log can't take is lost, and no more."""
+        try:
+            self.log.write(line + "\n")
+            self.log.flush()
+        except OSError:
+            if not best_effort:
+                raise
 
     def fail(self, step: str, message: str) -> None:
         self.note(f"== {step} failed: {message}")
         emit(event="error", step=step, message=message, log=str(self.log_path))
 
     def warn(self, message: str) -> None:
-        self.note(f"== {self.step} warning: {message}")
+        self.note(f"== {self.step} warning: {message}", best_effort=True)
         emit(event="warning", step=self.step, message=message, log=str(self.log_path))
 
     @contextlib.contextmanager
@@ -194,7 +201,7 @@ class Build:
             held = f"with {disk_use(*self.watched) / 1e6:.1f} MB in --data and --cache"
         except OSError as e:  # the measurement is a note, and never fails the step
             held = f"and --data and --cache couldn't be measured ({e})"
-        self.note(f"{took}, {held}")
+        self.note(f"{took}, {held}", best_effort=True)
 
     def run(self, cmd: list[str], cwd: Path, name: str = "",
             progress: Progress = lambda line: None) -> None:
@@ -439,7 +446,8 @@ def main(argv: list[str]) -> int:
                  message=f"another build holds {a.cache / 'build.lock'}")
             return 3
         a.log.parent.mkdir(parents=True, exist_ok=True)
-        with a.log.open("a") as log:
+        log = a.log.open("a")
+        try:
             b = Build(log, a.log, a.data, a.cache)
             try:
                 game = build_game(b, a, info)
@@ -449,6 +457,9 @@ def main(argv: list[str]) -> int:
             for name in ("warm",) + (() if a.keep_build else ("build",)):
                 shutil.rmtree(a.cache / name, ignore_errors=True)
             emit(event="done", game=str(game))
+        finally:
+            with contextlib.suppress(OSError):  # a flush that failed fails again as the log closes
+                log.close()
     return 0
 
 
