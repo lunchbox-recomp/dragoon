@@ -11,6 +11,13 @@ saves/
 *.gcz
 *.dol
 *.bin
+# A player's mods, which are game files and patch lists
+/mods/
+*.dat
+*.hps
+*.bnr
+*.elf
+*.gct
 frame_*.png
 output_*.png
 stdout.txt

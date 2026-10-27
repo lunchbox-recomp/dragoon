@@ -1,8 +1,15 @@
+import os
+import shutil
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import check_no_game_data
-from testutil import run_main
+from testutil import GIT_ENV, git, run_main
+
+MOD_SUFFIXES = (".dat", ".hps", ".bnr", ".elf", ".gct")
 
 
 class ViolationsTest(unittest.TestCase):
@@ -40,11 +47,58 @@ class ViolationsTest(unittest.TestCase):
         paths = ["out.wav", "tools/x/out.WAV", "docs/clip.wav"]
         self.assertEqual(check_no_game_data.violations(paths), paths)
 
+    def test_mod_files_fail_anywhere(self):
+        for suffix in MOD_SUFFIXES:
+            with self.subTest(suffix=suffix):
+                paths = [f"mod{suffix}", f"tools/x/Mod{suffix.upper()}", f"docs/a mod{suffix}"]
+                self.assertEqual(check_no_game_data.violations(paths), paths)
+
+    def test_anything_under_a_top_level_mods_fails(self):
+        paths = ["mods/README.md", "mods/Some Mod/patches.txt", "mods/a/b/c.txt"]
+        self.assertEqual(check_no_game_data.violations(paths), paths)
+
+    def test_a_mods_folder_below_the_top_passes(self):
+        paths = ["tests/mods/patches.txt", "tests/mods/Some Mod/list.txt", "docs/mods/guide.md", "x/mods/a.txt"]
+        self.assertEqual(check_no_game_data.violations(paths), [])
+
     def test_lookalikes_pass(self):
         paths = ["x/frame_00060.png.bak", "x/xframe_00060.png", "x/output_00060.png.bak",
                  "x/xoutput_00060.png", "x/saves.txt", "x/stdout.txt.md", "x/session.json.md", "x/inputs.txt.md",
                  "x/aid.raw.txt.md", "x/my-session.json", "x/inputs/inputs.txt.bak"]
         self.assertEqual(check_no_game_data.violations(paths), [])
+
+    def test_mod_file_lookalikes_pass(self):
+        paths = ["x/dat", "x/data", "x/notes.dat.md", "x/hps", "x/notes.hps.txt", "x/bnr", "x/notes.bnr.txt",
+                 "x/shelf", "x/elf", "x/notes.elf.md", "x/gct", "x/notes.gct.md",
+                 "mods", "modsy/a.txt", "my-mods/a.txt", "x/mods", "mods.txt"]
+        self.assertEqual(check_no_game_data.violations(paths), [])
+
+
+class GitignoreTest(unittest.TestCase):
+    """The mod rules in .gitignore, as git reads them. The repository's own .gitignore is
+    copied into a fresh repository, so nothing of the user's or the system's applies."""
+
+    def ignored(self, paths: list[str]) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            git(Path(tmp), "init", "-q")
+            shutil.copy(check_no_game_data.ROOT / ".gitignore", Path(tmp, ".gitignore"))
+            done = subprocess.run(["git", "-C", tmp, "check-ignore", "--stdin", "-z"],
+                                  env={**os.environ, **GIT_ENV}, input="\0".join(paths),
+                                  capture_output=True, text=True)
+        self.assertIn(done.returncode, (0, 1), done.stderr)
+        return done.stdout.split("\0")[:-1]
+
+    def test_mod_files_are_ignored_anywhere(self):
+        paths = [f"mod{suffix}" for suffix in MOD_SUFFIXES] + [f"tools/x/a mod{suffix}" for suffix in MOD_SUFFIXES]
+        self.assertEqual(self.ignored(paths), paths)
+
+    def test_a_top_level_mods_folder_is_ignored(self):
+        paths = ["mods/README.md", "mods/Some Mod/patches.txt", "mods/a/b/c.txt"]
+        self.assertEqual(self.ignored(paths), paths)
+
+    def test_a_mods_folder_below_the_top_is_not(self):
+        paths = ["tests/mods/patches.txt", "tests/mods/Some Mod/list.txt", "docs/mods/guide.md"]
+        self.assertEqual(self.ignored(paths), [])
 
 
 class MainTest(unittest.TestCase):
