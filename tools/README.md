@@ -138,10 +138,15 @@ Which cameras does a frame draw through, and what aspect does each hold? It read
 
 `aspects` lists each perspective camera's stored aspect from one frame to another, with the frames it held it. It exits 1 when one changed within its viewport, which is how a widening that compounds frame on frame would show.
 
+`setters` lists who set each camera's aspect from one frame to another. It reads the `[aspect]` line that `DRAGOON_CENSUS=1` prints for each call to `HSD_CObjSetAspect`.
+
+Each line names a camera and where the call returns to, then where its caller returns to. It ends with the aspect the call was given and the one the camera held after. `--symbols` names the function each return address is in and how far in it is, and `--cam ADDR` keeps one camera's lines.
+
 ```
 tools/probe.sh race 30 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
 tools/drawlog.py cameras build/probe/race/stdout.txt --frame 4200 --symbols analysis/symbols.txt
 tools/drawlog.py aspects build/probe/race/stdout.txt --from 3600 --to 4199
+tools/drawlog.py setters build/probe/race/stdout.txt --from 4200 --to 4200 --symbols analysis/symbols.txt
 ```
 
 It exits 2 when the log lacks the lines a command needs, naming the setting that makes them.

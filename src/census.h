@@ -54,6 +54,24 @@ inline std::string census_line(uint32_t frame, uint32_t cam, const Camera& c, ui
     return line;
 }
 
+// One line for a call to HSD_CObjSetAspect, such as
+//   [aspect] f=4200 cam=8123A0C0 lr=800C2884 lr2=800C1F00 given=1.25538 stored=1.67383
+// lr is where the call returns to and lr2 where its caller returns to, so a call the camera
+// library makes for someone else names them too. given is the aspect the caller passed and
+// stored the aspect the camera holds once the call is done, which src/cameras.cpp may have
+// widened.
+inline std::string aspect_line(uint32_t frame, uint32_t cam, uint32_t lr, uint32_t lr2, float given,
+                               float stored) {
+    char line[128];
+    snprintf(line, sizeof(line), "[aspect] f=%u cam=%08X lr=%08X lr2=%08X given=%.6g stored=%.6g", frame,
+             cam, lr, lr2, given, stored);
+    return line;
+}
+
+// Logs a call to HSD_CObjSetAspect as an aspect_line, with DRAGOON_CENSUS=1 (src/census.cpp).
+// sp is r1 on entry to the call, the caller's stack frame.
+void census_aspect(uint32_t cam, uint32_t lr, uint32_t sp, float given);
+
 // Lets each distinct line through once a frame.
 class OncePerFrame {
 public:

@@ -3,6 +3,7 @@
 
 Usage: drawlog.py cameras LOG [--symbols FILE] [--frame N]
        drawlog.py aspects LOG [--from N] [--to N]
+       drawlog.py setters LOG [--symbols FILE] [--from N] [--to N] [--cam ADDR]
 
 LOG is a run's stdout.txt from tools/probe.sh. The draws come from GCN_DRAWLOG=<frame> with
 GCN_DRAWLOG_VERBOSE=1, which adds each draw's viewport. The cameras and their render
@@ -19,6 +20,12 @@ drew through them, by name with --symbols (analysis/symbols.txt). --frame N read
 aspects prints each perspective camera's stored aspects in the [census] lines from frame N to
 frame M, with the frames it held each, a camera being one address in one viewport.
 
+setters prints who set each camera's aspect from frame N to frame M, from DRAGOON_CENSUS=1's
+[aspect] lines, one for each call to HSD_CObjSetAspect. Each line names a camera and where
+the call returns to, then where its caller returns to, by function and offset with
+--symbols. It ends with the aspect the call was given, the one the camera held after and
+the frames. --cam ADDR keeps one camera's lines.
+
 Exits 0 once it has read the log, 1 when aspects finds a camera whose stored aspect changed
 within its viewport, 2 on a bad argument or a log it can't read or that lacks the lines asked
 for.
@@ -26,6 +33,7 @@ for.
 from __future__ import annotations
 
 import argparse
+import bisect
 import math
 import re
 import sys
@@ -40,6 +48,8 @@ VIEWPORT = re.compile(rf"^\s+viewport=({NUM}),({NUM}),{NUM} ({NUM}),({NUM}),{NUM
                       r"scissor=\w+ \w+ offset=([0-9A-F]{6})")
 CENSUS = re.compile(r"\[census\] f=(\d+) cam=([0-9A-F]{8}) type=(\w+) p=(\S*) vp=(\S+) "
                     r"cb=([0-9A-F]{8}) cls=(\d+) via=(set|draw)$")
+SETTER = re.compile(rf"\[aspect\] f=(\d+) cam=([0-9A-F]{{8}}) lr=([0-9A-F]{{8}}) lr2=([0-9A-F]{{8}}) "
+                    rf"given=({NUM}) stored=({NUM})$")
 SYMBOL = re.compile(r"^(\S+) = \.text:0x([0-9A-Fa-f]{8});")
 # The draw log prints the projection to four decimals, so an orthographic camera matches
 # within this. A perspective camera's y scale matches within PERSP_TOLERANCE of the cotangent
@@ -271,6 +281,38 @@ def aspects(args) -> int:
     return 1 if changed else 0
 
 
+def caller_text(lr: int, names: dict[int, str], starts: list[int]) -> str:
+    """A return address, with the function it's in and how far in when symbols name one at or
+    before it. starts is names' addresses, sorted."""
+    i = bisect.bisect_right(starts, lr) - 1
+    if i < 0:
+        return f"{lr:08X}"
+    return f"{lr:08X} {names[starts[i]]}+0x{lr - starts[i]:X}"
+
+
+def setters(args) -> int:
+    try:
+        with args.log.open(errors="replace") as lines:
+            found = [m for line in lines if (m := SETTER.search(line.rstrip("\n")))]
+        names = read_symbols(args.symbols) if args.symbols else {}
+    except OSError as e:
+        print(e, file=sys.stderr)
+        return 2
+    if not found:
+        print(f"{args.log}: no [aspect] lines; was DRAGOON_CENSUS=1 set?", file=sys.stderr)
+        return 2
+    held: dict[tuple[int, int, int, str, str], list[int]] = {}
+    for m in found:
+        frame, cam = int(m[1]), int(m[2], 16)
+        if args.start <= frame <= args.end and args.cam in (None, cam):
+            held.setdefault((cam, int(m[3], 16), int(m[4], 16), m[5], m[6]), []).append(frame)
+    starts = sorted(names)
+    for (cam, lr, lr2, given, stored), frames in held.items():
+        print(f"{cam:08X}  from {caller_text(lr, names, starts)}  called from {caller_text(lr2, names, starts)}"
+              f"  given {given} stored {stored}  in frames {min(frames)}..{max(frames)} ({len(frames)} frames)")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -283,8 +325,14 @@ def main(argv: list[str]) -> int:
     asp.add_argument("log", type=Path)
     asp.add_argument("--from", dest="start", type=int, default=0)
     asp.add_argument("--to", dest="end", type=int, default=2**32)
+    setp = sub.add_parser("setters")
+    setp.add_argument("log", type=Path)
+    setp.add_argument("--symbols", type=Path)
+    setp.add_argument("--from", dest="start", type=int, default=0)
+    setp.add_argument("--to", dest="end", type=int, default=2**32)
+    setp.add_argument("--cam", type=lambda s: int(s, 16))
     args = ap.parse_args(argv)
-    return cameras(args) if args.command == "cameras" else aspects(args)
+    return {"cameras": cameras, "aspects": aspects, "setters": setters}[args.command](args)
 
 
 if __name__ == "__main__":
