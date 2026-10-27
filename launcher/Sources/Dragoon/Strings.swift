@@ -46,7 +46,6 @@ enum Strings {
 
     static let welcomeTitle = "Welcome to Dragoon"
     static let welcome = "Dragoon builds Kirby Air Ride for this Mac from your own disc image. It checks for Apple's developer tools and for your disc, then it builds the game and warms up its shaders."
-    static let welcomeTime = "The first build took about 95 seconds on an M4 Max."
     static let legal = "Dragoon isn't affiliated with or endorsed by Nintendo or HAL Laboratory. Kirby Air Ride is a Nintendo trademark. A build contains the game's code, so please don't share it."
     static let continueButton = "Continue"
 
