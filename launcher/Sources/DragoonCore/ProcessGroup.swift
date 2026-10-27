@@ -13,6 +13,12 @@ struct ProcessGroupOutcome: Equatable, Sendable {
     var cancelled: Bool
 }
 
+/// What a process leaves when its exit can't be collected, as when SIGCHLD is ignored or
+/// something else has collected it. `code` is the errno of the failed wait.
+struct ProcessWaitFailure: Error, Equatable {
+    var code: Int32
+}
+
 /// Starts a process as the leader of a process group of its own, so one signal reaches it and
 /// every helper it starts. Both real runners start their children here, which is where a
 /// timeout or a cancelled task stops them.
@@ -79,7 +85,7 @@ enum ProcessGroup {
         while waitid(P_PID, id_t(child.pid), &info, WEXITED | WNOWAIT) < 0, errno == EINTR {}
         control.awaitReaders()
         control.awaitGroupEmpty()
-        return control.reap()
+        return try control.reap()
     }
 
     private static func drain(_ descriptor: Int32, _ handler: @Sendable (Data) -> Void) {
@@ -104,11 +110,16 @@ enum ProcessGroup {
         var outPipe: [Int32] = [-1, -1]
         var errPipe: [Int32] = [-1, -1]
         guard pipe(&outPipe) == 0 else { throw posixError(errno) }
+        outPipe.forEach { _ = fcntl($0, F_SETFD, FD_CLOEXEC) }
         guard pipe(&errPipe) == 0 else {
             let failure = errno
             outPipe.forEach { close($0) }
             throw posixError(failure)
         }
+        // Close-on-exec from the start, so a spawn that doesn't ask for CLOEXEC_DEFAULT, started
+        // from another thread meanwhile, can't inherit a write end and hold the pipe open. The
+        // dup2 actions below give the child its own copies, which are not close-on-exec.
+        errPipe.forEach { _ = fcntl($0, F_SETFD, FD_CLOEXEC) }
 
         var actions: posix_spawn_file_actions_t?
         posix_spawn_file_actions_init(&actions)
@@ -252,14 +263,21 @@ enum ProcessGroup {
             }
         }
 
-        /// Collects the exit, which ends the signaling.
-        func reap() -> ProcessGroupOutcome {
+        /// Collects the exit, which ends the signaling. Throws when the exit can't be collected,
+        /// as when something else has already, so a lost status never reads as exit 0.
+        func reap() throws -> ProcessGroupOutcome {
             condition.lock()
             defer { condition.unlock() }
             var raw: Int32 = 0
-            while waitpid(pid, &raw, 0) < 0, errno == EINTR {}
+            var failure: Int32 = 0
+            while waitpid(pid, &raw, 0) < 0 {
+                if errno == EINTR { continue }
+                failure = errno
+                break
+            }
             live = false
             timers.forEach { $0.cancel() }
+            if failure != 0 { throw ProcessWaitFailure(code: failure) }
             let signal = raw & 0x7f
             return ProcessGroupOutcome(
                 status: signal == 0 ? (raw >> 8) & 0xff : signal, signaled: signal != 0,

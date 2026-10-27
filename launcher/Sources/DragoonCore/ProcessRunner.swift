@@ -34,7 +34,7 @@ public protocol ProcessRunner: Sendable {
     /// still holds its output open, is killed with its helpers and `ProcessTimeout` is thrown.
     /// Cancelling the calling task stops the process and its helpers with SIGTERM, then SIGKILL
     /// 10 seconds later if any are left, and throws `CancellationError` once they are gone.
-    /// Throws when the executable can't be started.
+    /// Throws when the executable can't be started or its exit can't be collected.
     func run(
         _ executable: String, _ arguments: [String], environment: [String: String]?,
         timeout: TimeInterval?
