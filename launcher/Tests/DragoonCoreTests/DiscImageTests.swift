@@ -184,6 +184,20 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
         #expect(check(makeCISO(from: iso), expecting: standardDOL) == .ok)
     }
 
+    @Test func aCISOReadThatStartsInsideABlockCrossesAnUnstoredBlockAtTheRightPlace() {
+        // The DOL starts 0x80 into block 3 and ends 0x580 into block 4, so every read of it starts
+        // mid-block, as it does in a real CISO whose blocks are 2 MiB. Block 4 is all zeros and
+        // so isn't stored.
+        let dol = makeDOL([Section(index: 0, offset: 0x100, size: 0x1400)], zeroed: 0xF80..<0x1500)
+        #expect(dol.count == 0x1500)
+        let iso = makeISO(dol: dol, dolOffset: 0x3080, tail: 0x6000 - 0x3080 - 0x1500)
+        #expect(iso.count == 0x6000)
+        let stored = storedBlocks(of: iso)
+        #expect(stored[3] != nil && stored[4] == nil)
+        #expect(check(iso, expecting: dol) == .ok)
+        #expect(check(makeCISO(from: iso), expecting: dol) == .ok)
+    }
+
     @Test func aCISOOfAnotherGameIsWrongGame() {
         let ciso = makeCISO(from: makeISO(id: Array("GMSE01".utf8), dol: standardDOL))
         #expect(check(ciso, expecting: standardDOL) == .wrongGame(foundID: "GMSE01"))
