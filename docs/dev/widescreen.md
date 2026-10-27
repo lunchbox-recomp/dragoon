@@ -284,7 +284,7 @@ and 4P at 3480, Top Ride on Grass at 3600 and, before `0ad99ed`, the mode select
 
 - Every HUD element is 4/3 too wide. In the race that's the position badge, the timer, the
   minimap box, the lap count, the speedometer, the "ff" bubble and the CPU markers. In 4P
-  it's the P1 to P4 labels, the speedometers and the gauges beside them, the icons for
+  it's the players' name labels, the speedometers and the gauges beside them, the icons for
   players past a view's edge and the clock.
 - After the finish the replay's banner and buttons are 4/3 too wide as well.
 - In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide.
@@ -296,4 +296,5 @@ and 4P at 3480, Top Ride on Grass at 3600 and, before `0ad99ed`, the mode select
 
 The markers sit where they should. The CPU markers sit over their karts in the race at 4200
 and in City Trial at 3300. In 4P at 3480 each marker sits over the same scenery as at 4:3,
-and P4 shows in P3's view at 16:9 where at 4:3 it's an icon at the view's edge.
+and player 4's marker shows in player 3's view at 16:9 where at 4:3 it's an icon at the view's
+edge.
