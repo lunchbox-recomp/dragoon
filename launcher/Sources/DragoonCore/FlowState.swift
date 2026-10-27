@@ -92,13 +92,18 @@ extension Flow {
             case .welcome: return .welcome
             case .tools: return .tools
             case .disc: return .disc
-            case .build(.running(let progress)) where progress.step == BuildProgress.warmupStep:
-                return .warmup
-            case .build(.failed(let failure, _)) where failure.step == BuildProgress.warmupStep:
-                return .warmup
+            case .build(.running(let progress)): return Self.listStep(forBuildStep: progress.step)
+            case .build(.failed(let failure, _)): return Self.listStep(forBuildStep: failure.step)
             case .build: return .build
             case .library: return .library
             }
+        }
+
+        /// Warm-up for the recipe's warm-up and the steps after it, so the list never goes back
+        /// to Build, and Build for the rest.
+        private static func listStep(forBuildStep step: String?) -> Step {
+            guard let step, BuildProgress.stepsFromWarmup.contains(step) else { return .build }
+            return .warmup
         }
     }
 }
@@ -142,6 +147,8 @@ public enum BuildScreen: Equatable, Sendable {
 public struct BuildProgress: Equatable, Sendable {
     /// The recipe's name for its warm-up step.
     public static let warmupStep = "warmup"
+    /// The recipe's warm-up and the steps it runs after it.
+    public static let stepsFromWarmup: Set<String> = [warmupStep, "package", "swap"]
 
     /// The recipe's step, or nil before its first event.
     public var step: String?

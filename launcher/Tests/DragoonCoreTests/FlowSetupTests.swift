@@ -80,6 +80,7 @@ import Testing
         #expect(run.state.step == .warmup)
         run.send(.build(.step("package")))
         run.send(.build(.step("swap")))
+        #expect(run.state.step == .warmup)
         #expect(run.send(.build(.done(game: "/x/game/current/Dragoon.app"))) == [])
 
         #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
@@ -87,6 +88,41 @@ import Testing
         #expect(run.state.step == .library)
         #expect(run.state.installed == InstalledGame(stamp: sourceCommits))
         #expect(run.state.rebuildOffer == nil)
+    }
+
+    /// The list's current step only moves down, so the package and swap steps after the warm-up
+    /// stay on Warm-up.
+    @Test func theStepListNeverGoesBackOnTheFirstRun() {
+        var run = launched(settings: LauncherSettings(), installed: nil)
+        var steps = [run.state.step]
+        let events: [Flow.Event] = [
+            .continuePressed, .toolsDetected(.ready(flowToolchain)), .chooseDiscPressed,
+            .discChosen(path: flowDisc, bookmark: flowBookmark),
+            .discChecked(path: flowDisc, check: .ok), .buildPressed, .spaceChecked(enoughSpace),
+            .bookmarkResolved(.found(flowDisc)), .discChecked(path: flowDisc, check: .ok),
+            .toolsDetected(.ready(flowToolchain)), .build(.step("recompile")),
+            .build(.step("compile")), .build(.step("warmup")), .build(.step("package")),
+            .build(.step("swap")), .buildEnded(nil),
+        ]
+        for event in events {
+            run.send(event)
+            steps.append(run.state.step)
+        }
+        let listed = steps.compactMap { $0 }
+        #expect(listed.count == steps.count)
+        #expect(listed == listed.sorted())
+        #expect(Set(listed) == Set(Flow.Step.allCases))
+    }
+
+    @Test(arguments: ["package", "swap"])
+    func aBuildThatFailedAfterItsWarmUpStaysOnWarmUp(step: String) {
+        let failure = BuildFailure.failed(step: step, message: "bad", log: flowLog)
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        run.send(.build(.step(step)))
+        #expect(run.state.step == .warmup)
+        run.send(.buildEnded(failure))
+        #expect(run.state.step == .warmup)
     }
 
     @Test func theStepsAreInTheOrderTheWindowListsThem() {
