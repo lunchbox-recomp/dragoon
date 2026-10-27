@@ -34,6 +34,15 @@ inline bool sets_world_aspect(uint32_t return_address, uint32_t callers_return_a
     }
 }
 
+// Whether a call to HSD_CObjLoadDesc loads a world camera, from where it returns to and where
+// its caller returns to. Top Ride's world camera takes its aspect from its description and
+// never goes through HSD_CObjSetAspect. kar_a2d_kurakko__near_80371968 loads it, its call
+// returning to 0x803719A0, when TopRide_GameSessionInit calls it (returning to 0x8028C0E0).
+// The HUD's and menus' cameras are loaded from elsewhere.
+inline bool loads_world_camera(uint32_t return_address, uint32_t callers_return_address) {
+    return return_address == 0x803719A0 && callers_return_address == 0x8028C0E0;
+}
+
 // A world camera's aspect at output aspect `output`: its 4:3 aspect times the output aspect
 // over 4:3. At 4:3 it's the aspect unchanged, to the bit, and so is it at an output of no
 // width, such as a window shrunk to nothing under --aspect=window.

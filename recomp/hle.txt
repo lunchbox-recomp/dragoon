@@ -5,3 +5,4 @@ OSReport
 OSPanic
 OSResetSystem
 HSD_CObjSetAspect
+HSD_CObjLoadDesc
