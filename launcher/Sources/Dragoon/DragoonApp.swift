@@ -36,10 +36,12 @@ enum Launch {
 }
 
 struct DragoonApp: App {
+    @State private var model = LauncherModel()
+
     var body: some Scene {
-        Window("Dragoon", id: "main") {
-            Color.clear
-                .frame(minWidth: 640, minHeight: 420)
+        Window(Strings.appName, id: "main") {
+            LauncherView(model: model)
+                .frame(minWidth: 720, minHeight: 460)
         }
     }
 }
