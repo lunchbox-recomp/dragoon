@@ -68,7 +68,7 @@ Every perspective camera that draws has a projection 1.062 times narrower than i
 viewport, except the world cameras in 2P. The world camera stores 1.25538 at 640x480 and
 1.39419 in a 308x208 4P view, and the HUD 3D camera stores 1.25538. The 2P world cameras
 store 2.23143 for a 632x208 view, 1.362 times narrower than the view, because the camera
-module scales the camera library's 2.86082 by 0.78, a factor that comes from
+module scales the camera library's 2.86081 by 0.78, a factor that comes from
 `kar_grlib2__near_800bbc8c`.
 
 During play the camera module sets the world cameras' aspect every frame through two calls to
