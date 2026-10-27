@@ -64,9 +64,9 @@ public enum DiscProblem: Equatable, Sendable {
 
 /// How a game run ended badly.
 public enum GameProblem: Equatable, Sendable {
-    /// The game exited with `status`. `panic` is what the runtime wrote to `panic.txt`, when it
-    /// wrote one.
-    case exited(status: Int32, panic: String?)
+    /// The game exited with a nonzero code or was stopped by a signal. `panic` is what the
+    /// runtime wrote to `panic.txt`, when it wrote one.
+    case exited(GameExit, panic: String?)
     case couldNotStart(reason: String)
 }
 

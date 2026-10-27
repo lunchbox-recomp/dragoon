@@ -55,8 +55,11 @@ extension Flow {
         public var intent: Intent?
         public var waiting: Waiting?
         /// The game is starting or running, from the `play` effect until `gameExited` or
-        /// `gameCouldNotStart`.
+        /// `gameCouldNotStart` for its launch.
         public var gameRunning = false
+        /// The launch number of the last `play`, which is 0 before the first. A result that
+        /// echoes any other number is ignored, so a late one can't end a game that's running.
+        public var launchNumber = 0
         /// How the last game run ended, when it ended badly.
         public var gameProblem: GameProblem?
         /// The player chose Later on the rebuild offer.
