@@ -530,45 +530,63 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
         runCheckDisc(arguments, bundledSourceInfo: bundledInfo, fs: fs)
     }
 
+    /// A source-info that matches the disc in `world()`, for a flag to point at.
+    private static let goodInfo = Data(
+        #"{"disc_id": "GKYE01", "dol_sha1": "\#(sha1(standardDOL))"}"#.utf8)
+
     @Test func aDiscThatMatchesPrintsOKAndExits0() throws {
-        let result = run([discPath], world())
+        let result = run(["--check-disc", discPath], world())
         #expect(result == CheckDiscCommandResult(stdout: DiscCheck.ok.json() + "\n", stderr: "", status: 0))
     }
 
     @Test func aDiscThatDoesntMatchPrintsWhyAndExits1() {
-        let result = run([discPath], world(id: "GMSE01"))
+        let result = run(["--check-disc", discPath], world(id: "GMSE01"))
         #expect(result.stdout == DiscCheck.wrongGame(foundID: kirbyID).json() + "\n")
         #expect(result.stderr.isEmpty)
         #expect(result.status == 1)
     }
 
-    @Test func aSourceInfoOfTheCallersChoiceIsUsedInPlaceOfTheBundledOne() {
+    @Test(arguments: [
+        ["--check-disc", discPath, "--source-info", "/elsewhere/source-info.json"],
+        ["--source-info", "/elsewhere/source-info.json", "--check-disc", discPath],
+    ])
+    func aSourceInfoOfTheCallersChoiceIsUsedInEitherOrder(_ arguments: [String]) {
         let fs = world(id: "GMSE01")
-        fs.addFile("/elsewhere/source-info.json", Data(#"{"disc_id": "GKYE01", "dol_sha1": "\#(sha1(standardDOL))"}"#.utf8))
-        #expect(run([discPath], fs).status == 1)
-        #expect(run([discPath, "--source-info", "/elsewhere/source-info.json"], fs).status == 0)
+        fs.addFile("/elsewhere/source-info.json", Self.goodInfo)
+        #expect(run(["--check-disc", discPath], fs).status == 1)
+        #expect(run(arguments, fs).status == 0)
     }
 
     @Test(arguments: [
-        [], ["--source-info", "/x"], ["/disc", "--source-info"], ["/disc", "extra"],
-        ["/disc", "--source-info", "/x", "extra"],
+        [], ["--check-disc"], ["--source-info", "/x"], ["--check-disc", "/disc", "--source-info"],
+        ["--source-info", "/x", "--check-disc"], ["/disc", "extra"],
+        ["--check-disc", "/disc", "extra"], ["--check-disc", "/disc", "--source-info", "/x", "extra"],
+        ["--check-disc", "/disc", "--other", "/x"], ["--check-disc", "/disc", "--sourceinfo", "/x"],
+        ["--other", "/x", "--check-disc", "/disc"],
+        ["--check-disc", "/disc", "--check-disc", "/disc"],
+        ["--check-disc", "/disc", "--source-info", "/x", "--source-info", "/x"],
     ] as [[String]])
     func badArgumentsPrintUsageAndExit2(_ arguments: [String]) {
-        let result = run(arguments, world())
+        // A source-info that works sits at /x, so an argument taken for the flag would run a check.
+        let fs = world()
+        fs.addFile("/x", Self.goodInfo)
+        fs.addFile("/disc", standardISO)
+        let result = run(arguments, fs)
         #expect(result.stdout.isEmpty)
-        #expect(result.stderr.hasPrefix("usage: Dragoon --check-disc PATH [--source-info FILE]"))
+        #expect(result.stderr == "usage: Dragoon --check-disc PATH [--source-info FILE]\n")
         #expect(result.status == 2)
     }
 
     @Test func aSourceInfoThatCantBeUsedNamesItAndExits2() {
-        let missing = run([discPath, "--source-info", "/nowhere/source-info.json"], world())
+        let missing = run(
+            ["--check-disc", discPath, "--source-info", "/nowhere/source-info.json"], world())
         #expect(missing.stdout.isEmpty)
         #expect(missing.stderr.contains("/nowhere/source-info.json"))
         #expect(missing.status == 2)
 
         let fs = world()
         fs.addFile(bundledInfo, Data(#"{"disc_id": "GKYE01"}"#.utf8))
-        let malformed = run([discPath], fs)
+        let malformed = run(["--check-disc", discPath], fs)
         #expect(malformed.stderr == "\(bundledInfo): dol_sha1 is missing or malformed\n")
         #expect(malformed.status == 2)
     }

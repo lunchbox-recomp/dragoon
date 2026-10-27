@@ -338,30 +338,36 @@ public struct CheckDiscCommandResult: Equatable, Sendable {
     }
 }
 
-/// `Dragoon --check-disc PATH [--source-info FILE]`, given the arguments after `--check-disc`.
+/// `Dragoon --check-disc PATH [--source-info FILE]`, given every argument after the program's
+/// name. The two flags come in either order and once each, and any other argument is refused.
 /// It checks the image at PATH against the disc `FILE` names, which is `bundledSourceInfo` when
 /// no FILE is given, and prints the result as JSON. The status is 0 for `ok`, 1 for any other
 /// result, and 2 when the arguments or the source-info are unusable, which prints on stderr.
 public func runCheckDisc(
     _ arguments: [String], bundledSourceInfo: String, fs: any FileSystem = SystemFileSystem()
 ) -> CheckDiscCommandResult {
-    var sourceInfo = bundledSourceInfo
-    switch arguments.count {
-    case 1: break
-    case 3 where arguments[1] == "--source-info": sourceInfo = arguments[2]
-    default:
-        return CheckDiscCommandResult(
-            stdout: "", stderr: "usage: Dragoon --check-disc PATH [--source-info FILE]\n",
-            status: 2)
+    let usage = CheckDiscCommandResult(
+        stdout: "", stderr: "usage: Dragoon --check-disc PATH [--source-info FILE]\n", status: 2)
+    var path: String?
+    var sourceInfo: String?
+    var rest = arguments[...]
+    while let flag = rest.popFirst() {
+        guard let value = rest.popFirst() else { return usage }
+        switch flag {
+        case "--check-disc" where path == nil: path = value
+        case "--source-info" where sourceInfo == nil: sourceInfo = value
+        default: return usage
+        }
     }
+    guard let path else { return usage }
     let expected: ExpectedDisc
     do {
-        expected = try ExpectedDisc.read(at: sourceInfo, fs: fs)
+        expected = try ExpectedDisc.read(at: sourceInfo ?? bundledSourceInfo, fs: fs)
     } catch {
         return CheckDiscCommandResult(stdout: "", stderr: "\(error)\n", status: 2)
     }
     let check = checkDisc(
-        at: arguments[0], expectedID: expected.id, expectedDOLSHA1: expected.dolSHA1, fs: fs)
+        at: path, expectedID: expected.id, expectedDOLSHA1: expected.dolSHA1, fs: fs)
     return CheckDiscCommandResult(
         stdout: check.json() + "\n", stderr: "", status: check.isOK ? 0 : 1)
 }

@@ -9,14 +9,14 @@ enum Launch {
     ///
     /// `--check-disc PATH [--source-info FILE]` does the same for `checkDisc`. It checks the disc
     /// image at PATH against the `source-info.json` in the app's source snapshot, or FILE when
-    /// that is given. It exits 0 for an `ok` disc, 1 for any other result and 2 for a bad
-    /// argument or a source-info it can't use.
+    /// that is given, and the two flags come in either order. It exits 0 for an `ok` disc, 1 for
+    /// any other result and 2 for a bad argument or a source-info it can't use.
     @MainActor
     static func main() {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        if let flag = arguments.firstIndex(of: "--check-disc") {
+        if arguments.contains("--check-disc") {
             let result = runCheckDisc(
-                Array(arguments[(flag + 1)...]),
+                arguments,
                 bundledSourceInfo: (Bundle.main.resourcePath ?? "") + "/source/source-info.json")
             print(result.stdout, terminator: "")
             FileHandle.standardError.write(Data(result.stderr.utf8))
