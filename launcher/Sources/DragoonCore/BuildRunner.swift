@@ -35,10 +35,11 @@ public struct BuildRequest: Equatable, Sendable {
     var recipe: String { source + "/tools/launcher_build.py" }
 
     /// What follows the python3 on the command line. `-B` keeps `__pycache__` out of the signed
-    /// bundle.
+    /// bundle, and `-s` keeps the player's user site-packages, with the code its `.pth` files and
+    /// `usercustomize.py` can run, out of the recipe's Python.
     func arguments(log: String) -> [String] {
         var arguments = [
-            "-B", recipe,
+            "-B", "-s", recipe,
             "--source", source, "--kit", kit, "--disc", disc, "--data", data, "--cache", cache,
             "--make", toolchain.make, "--cc", toolchain.clang, "--cxx", toolchain.clangxx,
             "--python", toolchain.python3, "--sdk", toolchain.sdk, "--log", log,
@@ -243,7 +244,8 @@ public final class BuildRunner: @unchecked Sendable {
     }
 
     /// The recipe's own tools get a fixed PATH from the recipe. This keeps what the player's
-    /// shell has, such as PYTHONPATH or Homebrew's directories, out of the recipe's Python.
+    /// shell has, such as PYTHONPATH or Homebrew's directories, out of the recipe's Python, and
+    /// PYTHONNOUSERSITE does the same for the user site-packages in the player's home.
     static func environment(for toolchain: Toolchain) -> [String: String] {
         [
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
@@ -251,6 +253,7 @@ public final class BuildRunner: @unchecked Sendable {
             "TMPDIR": NSTemporaryDirectory(),
             "LANG": "en_US.UTF-8",
             "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
             "DEVELOPER_DIR": toolchain.developerDirectory,
         ]
     }

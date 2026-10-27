@@ -27,7 +27,7 @@ import Testing
         #expect(finished.failure == nil)
     }
 
-    @Test func theRecipeRunsUnderPythonWithBFirstAndEveryArgumentWhole() async throws {
+    @Test func theRecipeRunsUnderPythonWithBAndSFirstAndEveryArgumentWhole() async throws {
         let fixture = try RecipeFixture()
         try fixture.install("")
         _ = await collect(fixture.runner().run(fixture.request()))
@@ -35,7 +35,7 @@ import Testing
         let tools = "/Library/Developer/CommandLineTools"
         #expect(
             try lines(of: fixture.argumentsFile) == [
-                "-B", source + "/tools/launcher_build.py",
+                "-B", "-s", source + "/tools/launcher_build.py",
                 "--source", source,
                 "--kit", fixture.bundle + "/Contents/Resources/kit",
                 "--disc", fixture.root + "/Kirby Air Ride (USA).gcm",
@@ -48,6 +48,28 @@ import Testing
                 "--sdk", tools + "/SDKs/MacOSX26.5.sdk",
                 "--log", fixture.logs + "/build-2027-01-15T08-00-00.000Z.log",
             ])
+    }
+
+    @Test func aRealPythonStartedTheWayTheLauncherDoesLoadsNoUserSitePackages() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.installPython(
+            """
+            import json, site, sys
+
+            def step(text):
+                print(json.dumps({"event": "step", "step": text}), flush=True)
+
+            step("no_user_site=%d" % sys.flags.no_user_site)
+            step("user_site_enabled=%s" % site.ENABLE_USER_SITE)
+            step("user_site_on_path=%s" % (site.getusersitepackages() in sys.path))
+            """)
+        let finished = await collect(fixture.runner().run(try await fixture.requestWithRealPython()))
+        #expect(
+            finished.events == [
+                .step("no_user_site=1"), .step("user_site_enabled=False"),
+                .step("user_site_on_path=False"),
+            ])
+        #expect(finished.failure == nil)
     }
 
     @Test func theFlagsGoAfterTheLogOnlyWhenAsked() async throws {
@@ -76,10 +98,12 @@ import Testing
         for added in ["PWD", "OLDPWD", "SHLVL", "_"] { environment[added] = nil }
         #expect(
             Set(environment.keys) == [
-                "PATH", "HOME", "TMPDIR", "LANG", "PYTHONDONTWRITEBYTECODE", "DEVELOPER_DIR",
+                "PATH", "HOME", "TMPDIR", "LANG", "PYTHONDONTWRITEBYTECODE", "PYTHONNOUSERSITE",
+                "DEVELOPER_DIR",
             ])
         #expect(environment["PATH"] == "/usr/bin:/bin:/usr/sbin:/sbin")
         #expect(environment["PYTHONDONTWRITEBYTECODE"] == "1")
+        #expect(environment["PYTHONNOUSERSITE"] == "1")
         #expect(environment["DEVELOPER_DIR"] == "/Library/Developer/CommandLineTools")
     }
 
