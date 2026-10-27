@@ -18,7 +18,7 @@ Measured on 2026-10-26 on macOS 26.6.2 with the Command Line Tools 26.6 (`CLTool
 | `swift build --package-path launcher` | Builds on the default SDK, `MacOSX26.5.sdk`. No `SDKROOT` is needed |
 | `swift test --package-path launcher` | Fails with `no such module 'Testing'` |
 | `swift test` with only `-Xswiftc -F` | The tests compile, then the runner can't load `Testing.framework` |
-| `launcher/tools/swift_test.py` | 63 tests in 6 suites pass |
+| `launcher/tools/swift_test.py` | 68 tests in 6 suites pass |
 | `Dragoon --check-tools` | Reports `MacOSX26.5.sdk` and the tools under `/Library/Developer/CommandLineTools/usr/bin/` |
 
 ## The tools check
