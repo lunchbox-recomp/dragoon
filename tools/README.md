@@ -494,7 +494,7 @@ A first build on an M4 Max, with the Command Line Tools' make 3.81, clang 21 and
 
 Which mods does a mods folder hold, and can the game be built with them? Each folder in it whose name doesn't start with a dot is one mod. A mod's `files/` mirrors the disc's root, and its `dol.txt` is a patch list in the format of gcn-recomp's `docs/dol-patches.md`.
 
-Either may be missing. The other files beside `dol.txt` are the ones its `section` lines may name, so a section's file sits there and not under `files/`.
+Either may be missing, and either name may come in any letter case. The other files beside `dol.txt` are the ones its `section` lines may name, so a section's file sits there and not under `files/`.
 
 Dotfiles and dot folders are skipped everywhere, so a `.DS_Store` never reaches the disc. A loose file in the mods folder isn't a mod.
 
@@ -511,6 +511,7 @@ A mod is refused for any of these. `check` then prints one object with the error
 | Refused | Where |
 |---|---|
 | A link | Anywhere in a mod, or the mod's own folder |
+| `files` or `dol.txt` in two letter cases | At the top of a mod |
 | Anything that isn't a file or a folder, or can't be read | Anywhere in a mod |
 | A file of 4 GiB or more | Anywhere in a mod |
 | A name that isn't ASCII or holds a control character | Under `files/` |
