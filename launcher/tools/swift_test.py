@@ -9,11 +9,12 @@ help of its own. A signal that ends swift counts as 128 plus its number.
 
 With Xcode selected, that's all it does. With the Command Line Tools selected, `swift test`
 alone stops at `no such module 'Testing'`, because the tools keep Testing.framework in
-Library/Developer/Frameworks, where the compiler doesn't look. Given only -F, the test runner
-then can't load that framework or lib_TestingInterop.dylib. So when `xcode-select -p` names a
-directory that holds Library/Developer/Frameworks/Testing.framework and has no Platforms
-directory beside it, as the Command Line Tools do and Xcode's doesn't, the tool adds these for
-that directory, whatever the directory is called:
+Library/Developer/Frameworks, where the compiler doesn't look. With only -F, the test runner
+can't load that framework. With -F and an rpath to it, the runner can't load
+lib_TestingInterop.dylib. So when `xcode-select -p` names a directory that holds
+Library/Developer/Frameworks/Testing.framework and has no Platforms directory beside it, as the
+Command Line Tools do and Xcode's doesn't, the tool adds these for that directory, whatever the
+directory is called:
   -Xswiftc -F -Xswiftc DEV/Library/Developer/Frameworks
   -Xlinker -rpath -Xlinker DEV/Library/Developer/Frameworks
   -Xlinker -rpath -Xlinker DEV/Library/Developer/usr/lib
