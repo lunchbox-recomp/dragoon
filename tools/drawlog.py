@@ -22,8 +22,8 @@ frame M, with the frames it held each, a camera being one address in one viewpor
 
 setters prints who set each camera's aspect from frame N to frame M, from DRAGOON_CENSUS=1's
 [aspect] lines, one for each call to HSD_CObjSetAspect. Each line names a camera and where
-the call returns to, then where its caller returns to, by function and offset with
---symbols. It ends with the aspect the call was given, the one the camera held after (none
+the call returns to, then where its caller returns to. With --symbols each is named by the
+function that holds its call, the instruction before it, and how far in it is. It ends with the aspect the call was given, the one the camera held after (none
 for a camera that isn't a perspective one) and the frames. --cam ADDR keeps one camera's
 lines.
 
@@ -53,7 +53,7 @@ CENSUS = re.compile(r"\[census\] f=(\d+) cam=([0-9A-F]{8}) type=(\w+) p=(\S*) vp
 ASPECT = rf"{NUM}|-?inf|-?nan"
 SETTER = re.compile(rf"\[aspect\] f=(\d+) cam=([0-9A-F]{{8}}) lr=([0-9A-F]{{8}}) lr2=([0-9A-F]{{8}}) "
                     rf"given=({ASPECT}) stored=({ASPECT}|none)$")
-SYMBOL = re.compile(r"^(\S+) = \.text:0x([0-9A-Fa-f]{8});")
+SYMBOL = re.compile(r"^(\S+) = \.text:0x([0-9A-Fa-f]{8});(?:.*\bsize:0x([0-9A-Fa-f]+))?")
 # The draw log prints the projection to four decimals, so an orthographic camera matches
 # within this. A perspective camera's y scale matches within PERSP_TOLERANCE of the cotangent
 # of half its field of view, since the game's own comes out about 0.02% over.
@@ -164,12 +164,21 @@ def matching(g: Group, cams: list[Camera]) -> list[Camera]:
 
 
 def read_symbols(path: Path) -> dict[int, str]:
-    names = {}
+    return {start: name for start, _, name in read_functions(path)}
+
+
+def read_functions(path: Path) -> list[tuple[int, int, str]]:
+    """Each function's start, end and name, by start. One with no size ends where the next
+    one starts."""
+    found = []
     with path.open() as lines:
         for line in lines:
             if m := SYMBOL.match(line):
-                names[int(m[2], 16)] = m[1]
-    return names
+                start = int(m[2], 16)
+                found.append((start, start + int(m[3], 16) if m[3] else None, m[1]))
+    found.sort(key=lambda f: f[0])
+    return [(start, end if end is not None else (found[i + 1][0] if i + 1 < len(found) else 2**32), name)
+            for i, (start, end, name) in enumerate(found)]
 
 
 def _unique(values) -> list:
@@ -284,20 +293,24 @@ def aspects(args) -> int:
     return 1 if changed else 0
 
 
-def caller_text(lr: int, names: dict[int, str], starts: list[int]) -> str:
-    """A return address, with the function it's in and how far in when symbols name one at or
-    before it. starts is names' addresses, sorted."""
-    i = bisect.bisect_right(starts, lr) - 1
-    if i < 0:
+def caller_text(lr: int, funcs: list[tuple[int, int, str]], starts: list[int]) -> str:
+    """A return address, with the function that holds the call and how far into it the address
+    is. The call is the instruction before the address, so a call that ends a function is named
+    by that function. Just the address when no function holds the call. funcs is
+    read_functions' list and starts its starts."""
+    call = lr - 4
+    i = bisect.bisect_right(starts, call) - 1
+    if i < 0 or call >= funcs[i][1]:
         return f"{lr:08X}"
-    return f"{lr:08X} {names[starts[i]]}+0x{lr - starts[i]:X}"
+    start, _, name = funcs[i]
+    return f"{lr:08X} {name}+0x{lr - start:X}"
 
 
 def setters(args) -> int:
     try:
         with args.log.open(errors="replace") as lines:
             found = [m for line in lines if (m := SETTER.search(line.rstrip("\n")))]
-        names = read_symbols(args.symbols) if args.symbols else {}
+        funcs = read_functions(args.symbols) if args.symbols else []
     except OSError as e:
         print(e, file=sys.stderr)
         return 2
@@ -309,9 +322,9 @@ def setters(args) -> int:
         frame, cam = int(m[1]), int(m[2], 16)
         if args.start <= frame <= args.end and args.cam in (None, cam):
             held.setdefault((cam, int(m[3], 16), int(m[4], 16), m[5], m[6]), []).append(frame)
-    starts = sorted(names)
+    starts = [f[0] for f in funcs]
     for (cam, lr, lr2, given, stored), frames in held.items():
-        print(f"{cam:08X}  from {caller_text(lr, names, starts)}  called from {caller_text(lr2, names, starts)}"
+        print(f"{cam:08X}  from {caller_text(lr, funcs, starts)}  called from {caller_text(lr2, funcs, starts)}"
               f"  given {given} stored {stored}  in frames {min(frames)}..{max(frames)} ({len(frames)} frames)")
     return 0
 
