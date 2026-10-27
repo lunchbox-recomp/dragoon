@@ -1,7 +1,7 @@
 # Widescreen
 
 This page covers which cameras Kirby Air Ride draws through, how Dragoon widens the world
-cameras for a wider output and what a 16:9 picture still gets wrong. Every number here comes
+cameras and anchors the HUD for a wider output and what a 16:9 picture still gets wrong. Every number here comes
 from runs of the routes in `tests/routes/` through `tools/probe.sh`, read with
 `tools/drawlog.py`.
 
@@ -297,17 +297,101 @@ in 1:14.68. Of the frames dumped every 600 from 8,400, only those up to 12,600 d
 the world camera after the finish is drawn. From frame 13,063 on, no world camera is in the
 census.
 
+## Anchoring the HUD
+
+The game draws its HUD through cameras that keep the 4:3 shape, so a stretched picture widens
+the HUD with the world. Dragoon marks each HUD draw with an anchor, gcn-recomp's
+`gx::set_draw_anchor`, which squeezes it back toward the left edge, the right edge or the middle
+of a rect. The draw keeps its 4:3 size and its 4:3 distance to that edge. At 4:3 every anchor is
+the identity.
+
+`src/hud_anchors.cpp` keys on the render callback. `recomp/patches.txt` calls it where
+`GObj_SetTextureCamera` calls each callback and where the callback returns, the census's two
+sites. A callback that isn't in its table draws stretched.
+
+| Callback | Draws | Placed by |
+|---|---|---|
+| `fn_80114F1C` | The speedometer, and the race's lap count and position or the players' names in split views | Its edge |
+| `fn_8011500C` | The clock and the minimap | Its edge |
+| `fn_8011F114` | City Trial's gauge beside the speedometer | Its edge |
+| `kar_ifround_display_mmapply_player_marker_world_projected`, `kar_ifround_display_mmapstart_marker_projected_midpoint` | The karts and the start on the minimap | Its edge |
+| `fn_8011F8F4`, `fn_801206A0`, `fn_80121278`, `fn_80121CA4`, `fn_80122380` | The markers over karts and items | Its own place |
+
+One callback draws at both sides of the screen. `fn_80114F1C` puts the position at the left and
+the speedometer at the right through the same HUD 3D camera, so its projection can't tell them
+apart. Each is a joint tree of its own, though, drawn by its own call to `HSD_JObjDispAll`.
+
+`recomp/hle.txt` lists `HSD_JObjDispAll`, so the hook places each tree as it's drawn, by where
+it sits on screen. A tree's root, and some of its joints, sit at the middle of the screen while
+its shapes are drawn at a side. So a tree goes by where most of its joints drew their shapes last
+frame, each joint's matrix put through the current camera.
+
+A tree in a rect's left third anchors to its left edge, one in its right third to its right
+edge and one between to its middle. A tree no joint has drawn yet goes by its root, which only
+happens the frame it first shows.
+
+The rect is the screen in one player. In 2P and 4P it's the view the tree sits in, from the
+viewports of the frame's world cameras, which `src/cameras.cpp` passes as the game sets their
+aspect.
+
+A tree outside every view sits on the bars between them and anchors to the screen, as the 4P
+clock does at the left. In the bars' middle third it's the bars themselves, which span the
+screen and stretch with it.
+
+A marker is centered on its root, which the game has just put over the kart or item it follows.
+Its rect has no width, so the marker keeps its 4:3 size and sits where the wider world puts
+what it follows.
+
+A mark takes its place where the front end has got to in the command stream. Up to 31 bytes of
+what the game wrote can still wait in the write-gather pipe, so the draw they end would take
+the next mark. `src/draw_marks.cpp` first pads the pipe's line with zero bytes, the GPU's no-op,
+as the SDK's `GXFlush` does, and the census's draw tags go through it too.
+
+```sh
+tools/probe.sh hud 60 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
+tools/probe.sh hud-wide 60 tests/routes/air-ride-race.txt 4200 --aspect=16:9 --output DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
+tools/drawlog.py hud build/probe/hud/stdout.txt build/probe/hud-wide/stdout.txt --aspect 16:9
+```
+
+`drawlog.py hud` pairs the two runs' HUD draws and checks each anchored one's box against its
+4:3 box, as `tools/README.md` says. On Dragoon `e52dce1` at gcn-recomp `5e49451`, one run at a
+time at loads of 1.5 to 3.1, every checkpoint passed.
+
+| Checkpoint | Anchored | Failed | Stretched |
+|---|---|---|---|
+| Race, 4200 | 41 | 0 | 0 |
+| Race with `GCN_GX_SYNC=1`, 4200 | 41 | 0 | 0 |
+| City Trial, 3300 | 33 | 0 | 0 |
+| 2P, 3480 | 54 | 0 | 1, the bar between the views |
+| 4P, 3480 | 76 | 0 | 1, an untextured full-screen draw |
+
+Two of 4P's anchored draws are markers with no match, both in player 3's view. At 4:3 player 4
+is past that view's left edge and shows as an icon there, and at 16:9 player 4 is in view and
+shows as a marker over their kart.
+
+In the output dumps at 16:9 the race's position sits at the left and the timer in the middle.
+The minimap, the lap count and the speedometer sit at the right, and the CPU marker sits over
+its kart. In 2P and 4P each player's name sits at the left of their view and the speedometer at
+its right, with the clock at the left of the bars.
+
+`tests/src/test_hud_anchors.cpp` checks the thirds, the views, the vote and the cameras' maths.
+`tests/src/test_draw_marks.cpp` checks the padding.
+
 ## What 16:9 still gets wrong
 
 These come from the output dumps at 16:9 of the race at 4200 and 8400, City Trial at 3300, 2P
-and 4P at 3480, Top Ride on Grass at 3600 and, before `b307f49`, the mode select at 1200.
+and 4P at 3480, Top Ride on Grass at 3600 and, before `b307f49`, the mode select at 1200. All
+but the mode select's are from Dragoon `e52dce1`, with the race at 8400 and Top Ride run at
+loads of 4.2 to 5.0.
 
-- Every HUD element is 4/3 too wide. In the race that's the position badge, the timer, the
-  minimap box, the lap count, the speedometer, the "ff" bubble and the CPU markers. In 4P
-  it's the players' name labels, the speedometers and the gauges beside them, the icons for
-  players past a view's edge and the clock.
-- After the finish the replay's banner and buttons are 4/3 too wide as well.
-- In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide.
+- After the finish `fn_8011500C` draws the replay's banner and buttons, and they keep their 4:3
+  shape in the middle of the screen. `drawlog.py hud` passed all 11 of their draws at 8400. The
+  banner's dark stripe spans the screen at 4:3, though, so at 16:9 it stops short of both sides.
+- In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide. At
+  3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
+  table draws them.
+- A HUD element that first shows goes by its root's place for that frame, which can anchor it
+  to the wrong edge. No dump caught one.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - No object is cut off at a side edge in these dumps, and the world drew at least as much at
