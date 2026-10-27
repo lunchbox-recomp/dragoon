@@ -10,7 +10,7 @@ source Contents/Resources/source
 budget dmg 60000000
 # PLACEHOLDER until the launcher and Sparkle are built. At Dragoon db8d24b the engine kit was
 # 5.4 MB and the source snapshot 6.1 MB. Sparkle and the launcher are guessed at 6 MB, what's
-# left of the research's 12 MB for them and the snapshot together. That's 17.5 MB, plus a
+# left of a 12 MB estimate for them and the snapshot together. That's 17.5 MB, plus a
 # quarter. Keep it under 101 MB so the generated C alone breaks it.
 budget app 22000000
 

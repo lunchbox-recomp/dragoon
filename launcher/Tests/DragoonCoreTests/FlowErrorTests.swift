@@ -2,7 +2,7 @@ import DragoonCore
 import Foundation
 import Testing
 
-/// One test for each row of the error table in the research's section 7.
+/// One test for each error the window can show, with what it offers the player for each.
 @Suite struct FlowErrorTests {
     /// Tools missing or the install cancelled: the install button again, and what the tools are
     /// for.
