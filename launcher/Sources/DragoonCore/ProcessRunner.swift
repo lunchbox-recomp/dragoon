@@ -32,7 +32,7 @@ public protocol ProcessRunner: Sendable {
     /// process's own. A nil `timeout` waits as long as the process takes. Otherwise a process
     /// still running after that many seconds, or one that has left something running that
     /// still holds its output open, is killed with its helpers and `ProcessTimeout` is thrown.
-    /// Cancelling the calling task stops the process and its helpers with SIGTERM, then SIGKILL
+    /// Canceling the calling task stops the process and its helpers with SIGTERM, then SIGKILL
     /// 10 seconds later if any are left, and throws `CancellationError` once they are gone.
     /// Throws when the executable can't be started or its exit can't be collected.
     func run(
@@ -54,11 +54,11 @@ extension ProcessRunner {
 }
 
 /// The real ProcessRunner. Each process leads a process group of its own, which is what a
-/// timeout or a cancelled task stops.
+/// timeout or a canceled task stops.
 public struct SystemProcessRunner: ProcessRunner {
     let killGrace: TimeInterval
 
-    /// `killGrace` is the seconds between the SIGTERM and the SIGKILL of a cancelled run, which
+    /// `killGrace` is the seconds between the SIGTERM and the SIGKILL of a canceled run, which
     /// is 10 unless a test shortens it.
     public init(killGrace: TimeInterval? = nil) {
         self.killGrace = killGrace ?? ProcessGroup.killGrace

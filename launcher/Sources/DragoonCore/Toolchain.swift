@@ -38,7 +38,7 @@ public enum ToolchainStatus: Equatable, Sendable {
     /// The probe's source file couldn't be written at `path`, so no SDK was tried. `error` says
     /// why.
     case cantWriteProbe(path: String, error: String)
-    /// The task running the check was cancelled before it had an answer. It says nothing about
+    /// The task running the check was canceled before it had an answer. It says nothing about
     /// the tools.
     case cancelled
     case ready(Toolchain)
@@ -98,7 +98,7 @@ extension Toolchain {
     /// that shims a developer tool runs until it has found a directory. The choice is kept in
     /// `<dataDirectory>/toolchain.json`, and the SDKs are probed again when `clang --version`
     /// says something new. The probe's source is written to `cacheDirectory` and removed again.
-    /// Cancelling the calling task stops the command it is waiting on and gives `cancelled`,
+    /// Canceling the calling task stops the command it is waiting on and gives `cancelled`,
     /// unless it had its answer already.
     public static func detect(
         runner: any ProcessRunner, fs: any FileSystem,
@@ -108,7 +108,7 @@ extension Toolchain {
         let status = await Detection(
             runner: runner, fs: fs, dataDirectory: dataDirectory, cacheDirectory: cacheDirectory
         ).run()
-        // A cancelled command fails like a missing tool or an SDK that doesn't link, and the
+        // A canceled command fails like a missing tool or an SDK that doesn't link, and the
         // check mustn't report either.
         if Task.isCancelled && !status.isReady { return .cancelled }
         return status

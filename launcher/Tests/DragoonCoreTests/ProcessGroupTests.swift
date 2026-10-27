@@ -2,7 +2,7 @@
 import Foundation
 import Testing
 
-/// Cancelling the task that waits on a process stops the process and everything it started, for
+/// Canceling the task that waits on a process stops the process and everything it started, for
 /// the runner the tools check uses as much as for the one the build uses.
 @Suite struct ProcessGroupTests {
     /// The start of a shell script that writes its pid to its first argument and a helper's to
