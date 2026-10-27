@@ -590,6 +590,24 @@ class SigtermTest(RecipeTestCase):
         self.stopped(["recompile", "compile", "warmup", "package"], tree(self.data))
         self.assertEqual(sorted(os.listdir(self.data / "game")), sorted(["current", OLD]))
 
+    def test_a_sigterm_just_after_the_build_directory_is_made_removes_it(self):
+        """The directory exists a moment before the cleanup that removes it does."""
+        self.old_game()
+        before = tree(self.data)
+        make = launcher_build.new_build_dir
+
+        def terminated(games: Path, commit: str) -> Path:
+            path = make(games, commit)
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(0.2)  # the handler raises here, unless the SIGTERM is held
+            return path
+
+        with mock.patch.object(launcher_build, "new_build_dir", terminated):
+            code, events, _ = self.build()
+        self.assertEqual(code, 143)
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertEqual(tree(self.data), before)
+
     def test_a_sigterm_just_before_the_swap_renames_its_link_leaves_no_link(self):
         self.old_game()
         saves = tree(self.data / "saves")

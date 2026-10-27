@@ -130,6 +130,22 @@ def exit_on_sigterm() -> Iterator[None]:
         signal.signal(signal.SIGTERM, before)
 
 
+@contextlib.contextmanager
+def sigterm_held() -> Iterator[Callable[[], None]]:
+    """Hold a SIGTERM that comes inside the block, and give back the function that lets it
+    through. A block that makes something calls it from inside the try that cleans the something
+    up, so a SIGTERM can't land between the two. The block's end lets it through too."""
+    held = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+
+    def release() -> None:
+        signal.pthread_sigmask(signal.SIG_SETMASK, held)
+
+    try:
+        yield release
+    finally:
+        release()
+
+
 def disk_use(*roots: Path) -> int:
     """Bytes the files under ROOTS take on disk, as du counts them, links not followed. A file
     removed between the listing and the measuring counts as nothing."""
@@ -266,20 +282,23 @@ def package(b: Build, a: argparse.Namespace, game: Path, info: dict[str, str]) -
     """<data>/game/<id>/Dragoon.app around GAME, sealed ad hoc, with stamp.json beside it."""
     games = a.data / "game"
     games.mkdir(parents=True, exist_ok=True)
-    build = new_build_dir(games, info["dragoon"])
-    try:
-        contents = build / APP / "Contents"
-        (contents / "MacOS").mkdir(parents=True)
-        shutil.copy2(game, contents / "MacOS" / GAME)
-        with (contents / "Info.plist").open("wb") as f:
-            plistlib.dump(INFO_PLIST, f)
-        b.run([CODESIGN, "--force", "--sign", "-", str(build / APP)], cwd=a.cache)
-        stamp = {"dragoon": info["dragoon"], "gcn-recomp": info["gcn-recomp"], "sdk": str(a.sdk),
-                 "built": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-        (build / "stamp.json").write_text(json.dumps(stamp, indent=2, sort_keys=True) + "\n")
-    except BaseException:  # no half-made build for the launcher's cleanup to find
-        shutil.rmtree(build, ignore_errors=True)
-        raise
+    with sigterm_held() as release:
+        build = new_build_dir(games, info["dragoon"])
+        try:
+            release()  # a SIGTERM that came during the mkdir raises here, in the cleanup's reach
+            contents = build / APP / "Contents"
+            (contents / "MacOS").mkdir(parents=True)
+            shutil.copy2(game, contents / "MacOS" / GAME)
+            with (contents / "Info.plist").open("wb") as f:
+                plistlib.dump(INFO_PLIST, f)
+            b.run([CODESIGN, "--force", "--sign", "-", str(build / APP)], cwd=a.cache)
+            stamp = {"dragoon": info["dragoon"], "gcn-recomp": info["gcn-recomp"],
+                     "sdk": str(a.sdk),
+                     "built": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            (build / "stamp.json").write_text(json.dumps(stamp, indent=2, sort_keys=True) + "\n")
+        except BaseException:  # no half-made build for the launcher's cleanup to find
+            shutil.rmtree(build, ignore_errors=True)
+            raise
     return build
 
 
