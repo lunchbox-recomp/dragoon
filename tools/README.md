@@ -529,7 +529,7 @@ It exits 0 when no mod is refused, 1 when one is and 2 on a bad argument or a mo
 
 Then gcn-recomp's `disc_overlay.py` builds the overlay from the clones, with that `main.dol` as the DOL it boots. `prepare` returns the DOL to recompile, the manifest and the digest of the clones. The DOL is the one the overlay boots, and the digest comes from the clones, so a mod edited during a build doesn't change it.
 
-A refusal from either tool that names a mod's list or file comes back naming the mod. Both tools run under `-B` with tool_env.py's environment and nothing else, as the recipe's own tools do, so the user's site-packages stay out.
+A refusal from either tool that names a mod's list or file comes back naming the mod. Any other failure of either tool is a `PrepareError`, and so is a file that can't be cloned or copied, such as one deleted since the scan, which it names. Both tools run under `-B` with tool_env.py's environment and nothing else, as the recipe's own tools do, so the user's site-packages stay out.
 
 The tests make every mods folder, image and DOL, at paths with spaces. Some run `prepare` against fakes of the two tools, and the rest against the pinned gcn-recomp's own, skipping when it isn't checked out.
 
