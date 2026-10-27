@@ -331,6 +331,79 @@ import Testing
         }
     }
 
+    @Test func aCancelBeforeTheSwapLeavesTheOldGameCurrentAndEndsCancelled() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.makeGame("old", current: "old")
+        try fixture.install(hanging(fixture))
+        let runner = fixture.runner()
+        var pgid: pid_t?
+        defer { Processes.killGroup(pgid) }
+
+        var iterator = runner.run(fixture.request()).makeAsyncIterator()
+        #expect(try await iterator.next() == .step("compile"))
+        pgid = Processes.pid(inFile: fixture.pidFile)
+        runner.cancel()
+        await #expect(throws: BuildFailure.cancelled) {
+            while try await iterator.next() != nil {}
+        }
+        #expect(try fixture.currentGame() == "old")
+    }
+
+    @Test func aCancelAfterTheSwapEndsWithTheNewGameDoneAndTellsTheLog() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.makeGame("old", current: "old")
+        try fixture.install(hanging(fixture, before: #"""
+                    mkdir -p "$data/game/new/Dragoon.app" && ln -sfn new "$data/game/current"
+                    """#))
+        let runner = fixture.runner()
+        var pgid: pid_t?
+        defer { Processes.killGroup(pgid) }
+
+        var iterator = runner.run(fixture.request()).makeAsyncIterator()
+        #expect(try await iterator.next() == .step("compile"))
+        pgid = Processes.pid(inFile: fixture.pidFile)
+        runner.cancel()
+        #expect(try await iterator.next() == .done(game: fixture.data + "/game/current/Dragoon.app"))
+        #expect(try await iterator.next() == nil)
+        #expect(try fixture.currentGame() == "new")
+        #expect(fixture.log().contains("[launcher] the build was canceled after the new game became current"))
+    }
+
+    @Test func aCancelAfterTheSwapIsDoneTooWhenNoGameWasCurrentBefore() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.install(hanging(fixture, before: #"""
+                    mkdir -p "$data/game/new/Dragoon.app" && ln -sfn new "$data/game/current"
+                    """#))
+        let runner = fixture.runner()
+        var pgid: pid_t?
+        defer { Processes.killGroup(pgid) }
+
+        var iterator = runner.run(fixture.request()).makeAsyncIterator()
+        #expect(try await iterator.next() == .step("compile"))
+        pgid = Processes.pid(inFile: fixture.pidFile)
+        runner.cancel()
+        #expect(try await iterator.next() == .done(game: fixture.data + "/game/current/Dragoon.app"))
+        #expect(try await iterator.next() == nil)
+    }
+
+    @Test func aCancelAfterTheRecipeSaidDoneDoesNotSayItAgain() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.install(hanging(fixture, before: #"""
+                    mkdir -p "$data/game/new/Dragoon.app" && ln -sfn new "$data/game/current"
+                    echo '{"event": "done", "game": "'"$data"'/game/current/Dragoon.app"}'
+                    """#))
+        let runner = fixture.runner()
+        var pgid: pid_t?
+        defer { Processes.killGroup(pgid) }
+
+        var iterator = runner.run(fixture.request()).makeAsyncIterator()
+        #expect(try await iterator.next() == .done(game: fixture.data + "/game/current/Dragoon.app"))
+        #expect(try await iterator.next() == .step("compile"))
+        pgid = Processes.pid(inFile: fixture.pidFile)
+        runner.cancel()
+        #expect(try await iterator.next() == nil)
+    }
+
     @Test func cancelSendsSigtermFirstSoARecipeCanCleanUp() async throws {
         let fixture = try RecipeFixture()
         try fixture.install(
