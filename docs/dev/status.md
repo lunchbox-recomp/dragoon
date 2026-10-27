@@ -22,7 +22,7 @@ The pin was `dac449e`, where on Dragoon `4602fa1` all twenty-one routes' frames 
 matched (under gcn-recomp `dac449e` below). The eight-pass warm-up was timed on it at `2fc9285`,
 and the three `-courses` routes' goldens were recorded on it just before.
 
-It's now `5e49451`, and on Dragoon `31da7e5` with the pin moved all twenty-four frame-hash
+It's now `5e49451`, and on Dragoon `64286c3` with the pin moved all twenty-four frame-hash
 routes still match (under gcn-recomp `5e49451` below).
 
 | Feature | Status | Note |
@@ -155,7 +155,7 @@ need `--pads=4`.
 Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
 frame 25,800. That's from gcn-recomp `deac351` with the aspect change (`widescreen.md`), and
 it showed 1:12.60 when this was first written, at `7d30377`. At `5e49451` its results frame
-on Dragoon `a5bc2e2` is the same at 16:9 as at 4:3, run at loads of 4.5 to 6.1.
+on Dragoon `b1f0ae0` is the same at 16:9 as at 4:3, run at loads of 4.5 to 6.1.
 
 City Trial with nobody steering drives into the sea and stays there while the clock runs. The
 opening movie, when it isn't skipped, plays to the end and hands over to the title and the
@@ -591,10 +591,10 @@ What a player's first session looks like after the warm-up, against the bars set
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, "Chained course passes" below). In 21 passes, 74.8 s at a load of 1.22 for 328 keys (Dragoon `529f40c`), and 73.7 s to 76.1 s under "Longer course passes". Before three of those passes grew, 67.7 s and 68.9 s for 318 keys five at a time (Dragoon `0059fce`, table below). One pass at a time, 47.1 s for the five routes' 191 keys, 120.5 s for the twelve routes' 222 and 252.8 s for the twenty-one routes' 318 | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`). At `529f40c`, 461 to 509 ms for 328 programs at loads of 1.90 to 8.56. Earlier, 270 to 298 ms for 191 programs and 362 to 387 ms for 222 | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there. The three `-courses` routes' goldens were recorded at `dac449e` on the tree that became Dragoon `2ae3277`, and all three routes' 609 frames matched a check run straight after. All twenty-four at `5e49451`, on Dragoon `31da7e5`, `0ad99ed` and `a5bc2e2` (under gcn-recomp `5e49451`) | Pass |
-| World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `a5bc2e2` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
-| Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `a5bc2e2` at loads of 2.7 to 6.3) | Pass |
-| Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at this pin (`widescreen.md` says why it isn't 1:12.60) | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `a5bc2e2` at loads of 4.5 to 6.1) | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there. The three `-courses` routes' goldens were recorded at `dac449e` on the tree that became Dragoon `2ae3277`, and all three routes' 609 frames matched a check run straight after. All twenty-four at `5e49451`, on Dragoon `64286c3`, `c62cdad` and `b1f0ae0` (under gcn-recomp `5e49451`) | Pass |
+| World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `b1f0ae0` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
+| Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `b1f0ae0` at loads of 2.7 to 6.3) | Pass |
+| Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at this pin (`widescreen.md` says why it isn't 1:12.60) | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `b1f0ae0` at loads of 4.5 to 6.1) | Pass |
 
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
@@ -911,16 +911,16 @@ The pin moved from `dac449e` to `5e49451`, 11 commits. Nine let a game mark a dr
 shape at one side of a wider picture, and the GL renderer remaps the draws so marked. Dragoon
 marks none yet, and the other two commits add notes on the audio to the README.
 
-Built on Dragoon `31da7e5`, `tools/frame_hashes.py check` matched 23 of the twenty-four routes
+Built on Dragoon `64286c3`, `tools/frame_hashes.py check` matched 23 of the twenty-four routes
 at loads of 4 to 11.7. `city-trial-stadium-4p` reached frame 20,700 of 21,000 before its time
 ran out, and its 70 frames matched on a rerun at a load of 7 to 9. That's all 1,906 frames, so
 no golden was recorded.
 
-On Dragoon `0ad99ed`, with the world cameras widened, the check matched 21 routes at loads of
+On Dragoon `c62cdad`, with the world cameras widened, the check matched 21 routes at loads of
 6.5 to 16. The race and the two `-courses` routes ran out of time under that load, and all
 three matched on a rerun at a load of 3.8 to 5.4, so all 1,906 frames match there too.
 
-On Dragoon `a5bc2e2`, with Top Ride's camera widened as well and the cameras set up once
+On Dragoon `b1f0ae0`, with Top Ride's camera widened as well and the cameras set up once
 following the output aspect, the check matched all twenty-four routes and 1,906 frames in one
 pass. The load was about 4 at its start and its end.
 
