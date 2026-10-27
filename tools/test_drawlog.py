@@ -319,6 +319,20 @@ class SettersCommandTest(unittest.TestCase):
             "81424A80  from 800C2884  called from 800C1F00  given 1.25538 stored 1.67383"
             "  in frames 100..100 (1 frames)"])
 
+    def test_infinite_and_undefined_aspects_are_listed(self):
+        lines = [setter(100), setter(101, given="inf", stored="inf"), setter(102, given="nan", stored="-nan"),
+                 setter(200)]
+        code, out, _ = run_main(drawlog.main, "setters", self.log(*lines))
+        self.assertEqual(code, 0)
+        self.assertIn("given 1.25538 stored 1.67383  in frames 100..200 (2 frames)", out)
+        self.assertIn("given inf stored inf  in frames 101..101 (1 frames)", out)
+        self.assertIn("given nan stored -nan  in frames 102..102 (1 frames)", out)
+
+    def test_a_log_of_only_infinite_aspects_is_read(self):
+        code, out, _ = run_main(drawlog.main, "setters", self.log(setter(101, given="-inf", stored="-inf")))
+        self.assertEqual(code, 0)
+        self.assertIn("given -inf stored -inf", out)
+
     def test_a_camera_with_no_aspect_stores_none(self):
         code, out, _ = run_main(drawlog.main, "setters", self.log(setter(100, cam="812C5260", stored="none")))
         self.assertEqual(code, 0)

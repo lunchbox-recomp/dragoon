@@ -49,8 +49,10 @@ VIEWPORT = re.compile(rf"^\s+viewport=({NUM}),({NUM}),{NUM} ({NUM}),({NUM}),{NUM
                       r"scissor=\w+ \w+ offset=([0-9A-F]{6})")
 CENSUS = re.compile(r"\[census\] f=(\d+) cam=([0-9A-F]{8}) type=(\w+) p=(\S*) vp=(\S+) "
                     r"cb=([0-9A-F]{8}) cls=(\d+) via=(set|draw)$")
+# An aspect as %.6g prints it, which for a viewport of no height is inf or nan.
+ASPECT = rf"{NUM}|-?inf|-?nan"
 SETTER = re.compile(rf"\[aspect\] f=(\d+) cam=([0-9A-F]{{8}}) lr=([0-9A-F]{{8}}) lr2=([0-9A-F]{{8}}) "
-                    rf"given=({NUM}) stored=({NUM}|none)$")
+                    rf"given=({ASPECT}) stored=({ASPECT}|none)$")
 SYMBOL = re.compile(r"^(\S+) = \.text:0x([0-9A-Fa-f]{8});")
 # The draw log prints the projection to four decimals, so an orthographic camera matches
 # within this. A perspective camera's y scale matches within PERSP_TOLERANCE of the cotangent
