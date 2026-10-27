@@ -94,6 +94,32 @@ import Testing
         #expect(ContinuousClock.now - cancelled >= .milliseconds(1400))
     }
 
+    @Test func aSurvivorOfSigtermThatHoldsNoPipeStillGetsTheSigkillBeforeTheRunEnds() async throws {
+        let files = try scratch()
+        defer { try? FileManager.default.removeItem(atPath: files.directory) }
+        // The shell dies of the SIGTERM, and the helper it leaves ignores it and holds no pipe.
+        let script = """
+            echo $$ > "$1"
+            ( trap '' TERM; exec /bin/sleep 30 ) > /dev/null 2>&1 &
+            echo $! > "$2"
+            wait
+            """
+        let task = Task {
+            try await SystemProcessRunner(killGrace: 1.5).run(
+                "/bin/sh", ["-c", script, "sh", files.pid, files.helper])
+        }
+        let helper = try #require(await Processes.waitForPid(inFile: files.helper))
+        let pgid = try #require(Processes.pid(inFile: files.pid))
+        defer { Processes.killGroup(pgid) }
+
+        let cancelled = ContinuousClock.now
+        task.cancel()
+        await #expect(throws: CancellationError.self) { try await task.value }
+        #expect(ContinuousClock.now - cancelled >= .milliseconds(1400))
+        #expect(await Processes.eventually(timeout: 2) { !Processes.groupExists(pgid) })
+        #expect(await Processes.eventually(timeout: 2) { !Processes.exists(helper) })
+    }
+
     @Test func aTaskCancelledBeforeItStartsARunRunsNothing() async throws {
         let files = try scratch()
         defer { try? FileManager.default.removeItem(atPath: files.directory) }
