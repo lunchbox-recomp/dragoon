@@ -20,6 +20,7 @@ Measured on 2026-10-26 on macOS 26.6.2 with the Command Line Tools 26.6 (`CLTool
 | `swift test` with only `-Xswiftc -F` | The tests compile, then the runner can't load `Testing.framework` |
 | `launcher/tools/swift_test.py` | Adds the Testing paths and runs the tests, which pass |
 | `Dragoon --check-tools` | Reports `MacOSX26.5.sdk` and the tools under `/Library/Developer/CommandLineTools/usr/bin/` |
+| `Dragoon --check-disc` on the supported disc and on another game's | `ok`, and `wrongGame` with the other disc's ID. `extract_dol.py` agrees on both |
 
 ## The tools check
 
@@ -32,6 +33,22 @@ The SDK is the first that compiles and links a C++ file that includes `<cstdio>`
 The probe's source goes in `~/Library/Caches/Dragoon` and comes out again after the probe. If it can't be written the status is `cantWriteProbe`, which names the path and the error. No SDK is blamed.
 
 The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon`. It's used only while the developer directory and the tool paths match and the first line of `clang --version` hasn't changed. A different developer directory or tool path forces a probe too, and so does an SDK that's gone.
+
+## The disc check
+
+`Dragoon --check-disc PATH` checks a disc image against the `source-info.json` in the app's source snapshot and prints the result as JSON. `--source-info FILE` names another one, for a binary that isn't inside the app. The exit code is 0 for `ok`, 1 for any other result and 2 for a bad argument or a source-info it can't use.
+
+The result is `ok`, `wrongGame` with the disc ID it found, `wrongRevision` with the SHA-1 of the main.dol it found, `needsConversion` with `RVZ`, `GCZ`, `WIA` or `WBFS`, or `unreadable` with a reason. A file that can't be opened, ends early or has a main.dol with no sections is `unreadable`.
+
+It reads a disc the way `gcn-recomp/recomp/extract_dol.py` does. The disc ID is the first 6 bytes, and main.dol starts at the big-endian word at 0x420. Its length is the largest offset plus size among the 18 sections in its header that have a size, and the SHA-1 covers that many bytes.
+
+A CISO is a 0x8000-byte header followed by the blocks its map marks with a 1. Any other block reads as zeros.
+
+An `RVZ`, `GCZ`, `WIA` or `WBFS` image is named by its magic and has to be converted first. The magics come from Dolphin's `Source/Core/DiscIO/`.
+
+The recipe's reader hashes whatever it gets from a short file. The check says `unreadable` there, and for a CISO read past the blocks its map covers.
+
+The image is read through a file handle a piece at a time, with no read over 1 MiB. A 1.4 GB disc doesn't cost 1.4 GB of memory.
 
 ## Why a wrapper runs the tests
 
