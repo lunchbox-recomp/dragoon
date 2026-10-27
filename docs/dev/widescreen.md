@@ -26,9 +26,9 @@ and logs the callback with the camera it draws through.
 Each pair is logged once a frame as a `[census]` line. drawlog.py matches those cameras to the
 projections in the frame's `[draw]` lines and counts the draws through each.
 
-The census also logs each call to `HSD_CObjSetAspect` as an `[aspect]` line, with the camera,
-where the call returns to and where its caller returns to. `drawlog.py setters` lists them by
-camera and caller.
+The census also logs each call to `HSD_CObjSetAspect`, and each perspective camera
+`HSD_CObjLoadDesc` loads, as an `[aspect]` line. Each gives the camera, where the call returns
+to and where its caller returns to. `drawlog.py setters` lists them by camera and caller.
 
 ## The cameras
 
@@ -98,6 +98,24 @@ A camera's address won't do as a rule, because one address can hold different ca
 run. In the race, the address of a HUD 3D camera at frame 4200 belonged to a world camera at
 frame 8202.
 
+### Top Ride
+
+Top Ride draws its world through one full-screen camera at fov 30, which stores 1.18 at 4:3.
+At frame 3,600 of `top-ride-grass.txt` it makes 198 of the frame's 236 draws, and fov 25
+cameras make the other 38. `drawlog.py setters` lists no call to `HSD_CObjSetAspect` for it.
+
+A watch build of Dragoon `c9caba4`, run at a load of about 20 just after its build, logged each
+store to the camera's aspect up to frame 3,700. After `_HSD_MemClearDefaultCB` clears the
+camera's memory, the only store is at `0x80403150` in `CObjLoad` (`0x80402FC0`), which copies
+the aspect from the camera's description. `HSD_CObjLoadDesc` (`0x804031EC`) calls it and
+returns the camera.
+
+`kar_a2d_kurakko__near_80371968` loads the world camera, its call returning to `0x803719A0`,
+when `TopRide_GameSessionInit` calls it (returning to `0x8028C0E0`). The HUD's, the effects'
+and the menus' cameras come from other calls, among them `fn_802CA894`'s,
+`kar_a2d_game_effect__80379f94`'s and the camera library's. That pair is the rule
+`src/cameras.h` keys on for a load.
+
 ## Widening the world cameras
 
 Three places were tried at `--aspect=16:9 --output`, each behind its own switch. The bars
@@ -105,7 +123,8 @@ were these four.
 
 1. Every world camera's projection reads 4/3 times its 4:3 aspect in one player, 2P and 4P,
    and no HUD or menu camera changes. Before Dragoon `0ad99ed` widened the library's four
-   calls as well, the kept widening met this only until the race's finish.
+   calls as well, the kept widening met this only until the race's finish. Top Ride's camera
+   met it only once `13cf644` widened it as it loads.
 2. The stored aspect holds steady over 600 frames, so nothing widens twice.
 3. The race finishes in the same time as at 4:3.
 4. It takes the fewest patch lines.
@@ -134,6 +153,15 @@ a perspective camera's aspect, widened when the object drawing is
 until the race's finish. Since the game stores the wider aspect, whatever reads it sees the
 wider view.
 
+Top Ride's world camera never goes through `HSD_CObjSetAspect`, so `HSD_CObjLoadDesc` is an HLE
+function as well. It widens the camera it returns when the pair under "Top Ride" above matches,
+and the census logs each perspective camera it loads.
+
+On Dragoon `a5bc2e2` at 16:9, at loads of 4.3 to 6.3, Top Ride's camera stored 1.57333 from
+its load at frame 3,234 to frame 3,833. At frame 3,600 it made 198 draws as at 4:3, and the fov
+25 cameras kept 1.25538. In the output dump the player's and the CPUs' markers sit over their
+karts.
+
 The world drew more at 16:9 than at 4:3 at all four checkpoints that have one, and in the
 race's output dump the CPU marker sits over its kart. The projection patch leaves the stored
 aspect at 4:3, so draws stay at their 4:3 count and the markers drift outward from the karts.
@@ -160,7 +188,7 @@ way.
 tools/probe.sh wide 30 tests/routes/air-ride-race.txt 4200 --aspect=16:9 --output
 ```
 
-`src/cameras.cpp` holds the hook and `src/cameras.h` the rule, which
+`src/cameras.cpp` holds the two hooks and `src/cameras.h` the rules, which
 `tests/src/test_cameras.cpp` checks. The widening is always on. At 4:3 it's the identity to
 the bit, so the game runs there as it did.
 
@@ -222,13 +250,14 @@ so the race still finishes in 1:14.68. From frame 13,063 on, no world camera is 
 ## What 16:9 still gets wrong
 
 These come from the output dumps at 16:9 of the race at 4200 and 8400, City Trial at 3300, 2P
-and 4P at 3480 and, before `0ad99ed`, the mode select at 1200.
+and 4P at 3480, Top Ride on Grass at 3600 and, before `0ad99ed`, the mode select at 1200.
 
 - Every HUD element is 4/3 too wide. In the race that's the position badge, the timer, the
   minimap box, the lap count, the speedometer, the "ff" bubble and the CPU markers. In 4P
   it's the P1 to P4 labels, the speedometers and the gauges beside them, the icons for
   players past a view's edge and the clock.
 - After the finish the replay's banner and buttons are 4/3 too wide as well.
+- In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - No object is cut off at a side edge in these dumps, and the world drew at least as much at
