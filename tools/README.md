@@ -461,11 +461,17 @@ How does the launcher build the game? launcher_build.py is its recipe, and a dev
 | compile | Runs make on the kit's Makefile with a job per core, which compiles `gen/*.c` and links `dragoon` with the kit. Each compile line make prints becomes a progress event |
 | warmup | Runs the snapshot's warm_shaders.py on the disc and a copy of the player's shader cache, one progress event per pass |
 | package | Wraps the game in an app sealed ad hoc, with a `stamp.json` naming both commits and the SDK |
-| swap | Points `game/current` at the new build, then installs the warmed cache in `<data>/saves` |
+| swap | Points `game/current` at the new build, then installs the warmed cache in `<data>/saves`, where a failure is only a warning |
 
 The tools run with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and five other variables, listed in `--help`, so nothing Homebrew or MacPorts installed reaches the build. The snapshot and the kit are only read, and Python runs with `-B`, so a build leaves the launcher's seal as it was.
 
-Before the swap nothing in `<data>` changes but the new `game/<id>`. A failed or killed build leaves the old game current and `saves/` as it was, and a package step that fails removes its `game/<id>`. A SIGTERM, which is how the launcher cancels, exits 143 once the running step has cleaned up, so it leaves no half-made `game/<id>` and no temp file in `saves/`. Earlier builds stay in `<data>/game` for the launcher to delete. A second build while one runs exits 3 at `<cache>/build.lock` without touching anything, its `--log` included. A kit whose `kit.mk` names a gcn-recomp commit other than the one in the snapshot's `source-info.json` or a `src/` digest other than the snapshot's, or names none, exits 2 the same way, with an error event at step `kit`. Its `engine.o` and headers wouldn't match the generated C.
+Before the swap nothing in `<data>` changes but the new `game/<id>`. A build that fails before the swap leaves the old game current and `saves/` as it was, and a package step that fails removes its `game/<id>`. Earlier builds stay in `<data>/game` for the launcher to delete.
+
+Once `game/current` points at the new build, the build has succeeded. A shader cache file that can't be installed afterward is a `warning` event, and the run still prints `done` and exits 0 with the old cache whole.
+
+A SIGTERM, which is how the launcher cancels, exits 143 once the running step has cleaned up. It leaves no half-made `game/<id>` and no temp file in `saves/`, and one that lands after the swap leaves the new game current. A SIGTERM that lands just after the swap makes its `.current.<pid>.partial` link can leave that link, and the next swap removes it.
+
+A second build while one runs exits 3 at `<cache>/build.lock` without touching anything, its `--log` included. A kit whose `kit.mk` names a gcn-recomp commit other than the one in the snapshot's `source-info.json` or a `src/` digest other than the snapshot's, or names none, exits 2 the same way, with an error event at step `kit`. Its `engine.o` and headers wouldn't match the generated C.
 
 ```
 tools/launcher_build.py --source /tmp/dragoon-source --kit /tmp/engine-kit \
