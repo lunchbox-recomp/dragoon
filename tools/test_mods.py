@@ -385,7 +385,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 tool = os.path.basename(__file__)
 with open(os.path.join(here, "calls.jsonl"), "a") as f:
     f.write(json.dumps({"tool": tool, "argv": sys.argv[1:], "cwd": os.getcwd(),
-                        "path": os.environ.get("PATH"),
+                        "path": os.environ.get("PATH"), "env": sorted(os.environ),
                         "nobytecode": sys.flags.dont_write_bytecode,
                         "nousersite": sys.flags.no_user_site}) + "\n")
 refusal = os.path.join(here, tool + ".refuse")
@@ -444,6 +444,17 @@ class PrepareTest(ModsCase):
         self.assertEqual(p.dol, self.out / "main.dol")
         self.assertEqual(p.manifest, self.out / "disc-overlay.txt")
         self.assertEqual((self.out / "patches" / "1" / "dol.txt").read_text(), DOL_TXT)
+
+    def test_the_tools_get_nothing_from_the_callers_environment(self) -> None:
+        self.put("Mod/dol.txt", DOL_TXT)
+        caller = {"PYTHONPATH": str(self.tmp / "site"), "DYLD_FALLBACK_LIBRARY_PATH": str(self.tmp)}
+        with mock.patch.dict(os.environ, caller):
+            self.prepare()
+        calls = self.calls()
+        self.assertEqual([c["tool"] for c in calls], ["dol_patch.py", "disc_overlay.py"])
+        for call in calls:  # macOS gives every process __CF_USER_TEXT_ENCODING
+            self.assertEqual([k for k in call["env"] if k != "__CF_USER_TEXT_ENCODING"],
+                             sorted(mods.TOOL_ENV))
 
     def test_without_a_patch_list_the_dol_given_is_the_one_to_recompile(self) -> None:
         self.put("Mod/files/a.bin")
