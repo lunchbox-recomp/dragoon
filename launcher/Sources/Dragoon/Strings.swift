@@ -127,7 +127,7 @@ enum Strings {
         case .failed(nil, let message, _):
             return "The build stopped. \(message)"
         case .refused(let message, _):
-            return "The build couldn't use the files that came with this copy of Dragoon. \(message)"
+            return "The build couldn't start with what it was given. \(message)"
         case .alreadyRunning:
             return "Another build is already running."
         case .couldNotStart(let reason):

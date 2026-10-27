@@ -164,8 +164,9 @@ import Testing
         #expect(run.send(.showLogPressed) == [])
     }
 
-    @Test func aRecipeThatRefusedItsFilesShowsItsLog() {
-        let failure = BuildFailure.refused(message: "the kit is from another commit", log: flowLog)
+    @Test func aBuildTheRecipeRefusedShowsItsLog() {
+        let failure = BuildFailure.refused(
+            message: "--disc /Volumes/USB/Kirby Air Ride (USA).gcm isn't a file", log: flowLog)
         var run = launched()
         for (event, _) in rebuildToRunning { run.send(event) }
         #expect(run.send(.buildEnded(failure)) == [.readLogTail(flowLog)])
