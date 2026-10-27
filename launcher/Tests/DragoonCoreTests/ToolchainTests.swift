@@ -106,6 +106,43 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         clangVersion: clangVersion)
 }
 
+/// The real runner as a cancelled task sees it. Once the task is cancelled every command throws
+/// `CancellationError`. The command that `trigger` picks cancels the task, and either throws too
+/// or, with `answerFirst`, gives its answer first.
+private final class CancellingRunner: ProcessRunner, @unchecked Sendable {
+    private let inner: FakeProcessRunner
+    private let trigger: @Sendable ([String]) -> Bool
+    private let answerFirst: Bool
+
+    init(
+        _ inner: FakeProcessRunner, answerFirst: Bool = false,
+        cancelling trigger: @escaping @Sendable ([String]) -> Bool
+    ) {
+        self.inner = inner
+        self.answerFirst = answerFirst
+        self.trigger = trigger
+    }
+
+    func run(
+        _ executable: String, _ arguments: [String], environment: [String: String]?,
+        timeout: TimeInterval?
+    ) async throws -> ProcessResult {
+        try Task.checkCancellation()
+        guard trigger([executable] + arguments) else {
+            return try await inner.run(
+                executable, arguments, environment: environment, timeout: timeout)
+        }
+        if answerFirst {
+            let result = try await inner.run(
+                executable, arguments, environment: environment, timeout: timeout)
+            withUnsafeCurrentTask { $0?.cancel() }
+            return result
+        }
+        withUnsafeCurrentTask { $0?.cancel() }
+        throw CancellationError()
+    }
+}
+
 @Suite struct ToolchainTests {
     @Test func toolsAt26_6WithSDKs26_5And27_0Pick26_5AndNeverTry27_0() async {
         let mac = FakeMac()
@@ -581,6 +618,56 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         _ = await mac.detect()
         #expect(mac.probedSDKs.count == 2)
     }
+
+    // MARK: cancelling
+
+    /// Runs the check in a task of its own, which is the one the runner cancels.
+    private func detect(_ mac: FakeMac, with runner: any ProcessRunner) async -> ToolchainStatus {
+        await Task {
+            await Toolchain.detect(
+                runner: runner, fs: mac.fs, dataDirectory: data, cacheDirectory: cache)
+        }.value
+    }
+
+    @Test func aCheckCancelledDuringAQueryIsCancelledNotMissing() async {
+        let mac = FakeMac()
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX26.5.sdk", true)
+        let runner = CancellingRunner(mac.runner) { $0 == ["/usr/bin/xcrun", "--find", "make"] }
+
+        #expect(await detect(mac, with: runner) == .cancelled)
+        #expect(mac.fs.writes.isEmpty)
+    }
+
+    @Test func aCheckCancelledDuringTheProbeIsCancelledNotNoLinkableSDK() async {
+        // The generic SDK points at one the tools can't use, and 26.5 is the one that links.
+        let mac = FakeMac()
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.addSDK("MacOSX27.0.sdk")
+        mac.addSDKLink("MacOSX.sdk", to: "MacOSX27.0.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX26.5.sdk", true)
+        let generic = tools + "/SDKs/MacOSX27.0.sdk"
+        let runner = CancellingRunner(mac.runner) { mac.isProbe($0, against: generic) }
+
+        #expect(await detect(mac, with: runner) == .cancelled)
+        // The check got as far as the probe, and chose nothing and left nothing behind.
+        #expect(mac.probeWrites.count == 1)
+        #expect(!mac.fs.writes.contains { $0.path == data + "/toolchain.json" })
+        #expect(!mac.fs.fileExists(at: mac.probeWrites[0].path))
+    }
+
+    @Test func aCheckThatHadItsAnswerBeforeTheCancelKeepsIt() async throws {
+        let mac = FakeMac()
+        mac.addSDK("MacOSX26.5.sdk")
+        let chosen = cltToolchain(sdk: tools + "/SDKs/MacOSX26.5.sdk")
+        mac.fs.addFile(data + "/toolchain.json", try JSONEncoder().encode(chosen))
+        // The last command the check runs is the clang version, and the cache answers after it.
+        let runner = CancellingRunner(mac.runner, answerFirst: true) {
+            $0 == [tools + "/usr/bin/clang", "--version"]
+        }
+
+        #expect(await detect(mac, with: runner) == .ready(chosen))
+    }
 }
 
 @Suite struct ToolchainStatusJSONTests {
@@ -627,10 +714,15 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         #expect(ToolchainStatus.noLinkableSDK(tried: ["/a/b"]).json().contains("\"/a/b\""))
     }
 
+    @Test func cancelledIsJustAStatus() throws {
+        #expect(try parse(.cancelled) as NSDictionary == ["status": "cancelled"])
+    }
+
     @Test func onlyReadyIsReady() {
         #expect(ToolchainStatus.ready(cltToolchain(sdk: "/sdk")).isReady)
         #expect(!ToolchainStatus.missing.isReady)
         #expect(!ToolchainStatus.noLinkableSDK(tried: []).isReady)
         #expect(!ToolchainStatus.cantWriteProbe(path: "/p", error: "e").isReady)
+        #expect(!ToolchainStatus.cancelled.isReady)
     }
 }

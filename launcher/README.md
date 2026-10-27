@@ -32,6 +32,8 @@ The SDK is the first that compiles and links a C++ file that includes `<cstdio>`
 
 The probe's source goes in `~/Library/Caches/Dragoon` and comes out again after the probe. If it can't be written the status is `cantWriteProbe`, which names the path and the error. No SDK is blamed.
 
+A check whose task is canceled stops the command it's waiting on and gives `cancelled`, so a cancel never reads as missing tools or an SDK that doesn't link. A check that had its answer already keeps it.
+
 The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon`. It's used only while the developer directory and the tool paths match and the first line of `clang --version` hasn't changed. A different developer directory or tool path forces a probe too, and so does an SDK that's gone.
 
 ## The disc check

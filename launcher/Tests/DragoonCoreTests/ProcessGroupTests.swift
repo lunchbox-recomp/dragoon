@@ -215,7 +215,7 @@ import Testing
         check.cancel()
         let status = await check.value
         #expect(ContinuousClock.now - started < .seconds(8))
-        #expect(status == .missing)
+        #expect(status == .cancelled)
         #expect(await Processes.eventually { !Processes.groupExists(pgid) })
         #expect(await Processes.eventually { !Processes.exists(helper) })
         #expect(runner.commands == 1)
