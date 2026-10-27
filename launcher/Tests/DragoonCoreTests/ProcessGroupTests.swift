@@ -60,7 +60,8 @@ import Testing
         let result = try await SystemProcessRunner().run("/usr/bin/env", [], environment: nil)
         var seen: [String: String] = [:]
         for line in result.stdout.split(separator: "\n") {
-            let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
+            let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                .map(String.init)
             if parts.count == 2 { seen[parts[0]] = parts[1] }
         }
         let own = ProcessInfo.processInfo.environment
