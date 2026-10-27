@@ -8,8 +8,9 @@ from runs of the routes in `tests/routes/` through `tools/probe.sh`, read with
 The numbers were taken against gcn-recomp `deac351` with `--aspect` and `--dump-output`
 added, the change `6575c67` makes on the fork's `dragoon` branch. At `3a8d154`, the
 race's census at 4:3 and the kept widening's aspects and draws in the race, City Trial, 2P
-and 4P came out the same. The section "Measured at gcn-recomp `5e49451`" has them again on
-Dragoon `0ad99ed`, which widens the race's cameras after the finish too.
+and 4P came out the same. The section "Measured on Dragoon `a5bc2e2`" has them again at
+gcn-recomp `5e49451`, with the race's cameras after the finish and Top Ride's camera widened
+too.
 
 ## Taking the census
 
@@ -89,10 +90,11 @@ The HUD's calls to the library come from `fn_801158C0`, `fn_801159C0`, `fn_80115
 `fn_8013A6AC`, beside the menus' `fn_801394B0`. The two calls of the camera module and the
 four of the library are the rule `src/cameras.h` keys on.
 
-After the race's finish line the world cameras get their aspect from the library alone. At
-gcn-recomp `3a8d154`, from frame 8,183 to 13,062, the full-screen ones stored 1.25538 at 16:9.
-At `5e49451`, `drawlog.py setters` showed the camera drawn at frame 8,400 getting its aspect
-only at frame 8,092 from the first two calls in the table, never from the module.
+After the race's finish line the world camera that's drawn gets its aspect from the library
+alone. At gcn-recomp `3a8d154`, from frame 8,183 to 13,062, the full-screen world cameras
+stored 1.25538 at 16:9. On Dragoon `a5bc2e2` at a load of about 4.5, `drawlog.py setters`
+showed the camera drawn at frame 8,400 getting its aspect only at frame 8,092 from the first
+two calls in the table, never from the module.
 
 A camera's address won't do as a rule, because one address can hold different cameras over a
 run. In the race, the address of a HUD 3D camera at frame 4200 belonged to a world camera at
@@ -248,27 +250,32 @@ tools/probe.sh readers 300 tests/routes/air-ride-race.txt 100000 --aspect=16:9 G
 the path is absolute. Configure again with `-DCMAKE_C_FLAGS=` and `-DCMAKE_CXX_FLAGS=` for the
 usual build.
 
-## Measured at gcn-recomp `5e49451`
+## Measured on Dragoon `a5bc2e2`
 
-These runs are from Dragoon `0ad99ed` at a load of about 16. The 4:3 counts before the finish
-are from `0178975`, where the widening was already the identity at 4:3. Each of those
-checkpoints' frame dumps at 16:9 is the same on both commits, so the library's calls change
-nothing before the finish.
+These runs are from Dragoon `a5bc2e2` at gcn-recomp `5e49451`, two at a time, at 1-minute loads
+of 2.7 to 6.3. Each checkpoint ran at 4:3 and at 16:9 on the same build.
 
 | Checkpoint | World draws at 4:3 | At 16:9 | World aspect at 16:9 | Steady over frames |
 |---|---|---|---|---|
 | Race, 4200 | 204 | 217 | 1.67383 | 3,600 to 4,199 |
 | Race after the finish, 8400 | 124 | 124 | 1.67383 | 8,183 to 13,062 |
-| City Trial, 3300 | 371 | 376 | 1.67383 | 2,733 to 3,299 |
+| City Trial, 3300 | 371 | 376 | 1.67383 | 2,733 to 3,332 |
 | 2P, 3480 | 103 and 211 | 106 and 211 | 2.97524 | 2,880 to 3,479 |
 | 4P, 3480 | 104, 207, 291 and 205 | 107, 207, 304 and 205 | 1.85892 | 2,880 to 3,479 |
+| Top Ride on Grass, 3600 | 198 | 198 | 1.57333 | 3,234 to 3,833 |
 
-Each world camera's aspect is its 4:3 one times 4/3 to three figures. Every HUD 3D, minimap
-and menu camera kept its 4:3 aspect. Every call of the six that widen was given its 4:3
-aspect, so none widened an aspect twice.
+City Trial's world camera is made at frame 2,733 and Top Ride's is loaded at 3,234, so their
+windows start there. Each runs 600 frames, past the checkpoint, in runs at 16:9 to frames
+3,340 and 3,900.
 
-The race's results frame at 25,800 is the same at 16:9 on `0ad99ed` as at 4:3 on `0178975`,
-so the race still finishes in 1:14.68. From frame 13,063 on, no world camera is in the census.
+Each world camera's aspect is its 4:3 one times 4/3 to five figures. Every HUD 3D, minimap
+and menu camera kept its 4:3 aspect. Every call of the six that widen was given its 4:3 aspect,
+as was Top Ride's load, so none widened an aspect twice.
+
+The race's results frame at 25,800 is the same at 16:9 as at 4:3, so the race still finishes
+in 1:14.68. Of the frames dumped every 600 from 8,400, only those up to 12,600 differ, while
+the world camera after the finish is drawn. From frame 13,063 on, no world camera is in the
+census.
 
 ## What 16:9 still gets wrong
 

@@ -155,7 +155,7 @@ need `--pads=4`.
 Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
 frame 25,800. That's from gcn-recomp `deac351` with the aspect change (`widescreen.md`), and
 it showed 1:12.60 when this was first written, at `7d30377`. At `5e49451` its results frame
-at 16:9 on Dragoon `0ad99ed`, run at a load of 16, is the same as at 4:3 on `0178975`.
+on Dragoon `a5bc2e2` is the same at 16:9 as at 4:3, run at loads of 4.5 to 6.1.
 
 City Trial with nobody steering drives into the sea and stays there while the clock runs. The
 opening movie, when it isn't skipped, plays to the end and hands over to the title and the
