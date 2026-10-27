@@ -150,6 +150,8 @@ When no line is left, `setters` says so on stderr. A camera whose aspect the gam
 
 The two runs' HUD draws pair by projection kind, textures and order. An anchored pair fails when its width, its height or its distance to its rect's anchored edge moves by more than 1 display pixel at 480 high. It also fails when it overhangs its view by more than it did at 4:3, its view being the world view its 4:3 box sits in or else the screen.
 
+A marker over a kart or an item is centered on a rect of no width at its own place, which moves with the wider world, so its rect may differ between the runs. A marker with no match passes too, since the wider world shows a different set of karts and items.
+
 Each line gives both boxes in display pixels. With `DRAGOON_CENSUS=1` it also names the render callback that made the draw, from the census's draw tags. Pairs with no anchor at either aspect are listed as stretched and don't fail.
 
 `hud_boxes.py` holds the check, and `drawlines.py` reads the draw log's lines for both.

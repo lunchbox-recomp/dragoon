@@ -13,19 +13,26 @@ kind, textures and order.
 
 An anchored pair passes when its width, its height and its distance to the anchored edge of its
 rect each come within 1 pixel of 4:3's, in display pixels at 480 high. A centered draw's distance
-is from the rect's middle to its own. No side of the box may stick out of its view by more than 1
-pixel more than at 4:3 either. Its view is the smallest world view its whole 4:3 box sits in, or
-else the screen. The world views are the viewports of OLD's draws whose projection NEW doesn't
-have, which are the ones that widened.
+is from the rect's middle to its own. Its anchor and rect must be the same at both aspects, but a
+draw centered on a rect of no width is a marker centered on its own place, which may move with
+the wider world.
+
+No side of the box may stick out of its view by more than 1 pixel more than at 4:3 either. Its
+view is the smallest world view its whole 4:3 box sits in, or else the screen. The world views
+are the viewports of OLD's draws whose projection NEW doesn't have, which are the ones that
+widened.
 
 A pair with no anchor at either aspect is listed as stretched, and passes. A HUD draw that
-pairs with none is left out unless it has an anchor, and then it fails.
+pairs with none is left out unless it has an anchor, and then it fails. A marker with no match is
+listed and passes, since the wider world shows a different set of karts and items.
 
 Each line gives the two draws' indices, the projection kind, the anchor and the textures by
 content hash (copy for an EFB copy). In a run with DRAGOON_CENSUS=1, the render callback that
 made the draw follows. Both boxes in display pixels come next, then ok, stretched or FAIL with
-the reasons. The last line counts them. Exits 0 when no anchored draw fails, 1 when one does and 2 on
-a bad argument or a log it can't read or that lacks the lines it needs.
+the reasons.
+
+The last line counts them. Exits 0 when no anchored draw fails, 1 when one does and 2 on a bad argument or a log it can't
+read or that lacks the lines it needs.
 """
 from __future__ import annotations
 
@@ -177,9 +184,15 @@ def edge_distance(anchor: str, rect: tuple[float, float], box: Box) -> float:
     return (box[0] + box[1]) / 2 - (rect[0] + rect[1]) / 2
 
 
+def follows(d: HudDraw) -> bool:
+    """Centered on a rect of no width: a marker centered on its own place, which moves with the
+    wider world."""
+    return d.anchor == "C" and d.rect is not None and d.rect[0] == d.rect[1]
+
+
 def faults(old: HudDraw, new: HudDraw, scale: float, label: str, views: list[Rect]) -> list[str]:
     """What keeps NEW, at `scale` display pixels to an EFB pixel across, from holding OLD's box."""
-    if (old.anchor, old.rect) != (new.anchor, new.rect):
+    if old.anchor != new.anchor or (old.rect != new.rect and not (follows(old) and follows(new))):
         return [f"anchor {old.anchor_text} at 4:3, {new.anchor_text} at {label}"]
     if old.box is None or new.box is None:
         return [] if old.box == new.box else [f"no box at {'4:3' if old.box is None else label}"]
@@ -268,6 +281,9 @@ def hud(args) -> int:
         anchored += 1
         if o and n:
             found = faults(o, n, scale, args.aspect, views)
+        elif follows(o or n):
+            print(f"{text}  ok, a marker with no match")
+            continue
         else:
             found = [f"no match at {args.aspect if o else '4:3'}"]
         failed += bool(found)

@@ -255,6 +255,40 @@ class HudCommandTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(line.endswith("FAIL anchor R(0..640) at 4:3, R(320..640) at 16:9"), line)
 
+    def test_marker_centered_on_its_own_point_may_follow_the_world(self):
+        code, line = self.one_draw(draw(1, "320.0..360.0,100.0..140.0", "C(340..340)"),
+                                   draw(1, "285.0..315.0,100.0..140.0", "C(300..300)"))
+        self.assertEqual(code, 0)
+        self.assertTrue(line.endswith("16:9 380.0..420.0,100.0..140.0  ok"), line)
+
+    def test_marker_off_its_point_fails(self):
+        code, line = self.one_draw(draw(1, "320.0..360.0,100.0..140.0", "C(340..340)"),
+                                   draw(1, "290.0..320.0,100.0..140.0", "C(300..300)"))
+        self.assertEqual(code, 1)
+        self.assertTrue(line.endswith("FAIL middle 0.0 to 6.7"), line)
+
+    def test_marker_with_no_match_passes(self):
+        code, out, _ = self.hud([*world(0, WORLD), draw(1, "320.0..360.0,100.0..140.0", "C(340..340)")],
+                                [*world(0, WIDE_WORLD), draw(1, "285.0..315.0,100.0..140.0", "C(300..300)",
+                                                             tex=OTHER_TEX)])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            "1> ortho C(340..340) 00000000deadbeef  4:3 320.0..360.0,100.0..140.0  ok, a marker with no match",
+            ">1 ortho C(300..300) 00000000cafef00d  16:9 380.0..420.0,100.0..140.0  ok, a marker with no match",
+            "anchored 2  failed 0  stretched 0"])
+
+    def test_edge_anchor_on_a_rect_of_no_width_is_no_marker(self):
+        code, line = self.one_draw(draw(1, "320.0..360.0,100.0..140.0", "L(340..340)"),
+                                   draw(1, "285.0..315.0,100.0..140.0", "L(300..300)"))
+        self.assertEqual(code, 1)
+        self.assertTrue(line.endswith("FAIL anchor L(340..340) at 4:3, L(300..300) at 16:9"), line)
+
+    def test_point_at_one_aspect_only_fails(self):
+        code, line = self.one_draw(draw(1, "320.0..360.0,100.0..140.0", "C(340..340)"),
+                                   draw(1, "395.0..425.0,100.0..140.0", "C(0..640)"))
+        self.assertEqual(code, 1)
+        self.assertTrue(line.endswith("FAIL anchor C(340..340) at 4:3, C(0..640) at 16:9"), line)
+
     def test_draw_anchored_at_one_aspect_only_fails(self):
         code, line = self.one_draw(draw(1, anchor="S"), draw(1, "552.2..632.5,35.0..115.0"))
         self.assertEqual(code, 1)
