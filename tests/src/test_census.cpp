@@ -67,6 +67,64 @@ TEST(AmnesiaLine, ShowsTheFrame) {
     EXPECT_EQ(dragoon::amnesia_line(4294967295u), "[amnesia] f=4294967295");
 }
 
+TEST(TagLine, ShowsTheFrameTheTagAndTheCallback) {
+    EXPECT_EQ(dragoon::tag_line(4200, 3, 0x8011F8F4), "[cbtag] f=4200 n=3 cb=8011F8F4");
+    EXPECT_EQ(dragoon::tag_line(4294967295u, 255, 0x00000040), "[cbtag] f=4294967295 n=255 cb=00000040");
+}
+
+TEST(CallbackTags, TagsGoOutInOrderFromOne) {
+    dragoon::CallbackTags tags;
+    bool fresh = false;
+    EXPECT_EQ(tags.enter(0x8011F8F4, &fresh), 1);
+    EXPECT_TRUE(fresh);
+    EXPECT_EQ(tags.leave(), dragoon::CallbackTags::kNone);
+    EXPECT_EQ(tags.enter(0x801206A0, &fresh), 2);
+    EXPECT_TRUE(fresh);
+}
+
+TEST(CallbackTags, ACallbackKeepsItsTag) {
+    dragoon::CallbackTags tags;
+    bool fresh = false;
+    tags.enter(0x8011F8F4, &fresh);
+    tags.leave();
+    tags.enter(0x801206A0, &fresh);
+    tags.leave();
+    EXPECT_EQ(tags.enter(0x8011F8F4, &fresh), 1);
+    EXPECT_FALSE(fresh);
+}
+
+TEST(CallbackTags, ANestedCallbackGivesTheOuterTagBack) {
+    dragoon::CallbackTags tags;
+    bool fresh = false;
+    tags.enter(0x8011586C, &fresh);
+    EXPECT_EQ(tags.enter(0x8011F8F4, &fresh), 2);
+    EXPECT_EQ(tags.enter(0x801206A0, &fresh), 3);
+    EXPECT_EQ(tags.leave(), 2);
+    EXPECT_EQ(tags.leave(), 1);
+    EXPECT_EQ(tags.leave(), dragoon::CallbackTags::kNone);
+}
+
+TEST(CallbackTags, AReturnWithNoCallGivesNone) {
+    dragoon::CallbackTags tags;
+    EXPECT_EQ(tags.leave(), dragoon::CallbackTags::kNone);
+    bool fresh = false;
+    EXPECT_EQ(tags.enter(0x8011F8F4, &fresh), 1);
+}
+
+TEST(CallbackTags, PastTheLastTagACallbackGetsNone) {
+    dragoon::CallbackTags tags;
+    bool fresh = false;
+    for (uint32_t cb = 0; cb < 255; cb++) {
+        EXPECT_EQ(tags.enter(0x80001000 + 4 * cb, &fresh), cb + 1);
+        tags.leave();
+    }
+    EXPECT_EQ(tags.enter(0x80002000, &fresh), dragoon::CallbackTags::kNone);
+    EXPECT_FALSE(fresh);
+    tags.leave();
+    EXPECT_EQ(tags.enter(0x80001000, &fresh), 1);
+    EXPECT_EQ(tags.enter(0x80001000 + 4 * 254, &fresh), 255);
+}
+
 TEST(OncePerFrame, RepeatInAFrameIsDropped) {
     dragoon::OncePerFrame once;
     EXPECT_TRUE(once.first(5, "a"));

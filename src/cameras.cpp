@@ -6,6 +6,7 @@
 #include "cameras.h"
 #include "census.h"
 #include "guest_memory.h"
+#include "hud_anchors.h"
 #include "gx/render.h"
 #include <cmath>
 
@@ -55,8 +56,10 @@ uint32_t callers_return_address(uint32_t sp) {
 extern "C" void hle_HSD_CObjSetAspect(CPU* c) {
     const uint32_t cobj = c->r[3], lr = c->lr, lr2 = callers_return_address(c->r[1]);
     const float given = (float)c->f[1].d, output = gx::output_aspect();
-    if (dragoon::sets_world_aspect(lr, lr2)) c->f[1].d = dragoon::widened_aspect(given, output);
+    const bool world = dragoon::sets_world_aspect(lr, lr2);
+    if (world) c->f[1].d = dragoon::widened_aspect(given, output);
     orig_HSD_CObjSetAspect(c);
+    if (world) dragoon::hud_world_view(cobj);
     if (dragoon::sets_up_world_camera(lr, lr2)) g_set_once.add(cobj, given, output, stored_aspect);
     dragoon::census_aspect(cobj, lr, lr2, given);
 }

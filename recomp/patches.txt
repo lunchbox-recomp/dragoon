@@ -6,5 +6,11 @@
 # watch the recompiler puts after it.
 80401150 { void dragoon_cameras_follow(void); void dragoon_census_camera(uint32_t); dragoon_cameras_follow(); dragoon_census_camera(c->r[3]); } { uint32_t ea = (c->r[1] + (uint32_t)-336); ST32(ea, c->r[1]); c->r[1] = ea; } WATCH_STORE(0x80401150u, c->r[1]);
 # GObj_SetTextureCamera, before it calls an object's render callback, r24 the object and r12
-# the callback, for the camera census. Restates the move of the callback to ctr.
-8042A13C { void dragoon_census_draw(uint32_t, uint32_t); dragoon_census_draw(c->r[24], c->r[12]); } c->ctr = c->r[12];
+# the callback, for the camera census and the HUD anchors (src/hud_anchors.cpp). Restates the
+# move of the callback to ctr.
+8042A13C { void dragoon_census_draw(uint32_t, uint32_t); void dragoon_hud_enter(uint32_t); dragoon_census_draw(c->r[24], c->r[12]); dragoon_hud_enter(c->r[12]); } c->ctr = c->r[12];
+# GObj_SetTextureCamera, once the render callback returns, for the camera census and the HUD
+# anchors. Restates the store that puts back the object that was drawing, r25, in
+# hsdGObj_current_render, written at its small-data address (0x805DE31C), and the store watch
+# after it.
+8042A144 { void dragoon_census_drawn(void); void dragoon_hud_leave(void); dragoon_census_drawn(); dragoon_hud_leave(); } ST32(0x805DE31Cu, c->r[25]); WATCH_STORE(0x8042A144u, 0x805DE31Cu);
