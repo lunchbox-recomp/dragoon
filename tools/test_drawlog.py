@@ -326,6 +326,15 @@ class SettersCommandTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("from 800C2884  called from 80066E50 fn_B+0x4  given", out)
 
+    def test_a_call_just_past_a_function_in_a_gap_is_left_unnamed(self):
+        symbols = str(write_file(self.dir, "symbols.txt",
+                                 "fn_A = .text:0x80001000; // type:function size:0x10\n"
+                                 "fn_B = .text:0x80001020; // type:function size:0x10\n"))
+        lines = [setter(100, lr="80001014", lr2="80001010")]
+        code, out, _ = run_main(drawlog.main, "setters", self.log(*lines), "--symbols", symbols)
+        self.assertEqual(code, 0)
+        self.assertIn("from 80001014  called from 80001010 fn_A+0x10  given", out)
+
     def test_a_function_with_no_size_ends_at_the_next(self):
         symbols = str(write_file(self.dir, "symbols.txt",
                                  "fn_A = .text:0x80066E00;\n"
