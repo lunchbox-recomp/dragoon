@@ -43,11 +43,12 @@ SHA-256 of the `src/` it was built from, and the launcher takes it only for a so
 with the same two.
 
 The hooks read guest memory through the runtime's `mem_r32` and friends, and the output
-aspect through `gx::output_aspect()`. Each one does nothing unless its `DRAGOON_*`
-environment variable is set, so the game runs as it always has without them.
+aspect through `gx::output_aspect()`. The census hooks do nothing unless `DRAGOON_CENSUS` is
+set. The world camera widening is always on, and at 4:3 it leaves every aspect as the game
+set it, so the game runs there as it always has.
 
 `tools/probe.sh` passes `DRAGOON_*=value` settings through to the game.
-`docs/dev/widescreen.md` covers the two that exist, `DRAGOON_CENSUS` and `DRAGOON_WIDEN`.
+`docs/dev/widescreen.md` covers the one that exists, `DRAGOON_CENSUS`.
 
 ## Nothing from the disc
 
