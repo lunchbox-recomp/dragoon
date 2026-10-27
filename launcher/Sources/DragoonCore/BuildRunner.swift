@@ -214,6 +214,12 @@ public final class BuildRunner: @unchecked Sendable {
             failure = Self.failure(for: outcome, state, logPath, write)
         } catch is CancellationError {
             failure = .cancelled
+        } catch let lost as ProcessWaitFailure {
+            stdout.flush()
+            stderr.flush()
+            let message = "the recipe's exit couldn't be read (error \(lost.code))"
+            write("[launcher] " + message)
+            failure = .failed(step: nil, message: message, log: logPath)
         } catch {
             failure = .couldNotStart(error.localizedDescription)
         }
