@@ -169,17 +169,15 @@ def read_symbols(path: Path) -> dict[int, str]:
 
 
 def read_functions(path: Path) -> list[tuple[int, int, str]]:
-    """Each function's start, end and name, by start. One with no size ends where the next
-    one starts."""
+    """Each function's start, end and name, by start. One with no size has no end, so an
+    address is its until the next function starts."""
     found = []
     with path.open() as lines:
         for line in lines:
             if m := SYMBOL.match(line):
                 start = int(m[2], 16)
-                found.append((start, start + int(m[3], 16) if m[3] else None, m[1]))
-    found.sort(key=lambda f: f[0])
-    return [(start, end if end is not None else (found[i + 1][0] if i + 1 < len(found) else 2**32), name)
-            for i, (start, end, name) in enumerate(found)]
+                found.append((start, start + int(m[3], 16) if m[3] else 2**32, m[1]))
+    return sorted(found, key=lambda f: f[0])
 
 
 def _unique(values) -> list:
