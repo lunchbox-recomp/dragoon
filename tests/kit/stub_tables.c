@@ -16,3 +16,5 @@ void orig_HSD_CObjSetAspect(CPU* c) { (void)c; }
 void orig_HSD_CObjLoadDesc(CPU* c) { (void)c; }
 void orig_CObjRelease(CPU* c) { (void)c; }
 void orig_CObjAmnesia(CPU* c) { (void)c; }
+/* src/hud_anchors.cpp's joint hook calls the original body too. */
+void orig_HSD_JObjDispAll(CPU* c) { (void)c; }
