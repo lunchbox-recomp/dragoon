@@ -24,14 +24,18 @@ enum ProcessGroup {
     /// given up on.
     private static let abandonDelay: TimeInterval = 1
 
+    /// Seconds between looks at whether a group being stopped is empty yet.
+    private static let groupCheckInterval: TimeInterval = 0.02
+
     /// Runs `executable` and hands what it prints to `onStdout` and `onStderr` as it arrives, each
     /// from a thread of its own. Returns once the process has exited and both pipes have closed.
     ///
     /// A process still running after `timeout` seconds, or one that left something running that
-    /// holds a pipe, is sent SIGKILL together with its group. Cancelling the calling task sends
+    /// holds a pipe, is sent SIGKILL together with its group. Canceling the calling task sends
     /// the group SIGTERM, then SIGKILL `killGrace` seconds later if anything is left. Either way
-    /// the outcome says so after the group is gone. Throws when the process can't be started, or
-    /// `CancellationError` when the task was cancelled before it started.
+    /// this returns only once the group holds nothing but the exited process, or a second after
+    /// the SIGKILL, and the outcome says what stopped it. Throws when the process can't be
+    /// started, or `CancellationError` when the task was canceled before it started.
     static func run(
         _ executable: String, _ arguments: [String], environment: [String: String]?,
         timeout: TimeInterval?, killGrace: TimeInterval = ProcessGroup.killGrace,
@@ -74,6 +78,7 @@ enum ProcessGroup {
         var info = siginfo_t()
         while waitid(P_PID, id_t(child.pid), &info, WEXITED | WNOWAIT) < 0, errno == EINTR {}
         control.awaitReaders()
+        control.awaitGroupEmpty()
         return control.reap()
     }
 
@@ -216,6 +221,34 @@ enum ProcessGroup {
                 } else {
                     condition.wait()
                 }
+            }
+        }
+
+        /// After a SIGTERM or a SIGKILL has gone out, waits until nothing but the exited leader
+        /// is left in the group, or until a second after the SIGKILL. The leader stays
+        /// uncollected meanwhile, so its pid can't be reused while the timer can still fire.
+        /// A group nobody has tried to stop is left alone.
+        func awaitGroupEmpty() {
+            condition.lock()
+            defer { condition.unlock() }
+            while cancelled || killSentAt != nil {
+                if !othersInGroup() { return }
+                if let sent = killSentAt, Date() >= sent.addingTimeInterval(ProcessGroup.abandonDelay) {
+                    return
+                }
+                _ = condition.wait(until: Date().addingTimeInterval(ProcessGroup.groupCheckInterval))
+            }
+        }
+
+        /// Whether any process but the leader itself is in the leader's group.
+        private func othersInGroup() -> Bool {
+            var members = [pid_t](repeating: 0, count: 1024)
+            let bytes = members.withUnsafeMutableBytes {
+                proc_listpids(UInt32(PROC_PGRP_ONLY), UInt32(pid), $0.baseAddress, Int32($0.count))
+            }
+            guard bytes > 0 else { return false }
+            return members.prefix(Int(bytes) / MemoryLayout<pid_t>.size).contains {
+                $0 != 0 && $0 != pid
             }
         }
 
