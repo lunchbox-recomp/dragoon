@@ -22,7 +22,9 @@ import Testing
         #expect(run.effects == [])
     }
 
-    @Test(arguments: MoveReason.refusedCharacters)
+    /// The kit's Makefile refuses these five, so the cases are listed here rather than taken
+    /// from the code under test.
+    @Test(arguments: ["$", "\"", "`", ":", ";"] as [Character])
     func aPathHoldingACharacterTheKitRefusesAsksToBeMoved(character: Character) {
         let path = flowHome + "/Apps \(character) Games/Dragoon.app"
         var run = launched(appPath: path)
