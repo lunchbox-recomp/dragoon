@@ -469,7 +469,9 @@ Before the swap nothing in `<data>` changes but the new `game/<id>`. A build tha
 
 Once `game/current` points at the new build, the build has succeeded, so a `--log` line the recipe can't write afterward is lost and fails nothing. A shader cache file that can't be installed afterward is a `warning` event, and the run still prints `done` and exits 0 with that file left as it was. When only the stamp can't be installed, the new cache stays beside the old stamp, so the next build warms again.
 
-A SIGTERM, which is how the launcher cancels, exits 143 once the running step has cleaned up. It leaves no half-made `game/<id>` and no temp file in `saves/`, and one that lands after the swap leaves the new game current. A SIGTERM that lands just after the swap makes its `.current.<pid>.partial` link can leave that link, and the next swap removes it.
+A SIGTERM, which is how the launcher cancels, exits 143 once the running step has cleaned up. It leaves no half-made `game/<id>` and no temp file in `saves/`, and one that lands after the swap leaves the new game current.
+
+The swap makes a temporary link, `.current.<pid>.partial`, in `<data>/game` and renames it over `game/current`. A SIGTERM that lands right after the link is made can leave it there, and the next swap removes it.
 
 A second build while one runs exits 3 at `<cache>/build.lock` without touching anything, its `--log` included. A kit whose `kit.mk` names a gcn-recomp commit other than the one in the snapshot's `source-info.json` or a `src/` digest other than the snapshot's, or names none, exits 2 the same way, with an error event at step `kit`. Its `engine.o` and headers wouldn't match the generated C.
 
