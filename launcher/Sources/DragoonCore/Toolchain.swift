@@ -35,6 +35,9 @@ public enum ToolchainStatus: Equatable, Sendable {
     case missing
     /// The tools are there, but no SDK compiled and linked the probe. `tried` lists each one.
     case noLinkableSDK(tried: [String])
+    /// The probe's source file couldn't be written at `path`, so no SDK was tried. `error` says
+    /// why.
+    case cantWriteProbe(path: String, error: String)
     case ready(Toolchain)
 }
 
@@ -44,7 +47,7 @@ extension ToolchainStatus {
         return false
     }
 
-    /// The status as JSON, keyed by `status` and then `tried` or `toolchain`.
+    /// The status as JSON, keyed by `status` and then by what that status carries.
     public func json() -> String {
         String(decoding: encodeJSON(self), as: UTF8.self)
     }
@@ -52,7 +55,7 @@ extension ToolchainStatus {
 
 extension ToolchainStatus: Encodable {
     private enum Keys: String, CodingKey {
-        case status, tried, toolchain
+        case status, tried, path, error, toolchain
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -63,6 +66,10 @@ extension ToolchainStatus: Encodable {
         case .noLinkableSDK(let tried):
             try container.encode("noLinkableSDK", forKey: .status)
             try container.encode(tried, forKey: .tried)
+        case .cantWriteProbe(let path, let error):
+            try container.encode("cantWriteProbe", forKey: .status)
+            try container.encode(path, forKey: .path)
+            try container.encode(error, forKey: .error)
         case .ready(let toolchain):
             try container.encode("ready", forKey: .status)
             try container.encode(toolchain, forKey: .toolchain)
@@ -144,7 +151,11 @@ private struct Detection {
 
         if let cached = cachedChoice(for: toolchain) { return .ready(cached) }
 
-        try? fs.writeData(Data(Self.probeSource.utf8), to: probePath)
+        do {
+            try fs.writeData(Data(Self.probeSource.utf8), to: probePath)
+        } catch {
+            return .cantWriteProbe(path: probePath, error: error.localizedDescription)
+        }
         var tried: [String] = []
         func links(_ sdk: String) async -> Bool {
             if tried.contains(sdk) { return false }
