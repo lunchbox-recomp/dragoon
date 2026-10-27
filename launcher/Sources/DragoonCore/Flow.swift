@@ -61,7 +61,7 @@ extension Flow.State {
             guard case .disc = screen, waiting == nil else { return [] }
             return [.openDiscPanel]
         case .changeDiscPressed:
-            guard screen == .library, waiting == nil else { return [] }
+            guard libraryIsIdle else { return [] }
             return [.openDiscPanel]
         case .discChosen(let path, let bookmark):
             guard choosesDisc, let source else { return [] }
@@ -105,7 +105,7 @@ extension Flow.State {
             default: return []
             }
         case .rebuildPressed:
-            guard canPlayOrRebuild else { return [] }
+            guard libraryIsIdle else { return [] }
             return begin(.build)
         case .spaceChecked(let space):
             guard waiting == .space else { return [] }
@@ -154,7 +154,7 @@ extension Flow.State {
             return [.showLog(log)]
 
         case .playPressed:
-            guard canPlayOrRebuild else { return [] }
+            guard libraryIsIdle else { return [] }
             gameProblem = nil
             return begin(.play)
         case .rebuildLaterPressed:
@@ -164,13 +164,10 @@ extension Flow.State {
             return screen == .library ? [.showSaves] : []
         case .backToLibraryPressed:
             return canGoBackToLibrary ? showLibrary() : []
-        case .gameStarted:
-            gameRunning = true
-            return []
         case .gameExited(let status, let panic):
-            gameRunning = false
-            gameProblem = status == 0 ? nil : GameProblem(status: status, panic: panic)
-            return deleteOldBuildsIfIdle()
+            return gameStopped(status == 0 ? nil : .exited(status: status, panic: panic))
+        case .gameCouldNotStart(let reason):
+            return gameStopped(.couldNotStart(reason: reason))
         }
     }
 
@@ -206,6 +203,12 @@ extension Flow.State {
 
     private func deleteOldBuildsIfIdle() -> [Effect] {
         installed != nil && !gameRunning && waiting != .build ? [.deleteOldBuilds] : []
+    }
+
+    private mutating func gameStopped(_ problem: GameProblem?) -> [Effect] {
+        gameRunning = false
+        gameProblem = problem
+        return deleteOldBuildsIfIdle()
     }
 
     // MARK: - Tools
@@ -269,6 +272,7 @@ extension Flow.State {
         case .play:
             intent = nil
             screen = .library
+            gameRunning = true
             return [.play(disc: path)]
         case .build:
             screen = .build(.preparing)

@@ -52,6 +52,8 @@ extension Flow {
         public var installed: InstalledGame?
         public var intent: Intent?
         public var waiting: Waiting?
+        /// The game is starting or running, from the `play` effect until `gameExited` or
+        /// `gameCouldNotStart`.
         public var gameRunning = false
         /// How the last game run ended, when it ended badly.
         public var gameProblem: GameProblem?
@@ -63,8 +65,9 @@ extension Flow {
         /// Whether a result is on its way, so the window's buttons wait for it.
         public var isBusy: Bool { waiting != nil }
 
-        /// Whether Library's Play and Rebuild do anything now.
-        public var canPlayOrRebuild: Bool { screen == .library && waiting == nil && !gameRunning }
+        /// Whether Library's Play, Rebuild and Change Disc do anything now, which needs no result
+        /// on its way and no game running.
+        public var libraryIsIdle: Bool { screen == .library && waiting == nil && !gameRunning }
 
         /// Whether a step can go back to Library, which needs a game and no build running.
         public var canGoBackToLibrary: Bool {

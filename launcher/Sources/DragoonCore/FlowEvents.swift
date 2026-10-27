@@ -61,8 +61,9 @@ extension Flow {
         /// The build's stream ended, with nil when the new game is current.
         case buildEnded(BuildFailure?)
         case logTailRead(path: String, lines: [String])
-        case gameStarted
         case gameExited(status: Int32, panic: String?)
+        /// `play` couldn't start the game, and `reason` says why.
+        case gameCouldNotStart(reason: String)
     }
 
     /// What the app does for the flow. Each result comes back as an event.
@@ -92,7 +93,8 @@ extension Flow {
         case readLogTail(String)
         case copyLog(String)
         case showLog(String)
-        /// Starts the current game with the disc at `disc`.
+        /// Starts the current game with the disc at `disc`, which gives `gameExited` once the
+        /// game exits, or `gameCouldNotStart`.
         case play(disc: String)
         case showSaves
         /// `OldBuilds.delete`, sent only while no game and no build is running.

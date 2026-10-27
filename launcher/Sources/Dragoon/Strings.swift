@@ -156,8 +156,14 @@ enum Strings {
     static let panicHeading = "The game wrote this in panic.txt"
 
     static func gameFailed(_ problem: GameProblem) -> String {
-        "The game quit with exit code \(problem.status)."
+        switch problem {
+        case .exited(let status, _): return "The game quit with exit code \(status)."
+        case .couldNotStart(let reason): return "The game couldn't start. \(reason)"
+        }
     }
+
+    /// Why Play doesn't start the game in this version.
+    static let playNotWiredUp = "This version of Dragoon doesn't launch the game."
 
     // MARK: - Sizes
 

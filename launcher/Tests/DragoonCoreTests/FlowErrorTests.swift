@@ -176,21 +176,48 @@ import Testing
     /// The game exited with an error: the exit code and `panic.txt` when the runtime wrote one.
     @Test func aGameThatExitedWithAnErrorShowsItsCodeAndPanic() {
         var run = launched()
-        run.send(.gameStarted)
-        #expect(run.state.gameRunning)
-        #expect(!run.state.canPlayOrRebuild)
-        #expect(run.send(.playPressed) == [])
-        #expect(run.send(.rebuildPressed) == [])
+        _ = run.send(playToStarting)
         #expect(run.send(.gameExited(status: 134, panic: "unmapped read at 0x80001234"))
             == [.deleteOldBuilds])
-        #expect(run.state.gameProblem == GameProblem(status: 134, panic: "unmapped read at 0x80001234"))
+        #expect(!run.state.gameRunning)
+        #expect(run.state.gameProblem == .exited(status: 134, panic: "unmapped read at 0x80001234"))
         // Playing again clears it, and so does a clean exit.
         run.send(.playPressed)
         #expect(run.state.gameProblem == nil)
+        _ = run.send(Array(playToStarting.dropFirst()))
         run.send(.gameExited(status: 2, panic: nil))
-        #expect(run.state.gameProblem == GameProblem(status: 2, panic: nil))
+        #expect(run.state.gameProblem == .exited(status: 2, panic: nil))
+        _ = run.send(playToStarting)
         run.send(.gameExited(status: 0, panic: nil))
         #expect(run.state.gameProblem == nil)
+    }
+
+    /// The game is counted as running from the moment Play starts it, so Play, Rebuild and
+    /// Change Disc wait until it exits.
+    @Test func aGameThatsStartingKeepsLibrarysButtonsOff() {
+        var run = launched()
+        #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
+        run.send(.bookmarkResolved(.found(flowDisc)))
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc)])
+        #expect(run.screen == .library)
+        #expect(run.state.gameRunning)
+        #expect(!run.state.libraryIsIdle)
+        #expect(run.send(.playPressed) == [])
+        #expect(run.send(.rebuildPressed) == [])
+        #expect(run.send(.changeDiscPressed) == [])
+        #expect(run.send(.gameExited(status: 0, panic: nil)) == [.deleteOldBuilds])
+        #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
+    }
+
+    /// A game that couldn't start: why, on Library, with Play and Rebuild on again.
+    @Test func aGameThatCouldntStartSaysWhy() {
+        var run = launched()
+        _ = run.send(playToStarting)
+        #expect(run.send(.gameCouldNotStart(reason: "Dragoon.app is damaged")) == [.deleteOldBuilds])
+        #expect(run.screen == .library)
+        #expect(!run.state.gameRunning)
+        #expect(run.state.gameProblem == .couldNotStart(reason: "Dragoon.app is damaged"))
+        #expect(run.send(.rebuildPressed) == [.checkSpace])
     }
 
     /// Running from Downloads or a DMG: move Dragoon to Applications first.
@@ -224,6 +251,7 @@ import Testing
         run.send(.bookmarkResolved(.found(flowDisc)))
         #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc)])
         #expect(run.state.installed == old)
+        run.send(.gameExited(status: 0, panic: nil))
         #expect(run.send(.rebuildLaterPressed) == [])
         #expect(!run.state.offersRebuild)
         #expect(run.send(.rebuildPressed) == [.checkSpace])

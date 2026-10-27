@@ -68,8 +68,8 @@ final class EffectRunner {
         case .showLog(let log):
             NSWorkspace.shared.open(URL(fileURLWithPath: log))
         case .play:
-            // Launching the game isn't wired up, so Play does nothing.
-            break
+            // Launching the game isn't wired up, so Play says so and Library's buttons come back.
+            Task { send(.gameCouldNotStart(reason: Strings.playNotWiredUp)) }
         case .showSaves:
             let folder = fs.isDirectory(at: places.saves) ? places.saves : places.data
             NSWorkspace.shared.open(URL(fileURLWithPath: folder))

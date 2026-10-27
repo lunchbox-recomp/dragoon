@@ -17,7 +17,7 @@ struct LibraryView: View {
                             Spacer()
                             Button(Strings.later) { send(.rebuildLaterPressed) }
                             Button(Strings.rebuildNow) { send(.rebuildPressed) }
-                                .disabled(!state.canPlayOrRebuild)
+                                .disabled(!state.libraryIsIdle)
                         }
                     }
                     .padding(4)
@@ -26,8 +26,8 @@ struct LibraryView: View {
             if let problem = state.gameProblem {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(Strings.gameFailed(problem))
-                        if let panic = problem.panic {
+                        Text(Strings.gameFailed(problem)).textSelection(.enabled)
+                        if case .exited(_, let panic?) = problem {
                             Text(Strings.panicHeading).font(.headline)
                             ScrollView {
                                 Text(panic)
@@ -44,12 +44,12 @@ struct LibraryView: View {
         } buttons: {
             Button(Strings.showSaves) { send(.showSavesPressed) }
             Button(Strings.changeDisc) { send(.changeDiscPressed) }
-                .disabled(state.isBusy)
+                .disabled(!state.libraryIsIdle)
             Button(Strings.rebuild) { send(.rebuildPressed) }
-                .disabled(!state.canPlayOrRebuild)
+                .disabled(!state.libraryIsIdle)
             Button(Strings.play) { send(.playPressed) }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!state.canPlayOrRebuild)
+                .disabled(!state.libraryIsIdle)
         }
     }
 }

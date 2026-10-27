@@ -172,22 +172,29 @@ private let oldCommits = Commits(
 
     @Test func oldBuildsWaitUntilTheGameHasExited() {
         var run = launched()
-        run.send(.gameStarted)
+        #expect(!run.send(playToStarting).joined().contains(.deleteOldBuilds))
+        #expect(run.send(.gameExited(status: 0, panic: nil)) == [.deleteOldBuilds])
+    }
+
+    /// Nothing the player can press leaves Library while the game runs, so the state is set by
+    /// hand here. Even then, old builds wait for the game.
+    @Test func oldBuildsAreKeptWhileTheGameRunsWhateverTheFlowDoes() {
+        var run = launched()
         run.send(.changeDiscPressed)
         run.send(.discChosen(path: flowDisc, bookmark: flowBookmark))
-        #expect(!run.send(.discChecked(path: flowDisc, check: .ok)).contains(.deleteOldBuilds))
-        #expect(run.screen == .library)
-        #expect(run.send(.gameExited(status: 0, panic: nil)) == [.deleteOldBuilds])
+        var state = run.state
+        state.gameRunning = true
+        let (next, effects) = Flow.reduce(state, .discChecked(path: flowDisc, check: .ok))
+        #expect(next.screen == .library)
+        #expect(!effects.contains(.deleteOldBuilds))
+        #expect(Flow.reduce(next, .gameExited(status: 0, panic: nil)).1 == [.deleteOldBuilds])
     }
 
     @Test func oldBuildsWaitUntilTheBuildHasEnded() {
         var run = launched()
         for (event, _) in rebuildToRunning { run.send(event) }
-        run.send(.gameStarted)
         #expect(run.send(.gameExited(status: 0, panic: nil)) == [])
-        run.send(.gameStarted)
-        #expect(run.send(.buildEnded(nil)) == [])
-        #expect(run.send(.gameExited(status: 0, panic: nil)) == [.deleteOldBuilds])
+        #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
     }
 
     @Test func noGameMeansNoOldBuildsToDelete() {

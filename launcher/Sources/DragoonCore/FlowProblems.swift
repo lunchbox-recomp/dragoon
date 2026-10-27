@@ -53,15 +53,11 @@ public enum DiscProblem: Equatable, Sendable {
 }
 
 /// How a game run ended badly.
-public struct GameProblem: Equatable, Sendable {
-    public var status: Int32
-    /// What the runtime wrote to `panic.txt`, when it wrote one.
-    public var panic: String?
-
-    public init(status: Int32, panic: String?) {
-        self.status = status
-        self.panic = panic
-    }
+public enum GameProblem: Equatable, Sendable {
+    /// The game exited with `status`. `panic` is what the runtime wrote to `panic.txt`, when it
+    /// wrote one.
+    case exited(status: Int32, panic: String?)
+    case couldNotStart(reason: String)
 }
 
 extension BuildFailure {

@@ -59,6 +59,12 @@ func launched(
     return run
 }
 
+/// The events that take Play from Library to the game starting, for a disc that's where the
+/// bookmark says. The last one gives `play`.
+let playToStarting: [Flow.Event] = [
+    .playPressed, .bookmarkResolved(.found(flowDisc)), .discChecked(path: flowDisc, check: .ok),
+]
+
 /// The events that take a rebuild from Library to a running build, each with the effects it
 /// gives, for a disc that's where the bookmark says.
 let rebuildToRunning: [(Flow.Event, [Flow.Effect])] = [
