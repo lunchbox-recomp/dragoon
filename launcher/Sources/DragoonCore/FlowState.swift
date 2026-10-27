@@ -98,7 +98,7 @@ extension Flow {
 
 public enum ToolsScreen: Equatable, Sendable {
     case checking
-    /// The install button, what the tools are for and Apple's installer's size. The step looks
+    /// The install button, what the tools are for and their size once installed. The step looks
     /// again every `Flow.toolsCheckInterval` seconds.
     case missing
     /// The tools are older than the SDKs. `tried` lists each SDK.

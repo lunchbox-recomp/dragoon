@@ -55,7 +55,7 @@ enum Strings {
     static let toolsTitle = "Developer Tools"
     static let toolsChecking = "Looking for Apple's developer tools…"
     static let toolsMissing = "Dragoon needs Apple's Command Line Tools to build the game. They hold the compiler and the other tools the build runs."
-    static let toolsInstaller = "Install Tools opens Apple's installer, which downloads about 1.8 GB. This step looks for the tools again every \(Int(Flow.toolsCheckInterval)) seconds."
+    static let toolsInstaller = "Install Tools opens Apple's installer. The tools take about 1.8 GB once they're installed. This step looks for the tools again every \(Int(Flow.toolsCheckInterval)) seconds."
     static let installTools = "Install Tools"
     static let noLinkableSDK = "The Command Line Tools on this Mac are older than its SDKs, so the build can't link. Update the tools in Software Update, then check again."
     static let sdksTried = "SDKs tried"
