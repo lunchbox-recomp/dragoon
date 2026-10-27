@@ -107,6 +107,26 @@ import Testing
         #expect(ContinuousClock.now - started < .seconds(8))
     }
 
+    @Test func aChildCollectedByAnotherWaitIsAnErrorNotAnExitOfZero() async throws {
+        let files = try scratch()
+        defer { try? FileManager.default.removeItem(atPath: files.directory) }
+        let pidFile = files.pid
+        await #expect(throws: ProcessWaitFailure(code: ECHILD)) {
+            try await ProcessGroup.run(
+                "/bin/sh", ["-c", "echo $$ > \"$1\"", "sh", pidFile], environment: nil, timeout: nil,
+                onStdout: { _ in }, onStderr: { _ in },
+                afterSpawn: {
+                    // Something else collects the child before the run's own wait can.
+                    let deadline = Date().addingTimeInterval(5)
+                    while Processes.pid(inFile: pidFile) == nil, Date() < deadline { usleep(5000) }
+                    if let pid = Processes.pid(inFile: pidFile) {
+                        var status: Int32 = 0
+                        waitpid(pid, &status, 0)
+                    }
+                })
+        }
+    }
+
     @Test func cancellingARunStopsTheChildAndItsHelpers() async throws {
         let files = try scratch()
         defer { try? FileManager.default.removeItem(atPath: files.directory) }
