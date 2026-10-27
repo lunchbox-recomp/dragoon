@@ -12,6 +12,7 @@ final class EffectRunner {
     private let fs: any FileSystem = SystemFileSystem()
     private let processes: any ProcessRunner = SystemProcessRunner()
     private let builds = BuildRunner()
+    private let games = GameLauncher()
 
     init(places: Places) {
         self.places = places
@@ -67,9 +68,8 @@ final class EffectRunner {
             NSPasteboard.general.setString(text, forType: .string)
         case .showLog(let log):
             NSWorkspace.shared.open(URL(fileURLWithPath: log))
-        case .play(_, let launch):
-            // Launching the game isn't wired up, so Play says so and Library's buttons come back.
-            Task { send(.gameCouldNotStart(launch: launch, reason: Strings.playNotWiredUp)) }
+        case .play(let disc, let launch):
+            play(disc: disc, launch: launch)
         case .showSaves:
             let folder = fs.isDirectory(at: places.saves) ? places.saves : places.data
             NSWorkspace.shared.open(URL(fileURLWithPath: folder))
@@ -98,6 +98,8 @@ final class EffectRunner {
         panel.begin { [weak self] response in
             MainActor.assumeIsolated {
                 guard response == .OK, let url = panel.url else {
+                    // This is the only thing that ends the flow's wait on the file chooser when
+                    // it closes without a file, and no test reaches it.
                     self?.send(.discPanelCanceled)
                     return
                 }
@@ -108,6 +110,25 @@ final class EffectRunner {
                     self?.send(.discChoiceFailed(reason: error.localizedDescription))
                 }
             }
+        }
+    }
+
+    /// Starts the game and hides the window while it runs. The window comes back once the
+    /// launch's one result has been sent.
+    private func play(disc: String, launch: Int) {
+        let session = games.play(game: places.game, disc: disc, data: places.data)
+        NSApplication.shared.hide(nil)
+        Task {
+            for await result in session {
+                switch result {
+                case .exited(let ending, let panic):
+                    send(.gameExited(launch: launch, exit: ending, panic: panic))
+                case .couldNotStart(let failure):
+                    send(.gameCouldNotStart(launch: launch, reason: Strings.gameStart(failure)))
+                }
+            }
+            NSApplication.shared.unhide(nil)
+            NSApplication.shared.activate()
         }
     }
 

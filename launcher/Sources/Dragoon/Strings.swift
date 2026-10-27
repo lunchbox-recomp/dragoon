@@ -178,8 +178,13 @@ enum Strings {
         }
     }
 
-    /// Why Play doesn't start the game in this version.
-    static let playNotWiredUp = "This version of Dragoon doesn't launch the game."
+    /// Why the game couldn't start, after "The game couldn't start."
+    static func gameStart(_ failure: GameStartFailure) -> String {
+        switch failure {
+        case .missing(let path): return "There's no game at \(path)."
+        case .failed(let reason): return reason
+        }
+    }
 
     // MARK: - Sizes
 
