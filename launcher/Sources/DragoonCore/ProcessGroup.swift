@@ -46,7 +46,8 @@ enum ProcessGroup {
         _ executable: String, _ arguments: [String], environment: [String: String]?,
         timeout: TimeInterval?, killGrace: TimeInterval = ProcessGroup.killGrace,
         onStdout: @escaping @Sendable (Data) -> Void,
-        onStderr: @escaping @Sendable (Data) -> Void
+        onStderr: @escaping @Sendable (Data) -> Void,
+        afterSpawn: (@Sendable () -> Void)? = nil
     ) async throws -> ProcessGroupOutcome {
         try Task.checkCancellation()
         let control = Control(killGrace: killGrace)
@@ -56,7 +57,8 @@ enum ProcessGroup {
                 DispatchQueue.global().async {
                     continuation.resume(with: Result {
                         try runBlocking(
-                            executable, arguments, environment, timeout, control, onStdout, onStderr)
+                            executable, arguments, environment, timeout, control, onStdout, onStderr,
+                            afterSpawn)
                     })
                 }
             }
@@ -69,9 +71,12 @@ enum ProcessGroup {
         _ executable: String, _ arguments: [String], _ environment: [String: String]?,
         _ timeout: TimeInterval?, _ control: Control,
         _ onStdout: @escaping @Sendable (Data) -> Void,
-        _ onStderr: @escaping @Sendable (Data) -> Void
+        _ onStderr: @escaping @Sendable (Data) -> Void,
+        _ afterSpawn: (@Sendable () -> Void)?
     ) throws -> ProcessGroupOutcome {
         let child = try spawn(executable, arguments, environment)
+        // A test's hook for a cancel that lands after the process exists and before `begin`.
+        afterSpawn?()
         control.begin(pid: child.pid, timeout: timeout)
         for (descriptor, handler) in [(child.stdout, onStdout), (child.stderr, onStderr)] {
             DispatchQueue.global().async {

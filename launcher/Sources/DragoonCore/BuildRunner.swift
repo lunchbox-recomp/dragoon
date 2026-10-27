@@ -136,7 +136,7 @@ public final class BuildRunner: @unchecked Sendable {
 
     private let fs: any FileSystem
     private let logDirectory: String
-    private let killGrace: TimeInterval
+    let killGrace: TimeInterval
     private let now: @Sendable () -> Date
     private let lock = NSLock()
     private var current: Task<Void, Never>?
