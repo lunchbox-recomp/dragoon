@@ -236,8 +236,9 @@ field of view wouldn't show up in this table, and neither would one in another m
 So the table doesn't show that culling follows the wider view.
 
 The draws and the output dumps are what show it. At 16:9 the world drew at least as much as at
-4:3 at every checkpoint measured here, and no dump shows an object cut off at a side edge. Five of the ten world views drew the same number at both, which are the
-race after its finish, 2P's second view, 4P's second and fourth and Top Ride.
+4:3 at every checkpoint measured here, and no dump shows an object cut off at a side edge. Five
+of the ten world views drew the same number at both, which are the race after its finish, 2P's
+second view, 4P's second and fourth and Top Ride.
 
 ```sh
 cmake -S . -B build -DCMAKE_C_FLAGS=-DGCN_WATCH -DCMAKE_CXX_FLAGS=-DGCN_WATCH
