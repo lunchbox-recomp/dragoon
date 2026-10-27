@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import errno
 import fcntl
+import io
 import json
 import os
 import plistlib
@@ -14,7 +15,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from typing import TextIO
+from typing import BinaryIO, Callable, TextIO
 from unittest import mock
 
 import export_source
@@ -138,6 +139,31 @@ class FullLog:
             raise OSError(errno.ENOSPC, "No space left on device")
 
 
+class FullVolume(io.RawIOBase):
+    """The file under a build log, on a volume that fills up when a write carries FILLS_AT. It
+    writes to FILE until then and refuses every write from then on. Under a TextIOWrapper and a
+    BufferedWriter, as Path.open makes them, a line whose flush failed stays pending."""
+
+    def __init__(self, file: BinaryIO, fills_at: bytes):
+        super().__init__()
+        self.file = file
+        self.fills_at = fills_at
+        self.full = False
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, data) -> int:
+        self.full = self.full or self.fills_at in bytes(data)
+        if self.full:
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return self.file.write(data)
+
+    def close(self) -> None:
+        self.file.close()
+        super().close()
+
+
 class RecipeTestCase(unittest.TestCase):
     """Fake tools, a snapshot, a kit and the player's directories, all at paths with spaces,
     as the launcher's are."""
@@ -231,11 +257,25 @@ class RecipeTestCase(unittest.TestCase):
     def build_on_a_full_log(self, *refused: str,
                             close_fails: bool = False) -> tuple[int, list[dict], str]:
         """build() with a log that refuses each write starting with one of REFUSED."""
+        return self.build_logging_to(
+            lambda path, opened: FullLog(opened(path, "a"), refused, close_fails))
+
+    def build_on_a_full_volume(self, fills_at: bytes) -> tuple[int, list[dict], str]:
+        """build() with a log, a real TextIOWrapper over a BufferedWriter, on a volume that
+        fills up at the first write carrying FILLS_AT."""
+        def make(path: Path, opened: Callable[..., BinaryIO]) -> TextIO:
+            raw = FullVolume(opened(path, "ab", buffering=0), fills_at)
+            return io.TextIOWrapper(io.BufferedWriter(raw), encoding="utf-8")
+
+        return self.build_logging_to(make)
+
+    def build_logging_to(self, make_log: Callable[[Path, Callable[..., BinaryIO]], object]
+                         ) -> tuple[int, list[dict], str]:
+        """build() with the log opened by MAKE_LOG(path, opened), where opened is Path.open."""
         opened = Path.open
 
         def open_log(path: Path, *args, **kwargs):
-            file = opened(path, *args, **kwargs)
-            return FullLog(file, refused, close_fails) if path == self.log else file
+            return make_log(path, opened) if path == self.log else opened(path, *args, **kwargs)
 
         with mock.patch.object(Path, "open", open_log):
             return self.build()
@@ -597,6 +637,36 @@ class FailureTest(RecipeTestCase):
         self.assertEqual(error["step"], "compile")
         self.assertIn("No space left on device", error["message"])
         self.assertEqual(tree(self.data), before)
+
+    def test_a_closing_note_the_log_cant_take_before_the_swap_is_lost_and_the_build_goes_on(self):
+        """Every step's closing note is a measurement, and a measurement never fails a step."""
+        self.old_game()
+        code, events, err = self.build_on_a_full_log("== package took")
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertNotEqual(self.current(), OLD)
+        log = self.log.read_text()
+        self.assertNotIn("== package took", log)
+        self.assertIn("== compile took", log)
+
+    def test_a_log_that_stays_full_from_the_package_note_stops_the_run_before_the_swap(self):
+        """The package step's closing note is best-effort, but a line whose flush failed stays
+        pending in the file object, so the next write that isn't best-effort fails too. At the
+        latest it's the swap step's opening note, before the rename. The failure's own note meets
+        the same full log, so main ends with the OSError."""
+        self.old_game()
+        saves = tree(self.data / "saves")
+        with self.assertRaises(OSError) as raised:
+            self.build_on_a_full_volume(b"== package took")
+        self.assertEqual(raised.exception.errno, errno.ENOSPC)
+        self.assertEqual(self.current(), OLD)  # the swap never ran
+        self.assertEqual(self.links_left_in_game(), [])
+        self.assertEqual(tree(self.data / "saves"), saves)
+        log = self.log.read_text()
+        self.assertIn("== package\n", log)
+        self.assertNotIn("== package took", log)
+        self.assertNotIn("== swap", log)
 
     def test_a_failed_package_removes_the_half_made_build(self):
         self.old_game()
