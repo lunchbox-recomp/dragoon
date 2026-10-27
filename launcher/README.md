@@ -38,7 +38,7 @@ The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon
 
 `Dragoon --check-disc PATH` checks a disc image against the `source-info.json` in the app's source snapshot and prints the result as JSON. `--source-info FILE` names another one when the binary isn't inside the app, and it can come before or after `--check-disc`. The exit code is 0 for `ok`, 1 for any other result and 2 for a bad argument or a source-info it can't use.
 
-The result is `ok`, `wrongGame` with the disc ID it found, `wrongRevision` with the SHA-1 of the main.dol it found, `needsConversion` with `RVZ`, `GCZ`, `WIA` or `WBFS`, or `unreadable` with a reason. A file that can't be opened, ends early or has a main.dol with no sections is `unreadable`.
+A matching disc is `ok`, and another game's is `wrongGame` with the disc ID it found. A different build of the right game is `wrongRevision` with the SHA-1 of the main.dol it found, and a format the build doesn't read is `needsConversion` with `RVZ`, `GCZ`, `WIA` or `WBFS`. A file that can't be opened, ends early or has a main.dol with no sections is `unreadable` with a reason.
 
 It reads a disc the way `gcn-recomp/recomp/extract_dol.py` does. The disc ID is the first 6 bytes, and main.dol starts at the big-endian word at 0x420. Its length is the largest offset plus size among the 18 sections in its header that have a size, and the SHA-1 covers that many bytes.
 
