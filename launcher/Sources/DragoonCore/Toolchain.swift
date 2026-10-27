@@ -83,16 +83,24 @@ extension Toolchain {
         NSHomeDirectory() + "/Library/Application Support/Dragoon"
     }
 
+    /// Where the launcher keeps what it can make again, until a caller names another place.
+    public static var defaultCacheDirectory: String {
+        NSHomeDirectory() + "/Library/Caches/Dragoon"
+    }
+
     /// Finds the Command Line Tools or Xcode and an SDK that links, without opening Apple's
     /// install prompt. The first command is `xcode-select -p`, and nothing under `/usr/bin`
     /// that shims a developer tool runs until it has found a directory. The choice is kept in
     /// `<dataDirectory>/toolchain.json`, and the SDKs are probed again when `clang --version`
-    /// says something new.
+    /// says something new. The probe's source is written to `cacheDirectory` and removed again.
     public static func detect(
         runner: any ProcessRunner, fs: any FileSystem,
-        dataDirectory: String = Toolchain.defaultDataDirectory
+        dataDirectory: String = Toolchain.defaultDataDirectory,
+        cacheDirectory: String = Toolchain.defaultCacheDirectory
     ) async -> ToolchainStatus {
-        await Detection(runner: runner, fs: fs, dataDirectory: dataDirectory).run()
+        await Detection(
+            runner: runner, fs: fs, dataDirectory: dataDirectory, cacheDirectory: cacheDirectory
+        ).run()
     }
 }
 
@@ -130,9 +138,10 @@ private struct Detection {
     let runner: any ProcessRunner
     let fs: any FileSystem
     let dataDirectory: String
+    let cacheDirectory: String
 
-    var cachePath: String { dataDirectory + "/toolchain.json" }
-    var probePath: String { dataDirectory + "/probe/toolchain.cpp" }
+    var choicePath: String { dataDirectory + "/toolchain.json" }
+    var probePath: String { cacheDirectory + "/toolchain-probe.cpp" }
 
     func run() async -> ToolchainStatus {
         guard let developer = await output(Self.xcodeSelect, ["-p"]), fs.isDirectory(at: developer)
@@ -156,6 +165,7 @@ private struct Detection {
         } catch {
             return .cantWriteProbe(path: probePath, error: error.localizedDescription)
         }
+        defer { try? fs.removeItem(at: probePath) }
         var tried: [String] = []
         func links(_ sdk: String) async -> Bool {
             if tried.contains(sdk) { return false }
@@ -165,7 +175,7 @@ private struct Detection {
         func chosen(_ sdk: String) -> ToolchainStatus {
             var choice = toolchain
             choice.sdk = sdk
-            try? fs.writeData(encodeJSON(choice), to: cachePath)
+            try? fs.writeData(encodeJSON(choice), to: choicePath)
             return .ready(choice)
         }
 
@@ -213,7 +223,7 @@ private struct Detection {
 
     /// The cached choice, when it was made for these same tools and its SDK is still there.
     private func cachedChoice(for toolchain: Toolchain) -> Toolchain? {
-        guard let data = try? fs.readData(at: cachePath),
+        guard let data = try? fs.readData(at: choicePath),
             let cached = try? JSONDecoder().decode(Toolchain.self, from: data),
             fs.isDirectory(at: cached.sdk)
         else { return nil }
