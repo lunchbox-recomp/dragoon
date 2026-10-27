@@ -319,6 +319,47 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         #expect(mac.commands.last == ["/usr/bin/xcrun", "--find", "make"])
     }
 
+    @Test func anXcodeSelectThatFailsIsMissingEvenWhenItPrintedADirectory() async {
+        let mac = FakeMac()
+        mac.runner.respond(
+            to: "/usr/bin/xcode-select", ["-p"], with: ProcessResult(status: 1, stdout: tools + "\n"))
+
+        #expect(await mac.detect() == .missing)
+        #expect(mac.commands == [["/usr/bin/xcode-select", "-p"]])
+    }
+
+    @Test func anXcrunFindThatFailsIsMissingEvenWhenItPrintedAPath() async {
+        let mac = FakeMac()
+        mac.runner.respond(
+            to: "/usr/bin/xcrun", ["--find", "make"],
+            with: ProcessResult(status: 1, stdout: tools + "/usr/bin/make\n"))
+
+        #expect(await mac.detect() == .missing)
+        #expect(mac.commands.last == ["/usr/bin/xcrun", "--find", "make"])
+    }
+
+    @Test func aClangVersionThatFailsIsMissingEvenWhenItPrintedALine() async {
+        let mac = FakeMac()
+        mac.runner.respond(
+            to: tools + "/usr/bin/clang", ["--version"],
+            with: ProcessResult(status: 1, stdout: clang26_6 + "\n"))
+
+        #expect(await mac.detect() == .missing)
+        #expect(mac.commands.last == [tools + "/usr/bin/clang", "--version"])
+    }
+
+    @Test func aPkgutilThatFailsSkipsNoSDKEvenWhenItPrintedAVersion() async {
+        let mac = FakeMac()
+        mac.runner.respond(
+            to: "/usr/sbin/pkgutil", ["--pkg-info=com.apple.pkg.CLTools_Executables"],
+            with: ProcessResult(status: 1, stdout: "version: 26.6.0.0.1781586589\n"))
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.addSDK("MacOSX27.0.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX27.0.sdk", true)
+
+        #expect(await mac.detect() == .ready(cltToolchain(sdk: tools + "/SDKs/MacOSX27.0.sdk")))
+    }
+
     @Test func everyQueryGetsTenSecondsAndTheProbeGetsSixty() async {
         let mac = FakeMac()
         mac.setToolsPackageVersion("26.6.0.0.1781586589")
