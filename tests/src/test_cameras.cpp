@@ -2,6 +2,7 @@
 #include "cameras.h"
 #include <cmath>
 #include <gtest/gtest.h>
+#include <map>
 
 namespace {
 
@@ -63,6 +64,121 @@ TEST(SetsWorldAspect, ALibraryCallWithAnotherWorldCallsCallerDoesNotCount) {
     EXPECT_FALSE(dragoon::sets_world_aspect(0x80066FF0, 0x800BAD68));
     EXPECT_FALSE(dragoon::sets_world_aspect(0x80067148, 0x800BACD0));
     EXPECT_FALSE(dragoon::sets_world_aspect(0x800B3990, 0x80066E4C));  // the pair the wrong way round
+}
+
+// Only the library's calls set a camera up. The camera module's set one every frame.
+TEST(SetsUpWorldCamera, OnlyTheLibrarysFourCallsCount) {
+    EXPECT_TRUE(dragoon::sets_up_world_camera(0x80066E4C, 0x800B3990));
+    EXPECT_TRUE(dragoon::sets_up_world_camera(0x80067148, 0x800BAD68));
+    EXPECT_FALSE(dragoon::sets_up_world_camera(0x800C2884, 0x800B35D4));
+    EXPECT_FALSE(dragoon::sets_up_world_camera(0x800C9820, 0x800B2FAC));
+    EXPECT_FALSE(dragoon::sets_up_world_camera(0x80066E4C, 0x8011590C));
+}
+
+// Guest cameras' stored aspects for SetOnceCameras, NaN for a camera that's gone.
+struct Aspects {
+    std::map<uint32_t, float> stored;
+    int writes = 0;
+    float read(uint32_t cam) const {
+        const auto it = stored.find(cam);
+        return it == stored.end() ? std::nanf("") : it->second;
+    }
+    auto reader() { return [this](uint32_t cam) { return read(cam); }; }
+    auto writer() {
+        return [this](uint32_t cam, float aspect) {
+            stored[cam] = aspect;
+            writes++;
+        };
+    }
+};
+
+constexpr uint32_t kCam = 0x814338E0, kOther = 0x80D9B920;
+
+// A camera widened at `output` as the hooks widen it, then kept.
+void widen_and_keep(dragoon::SetOnceCameras& kept, Aspects& mem, uint32_t cam, float aspect, float output) {
+    mem.stored[cam] = dragoon::widened_aspect(aspect, output);
+    kept.add(cam, aspect, output, mem.reader());
+}
+
+TEST(SetOnceCameras, AResizeWidensAKeptCameraForTheNewOutput) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    kept.follow(21.0f / 9.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.stored[kCam], dragoon::widened_aspect(1.25538f, 21.0f / 9.0f));
+    EXPECT_FLOAT_EQ(mem.stored[kCam], 1.25538f * 7 / 4);
+    EXPECT_EQ(kept.size(), 1u);
+}
+
+TEST(SetOnceCameras, BackAt4By3TheAspectIsThe4By3OneToTheBit) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    kept.follow(4.0f / 3.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.stored[kCam], 1.25538f);
+    kept.follow(kWide, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.stored[kCam], dragoon::widened_aspect(1.25538f, kWide));
+}
+
+TEST(SetOnceCameras, ACameraTheGameSetSinceIsLeftAloneAndForgotten) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    widen_and_keep(kept, mem, kOther, 1.18f, kWide);
+    mem.stored[kCam] = 2.97524f;
+    kept.follow(21.0f / 9.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.stored[kCam], 2.97524f);
+    EXPECT_EQ(mem.stored[kOther], dragoon::widened_aspect(1.18f, 21.0f / 9.0f));
+    EXPECT_EQ(kept.size(), 1u);
+}
+
+TEST(SetOnceCameras, AFreedCameraIsForgotten) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    mem.stored.erase(kCam);
+    kept.follow(4.0f / 3.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.writes, 0);
+    EXPECT_EQ(kept.size(), 0u);
+}
+
+TEST(SetOnceCameras, AnUnchangedOutputWritesNothing) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    widen_and_keep(kept, mem, kOther, 1.18f, kWide);
+    mem.stored[kCam] = 2.97524f;
+    kept.follow(kWide, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.writes, 0);
+    EXPECT_EQ(mem.stored[kCam], 2.97524f);
+}
+
+TEST(SetOnceCameras, KeepingACameraAgainReplacesIt) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    widen_and_keep(kept, mem, kCam, 1.39419f, kWide);
+    EXPECT_EQ(kept.size(), 1u);
+    kept.follow(4.0f / 3.0f, mem.reader(), mem.writer());
+    EXPECT_EQ(mem.stored[kCam], 1.39419f);
+}
+
+// A scene that sets its camera up again at the same address keeps one entry for it.
+TEST(SetOnceCameras, KeepingACameraAgainWithTheSameAspectKeepsOneEntry) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    EXPECT_EQ(kept.size(), 1u);
+}
+
+TEST(SetOnceCameras, KeepingOneForgetsTheCamerasSetSince) {
+    dragoon::SetOnceCameras kept;
+    Aspects mem;
+    widen_and_keep(kept, mem, kCam, 1.25538f, kWide);
+    mem.stored[kCam] = 2.97524f;
+    widen_and_keep(kept, mem, kOther, 1.18f, kWide);
+    EXPECT_EQ(kept.size(), 1u);
 }
 
 TEST(LoadsWorldCamera, TopRidesWorldCameraCounts) {

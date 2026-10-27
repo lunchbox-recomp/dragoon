@@ -28,6 +28,13 @@ float stored_aspect(uint32_t cam) {
     return dragoon::f32_at(cam + kCObjAspect);
 }
 
+void store_aspect(uint32_t cam, float aspect) { dragoon::set_f32(cam + kCObjAspect, aspect); }
+
+// The world cameras the library sets up and Top Ride's, which nothing sets again each frame,
+// kept so they follow a change of output aspect. Only the guest thread holding the baton
+// touches it.
+dragoon::SetOnceCameras g_set_once;
+
 // Where the caller returns to, given its stack frame `sp`. The word at sp is the back chain,
 // the address of the frame of the caller's own caller. The caller's prologue saved its return
 // address in that frame's LR save word, the back chain plus 4, as the EABI's prologue does, and
@@ -45,10 +52,10 @@ uint32_t callers_return_address(uint32_t sp) {
 // (src/census.cpp) logs the call.
 extern "C" void hle_HSD_CObjSetAspect(CPU* c) {
     const uint32_t cobj = c->r[3], lr = c->lr, lr2 = callers_return_address(c->r[1]);
-    const float given = (float)c->f[1].d;
-    if (dragoon::sets_world_aspect(lr, lr2))
-        c->f[1].d = dragoon::widened_aspect(given, gx::output_aspect());
+    const float given = (float)c->f[1].d, output = gx::output_aspect();
+    if (dragoon::sets_world_aspect(lr, lr2)) c->f[1].d = dragoon::widened_aspect(given, output);
     orig_HSD_CObjSetAspect(c);
+    if (dragoon::sets_up_world_camera(lr, lr2)) g_set_once.add(cobj, given, output, stored_aspect);
     dragoon::census_aspect(cobj, lr, lr2, given);
 }
 
@@ -62,7 +69,16 @@ extern "C" void hle_HSD_CObjLoadDesc(CPU* c) {
     const uint32_t cobj = c->r[3];
     const float loaded = stored_aspect(cobj);
     if (std::isnan(loaded)) return;
-    if (dragoon::loads_world_camera(lr, lr2))
-        dragoon::set_f32(cobj + kCObjAspect, dragoon::widened_aspect(loaded, gx::output_aspect()));
+    if (dragoon::loads_world_camera(lr, lr2)) {
+        const float output = gx::output_aspect();
+        store_aspect(cobj, dragoon::widened_aspect(loaded, output));
+        g_set_once.add(cobj, loaded, output, stored_aspect);
+    }
     dragoon::census_aspect(cobj, lr, lr2, loaded);
+}
+
+// HSD_CObjSetCurrent (0x80401150) on entry, from recomp/patches.txt, before the camera's
+// projection is built: the kept cameras follow the output aspect, should it have changed.
+extern "C" void dragoon_cameras_follow(void) {
+    g_set_once.follow(gx::output_aspect(), stored_aspect, store_aspect);
 }
