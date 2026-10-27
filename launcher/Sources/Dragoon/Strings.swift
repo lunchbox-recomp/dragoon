@@ -28,7 +28,7 @@ enum Strings {
         case .translocated:
             return "macOS is running this copy of Dragoon from a temporary read-only place, as it does for an app opened where it was downloaded. Move Dragoon to Applications and open it from there."
         case .readOnlyVolume:
-            return "Dragoon is on a read-only volume, such as a disk image, and it can't build the game from there. Move Dragoon to Applications and open it from there."
+            return "Dragoon is on a read-only volume, such as a disk image. Move Dragoon to Applications and open it from there."
         case .refusedCharacter(let character):
             return "The path to Dragoon has a \(finderName(character)) in a folder's name, and the build can't use a path with that character. Move Dragoon to Applications and open it from there."
         }
