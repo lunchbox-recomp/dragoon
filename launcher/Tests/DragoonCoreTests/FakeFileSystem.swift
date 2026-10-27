@@ -97,6 +97,15 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
         }
     }
 
+    func appendData(_ data: Data, to path: String) throws {
+        try lock.withLock {
+            if let writeError { throw writeError }
+            let resolved = resolve(path)
+            makeDirectories(Self.parent(resolved))
+            files[resolved, default: Data()].append(data)
+        }
+    }
+
     func removeItem(at path: String) throws {
         try lock.withLock {
             if links[path] != nil {

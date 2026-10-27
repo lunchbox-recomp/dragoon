@@ -76,6 +76,18 @@ private func cleanUp(_ tree: any Tree) {
     }
 
     @Test(arguments: Kind.allCases)
+    func appendMakesTheFileAndItsDirectoryAndKeepsWhatWasThere(_ kind: Kind) throws {
+        let tree = try makeTree(kind)
+        defer { cleanUp(tree) }
+        let path = tree.root + "/Logs dir/build.log"
+        try tree.fs.appendData(Data("one\n".utf8), to: path)
+        try tree.fs.appendData(Data("two\n".utf8), to: path)
+        try tree.fs.appendData(Data(), to: path)
+        #expect(try tree.fs.readData(at: path) == Data("one\ntwo\n".utf8))
+        #expect(tree.fs.isDirectory(at: tree.root + "/Logs dir"))
+    }
+
+    @Test(arguments: Kind.allCases)
     func aDirectoryListsItsNamesSorted(_ kind: Kind) throws {
         let tree = try makeTree(kind)
         defer { cleanUp(tree) }

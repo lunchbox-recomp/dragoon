@@ -22,6 +22,9 @@ public protocol FileSystem: Sendable {
     func openReader(at path: String) throws -> any FileReader
     /// Replaces the file at `path` whole or not at all, making its directory first.
     func writeData(_ data: Data, to path: String) throws
+    /// Adds `data` to the end of the file at `path`, making the file and its directory first.
+    /// Two processes appending to one file don't overwrite each other.
+    func appendData(_ data: Data, to path: String) throws
     /// Removes the file or link at `path`, or the directory and everything in it. A link goes
     /// without what it points to. Throws when nothing is there.
     func removeItem(at path: String) throws
@@ -66,6 +69,27 @@ public struct SystemFileSystem: FileSystem {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url, options: .atomic)
+    }
+
+    public func appendData(_ data: Data, to path: String) throws {
+        try FileManager.default.createDirectory(
+            atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        // O_APPEND moves to the end and writes in one step, so another process appending to the
+        // same file never has its lines overwritten.
+        let descriptor = open(path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o644)
+        if descriptor < 0 { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { close(descriptor) }
+        var written = 0
+        while written < data.count {
+            let wrote = data.withUnsafeBytes { buffer in
+                write(descriptor, buffer.baseAddress! + written, data.count - written)
+            }
+            if wrote < 0 {
+                if errno == EINTR { continue }
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            written += wrote
+        }
     }
 
     public func removeItem(at path: String) throws {
