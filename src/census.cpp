@@ -13,6 +13,7 @@
 // Addresses are this disc's (GKYE01), from analysis/symbols.txt. The HSD_CObj and HSD_GObj
 // layouts are the decomp's (sysdolphin's cobj.h and gobj.h).
 #include "census.h"
+#include "draw_marks.h"
 #include "guest_memory.h"
 #include "gx/render.h"
 #include <cstdlib>
@@ -77,13 +78,13 @@ extern "C" void dragoon_census_draw(uint32_t gobj, uint32_t cb) {
     bool fresh = false;
     const uint8_t tag = g_tags.enter(cb, &fresh);
     if (fresh) fprintf(stderr, "%s\n", dragoon::tag_line(this_frame(), tag, cb).c_str());
-    gx::set_draw_tag(tag);
+    dragoon::mark_tag(tag);
 }
 
 // GObj_SetTextureCamera, as the render callback returns: the draws go back to its caller's tag.
 extern "C" void dragoon_census_drawn(void) {
     if (!g_on) return;
-    gx::set_draw_tag(g_tags.leave());
+    dragoon::mark_tag(g_tags.leave());
 }
 
 // HSD_CObjSetAspect (0x80402C94) once it has stored the aspect, or HSD_CObjLoadDesc
