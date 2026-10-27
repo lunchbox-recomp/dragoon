@@ -11,7 +11,7 @@ add_subdirectory(gcn-recomp)
 
 # src/, the C++ the tables' hooks call. SOURCES compiles it into the game targets.
 set(DRAGOON_SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp ${CMAKE_SOURCE_DIR}/src/cameras.cpp
-                    ${CMAKE_SOURCE_DIR}/src/draw_marks.cpp)
+                    ${CMAKE_SOURCE_DIR}/src/draw_marks.cpp ${CMAKE_SOURCE_DIR}/src/hud_anchors.cpp)
 
 gcn_add_game(
   NAME dragoon
@@ -47,7 +47,8 @@ if(DRAGOON_TESTS)
   include(GoogleTest)
   add_executable(dragoon_tests ${CMAKE_SOURCE_DIR}/tests/src/test_census.cpp
                                ${CMAKE_SOURCE_DIR}/tests/src/test_cameras.cpp
-                               ${CMAKE_SOURCE_DIR}/tests/src/test_draw_marks.cpp)
+                               ${CMAKE_SOURCE_DIR}/tests/src/test_draw_marks.cpp
+                               ${CMAKE_SOURCE_DIR}/tests/src/test_hud_anchors.cpp)
   set_target_properties(dragoon_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
   # gcn-recomp's runtime for gx/anchor.h, which is free of the rest of it.
   target_include_directories(dragoon_tests PRIVATE ${CMAKE_SOURCE_DIR}/src

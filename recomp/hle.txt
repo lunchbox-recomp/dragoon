@@ -8,3 +8,4 @@ HSD_CObjSetAspect
 HSD_CObjLoadDesc
 CObjRelease
 CObjAmnesia
+HSD_JObjDispAll
