@@ -192,6 +192,22 @@ tools/probe.sh wide 30 tests/routes/air-ride-race.txt 4200 --aspect=16:9 --outpu
 `tests/src/test_cameras.cpp` checks. The widening is always on. At 4:3 it's the identity to
 the bit, so the game runs there as it did.
 
+### A change of output aspect
+
+Under `--aspect=window` the output aspect follows the window. The module's two calls run every
+frame, so the cameras they set follow it, but the library's four calls and Top Ride's load set
+a camera once. `src/cameras.cpp` keeps each camera those widen, with its 4:3 aspect and the
+factor it was widened by.
+
+At each `HSD_CObjSetCurrent`, before the projection is built, a kept camera widened for another
+output aspect is widened again for the new one if it still holds what it was given. One holding
+anything else has been set again or freed since, so it's left alone and forgotten. While the
+output aspect holds steady nothing is written.
+
+A hidden probe window is never resized, so the output aspect can't change during a probe run
+and no run measures this. `tests/src/test_cameras.cpp` covers a resize, a camera the game set
+again since and a return to 4:3, where the aspect is the 4:3 one to the bit.
+
 ## World to screen and culling
 
 World to screen reads the world camera's stored aspect, so it needed no change of its own. A
