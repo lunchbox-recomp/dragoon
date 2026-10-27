@@ -943,7 +943,7 @@ its end.
 
 ## gcn-recomp `013d907`
 
-The pin moved from `5e49451` to `013d907`, 59 commits. They add an FST reader and writer in
+The pin moved from `5e49451` to `013d907`, 54 commits. They add an FST reader and writer in
 Python and a builder for a disc overlay, which lays loose files over the disc. The runtime reads
 the disc through an overlay named by `--disc-overlay` or `GCN_DISC_OVERLAY`, and
 `recomp/dol_patch.py` applies patch lists to a DOL.
