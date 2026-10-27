@@ -104,7 +104,7 @@ extension Toolchain {
     }
 }
 
-private func encodeJSON(_ value: some Encodable) -> Data {
+func encodeJSON(_ value: some Encodable) -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     // Strings and arrays of them always encode.
