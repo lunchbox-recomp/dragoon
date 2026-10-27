@@ -18,18 +18,20 @@ Measured on 2026-10-26 on macOS 26.6.2 with the Command Line Tools 26.6 (`CLTool
 | `swift build --package-path launcher` | Builds on the default SDK, `MacOSX26.5.sdk`. No `SDKROOT` is needed |
 | `swift test --package-path launcher` | Fails with `no such module 'Testing'` |
 | `swift test` with only `-Xswiftc -F` | The tests compile, then the runner can't load `Testing.framework` |
-| `launcher/tools/swift_test.py` | 36 tests in 5 suites pass |
+| `launcher/tools/swift_test.py` | 63 tests in 6 suites pass |
 | `Dragoon --check-tools` | Reports `MacOSX26.5.sdk` and the tools under `/Library/Developer/CommandLineTools/usr/bin/` |
 
 ## The tools check
 
-`Dragoon --check-tools` prints what `Toolchain.detect` found as JSON and exits without opening a window. The exit code is 0 for a `ready` status and 1 for `missing` or `noLinkableSDK`.
+`Dragoon --check-tools` prints what `Toolchain.detect` found as JSON and exits without opening a window. The exit code is 0 for a `ready` status and 1 for any other.
 
-It runs `xcode-select -p` first, because a developer tool shim under `/usr/bin` would open Apple's install prompt. Then `xcrun --find` names `clang`, `clang++`, `make` and `python3` by full path.
+It runs `xcode-select -p` first, because a developer tool shim under `/usr/bin` would open Apple's install prompt. Then `xcrun --find` names `clang`, `clang++`, `make` and `python3` by full path. Each of those queries gets 10 seconds, and one that runs out counts as having failed.
 
-The SDK is the first that compiles and links a C++ file that includes `<cstdio>`. With Xcode selected it tries the one `xcrun --show-sdk-path` names first. Then it tries `SDKs/MacOSX.sdk`, then every other `MacOSX*.sdk` newest first, skipping an SDK whose major version is above the tools' own in that last step only.
+The SDK is the first that compiles and links a C++ file that includes `<cstdio>`, and each try gets 60 seconds. With Xcode selected it tries the one `xcrun --show-sdk-path` names first. Then it tries `SDKs/MacOSX.sdk`, then every other `MacOSX*.sdk` newest first, skipping an SDK whose major version is above the tools' own in that last step only.
 
-The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon`. It's probed again when the first line of `clang --version` changes or the SDK is gone.
+The probe's source goes in `~/Library/Caches/Dragoon` and comes out again after the probe. If it can't be written the status is `cantWriteProbe`, which names the path and the error. No SDK is blamed.
+
+The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon`. It's used only while the developer directory and the tool paths match and the first line of `clang --version` hasn't changed. A different developer directory or tool path forces a probe too, and so does an SDK that's gone.
 
 ## Why a wrapper runs the tests
 
