@@ -55,15 +55,17 @@ final class RecipeFixture: @unchecked Sendable {
 
     deinit { try? FileManager.default.removeItem(atPath: root) }
 
-    /// Installs `body` as the recipe. It runs with the arguments the launcher gave, and `$log` is
-    /// the one after `--log`.
+    /// Installs `body` as the recipe. It runs with the arguments the launcher gave, and `$log` and
+    /// `$data` are the ones after `--log` and `--data`.
     func install(_ body: String) throws {
         try executable(
             recipe,
             """
             log=
+            data=
             for argument in "$@"; do
               if [ "$previous" = "--log" ]; then log="$argument"; fi
+              if [ "$previous" = "--data" ]; then data="$argument"; fi
               previous="$argument"
             done
             \(body)
@@ -84,6 +86,20 @@ final class RecipeFixture: @unchecked Sendable {
             .stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         return BuildRequest(
             toolchain: real, bundle: bundle, disc: disc, data: data, cache: cache)
+    }
+
+    /// Makes `<data>/game/<name>/Dragoon.app`, and `<data>/game/current` a link to `current`.
+    func makeGame(_ name: String, current: String) throws {
+        let games = data + "/game"
+        try FileManager.default.createDirectory(
+            atPath: games + "/" + name + "/Dragoon.app", withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            atPath: games + "/current", withDestinationPath: current)
+    }
+
+    /// What `<data>/game/current` links to.
+    func currentGame() throws -> String {
+        try FileManager.default.destinationOfSymbolicLink(atPath: data + "/game/current")
     }
 
     func request(noWarmup: Bool = false, keepBuild: Bool = false) -> BuildRequest {

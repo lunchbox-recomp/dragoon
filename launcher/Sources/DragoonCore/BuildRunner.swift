@@ -55,7 +55,9 @@ public enum BuildEvent: Equatable, Sendable {
     /// A step began. The steps are recompile, compile, warmup, package and swap.
     case step(String)
     case progress(step: String, done: Int, total: Int)
-    /// The new game is current, at `game`.
+    /// The new game is current, at `game`. A cancel that lands after the swap has made the new
+    /// game current ends the stream with this too, and the warmed shader cache may then be
+    /// only partly installed.
     case done(game: String)
     /// A step failed. The stream ends with `BuildFailure.failed` right after it. Nothing else
     /// yields this: an error the recipe reports as it refuses its arguments or finds another build
@@ -95,7 +97,9 @@ extension BuildEvent {
     }
 }
 
-/// Why a build's stream ended without the new game being current. The texts are drafts.
+/// Why a build's stream ended without the new game being current. The texts are drafts. A build
+/// canceled after the recipe's swap isn't one of these, since its game is current and its stream
+/// ends with `done`.
 public enum BuildFailure: Error, Equatable, Sendable {
     /// Another build holds the recipe's lock, so this one touched nothing.
     case alreadyRunning
@@ -103,7 +107,7 @@ public enum BuildFailure: Error, Equatable, Sendable {
     case refused(message: String, log: String)
     /// A step failed, or the recipe ended in a way it didn't explain, in which case `step` is nil.
     case failed(step: String?, message: String, log: String)
-    /// `cancel()` stopped it.
+    /// `cancel()` stopped it before the swap made the new game current.
     case cancelled
     /// The recipe's python3 couldn't be started.
     case couldNotStart(String)
@@ -189,7 +193,8 @@ public final class BuildRunner: @unchecked Sendable {
 
     /// Stops the running build's process group with SIGTERM, then with SIGKILL 10 seconds later if
     /// anything is left. The stream ends with `BuildFailure.cancelled` once the group is gone,
-    /// unless the recipe finished first.
+    /// unless the recipe finished first, or the swap had made the new game current already, which
+    /// ends it with `done`.
     public func cancel() {
         lock.withLock { current }?.cancel()
     }
@@ -205,10 +210,15 @@ public final class BuildRunner: @unchecked Sendable {
             _ = try? fs.appendData(Data((line + "\n").utf8), to: logPath)
         }
         let state = RunState()
+        // The swap points this link at the new game, so a link that has moved means it happened.
+        let link = request.data + "/game/current"
+        let linked = fs.resolvingSymlinks(at: link)
         let stdout = LineSplitter { line in
             if let event = BuildEvent(line: line) {
+                state.note(event)
                 // An error waits for the exit code, which says whether the stream should show it.
-                if case .error = event { state.note(event) } else { continuation.yield(event) }
+                if case .error = event { return }
+                continuation.yield(event)
             } else if !line.isEmpty {
                 write("[stdout] " + line)
             }
@@ -227,7 +237,9 @@ public final class BuildRunner: @unchecked Sendable {
                 killGrace: killGrace, onStdout: stdout.feed, onStderr: stderr.feed)
             stdout.flush()
             stderr.flush()
-            failure = Self.failure(for: outcome, state, logPath, write, yield: { continuation.yield($0) })
+            failure = Self.failure(
+                for: outcome, state, logPath, write, yield: { continuation.yield($0) },
+                swappedGame: { fs.resolvingSymlinks(at: link) == linked ? nil : link + "/Dragoon.app" })
         } catch is CancellationError {
             failure = .cancelled
         } catch let lost as ProcessWaitFailure {
@@ -261,10 +273,18 @@ public final class BuildRunner: @unchecked Sendable {
     /// Nil when the new game is current. Otherwise why not, from the recipe's exit code.
     private static func failure(
         for outcome: ProcessGroupOutcome, _ state: RunState, _ logPath: String,
-        _ write: @Sendable (String) -> Void, yield: (BuildEvent) -> Void
+        _ write: @Sendable (String) -> Void, yield: (BuildEvent) -> Void,
+        swappedGame: () -> String?
     ) -> BuildFailure? {
         if !outcome.signaled && outcome.status == 0 { return nil }
-        if outcome.cancelled { return .cancelled }
+        if outcome.cancelled {
+            // The swap came first, so the new game is current and the build counts as done.
+            if state.sawDone { return nil }
+            guard let game = swappedGame() else { return .cancelled }
+            write("[launcher] the build was canceled after the new game became current")
+            yield(.done(game: game))
+            return nil
+        }
         // The log gets a line for an ending the recipe didn't explain, so the log it names does.
         func unexplained(_ message: String) -> BuildFailure {
             write("[launcher] " + message)
@@ -328,12 +348,21 @@ private final class RunState: @unchecked Sendable {
     private var error: RecipeError?
     private var stderrLine: String?
 
+    private var done = false
+
     var recipeError: RecipeError? { lock.withLock { error } }
+    var sawDone: Bool { lock.withLock { done } }
     var lastStderr: String? { lock.withLock { stderrLine } }
 
     func note(_ event: BuildEvent) {
-        guard case .error(let step, let message, let log) = event else { return }
-        lock.withLock { error = RecipeError(step: step, message: message, log: log) }
+        switch event {
+        case .error(let step, let message, let log):
+            lock.withLock { error = RecipeError(step: step, message: message, log: log) }
+        case .done:
+            lock.withLock { done = true }
+        case .step, .progress:
+            break
+        }
     }
 
     func noteStderr(_ line: String) {
