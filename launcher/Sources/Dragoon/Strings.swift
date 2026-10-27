@@ -30,13 +30,8 @@ enum Strings {
         case .readOnlyVolume:
             return "Dragoon is on a read-only volume, such as a disk image. Move Dragoon to Applications and open it from there."
         case .refusedCharacter(let character):
-            return "The path to Dragoon has a \(finderName(character)) in a folder's name, and the build can't use a path with that character. Move Dragoon to Applications and open it from there."
+            return "The path to Dragoon has a \(MoveReason.finderName(of: character)) in a folder's name, and the build can't use a path with that character. Move Dragoon to Applications and open it from there."
         }
-    }
-
-    /// Finder shows a `:` in a folder's name as `/`.
-    private static func finderName(_ character: Unicode.Scalar) -> String {
-        character == ":" ? "/" : String(character)
     }
 
     static let damagedTitle = "Dragoon Is Missing Files"

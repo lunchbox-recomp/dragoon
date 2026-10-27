@@ -27,6 +27,11 @@ public enum MoveReason: Equatable, Sendable {
             return nil
         }
     }
+
+    /// How Finder shows `character` in a folder's name, which for a `:` is `/`.
+    public static func finderName(of character: Unicode.Scalar) -> String {
+        character == ":" ? "/" : String(character)
+    }
 }
 
 /// Why the disc step can't go on.

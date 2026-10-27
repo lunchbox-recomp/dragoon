@@ -44,6 +44,12 @@ import Testing
         #expect(launched(appPath: path).screen == .mustMove(.refusedCharacter("$")))
     }
 
+    @Test func finderShowsAColonInAFoldersNameAsASlash() {
+        #expect(MoveReason.finderName(of: ":") == "/")
+        #expect(MoveReason.finderName(of: "$") == "$")
+        #expect(MoveReason.finderName(of: "`") == "`")
+    }
+
     @Test func theFirstRefusedCharacterInThePathIsTheOneNamed() {
         let path = flowHome + "/a;b/c:d/Dragoon.app"
         #expect(launched(appPath: path).screen == .mustMove(.refusedCharacter(";")))
