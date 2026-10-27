@@ -68,6 +68,12 @@ class ModsCase(unittest.TestCase):
         self.assertEqual((cm.exception.mod, cm.exception.path), (mod, path))
         self.assertRegex(cm.exception.why, why)
 
+    def sparse(self, rel: str, size: int) -> None:
+        path = self.put(rel)
+        os.truncate(path, size)
+        if os.stat(path).st_blocks * 512 > 1 << 24:
+            self.skipTest("this file system has no sparse files")
+
 
 class ScanTest(ModsCase):
     def test_a_missing_or_empty_folder_has_no_mods(self) -> None:
@@ -169,12 +175,6 @@ class RefusalTest(ModsCase):
         self.put("Modé/dol.txt", DOL_TXT)
         self.put("Modé/crochet é.bin")
         self.assertEqual(len(self.scan()), 1)
-
-    def sparse(self, rel: str, size: int) -> None:
-        path = self.put(rel)
-        os.truncate(path, size)
-        if os.stat(path).st_blocks * 512 > 1 << 24:
-            self.skipTest("this file system has no sparse files")
 
     def test_a_file_of_4_gib_or_more(self) -> None:
         self.sparse("Mod/files/big.bin", 1 << 32)
@@ -499,6 +499,46 @@ class PrepareTest(ModsCase):
                 e = cm.exception
                 self.assertEqual((e.mod, e.path, e.why), ("B Mod", path, why))
 
+    def test_an_overlay_refusal_names_the_mod_holding_the_whole_path_it_names(self) -> None:
+        self.put("A Mod/files/Data/readme")
+        self.put("B Mod/files/Data/readme text.txt/x.bin")
+        self.put("disc_overlay.py.refuse",
+                 "error: Data/readme text.txt is a file on the disc, not a directory\n", self.recomp)
+        with self.assertRaises(mods.ModError) as cm:
+            self.prepare()
+        e = cm.exception
+        self.assertEqual((e.mod, e.path, e.why), ("B Mod", "files/Data/readme text.txt",
+                                                  "is a file on the disc, not a directory"))
+
+    def test_an_overlay_refusal_of_case_twins_names_the_mod(self) -> None:
+        self.put("Mod/files/Data/Readme.txt")
+        twins = "matches 'README.TXT', 'readme.txt' on the disc by case alone"
+        self.put("disc_overlay.py.refuse", f"error: Data/Readme.txt {twins}\n", self.recomp)
+        with self.assertRaises(mods.ModError) as cm:
+            self.prepare()
+        e = cm.exception
+        self.assertEqual((e.mod, e.path, e.why), ("Mod", "files/Data/Readme.txt", twins))
+
+    def test_an_overlay_failure_that_only_starts_with_a_held_path_names_no_mod(self) -> None:
+        self.put("A Mod/files/the")
+        self.put("B Mod/files/big.bin")
+        for n, said in enumerate(("the layout would end past 4 GiB, at big.bin",
+                                  "the image's disc ID isn't printable ASCII",
+                                  "big.bin is a file on the disc",
+                                  "'the' and 'THE' in the files folder are one name on the disc")):
+            with self.subTest(said=said):
+                self.put("disc_overlay.py.refuse", f"error: {said}\n", self.recomp)
+                with self.assertRaisesRegex(mods.PrepareError, "disc_overlay.py exited 1"):
+                    mods.prepare(self.scan(), self.disc, self.dol, self.tmp / f"out {n}",
+                                 Path(sys.executable), self.recomp)
+
+    def test_a_patch_tool_failure_not_about_a_list_line_names_no_mod(self) -> None:
+        self.put("Mod/dol.txt", DOL_TXT)
+        self.put("dol_patch.py.refuse", "patches/1/hook code.bin: is not a regular file\n",
+                 self.recomp)
+        with self.assertRaisesRegex(mods.PrepareError, "dol_patch.py exited 1: patches/1/hook"):
+            self.prepare()
+
     def test_a_failure_that_names_no_mod_is_a_prepare_error(self) -> None:
         self.put("Mod/dol.txt", DOL_TXT)
         self.put("dol_patch.py.refuse", f"{self.dol}: too short to be a DOL\n", self.recomp)
@@ -667,6 +707,21 @@ class RealToolsTest(ModsCase):
             self.prepare()
         self.assertEqual((cm.exception.mod, cm.exception.path), ("Big Mod", "files/Data"))
         self.assertIn("directory on the disc", cm.exception.why)
+
+    def test_a_folder_where_the_disc_has_a_file_names_the_mod_that_needs_it(self) -> None:
+        self.put("A Mod/files/Data/readme")
+        self.put("B Mod/files/Data/readme text.txt/x.bin")
+        with self.assertRaises(mods.ModError) as cm:
+            self.prepare()
+        e = cm.exception
+        self.assertEqual((e.mod, e.path, e.why), ("B Mod", "files/Data/readme text.txt",
+                                                  "is a file on the disc, not a directory"))
+
+    def test_a_layout_past_4_gib_names_no_mod(self) -> None:
+        self.put("A Mod/files/the")
+        self.sparse("B Mod/files/big.bin", (1 << 32) - 1)
+        with self.assertRaisesRegex(mods.PrepareError, "past 4 GiB, at big.bin"):
+            self.prepare()
 
     def test_the_digest_of_the_clones_matches_the_mods_folders(self) -> None:
         self.code_mod()
