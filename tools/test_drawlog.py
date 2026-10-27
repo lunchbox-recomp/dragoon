@@ -310,6 +310,31 @@ class SettersCommandTest(unittest.TestCase):
                       out)
         self.assertIn("from 80001000  called from", out)
 
+    def test_a_call_that_ends_a_function_is_named_by_that_function(self):
+        symbols = str(write_file(self.dir, "symbols.txt",
+                                 "fn_A = .text:0x80066E00; // type:function size:0x4C\n"
+                                 "fn_B = .text:0x80066E4C; // type:function size:0x80\n"))
+        lines = [setter(100, lr="80066E4C", lr2="80066E50")]
+        code, out, _ = run_main(drawlog.main, "setters", self.log(*lines), "--symbols", symbols)
+        self.assertEqual(code, 0)
+        self.assertIn("from 80066E4C fn_A+0x4C  called from 80066E50 fn_B+0x4  given", out)
+
+    def test_an_address_past_the_last_function_is_left_unnamed(self):
+        symbols = str(write_file(self.dir, "symbols.txt",
+                                 "fn_B = .text:0x80066E4C; // type:function size:0x80\n"))
+        code, out, _ = run_main(drawlog.main, "setters", self.log(setter(100, lr2="80066E50")), "--symbols", symbols)
+        self.assertEqual(code, 0)
+        self.assertIn("from 800C2884  called from 80066E50 fn_B+0x4  given", out)
+
+    def test_a_function_with_no_size_ends_at_the_next(self):
+        symbols = str(write_file(self.dir, "symbols.txt",
+                                 "fn_A = .text:0x80066E00;\n"
+                                 "fn_B = .text:0x80066F00; // type:function size:0x10\n"))
+        lines = [setter(100, lr="80066EFC", lr2="80066F04")]
+        code, out, _ = run_main(drawlog.main, "setters", self.log(*lines), "--symbols", symbols)
+        self.assertEqual(code, 0)
+        self.assertIn("from 80066EFC fn_A+0xFC  called from 80066F04 fn_B+0x4  given", out)
+
     def test_window_and_camera_pick_lines(self):
         lines = [setter(99), setter(100), setter(100, cam="812C51C0"), setter(201)]
         code, out, _ = run_main(drawlog.main, "setters", self.log(*lines),
