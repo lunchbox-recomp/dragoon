@@ -118,7 +118,8 @@ def _is_dir(mod: str, path: str, e: os.DirEntry) -> bool:
 
 
 def _walk(mod: str, folder: Path, prefix: str, skip: tuple[str, ...] = ()) -> Iterator[tuple[str, Path]]:
-    """Every file under FOLDER as (its path there, host path), but those under SKIP at the top."""
+    """Every file under FOLDER as (its path there, host path), but those under SKIP at the top.
+    Each is opened, so one that can't be read is an OSError here."""
     todo = [""]
     while todo:
         rel = todo.pop()
@@ -129,6 +130,7 @@ def _walk(mod: str, folder: Path, prefix: str, skip: tuple[str, ...] = ()) -> It
             if _is_dir(mod, prefix + path, e):
                 todo.append(path)
             else:
+                open(e.path, "rb").close()
                 yield path, Path(e.path)
 
 
