@@ -25,6 +25,10 @@ and logs the callback with the camera it draws through.
 Each pair is logged once a frame as a `[census]` line. drawlog.py matches those cameras to the
 projections in the frame's `[draw]` lines and counts the draws through each.
 
+The census also logs each call to `HSD_CObjSetAspect` as an `[aspect]` line, with the camera,
+where the call returns to and where its caller returns to. `drawlog.py setters` lists them by
+camera and caller.
+
 ## The cameras
 
 Five kinds of camera draw at the six checkpoints.

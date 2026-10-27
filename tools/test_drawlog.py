@@ -268,6 +268,68 @@ class AspectsCommandTest(unittest.TestCase):
         self.assertIn("DRAGOON_CENSUS", err)
 
 
+def setter(frame: int, cam: str = "81424A80", lr: str = "800C2884", lr2: str = "800C1F00",
+           given: str = "1.25538", stored: str = "1.67383") -> str:
+    return f"[aspect] f={frame} cam={cam} lr={lr} lr2={lr2} given={given} stored={stored}"
+
+
+class SettersCommandTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def log(self, *lines: str) -> str:
+        return str(write_file(self.dir, "stdout.txt", "\n".join(lines) + "\n"))
+
+    def test_calls_from_one_place_with_one_aspect_make_one_line(self):
+        code, out, _ = run_main(drawlog.main, "setters", self.log(setter(100), setter(101), setter(102)))
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            "81424A80  from 800C2884  called from 800C1F00  given 1.25538 stored 1.67383"
+            "  in frames 100..102 (3 frames)"])
+
+    def test_another_caller_or_aspect_is_another_line(self):
+        lines = [setter(100), setter(101, lr="80066E4C", stored="1.25538"), setter(102, given="1.39419"),
+                 setter(103, lr2="8011586C")]
+        code, out, _ = run_main(drawlog.main, "setters", self.log(*lines))
+        self.assertEqual(code, 0)
+        self.assertEqual(len(out.splitlines()), 4)
+        self.assertIn("from 80066E4C  called from 800C1F00  given 1.25538 stored 1.25538", out)
+        self.assertIn("given 1.39419", out)
+        self.assertIn("called from 8011586C", out)
+
+    def test_symbols_name_the_function_and_offset(self):
+        symbols = str(write_file(self.dir, "symbols.txt",
+                                 "kar_cmreplay__near_800c24e8 = .text:0x800C24E8; // type:function size:0x400\n"
+                                 "fn_80066E00 = .text:0x80066E00; // type:function size:0x80\n"))
+        lines = [setter(100, lr2="80066E10"), setter(101, lr="80001000")]
+        code, out, _ = run_main(drawlog.main, "setters", self.log(*lines), "--symbols", symbols)
+        self.assertEqual(code, 0)
+        self.assertIn("from 800C2884 kar_cmreplay__near_800c24e8+0x39C  called from 80066E10 fn_80066E00+0x10  given",
+                      out)
+        self.assertIn("from 80001000  called from", out)
+
+    def test_window_and_camera_pick_lines(self):
+        lines = [setter(99), setter(100), setter(100, cam="812C51C0"), setter(201)]
+        code, out, _ = run_main(drawlog.main, "setters", self.log(*lines),
+                                "--from", "100", "--to", "200", "--cam", "81424a80")
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            "81424A80  from 800C2884  called from 800C1F00  given 1.25538 stored 1.67383"
+            "  in frames 100..100 (1 frames)"])
+
+    def test_line_at_the_end_of_a_renderer_line_counts(self):
+        code, out, _ = run_main(drawlog.main, "setters", self.log(FULL_VP + setter(100)))
+        self.assertEqual(code, 0)
+        self.assertIn("81424A80", out)
+
+    def test_log_with_no_aspect_lines_exits_2(self):
+        code, _, err = run_main(drawlog.main, "setters", self.log(CENSUS_WORLD))
+        self.assertEqual(code, 2)
+        self.assertIn("DRAGOON_CENSUS", err)
+
+
 class HelpTest(unittest.TestCase):
     def test_help_exits_0_and_prints_usage(self):
         code, out, _ = run_main(drawlog.main, "--help")

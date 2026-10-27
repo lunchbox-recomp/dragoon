@@ -3,6 +3,7 @@
 // the wider view too. Every other camera keeps the aspect the game gives it. At 4:3 the
 // widening is the identity, so the game runs as it always has.
 #include "cameras.h"
+#include "census.h"
 #include "gx/render.h"
 #include "runtime.h"
 
@@ -11,9 +12,13 @@
 extern "C" void orig_HSD_CObjSetAspect(CPU* c);
 
 // HSD_CObjSetAspect(cobj in r3, aspect in f1) stores the aspect of a perspective camera. lr is
-// still the caller's return address on entry.
+// still the caller's return address on entry, and r1 the caller's stack frame. The census
+// (src/census.cpp) logs the call.
 extern "C" void hle_HSD_CObjSetAspect(CPU* c) {
-    if (dragoon::sets_world_aspect(c->lr))
-        c->f[1].d = dragoon::widened_aspect((float)c->f[1].d, gx::output_aspect());
+    const uint32_t cobj = c->r[3], lr = c->lr, sp = c->r[1];
+    const float given = (float)c->f[1].d;
+    if (dragoon::sets_world_aspect(lr))
+        c->f[1].d = dragoon::widened_aspect(given, gx::output_aspect());
     orig_HSD_CObjSetAspect(c);
+    dragoon::census_aspect(cobj, lr, sp, given);
 }
