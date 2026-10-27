@@ -4,6 +4,7 @@
 Usage: drawlog.py cameras LOG [--symbols FILE] [--frame N]
        drawlog.py aspects LOG [--from N] [--to N]
        drawlog.py setters LOG [--symbols FILE] [--from N] [--to N] [--cam ADDR]
+       drawlog.py hud OLD NEW [--aspect W:H]
 
 LOG is a run's stdout.txt from tools/probe.sh. The draws come from GCN_DRAWLOG=<frame> with
 GCN_DRAWLOG_VERBOSE=1, which adds each draw's viewport. The cameras and their render
@@ -29,9 +30,12 @@ loaded, the one the camera held after (none for a camera that isn't a perspectiv
 the frames. --cam ADDR keeps one camera's lines. When no line is left, it says so on stderr,
 since a camera whose aspect is set some other way has none.
 
+hud checks that each HUD draw of a run at a wider output keeps the box it had at 4:3, as
+tools/hud_boxes.py describes.
+
 Exits 0 once it has read the log, 1 when aspects finds a camera whose stored aspect changed
-within its viewport, 2 on a bad argument or a log it can't read or that lacks the lines asked
-for.
+within its viewport or hud finds a HUD draw that fails, 2 on a bad argument or a log it can't
+read or that lacks the lines asked for.
 """
 from __future__ import annotations
 
@@ -43,12 +47,11 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-NUM = r"-?[\d.]+(?:e[-+]?\d+)?"
-DRAW = re.compile(rf"^\[draw\] \d+ .*?proj=([po]),({NUM}),({NUM}),({NUM}),({NUM}),{NUM},{NUM}\s")
-# The renderer prints a draw in pieces from its own thread, so a [census] line from the guest
-# thread can land at the end of one of its lines. Neither pattern needs the line to itself.
-VIEWPORT = re.compile(rf"^\s+viewport=({NUM}),({NUM}),{NUM} ({NUM}),({NUM}),{NUM} "
-                      r"scissor=\w+ \w+ offset=([0-9A-F]{6})")
+import hud_boxes
+from drawlines import DRAW, NUM, VIEWPORT, projection, viewport
+
+# A [census] line can land at the end of a renderer's line too (drawlines.py), so this pattern
+# doesn't need the line to itself either.
 CENSUS = re.compile(r"\[census\] f=(\d+) cam=([0-9A-F]{8}) type=(\w+) p=(\S*) vp=(\S+) "
                     r"cb=([0-9A-F]{8}) cls=(\d+) via=(set|draw)$")
 # An aspect as %.6g prints it, which for a viewport of no height is inf or nan.
@@ -116,12 +119,9 @@ def parse(lines) -> tuple[list[Draw], list[Camera]]:
     for line in lines:
         line = line.rstrip("\n")
         if m := DRAW.match(line):
-            draws.append(Draw("persp" if m[1] == "p" else "ortho", tuple(float(x) for x in m.groups()[1:])))
+            draws.append(Draw(*projection(m)))
         elif (m := VIEWPORT.match(line)) and draws:
-            sx, sy, ox, oy = (float(x) for x in m.groups()[:4])
-            offset = int(m[5], 16)
-            xoff, yoff = (offset & 0x3FF) * 2, ((offset >> 10) & 0x3FF) * 2
-            draws[-1].viewport = (ox - xoff - abs(sx), oy - yoff - abs(sy), 2 * abs(sx), 2 * abs(sy))
+            draws[-1].viewport = viewport(m)
         if m := CENSUS.search(line):
             left, right, top, bottom = (float(x) for x in m[5].split(","))
             cams.append(Camera(int(m[1]), int(m[2], 16), m[3], tuple(float(x) for x in m[4].split(",") if x),
@@ -350,8 +350,12 @@ def main(argv: list[str]) -> int:
     setp.add_argument("--from", dest="start", type=int, default=0)
     setp.add_argument("--to", dest="end", type=int, default=2**32)
     setp.add_argument("--cam", type=lambda s: int(s, 16))
+    hudp = sub.add_parser("hud")
+    hudp.add_argument("old", type=Path)
+    hudp.add_argument("new", type=Path)
+    hudp.add_argument("--aspect", default="16:9")
     args = ap.parse_args(argv)
-    return {"cameras": cameras, "aspects": aspects, "setters": setters}[args.command](args)
+    return {"cameras": cameras, "aspects": aspects, "setters": setters, "hud": hud_boxes.hud}[args.command](args)
 
 
 if __name__ == "__main__":
