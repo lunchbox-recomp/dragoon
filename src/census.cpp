@@ -1,13 +1,14 @@
 // The camera census, on with DRAGOON_CENSUS=1: which camera each render callback draws
 // through, as the [census] lines census.h makes. docs/dev/widescreen.md has what it found.
 //
-// Two hooks in recomp/patches.txt call in. One is HSD_CObjSetCurrent (0x80401150) on entry,
-// with the camera it's about to make current. The other is GObj_SetTextureCamera
+// Three hooks in recomp/patches.txt call in. One is HSD_CObjSetCurrent (0x80401150) on entry,
+// with the camera it's about to make current. The others are GObj_SetTextureCamera
 // (0x8042A0B4) at its call of each object's render callback, which walks every object drawn
-// through the current camera. src/cameras.cpp also calls in after each HSD_CObjSetAspect and
-// each HSD_CObjLoadDesc of a perspective camera, with the camera, where the call and its
-// caller return to and the aspect it was given or loaded with, and at each CObjRelease with
-// the camera. Off, each hook returns at once.
+// through the current camera, and as the callback returns. Between the two, the callback's
+// draws carry its tag (census.h's CallbackTags). src/cameras.cpp also calls in after each
+// HSD_CObjSetAspect and each HSD_CObjLoadDesc of a perspective camera, with the camera, where
+// the call and its caller return to and the aspect it was given or loaded with, and at each
+// CObjRelease with the camera. Off, each hook returns at once.
 //
 // Addresses are this disc's (GKYE01), from analysis/symbols.txt. The HSD_CObj and HSD_GObj
 // layouts are the decomp's (sysdolphin's cobj.h and gobj.h).
@@ -35,6 +36,10 @@ const bool g_on = [] {
     return e && *e && strcmp(e, "0") != 0;
 }();
 dragoon::OncePerFrame g_once;
+dragoon::CallbackTags g_tags;
+
+// The frame being drawn, one more than the frames the game had submitted.
+uint32_t this_frame() { return gx::g_frames_submitted.load(std::memory_order_relaxed) + 1; }
 
 dragoon::Camera read_camera(uint32_t cobj) {
     dragoon::Camera c;
@@ -48,7 +53,7 @@ dragoon::Camera read_camera(uint32_t cobj) {
 
 void log_pair(uint32_t cobj, uint32_t gobj, uint32_t cb, const char* via) {
     if (!in_ram(cobj)) return;
-    const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
+    const uint32_t frame = this_frame();
     const uint32_t cls = in_ram(gobj) ? mem_r16(gobj) : 0;
     const std::string line = dragoon::census_line(frame, cobj, read_camera(cobj), cb, cls, via);
     if (g_once.first(frame, line)) fprintf(stderr, "%s\n", line.c_str());
@@ -65,16 +70,27 @@ extern "C" void dragoon_census_camera(uint32_t cobj) {
 }
 
 // GObj_SetTextureCamera, about to call an object's render callback through the current camera.
+// The callback's draws carry its tag, logged the first time.
 extern "C" void dragoon_census_draw(uint32_t gobj, uint32_t cb) {
     if (!g_on) return;
     log_pair(mem_r32(kCObjCurrent), gobj, cb, "draw");
+    bool fresh = false;
+    const uint8_t tag = g_tags.enter(cb, &fresh);
+    if (fresh) fprintf(stderr, "%s\n", dragoon::tag_line(this_frame(), tag, cb).c_str());
+    gx::set_draw_tag(tag);
+}
+
+// GObj_SetTextureCamera, as the render callback returns: the draws go back to its caller's tag.
+extern "C" void dragoon_census_drawn(void) {
+    if (!g_on) return;
+    gx::set_draw_tag(g_tags.leave());
 }
 
 // HSD_CObjSetAspect (0x80402C94) once it has stored the aspect, or HSD_CObjLoadDesc
 // (0x804031EC) once it has loaded a perspective camera, from src/cameras.cpp.
 void dragoon::census_aspect(uint32_t cam, uint32_t lr, uint32_t lr2, float given) {
     if (!g_on || !in_ram(cam)) return;
-    const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
+    const uint32_t frame = this_frame();
     const std::string line = aspect_line(frame, cam, lr, lr2, given, read_camera(cam));
     if (g_once.first(frame, line)) fprintf(stderr, "%s\n", line.c_str());
 }
@@ -82,13 +98,13 @@ void dragoon::census_aspect(uint32_t cam, uint32_t lr, uint32_t lr2, float given
 // CObjRelease (0x80403324) as the game releases a camera, from src/cameras.cpp.
 void dragoon::census_release(uint32_t cam) {
     if (!g_on) return;
-    const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
+    const uint32_t frame = this_frame();
     fprintf(stderr, "%s\n", release_line(frame, cam).c_str());
 }
 
 // CObjAmnesia (0x804034A8) as the game forgets its cameras' memory, from src/cameras.cpp.
 void dragoon::census_amnesia() {
     if (!g_on) return;
-    const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
+    const uint32_t frame = this_frame();
     fprintf(stderr, "%s\n", amnesia_line(frame).c_str());
 }

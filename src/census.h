@@ -1,11 +1,14 @@
 // The camera census's pure parts: the line logged for a camera and the render callback that
-// draws through it, and which of a frame's lines are new. src/census.cpp reads the cameras
-// out of the guest and calls these. tools/drawlog.py reads the lines.
+// draws through it, which of a frame's lines are new and the tag each callback's draws carry.
+// src/census.cpp reads the cameras out of the guest and calls these. tools/drawlog.py reads
+// the lines.
 #pragma once
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace dragoon {
 
@@ -96,6 +99,50 @@ void census_release(uint32_t cam);
 
 // Logs the camera class's amnesia as an amnesia_line, with DRAGOON_CENSUS=1 (src/census.cpp).
 void census_amnesia();
+
+// One line for a render callback's draw tag, such as
+//   [cbtag] f=4200 n=3 cb=8011F8F4
+// n is the tag the draw log shows on the callback's draws (gx::set_draw_tag). It's logged once,
+// in the frame the callback is first called.
+inline std::string tag_line(uint32_t frame, uint8_t tag, uint32_t cb) {
+    char line[48];
+    snprintf(line, sizeof(line), "[cbtag] f=%u n=%u cb=%08X", frame, tag, cb);
+    return line;
+}
+
+// A draw tag for each render callback, so the draw log says which callback made each draw. The
+// tags are given out from 1 in the order the callbacks are first called, and after 255 a
+// callback gets none. A callback can draw a camera's objects through GObj_SetTextureCamera
+// itself, so the tag of the callback that called it is kept and given back as it returns.
+class CallbackTags {
+public:
+    static constexpr uint8_t kNone = 0;
+
+    // The tag for `cb` as it's called. `*fresh` is set when it's the callback's first.
+    uint8_t enter(uint32_t cb, bool* fresh) {
+        outer_.push_back(current_);
+        auto it = tags_.find(cb);
+        *fresh = it == tags_.end() && tags_.size() < 255;
+        if (*fresh) it = tags_.emplace(cb, (uint8_t)(tags_.size() + 1)).first;
+        current_ = it == tags_.end() ? kNone : it->second;
+        return current_;
+    }
+
+    // The tag of the callback that called the one returning, or kNone.
+    uint8_t leave() {
+        current_ = kNone;
+        if (!outer_.empty()) {
+            current_ = outer_.back();
+            outer_.pop_back();
+        }
+        return current_;
+    }
+
+private:
+    std::unordered_map<uint32_t, uint8_t> tags_;
+    std::vector<uint8_t> outer_;
+    uint8_t current_ = kNone;
+};
 
 // Lets each distinct line through once a frame.
 class OncePerFrame {

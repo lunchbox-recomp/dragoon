@@ -8,3 +8,7 @@
 # GObj_SetTextureCamera, before it calls an object's render callback, r24 the object and r12
 # the callback, for the camera census. Restates the move of the callback to ctr.
 8042A13C { void dragoon_census_draw(uint32_t, uint32_t); dragoon_census_draw(c->r[24], c->r[12]); } c->ctr = c->r[12];
+# GObj_SetTextureCamera, once the render callback returns, for the camera census. Restates the
+# store that puts back the object that was drawing, r25, in hsdGObj_current_render, written at
+# its small-data address (0x805DE31C), and the store watch after it.
+8042A144 { void dragoon_census_drawn(void); dragoon_census_drawn(); } ST32(0x805DE31Cu, c->r[25]); WATCH_STORE(0x8042A144u, 0x805DE31Cu);

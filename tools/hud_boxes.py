@@ -21,9 +21,10 @@ have, which are the ones that widened.
 A pair with no anchor at either aspect is listed as stretched, and passes. A HUD draw that
 pairs with none is left out unless it has an anchor, and then it fails.
 
-Each line gives the two draws' indices, the projection kind, the anchor, the textures by content
-hash (copy for an EFB copy) and both boxes in display pixels, then ok, stretched or FAIL with the
-reasons. The last line counts them. Exits 0 when no anchored draw fails, 1 when one does and 2 on
+Each line gives the two draws' indices, the projection kind, the anchor and the textures by
+content hash (copy for an EFB copy). In a run with DRAGOON_CENSUS=1, the render callback that
+made the draw follows. Both boxes in display pixels come next, then ok, stretched or FAIL with
+the reasons. The last line counts them. Exits 0 when no anchored draw fails, 1 when one does and 2 on
 a bad argument or a log it can't read or that lacks the lines it needs.
 """
 from __future__ import annotations
@@ -40,6 +41,10 @@ FLOAT = r"-?\d+(?:\.\d+)?"
 FIELDS = re.compile(rf" anchor=(?:S|([LCR])\(({FLOAT})\.\.({FLOAT})\)) "
                     rf"scr=(?:({FLOAT})\.\.({FLOAT}),({FLOAT})\.\.({FLOAT})|none)")
 TEXTURE = re.compile(r" t\d=\d+(?:(\*)|\[([0-9a-f]{16})\])")
+TAG = re.compile(r" tag=(\d+)")
+# DRAGOON_CENSUS=1 tags each render callback's draws and names the callback once. The line can
+# land at the end of a renderer's line.
+CALLBACK_TAG = re.compile(r"\[cbtag\] f=\d+ n=(\d+) cb=([0-9A-F]{8})")
 
 EFB_WIDTH = 640.0
 SCREEN = (0.0, 0.0, EFB_WIDTH, 480.0)  # x, y, width and height in EFB pixels
@@ -60,6 +65,8 @@ class HudDraw:
     box: Box | None = None            # on the EFB after the remap, None for no box
     textures: tuple[str, ...] = ()
     viewport: Rect | None = None
+    tag: int = 0
+    callback: int | None = None       # the render callback the census tagged it with
 
     @property
     def anchored(self) -> bool:
@@ -77,8 +84,10 @@ def _textures(text: str) -> tuple[str, ...]:
 
 
 def _read_fields(d: HudDraw, line: str) -> bool:
-    """Reads a draw's anchor, box and textures from its line. True when its textures may be on
-    the next line."""
+    """Reads a draw's tag, anchor, box and textures from its line. True when its textures may be
+    on the next line."""
+    if t := TAG.search(line):
+        d.tag = int(t[1])
     m = FIELDS.search(line)
     if not m:
         return False
@@ -91,9 +100,12 @@ def _read_fields(d: HudDraw, line: str) -> bool:
 
 def read_draws(lines) -> list[HudDraw]:
     draws: list[HudDraw] = []
+    callbacks: dict[int, int] = {}
     textures_next = False
     for line in lines:
         line = line.rstrip("\n")
+        if t := CALLBACK_TAG.search(line):
+            callbacks[int(t[1])] = int(t[2], 16)
         if m := DRAW.match(line):
             draws.append(HudDraw(int(m[1]), *projection(m)))
             textures_next = _read_fields(draws[-1], line)
@@ -111,6 +123,8 @@ def read_draws(lines) -> list[HudDraw]:
             textures_next = _read_fields(d, line)
             continue
         textures_next = False
+    for d in draws:
+        d.callback = callbacks.get(d.tag)
     return draws
 
 
@@ -197,6 +211,8 @@ def pair_text(old: HudDraw | None, new: HudDraw | None, scale: float, label: str
     shown = new or old
     head = (f"{old.index if old else ''}>{new.index if new else ''} {shown.kind} {shown.anchor_text} "
             f"{','.join(shown.textures) or 'untextured'}")
+    if (cb := next((d.callback for d in (new, old) if d and d.callback is not None), None)) is not None:
+        head += f" cb {cb:08X}"
     boxes = [_box_text("4:3", old.box, 1.0)] if old else []
     return "  ".join([head, *boxes, *([_box_text(label, new.box, scale)] if new else [])])
 

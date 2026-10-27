@@ -19,13 +19,17 @@ tools/probe.sh race 30 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_
 tools/drawlog.py cameras build/probe/race/stdout.txt --frame 4200 --symbols analysis/symbols.txt
 ```
 
-`DRAGOON_CENSUS=1` turns on two hooks in `src/census.cpp`. One sits at the entry of
-`HSD_CObjSetCurrent` (`0x80401150`) and logs the camera it's about to make current. The
-other sits where `GObj_SetTextureCamera` (`0x8042A0B4`) calls each object's render callback,
-and logs the callback with the camera it draws through.
+`DRAGOON_CENSUS=1` turns on three hooks in `src/census.cpp`. One sits at the entry of
+`HSD_CObjSetCurrent` (`0x80401150`) and logs the camera it's about to make current. Another
+sits where `GObj_SetTextureCamera` (`0x8042A0B4`) calls each object's render callback, and
+logs the callback with the camera it draws through.
 
 Each pair is logged once a frame as a `[census]` line. drawlog.py matches those cameras to the
 projections in the frame's `[draw]` lines and counts the draws through each.
+
+The third hook sits where the callback returns (`0x8042A144`). In between, the callback's draws
+carry a draw tag, which the draw log shows as `tag=N`. A `[cbtag]` line names the callback the
+first time it's called, and `drawlog.py hud` names it beside each HUD draw.
 
 The census also logs each call to `HSD_CObjSetAspect`, and each perspective camera
 `HSD_CObjLoadDesc` loads, as an `[aspect]` line. Each gives the camera, where the call returns

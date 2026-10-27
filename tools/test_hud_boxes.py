@@ -16,10 +16,14 @@ OTHER_TEX = "t0=13[00000000cafef00d]"
 
 
 def draw(i: int, box: str = "523.0..630.0,35.0..115.0", anchor: str = "R(0..640)", proj: str = ORTHO,
-         tex: str = TEX, slivers: int = 0) -> str:
+         tex: str = TEX, slivers: int = 0, tag: int = 0) -> str:
     line = (f"[draw] {i} verts=4 st=1 texgens=1 proj={proj} z=-1.00..-1.00 x=0.00..1.00 y=0.00..1.00 "
-            f"band=0.00000..1.00000 origin=0 slivers={slivers} anchor={anchor} scr={box}")
+            f"band=0.00000..1.00000 origin=0 slivers={slivers}{f' tag={tag}' if tag else ''} anchor={anchor} "
+            f"scr={box}")
     return line + (f" {tex}" if tex else "")
+
+
+CBTAG = "[cbtag] f=4200 n=3 cb=8011F8F4"
 
 
 def viewport(x: float, y: float, w: float, h: float) -> str:
@@ -330,6 +334,37 @@ class HudCommandTest(unittest.TestCase):
         code, line = self.one_draw(draw(1) + genmode, draw(1, "552.2..632.5,35.0..115.0") + genmode)
         self.assertEqual(code, 0)
         self.assertIn(" 00000000deadbeef  ", line)
+
+    def test_census_tag_names_the_callback(self):
+        code, out, _ = self.hud([*world(0, WORLD), CBTAG, draw(1, tag=3)],
+                                [*world(0, WIDE_WORLD), CBTAG, draw(1, "552.2..632.5,35.0..115.0", tag=3)])
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("1>1 ortho R(0..640) 00000000deadbeef cb 8011F8F4  4:3 "), out)
+
+    def test_tag_with_no_census_line_names_nothing(self):
+        code, line = self.one_draw(draw(1, tag=3), draw(1, "552.2..632.5,35.0..115.0", tag=3))
+        self.assertEqual(code, 0)
+        self.assertTrue(line.startswith("1>1 ortho R(0..640) 00000000deadbeef  4:3 "), line)
+
+    def test_callback_comes_from_the_4_3_run_when_the_other_has_none(self):
+        code, out, _ = self.hud([*world(0, WORLD), CBTAG, draw(1, tag=3)],
+                                [*world(0, WIDE_WORLD), draw(1, "552.2..632.5,35.0..115.0")])
+        self.assertEqual(code, 0)
+        self.assertIn(" cb 8011F8F4  ", out)
+
+    def test_census_tag_line_at_the_end_of_a_renderer_line_counts(self):
+        code, out, _ = self.hud([*world(0, WORLD)[:1], world(0, WORLD)[1] + CBTAG, draw(1, tag=3)],
+                                [*world(0, WIDE_WORLD), draw(1, "552.2..632.5,35.0..115.0", tag=3)])
+        self.assertEqual(code, 0)
+        self.assertIn(" cb 8011F8F4  ", out)
+
+    def test_tag_before_a_census_line_and_fields_after_it_count(self):
+        census = "[census] f=4200 cam=812C5260 type=ortho p=0,-48,0,64 vp=0,640,0,480 cb=8011F8F4 cls=27 via=draw"
+        head, tail = draw(1, tag=3).split(" anchor=")
+        code, out, _ = self.hud([*world(0, WORLD), CBTAG, head + census, " anchor=" + tail],
+                                [*world(0, WIDE_WORLD), draw(1, "552.2..632.5,35.0..115.0")])
+        self.assertEqual(code, 0)
+        self.assertIn(" cb 8011F8F4  ", out)
 
     def test_log_with_no_draws_exits_2(self):
         code, _, err = self.hud(["[census] f=1"], world(0, WIDE_WORLD))
