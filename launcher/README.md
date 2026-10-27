@@ -65,9 +65,9 @@ The recipe's exit code decides how the stream ends.
 | Exit | The stream |
 |---|---|
 | 0 | Ends normally, and the new game is current |
-| 1 | Throws `failed`, with the recipe's error event or else the log's path |
-| 2 | Throws `refused`, with the kit's reason or the recipe's stderr |
-| 3 | Throws `alreadyRunning`, which reads "a build is already running" |
+| 1 | Yields the recipe's `error` event, then throws `failed` with its step and message, or with the log's path when there was none |
+| 2 | Throws `refused`, with the kit's reason or the recipe's stderr, and yields no `error` event |
+| 3 | Throws `alreadyRunning`, "a build is already running", with no `error` event |
 | Anything else, or a signal | Throws `failed`, with the log's path |
 | `cancel()` | Throws `cancelled` unless the recipe exited 0 first |
 

@@ -56,7 +56,9 @@ public enum BuildEvent: Equatable, Sendable {
     case progress(step: String, done: Int, total: Int)
     /// The new game is current, at `game`.
     case done(game: String)
-    /// A step failed. The stream ends with `BuildFailure.failed` right after it.
+    /// A step failed. The stream ends with `BuildFailure.failed` right after it. Nothing else
+    /// yields this: an error the recipe reports as it refuses its arguments or finds another build
+    /// running is left to `BuildFailure.refused` or `alreadyRunning`.
     case error(step: String, message: String, log: String)
 }
 
@@ -191,8 +193,8 @@ public final class BuildRunner: @unchecked Sendable {
         let state = RunState()
         let stdout = LineSplitter { line in
             if let event = BuildEvent(line: line) {
-                state.note(event)
-                continuation.yield(event)
+                // An error waits for the exit code, which says whether the stream should show it.
+                if case .error = event { state.note(event) } else { continuation.yield(event) }
             } else if !line.isEmpty {
                 write("[stdout] " + line)
             }
@@ -211,7 +213,7 @@ public final class BuildRunner: @unchecked Sendable {
                 killGrace: killGrace, onStdout: stdout.feed, onStderr: stderr.feed)
             stdout.flush()
             stderr.flush()
-            failure = Self.failure(for: outcome, state, logPath, write)
+            failure = Self.failure(for: outcome, state, logPath, write, yield: { continuation.yield($0) })
         } catch is CancellationError {
             failure = .cancelled
         } catch let lost as ProcessWaitFailure {
@@ -243,7 +245,7 @@ public final class BuildRunner: @unchecked Sendable {
     /// Nil when the new game is current. Otherwise why not, from the recipe's exit code.
     private static func failure(
         for outcome: ProcessGroupOutcome, _ state: RunState, _ logPath: String,
-        _ write: @Sendable (String) -> Void
+        _ write: @Sendable (String) -> Void, yield: (BuildEvent) -> Void
     ) -> BuildFailure? {
         if !outcome.signaled && outcome.status == 0 { return nil }
         if outcome.cancelled { return .cancelled }
@@ -259,6 +261,8 @@ public final class BuildRunner: @unchecked Sendable {
         switch outcome.status {
         case 1:
             if let recipeError {
+                yield(.error(
+                    step: recipeError.step, message: recipeError.message, log: recipeError.log))
                 return .failed(
                     step: recipeError.step, message: recipeError.message, log: recipeError.log)
             }

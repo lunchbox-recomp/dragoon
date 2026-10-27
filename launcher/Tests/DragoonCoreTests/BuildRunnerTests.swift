@@ -181,6 +181,8 @@ import Testing
         let finished = await collect(fixture.runner().run(fixture.request()))
         #expect(finished.failure == .alreadyRunning)
         #expect(finished.failure?.message == "a build is already running")
+        // The recipe's own error event names a log that doesn't exist, so the stream leaves it out.
+        #expect(finished.events.isEmpty)
         #expect(fixture.logNames.isEmpty)
     }
 
@@ -196,6 +198,7 @@ import Testing
         #expect(
             finished.failure
                 == .refused(message: "the kit is from another commit", log: fixture.logPath))
+        #expect(finished.events.isEmpty)
 
         try fixture.install(
             #"""
