@@ -50,6 +50,27 @@ The recipe's reader stops with a Python error when the file ends before the DOL 
 
 The image is read through a file handle a piece at a time, with no read over 1 MiB. A 1.4 GB disc doesn't cost 1.4 GB of memory.
 
+## Running the recipe
+
+`BuildRunner.run(_:)` runs the build recipe with the tools the tools check found and gives its JSON lines back as `BuildEvent` values. The command is `<python3> -B <bundle>/Contents/Resources/source/tools/launcher_build.py` and then the recipe's options as a list, so a path with spaces stays one argument. `-B` keeps `__pycache__` out of the signed bundle, and the kit comes from `Contents/Resources/kit`.
+
+The recipe gets an environment of its own with a fixed `PATH`, `HOME`, `TMPDIR`, `LANG`, `PYTHONDONTWRITEBYTECODE` and `DEVELOPER_DIR`. Nothing from the player's shell reaches its Python.
+
+It starts as the leader of a new process group, so the recipe, make, clang and the warm-up's game stop together. `BuildRunner.cancel()` sends that group SIGTERM, and SIGKILL 10 seconds later if anything is left. Dropping the stream does the same. Every `SystemProcessRunner` call starts its process this way too, so cancelling a task that waits on `Toolchain.detect` stops its command the same way.
+
+A stdout line that isn't an event is logged and never counted as an error. Everything the recipe prints on stderr is logged too. Both go into `~/Library/Logs/Dragoon/build-<time>.log` beside what the recipe writes there, and the newest 10 logs stay.
+
+The recipe's exit code decides how the stream ends.
+
+| Exit | The stream |
+|---|---|
+| 0 | Ends normally, and the new game is current |
+| 1 | Throws `failed`, with the recipe's error event or else the log's path |
+| 2 | Throws `refused`, with the kit's reason or the recipe's stderr |
+| 3 | Throws `alreadyRunning`, which reads "a build is already running" |
+| Anything else, or a signal | Throws `failed`, with the log's path |
+| `cancel()` | Throws `cancelled` unless the recipe exited 0 first |
+
 ## Why a wrapper runs the tests
 
 The Command Line Tools ship Swift Testing, but not where `swift test` looks. `Testing.framework` is in `/Library/Developer/CommandLineTools/Library/Developer/Frameworks` and `lib_TestingInterop.dylib` is in `.../Library/Developer/usr/lib`. The compiler needs the first as a framework search path, and the test runner needs both as rpaths.
