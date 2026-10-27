@@ -54,9 +54,9 @@ The image is read through a file handle a piece at a time, with no read over 1 M
 
 ## Running the recipe
 
-`BuildRunner.run(_:)` runs the build recipe with the tools the tools check found and gives its JSON lines back as `BuildEvent` values. The command is `<python3> -B <bundle>/Contents/Resources/source/tools/launcher_build.py` and then the recipe's options as a list, so a path with spaces stays one argument. `-B` keeps `__pycache__` out of the signed bundle, and the kit comes from `Contents/Resources/kit`.
+`BuildRunner.run(_:)` runs the build recipe with the tools the tools check found and gives its JSON lines back as `BuildEvent` values. The command is `<python3> -B -s <bundle>/Contents/Resources/source/tools/launcher_build.py` and then the recipe's options as a list, so a path with spaces stays one argument. `-B` keeps `__pycache__` out of the signed bundle, `-s` keeps the player's user site-packages off the path, and the kit comes from `Contents/Resources/kit`.
 
-The recipe gets an environment of its own with a fixed `PATH`, `HOME`, `TMPDIR`, `LANG`, `PYTHONDONTWRITEBYTECODE` and `DEVELOPER_DIR`. Nothing from the player's shell reaches its Python.
+The recipe gets an environment of its own with a fixed `PATH`, `HOME`, `TMPDIR`, `LANG`, `PYTHONDONTWRITEBYTECODE`, `PYTHONNOUSERSITE` and `DEVELOPER_DIR`. Nothing from the player's shell or their user site-packages reaches its Python.
 
 It starts as the leader of a new process group, so the recipe, make, clang and the warm-up's game stop together. `BuildRunner.cancel()` sends that group SIGTERM, and SIGKILL 10 seconds later if anything is left. Dropping the stream does the same. Every `SystemProcessRunner` call starts its process this way too, so cancelling a task that waits on `Toolchain.detect` stops its command the same way.
 

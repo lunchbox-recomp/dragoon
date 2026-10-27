@@ -3,7 +3,7 @@ import Foundation
 
 /// A scratch directory with spaces in its name that holds what a build needs. That is a bundle
 /// whose recipe is a shell script a test writes, a python3 that records how it was called and
-/// then runs that script with sh, and directories for the logs, data and cache.
+/// then runs that script with sh after the -B and -s, and directories for the logs, data and cache.
 final class RecipeFixture: @unchecked Sendable {
     let root: String
 
@@ -48,7 +48,7 @@ final class RecipeFixture: @unchecked Sendable {
             #!/bin/sh
             printf '%s\\n' "$@" > \(shellWord(argumentsFile))
             /usr/bin/env > \(shellWord(environmentFile))
-            shift
+            shift 2
             exec /bin/sh "$@"
             """)
     }
@@ -68,6 +68,22 @@ final class RecipeFixture: @unchecked Sendable {
             done
             \(body)
             """)
+    }
+
+    /// Installs `source`, which is Python, as the recipe, for a test that runs a real python3.
+    func installPython(_ source: String) throws {
+        try executable(recipe, source)
+    }
+
+    /// A request that runs the recipe under the python3 in `/usr/bin`, with the developer
+    /// directory that `xcode-select -p` names, as it runs on a Mac with the tools installed.
+    func requestWithRealPython() async throws -> BuildRequest {
+        var real = toolchain
+        real.python3 = "/usr/bin/python3"
+        real.developerDirectory = try await SystemProcessRunner().run("/usr/bin/xcode-select", ["-p"])
+            .stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return BuildRequest(
+            toolchain: real, bundle: bundle, disc: disc, data: data, cache: cache)
     }
 
     func request(noWarmup: Bool = false, keepBuild: Bool = false) -> BuildRequest {
