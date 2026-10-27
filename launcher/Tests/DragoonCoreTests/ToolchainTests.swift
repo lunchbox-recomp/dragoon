@@ -441,6 +441,19 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         #expect(mac.runner.calls.dropFirst().allSatisfy { $0.environment == fixed })
     }
 
+    @Test func everyCommandAfterXcodeSelectRunsOnAFixedPathUnderXcodeToo() async {
+        let mac = FakeMac(developer: xcode)
+        let named = xcode + "/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+        mac.runner.respond(
+            to: "/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], with: ok(named + "\n"))
+        mac.setLinks(named, true)
+        _ = await mac.detect()
+
+        let fixed = ["DEVELOPER_DIR": xcode, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
+        #expect(mac.commands.contains(["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"]))
+        #expect(mac.runner.calls.dropFirst().allSatisfy { $0.environment == fixed })
+    }
+
     @Test func theProbeIsACstdioFileInCachesAndItsPathKeepsItsSpaces() async throws {
         let mac = FakeMac()
         mac.addSDK("MacOSX26.5.sdk")
