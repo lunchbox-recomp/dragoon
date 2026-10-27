@@ -65,4 +65,19 @@ TEST(SetsWorldAspect, ALibraryCallWithAnotherWorldCallsCallerDoesNotCount) {
     EXPECT_FALSE(dragoon::sets_world_aspect(0x800B3990, 0x80066E4C));  // the pair the wrong way round
 }
 
+TEST(LoadsWorldCamera, TopRidesWorldCameraCounts) {
+    EXPECT_TRUE(dragoon::loads_world_camera(0x803719A0, 0x8028C0E0));
+}
+
+// Callers seen in the census loading Top Ride's HUD, effect and menu cameras.
+TEST(LoadsWorldCamera, NoOtherLoadCounts) {
+    EXPECT_FALSE(dragoon::loads_world_camera(0x802CAD8C, 0x8028C37C));  // fn_802CA894, fov 25
+    EXPECT_FALSE(dragoon::loads_world_camera(0x8037A100, 0x8037A928));  // the game's effects
+    EXPECT_FALSE(dragoon::loads_world_camera(0x80382510, 0x8028C2E0));  // the slide blur
+    EXPECT_FALSE(dragoon::loads_world_camera(0x80066E0C, 0x8013945C));  // the camera library
+    EXPECT_FALSE(dragoon::loads_world_camera(0x803719A0, 0x8028C37C));  // another caller
+    EXPECT_FALSE(dragoon::loads_world_camera(0x803719A0, 0));
+    EXPECT_FALSE(dragoon::loads_world_camera(0x8028C0E0, 0x803719A0));  // the wrong way round
+}
+
 }  // namespace

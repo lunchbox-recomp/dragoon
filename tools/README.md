@@ -138,7 +138,7 @@ Which cameras does a frame draw through, and what aspect does each hold? It read
 
 `aspects` lists each perspective camera's stored aspect from one frame to another, with the frames it held it. It exits 1 when one changed within its viewport, which is how a widening that compounds frame on frame would show.
 
-`setters` lists who set each camera's aspect from one frame to another. It reads the `[aspect]` line that `DRAGOON_CENSUS=1` prints for each call to `HSD_CObjSetAspect`.
+`setters` lists who set each camera's aspect from one frame to another. It reads the `[aspect]` line that `DRAGOON_CENSUS=1` prints for each call to `HSD_CObjSetAspect` and each perspective camera `HSD_CObjLoadDesc` loads.
 
 Each line names a camera and where the call returns to, then where its caller returns to. It ends with the aspect the call was given and the one the camera held after, or `none` for a camera that isn't a perspective one.
 

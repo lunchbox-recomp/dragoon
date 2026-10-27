@@ -21,12 +21,13 @@ aspects prints each perspective camera's stored aspects in the [census] lines fr
 frame M, with the frames it held each, a camera being one address in one viewport.
 
 setters prints who set each camera's aspect from frame N to frame M, from DRAGOON_CENSUS=1's
-[aspect] lines, one for each call to HSD_CObjSetAspect. Each line names a camera and where
-the call returns to, then where its caller returns to. With --symbols each is named by the
-function that holds its call, the instruction before it, and how far in it is. It ends with the aspect the call was given, the one the camera held after (none
-for a camera that isn't a perspective one) and the frames. --cam ADDR keeps one camera's
-lines. When no line is left, it says so on stderr, since a camera whose aspect is set some
-other way has none.
+[aspect] lines, one for each call to HSD_CObjSetAspect and each perspective camera
+HSD_CObjLoadDesc loads. Each line names a camera and where the call returns to, then where
+its caller returns to. With --symbols each is named by the function that holds its call, the
+instruction before it, and how far in it is. It ends with the aspect the call was given or
+loaded, the one the camera held after (none for a camera that isn't a perspective one) and
+the frames. --cam ADDR keeps one camera's lines. When no line is left, it says so on stderr,
+since a camera whose aspect is set some other way has none.
 
 Exits 0 once it has read the log, 1 when aspects finds a camera whose stored aspect changed
 within its viewport, 2 on a bad argument or a log it can't read or that lacks the lines asked

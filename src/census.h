@@ -54,12 +54,14 @@ inline std::string census_line(uint32_t frame, uint32_t cam, const Camera& c, ui
     return line;
 }
 
-// One line for a call to HSD_CObjSetAspect, such as
+// One line for a call to HSD_CObjSetAspect, or to HSD_CObjLoadDesc for a perspective camera,
+// such as
 //   [aspect] f=4200 cam=8123A0C0 lr=800C2884 lr2=800C1F00 given=1.25538 stored=1.67383
 // lr is where the call returns to and lr2 where its caller returns to, so a call the camera
-// library makes for someone else names them too. given is the aspect the caller passed and
-// stored the aspect the camera holds once the call is done, which src/cameras.cpp may have
-// widened. A camera that isn't a perspective one holds no aspect, so its stored is "none".
+// library makes for someone else names them too. given is the aspect the caller passed, or
+// the one the camera was loaded with, and stored the aspect the camera holds once the call is
+// done, which src/cameras.cpp may have widened. A camera that isn't a perspective one holds
+// no aspect, so its stored is "none".
 inline std::string aspect_line(uint32_t frame, uint32_t cam, uint32_t lr, uint32_t lr2, float given,
                                const Camera& c) {
     char stored[32] = "none";
