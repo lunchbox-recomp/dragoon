@@ -59,11 +59,13 @@ inline std::string census_line(uint32_t frame, uint32_t cam, const Camera& c, ui
 // lr is where the call returns to and lr2 where its caller returns to, so a call the camera
 // library makes for someone else names them too. given is the aspect the caller passed and
 // stored the aspect the camera holds once the call is done, which src/cameras.cpp may have
-// widened.
+// widened. A camera that isn't a perspective one holds no aspect, so its stored is "none".
 inline std::string aspect_line(uint32_t frame, uint32_t cam, uint32_t lr, uint32_t lr2, float given,
-                               float stored) {
+                               const Camera& c) {
+    char stored[32] = "none";
+    if (c.type == kPerspective) snprintf(stored, sizeof(stored), "%.6g", c.proj[1]);
     char line[128];
-    snprintf(line, sizeof(line), "[aspect] f=%u cam=%08X lr=%08X lr2=%08X given=%.6g stored=%.6g", frame,
+    snprintf(line, sizeof(line), "[aspect] f=%u cam=%08X lr=%08X lr2=%08X given=%.6g stored=%s", frame,
              cam, lr, lr2, given, stored);
     return line;
 }

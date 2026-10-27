@@ -319,6 +319,11 @@ class SettersCommandTest(unittest.TestCase):
             "81424A80  from 800C2884  called from 800C1F00  given 1.25538 stored 1.67383"
             "  in frames 100..100 (1 frames)"])
 
+    def test_a_camera_with_no_aspect_stores_none(self):
+        code, out, _ = run_main(drawlog.main, "setters", self.log(setter(100, cam="812C5260", stored="none")))
+        self.assertEqual(code, 0)
+        self.assertIn("812C5260  from 800C2884  called from 800C1F00  given 1.25538 stored none", out)
+
     def test_line_at_the_end_of_a_renderer_line_counts(self):
         code, out, _ = run_main(drawlog.main, "setters", self.log(FULL_VP + setter(100)))
         self.assertEqual(code, 0)
