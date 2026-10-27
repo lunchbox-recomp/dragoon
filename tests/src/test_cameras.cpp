@@ -1,5 +1,6 @@
 // Which cameras widen and by how much (src/cameras.h).
 #include "cameras.h"
+#include <cmath>
 #include <gtest/gtest.h>
 
 namespace {
@@ -22,6 +23,11 @@ TEST(WidenedAspect, SplitScreenViewsWidenByTheSameFactor) {
 
 TEST(WidenedAspect, At21By9TheViewIsSevenQuartersAsWide) {
     EXPECT_FLOAT_EQ(dragoon::widened_aspect(1.25538f, 21.0f / 9.0f), 1.25538f * 7 / 4);
+}
+
+TEST(WidenedAspect, AnOutputOfNoWidthLeavesTheAspectAlone) {
+    EXPECT_EQ(dragoon::widened_aspect(1.25538f, 0.0f), 1.25538f);
+    EXPECT_EQ(dragoon::widened_aspect(1.25538f, std::nanf("")), 1.25538f);
 }
 
 TEST(SetsWorldAspect, OnlyTheCameraModulesTwoCallsCount) {
