@@ -242,6 +242,18 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         #expect(await mac.detect() == .noLinkableSDK(tried: [tools + "/SDKs/MacOSX26.5.sdk"]))
     }
 
+    @Test func aProbeThatCantBeWrittenIsItsOwnStatusAndNoSDKIsTried() async {
+        let mac = FakeMac()
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX26.5.sdk", true)
+        let denied = CocoaError(.fileWriteNoPermission)
+        mac.fs.failWrites(with: denied)
+
+        #expect(await mac.detect() == .cantWriteProbe(
+            path: data + "/probe/toolchain.cpp", error: denied.localizedDescription))
+        #expect(mac.probedSDKs.isEmpty)
+    }
+
     @Test func noDeveloperDirectoryIsMissingAndOnlyXcodeSelectRan() async {
         let mac = FakeMac()
         mac.runner.respond(
@@ -431,6 +443,13 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         ])
     }
 
+    @Test func cantWriteProbeNamesThePathAndTheError() throws {
+        let json = try parse(.cantWriteProbe(path: "/a b/probe.cpp", error: "no permission"))
+        #expect(json as NSDictionary == [
+            "status": "cantWriteProbe", "path": "/a b/probe.cpp", "error": "no permission",
+        ])
+    }
+
     @Test func readyHoldsEveryFieldOfTheToolchain() throws {
         let json = try parse(.ready(cltToolchain(sdk: tools + "/SDKs/MacOSX26.5.sdk")))
         #expect(json as NSDictionary == [
@@ -455,5 +474,6 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         #expect(ToolchainStatus.ready(cltToolchain(sdk: "/sdk")).isReady)
         #expect(!ToolchainStatus.missing.isReady)
         #expect(!ToolchainStatus.noLinkableSDK(tried: []).isReady)
+        #expect(!ToolchainStatus.cantWriteProbe(path: "/p", error: "e").isReady)
     }
 }
