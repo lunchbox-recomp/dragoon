@@ -194,10 +194,10 @@ the bit, so the game runs there as it did.
 
 ## World to screen and culling
 
-Both read the world camera's stored aspect, so neither needed a change of its own. A watch
-build of gcn-recomp lists every load from a range of guest memory. In the race at 16:9, these
-were all the loads of the full-screen world camera's field of view and aspect over frames
-4,199 and 4,200.
+World to screen reads the world camera's stored aspect, so it needed no change of its own. A
+watch build of gcn-recomp lists every load from a range of guest memory. On Dragoon `c9caba4`
+at loads of 3.2 to 3.4, in the race at 16:9, these were all the loads of the full-screen world
+camera's field of view and aspect over frames 4,199 and 4,200.
 
 | Function | Field of view loaded at | Aspect loaded at |
 |---|---|---|
@@ -211,8 +211,15 @@ were all the loads of the full-screen world camera's field of view and aspect ov
 
 The world-to-screen helper reads both off the camera, so the markers it places follow the
 wider view. `kar_grcoll__near_800d7e78` loads neither itself. Every load of the aspect reads the
-widened value, so whatever culls the world sees the wider view, and the world drew more at
-16:9 at every checkpoint.
+widened value.
+
+The test that decides which objects the world draws wasn't identified. One that takes only the
+field of view wouldn't show up in this table, and neither would one in another mode or frame.
+So the table doesn't show that culling follows the wider view.
+
+The draws and the output dumps are what show it. At 16:9 the world drew at least as much as at
+4:3 at every checkpoint measured here, and no dump shows an object cut off at a side edge. Five of the ten world views drew the same number at both, which are the
+race after its finish, 2P's second view, 4P's second and fourth and Top Ride.
 
 ```sh
 cmake -S . -B build -DCMAKE_C_FLAGS=-DGCN_WATCH -DCMAKE_CXX_FLAGS=-DGCN_WATCH
@@ -261,7 +268,8 @@ and 4P at 3480, Top Ride on Grass at 3600 and, before `0ad99ed`, the mode select
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - No object is cut off at a side edge in these dumps, and the world drew at least as much at
-  16:9 at every checkpoint. Pop-in while moving still needs a person to watch.
+  16:9 at every checkpoint. The test that culls the world wasn't found, so pop-in while moving
+  still needs a person to watch.
 
 The markers sit where they should. The CPU markers sit over their karts in the race at 4200
 and in City Trial at 3300. In 4P at 3480 each marker sits over the same scenery as at 4:3,
