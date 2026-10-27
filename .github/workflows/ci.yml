@@ -83,4 +83,4 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s launcher/tools -p 'test_*.py'
       - name: Swift tests
         if: ${{ hashFiles('launcher/Package.swift') != '' }}
-        run: swift test --package-path launcher
+        run: python3 launcher/tools/swift_test.py
