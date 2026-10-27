@@ -103,8 +103,9 @@ frame 8202.
 ### Top Ride
 
 Top Ride draws its world through one full-screen camera at fov 30, which stores 1.18 at 4:3.
-At frame 3,600 of `top-ride-grass.txt` it makes 198 of the frame's 236 draws, and fov 25
-cameras make the other 38. `drawlog.py setters` lists no call to `HSD_CObjSetAspect` for it.
+On Dragoon `a2ff7fd` at a load of about 3, at frame 3,600 of `top-ride-grass.txt`, it makes
+198 of the frame's 236 draws at 4:3 and at 16:9, and fov 25 cameras make the other 38.
+`drawlog.py setters` lists no call to `HSD_CObjSetAspect` for it.
 
 A watch build of Dragoon `c4bba2b`, run at a load of about 20 just after its build, logged each
 store to the camera's aspect up to frame 3,700. After `_HSD_MemClearDefaultCB` clears the
