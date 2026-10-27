@@ -191,6 +191,10 @@ class Build:
 
     @contextlib.contextmanager
     def stage(self, step: str) -> Iterator[None]:
+        """Print the step's event and write its notes. The closing note is best-effort in every
+        step, since it holds a measurement and a measurement never fails a step. A line whose
+        flush failed stays pending, so a log that stays full fails the next strict write, and a
+        full log before the swap still stops the run with the old game current."""
         self.step = step
         emit(event="step", step=step)
         self.note(f"== {step}")
