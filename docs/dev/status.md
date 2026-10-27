@@ -22,8 +22,11 @@ The pin was `dac449e`, where on Dragoon `4602fa1` all twenty-one routes' frames 
 matched (under gcn-recomp `dac449e` below). The eight-pass warm-up was timed on it at `2fc9285`,
 and the three `-courses` routes' goldens were recorded on it just before.
 
-It's now `5e49451`, and on Dragoon `35a4d3a` with the pin moved all twenty-four frame-hash
-routes still match (under gcn-recomp `5e49451` below).
+The pin was `5e49451`, where on Dragoon `35a4d3a` all twenty-four frame-hash routes matched
+(under gcn-recomp `5e49451` below).
+
+It's now `013d907`, and on Dragoon `8202011` with the pin moved all twenty-four routes' frames
+and audio still match (under gcn-recomp `013d907` below).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -591,7 +594,7 @@ What a player's first session looks like after the warm-up, against the bars set
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, "Chained course passes" below). In 21 passes, 74.8 s at a load of 1.22 for 328 keys (Dragoon `529f40c`), and 73.7 s to 76.1 s under "Longer course passes". Before three of those passes grew, 67.7 s and 68.9 s for 318 keys five at a time (Dragoon `0059fce`, table below). One pass at a time, 47.1 s for the five routes' 191 keys, 120.5 s for the twelve routes' 222 and 252.8 s for the twenty-one routes' 318 | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`). At `529f40c`, 461 to 509 ms for 328 programs at loads of 1.90 to 8.56. Earlier, 270 to 298 ms for 191 programs and 362 to 387 ms for 222 | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there. The three `-courses` routes' goldens were recorded at `dac449e` on the tree that became Dragoon `2ae3277`, and all three routes' 609 frames matched a check run straight after. All twenty-four at `5e49451`, on Dragoon `35a4d3a`, `b307f49`, `45c52c5` and `05b3389` (under gcn-recomp `5e49451`) | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All five routes OK. All twelve at `fe0c0bf`, and all twelve at `b97c019` and `e1016b8` after the goldens were recorded at `b97c019`. All twenty-one at `e1016b8`, with the nine newer routes' goldens recorded there. The three `-courses` routes' goldens were recorded at `dac449e` on the tree that became Dragoon `2ae3277`, and all three routes' 609 frames matched a check run straight after. All twenty-four at `5e49451`, on Dragoon `35a4d3a`, `b307f49`, `45c52c5` and `05b3389` (under gcn-recomp `5e49451`). All twenty-four at `013d907`, on Dragoon `8202011` (under gcn-recomp `013d907`) | Pass |
 | World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `45c52c5` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
 | Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `45c52c5` at loads of 2.7 to 6.3) | Pass |
 | Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at this pin (`widescreen.md` says why it isn't 1:12.60) | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1) | Pass |
@@ -937,6 +940,22 @@ pass. The load was about 4 at its start and its end.
 On Dragoon `05b3389`, which also forgets a kept camera as the game frees it, the check matched
 all twenty-four routes and 1,906 frames in one pass. The load was 2.3 at its start and 4.2 at
 its end.
+
+## gcn-recomp `013d907`
+
+The pin moved from `5e49451` to `013d907`, 59 commits. They add an FST reader and writer in
+Python and a builder for a disc overlay, which lays loose files over the disc. The runtime reads
+the disc through an overlay named by `--disc-overlay` or `GCN_DISC_OVERLAY`, and
+`recomp/dol_patch.py` applies patch lists to a DOL.
+
+Built on Dragoon `8202011`, `tools/frame_hashes.py check` matched all twenty-four routes and
+1,906 frames in one pass. The load was 6.4 at its start and 4.1 at its end. Then
+`tools/audio_hashes.py check` matched all 48 audio rows, with the load at 4.1 at its start and
+2.3 at its end.
+
+Dragoon doesn't load an overlay or patch its DOL yet, so the game reads the disc as it did
+before. Every frame and audio row matched, so no golden was recorded. Each check took about
+15 min.
 
 ## Fixes on the way
 
