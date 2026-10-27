@@ -71,7 +71,7 @@ During play the camera module sets the world cameras' aspect through two calls t
 `0x800C9820` in `kar_cmreplay__near_800c9790`. The HUD, minimap and menu cameras get theirs
 from calls elsewhere, and that's the rule `src/cameras.h` keys on. At gcn-recomp `3a8d154`,
 from frame 8,183 after the race's finish to 13,062, the full-screen world cameras store
-1.25538 with `DRAGOON_WIDEN=1`, and neither of the two calls sets them.
+1.25538 at 16:9, and neither of the two calls sets them.
 
 A camera's address won't do as a rule, because one address can hold different cameras over a
 run. In the race, the address of a HUD 3D camera at frame 4200 belonged to a world camera at
@@ -135,17 +135,17 @@ widening. Those frames, the results screen's at 25,800 among them, all come afte
 where the world cameras are back at 4:3, so they only show that the race ended the same way.
 
 ```sh
-tools/probe.sh wide 30 tests/routes/air-ride-race.txt 4200 --aspect=16:9 --output DRAGOON_WIDEN=1
+tools/probe.sh wide 30 tests/routes/air-ride-race.txt 4200 --aspect=16:9 --output
 ```
 
 `src/cameras.cpp` holds the hook and `src/cameras.h` the rule, which
-`tests/src/test_cameras.cpp` checks. Without `DRAGOON_WIDEN=1` the game runs as it did, and
-at 4:3 the widening is the identity to the bit.
+`tests/src/test_cameras.cpp` checks. The widening is always on. At 4:3 it's the identity to
+the bit, so the game runs there as it did.
 
 ## What 16:9 still gets wrong
 
 These come from the output dumps of the race at 4200, 4P at 3480 and the mode select at 1200,
-with `DRAGOON_WIDEN=1`, and from the race's census after its finish.
+with the widening, and from the race's census after its finish.
 
 - Every HUD element is 4/3 too wide. In the race that's the position badge, the timer, the
   minimap box, the lap count, the speedometer, the "ff" bubble and the CPU markers. In 4P
@@ -158,6 +158,5 @@ with `DRAGOON_WIDEN=1`, and from the race's census after its finish.
 - No object is cut off at a side edge in these dumps, and the world drew more at 16:9 in
   both. Pop-in while moving still needs a person to watch.
 - After the race's finish line the world cameras are back at 4:3. At gcn-recomp `3a8d154`,
-  from frame 8,183 to 13,062, the full-screen world cameras store 1.25538 with
-  `DRAGOON_WIDEN=1`, and neither of the two hooked calls sets them.
-- The widening stays behind `DRAGOON_WIDEN=1`.
+  from frame 8,183 to 13,062, the full-screen world cameras store 1.25538 at 16:9, and
+  neither of the two hooked calls sets them.

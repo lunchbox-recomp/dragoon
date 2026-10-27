@@ -13,13 +13,17 @@ constexpr float kConsoleAspect = 4.0f / 3.0f;
 // kar_cmreplay__near_800c9790. The HUD, the minimap and the menus set theirs through the
 // camera library instead, so a call from anywhere else isn't a world camera's. In the race
 // at gcn-recomp 3a8d154, from frame 8,183 after the finish to 13,062, the full-screen world
-// cameras store 1.25538 with DRAGOON_WIDEN=1, and neither call sets them.
+// cameras store 1.25538 at 16:9, and neither call sets them.
 inline bool sets_world_aspect(uint32_t return_address) {
     return return_address == 0x800C2884 || return_address == 0x800C9820;
 }
 
 // A world camera's aspect at output aspect `output`: its 4:3 aspect times the output aspect
-// over 4:3. At 4:3 it's the aspect unchanged, to the bit.
-inline float widened_aspect(float aspect, float output) { return aspect * (output / kConsoleAspect); }
+// over 4:3. At 4:3 it's the aspect unchanged, to the bit, and so is it at an output of no
+// width, such as a window shrunk to nothing under --aspect=window.
+inline float widened_aspect(float aspect, float output) {
+    if (!(output > 0.0f)) return aspect;
+    return aspect * (output / kConsoleAspect);
+}
 
 }  // namespace dragoon
