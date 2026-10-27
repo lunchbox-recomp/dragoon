@@ -250,6 +250,16 @@ class RefusalTest(ModsCase):
         self.addCleanup(locked.chmod, 0o755)
         self.refused("Mod", "files/Data", "can't be read")
 
+    @unittest.skipIf(os.geteuid() == 0, "root reads a file whatever its mode")
+    def test_a_file_that_cant_be_read(self) -> None:
+        for rel in ("files/Data/a.bin", "hook.bin"):
+            with self.subTest(rel=rel):
+                self.mods = self.make({"Mod/dol.txt": DOL_TXT, f"Mod/{rel}": b"x"})
+                locked = self.mods / "Mod" / rel
+                locked.chmod(0)
+                self.addCleanup(locked.chmod, 0o644)
+                self.refused("Mod", rel, "can't be read")
+
     def test_the_error_names_the_mod_and_the_path(self) -> None:
         self.put("Big Mod/files/main.dol")
         with self.assertRaises(mods.ModError) as cm:
@@ -332,6 +342,17 @@ class CheckTest(ModsCase):
             "error": "Big Mod/files/main.dol: is a whole DOL, and a mod changes the game's code "
                      "with dol.txt",
             "mod": "Big Mod", "path": "files/main.dol"})
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a file whatever its mode")
+    def test_a_file_that_cant_be_read_exits_1_naming_it(self) -> None:
+        locked = self.put("Big Mod/files/a.bin")
+        locked.chmod(0)
+        self.addCleanup(locked.chmod, 0o644)
+        code, out, err = self.check()
+        self.assertEqual((code, err), (1, ""))
+        got = json.loads(out)
+        self.assertEqual((got["mod"], got["path"]), ("Big Mod", "files/a.bin"))
+        self.assertIn("can't be read", got["error"])
 
     def test_bad_arguments_exit_2(self) -> None:
         for argv in ([], ["check"], ["check", str(self.mods)],
