@@ -833,6 +833,16 @@ rest grew by 15.8 s, since each later race's menus and start now come past frame
 | All passes | 366.6 s for 21 | 291.4 s for 8 |
 | Warm-up, with the load when it began | 76.8 s at 2.36 | 63.2 s at 1.58 |
 
+## Mods
+
+What a mods folder costs and what it catches, against the bars set for it. Times are on an M4 Max.
+
+| Target | Bar | Measured | Result |
+|---|---|---|---|
+| Noticing a change | `mods.py check` on 120 MB takes 1 s or less, and any added, removed, edited or renamed file changes the digest | 0.08 s in each of three runs on 125,829,120 bytes in 120 files, at a load of 3.0 (Dragoon `b2517cf`). `test_mods.py` adds, removes, edits and renames a file, renames a mod and moves a file between mods, and each changes the digest | Pass |
+
+The files were 120 pieces of 1 MiB from `/dev/urandom` in one mod's `files/audio/`, written just before, so they were in the page cache. `check` ran under the Command Line Tools' Python 3.9.6 with `/usr/bin/time -p`, and the row gives its real time.
+
 ## gcn-recomp `e1016b8`
 
 The pin moved from gcn-recomp `b848158` to `e1016b8`, 87 commits, by way of `b97c019`, 66
