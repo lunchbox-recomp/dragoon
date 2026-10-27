@@ -13,6 +13,9 @@ public protocol FileSystem: Sendable {
     func readData(at path: String) throws -> Data
     /// Replaces the file at `path` whole or not at all, making its directory first.
     func writeData(_ data: Data, to path: String) throws
+    /// Removes the file or link at `path`, or the directory and everything in it. A link goes
+    /// without what it points to. Throws when nothing is there.
+    func removeItem(at path: String) throws
 }
 
 /// The real FileSystem, on FileManager.
@@ -50,5 +53,9 @@ public struct SystemFileSystem: FileSystem {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url, options: .atomic)
+    }
+
+    public func removeItem(at path: String) throws {
+        try FileManager.default.removeItem(atPath: path)
     }
 }

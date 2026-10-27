@@ -100,6 +100,43 @@ private func cleanUp(_ tree: any Tree) {
     }
 
     @Test(arguments: Kind.allCases)
+    func removeTakesAFileAndThenADirectoryWithEverythingInIt(_ kind: Kind) throws {
+        let tree = try makeTree(kind)
+        defer { cleanUp(tree) }
+        try tree.file(tree.root + "/probe dir/a.cpp", "a")
+        try tree.file(tree.root + "/probe dir/deeper/b.cpp", "b")
+        try tree.file(tree.root + "/toolchain.json", "{}")
+
+        try tree.fs.removeItem(at: tree.root + "/probe dir/a.cpp")
+        #expect(!tree.fs.fileExists(at: tree.root + "/probe dir/a.cpp"))
+        #expect(tree.fs.fileExists(at: tree.root + "/probe dir/deeper/b.cpp"))
+
+        try tree.fs.removeItem(at: tree.root + "/probe dir")
+        #expect(!tree.fs.fileExists(at: tree.root + "/probe dir"))
+        #expect(!tree.fs.fileExists(at: tree.root + "/probe dir/deeper/b.cpp"))
+        #expect(tree.fs.fileExists(at: tree.root + "/toolchain.json"))
+    }
+
+    @Test(arguments: Kind.allCases)
+    func removingALinkLeavesWhatItPointsTo(_ kind: Kind) throws {
+        let tree = try makeTree(kind)
+        defer { cleanUp(tree) }
+        try tree.file(tree.root + "/SDKs/MacOSX26.5.sdk/SDKSettings.json", "{}")
+        try tree.symlink(tree.root + "/SDKs/MacOSX.sdk", to: "MacOSX26.5.sdk")
+
+        try tree.fs.removeItem(at: tree.root + "/SDKs/MacOSX.sdk")
+        #expect(tree.fs.fileExists(at: tree.root + "/SDKs/MacOSX26.5.sdk/SDKSettings.json"))
+        #expect(try tree.fs.contentsOfDirectory(at: tree.root + "/SDKs") == ["MacOSX26.5.sdk"])
+    }
+
+    @Test(arguments: Kind.allCases)
+    func removingWhatIsntThereThrows(_ kind: Kind) throws {
+        let tree = try makeTree(kind)
+        defer { cleanUp(tree) }
+        #expect(throws: (any Error).self) { try tree.fs.removeItem(at: tree.root + "/no such file") }
+    }
+
+    @Test(arguments: Kind.allCases)
     func whatIsntThereIsReportedSo(_ kind: Kind) throws {
         let tree = try makeTree(kind)
         defer { cleanUp(tree) }
@@ -109,5 +146,25 @@ private func cleanUp(_ tree: any Tree) {
         #expect(tree.fs.resolvingSymlinks(at: missing) == missing)
         #expect(throws: (any Error).self) { try tree.fs.readData(at: missing) }
         #expect(throws: (any Error).self) { try tree.fs.contentsOfDirectory(at: missing) }
+    }
+}
+
+@Suite struct FakeFileSystemTests {
+    @Test func aWriteThatIsToldToFailThrowsAndLeavesNothing() {
+        let fake = FakeFileSystem()
+        fake.failWrites(with: CocoaError(.fileWriteNoPermission))
+        #expect(throws: CocoaError(.fileWriteNoPermission)) {
+            try fake.writeData(Data("x".utf8), to: "/a/b")
+        }
+        #expect(!fake.fileExists(at: "/a/b"))
+        #expect(fake.writes.isEmpty)
+    }
+
+    @Test func writesStayRecordedAfterTheFileIsRemoved() throws {
+        let fake = FakeFileSystem()
+        try fake.writeData(Data("x".utf8), to: "/a/b")
+        try fake.removeItem(at: "/a/b")
+        #expect(!fake.fileExists(at: "/a/b"))
+        #expect(fake.writes == [.init(path: "/a/b", data: Data("x".utf8))])
     }
 }
