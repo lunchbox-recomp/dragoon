@@ -46,7 +46,7 @@ A CISO is a 0x8000-byte header followed by the blocks its map marks with a 1. An
 
 An `RVZ`, `GCZ`, `WIA` or `WBFS` image is named by its magic and has to be converted first. The magics come from Dolphin's `Source/Core/DiscIO/`.
 
-The recipe's reader hashes whatever it gets from a short file. The check says `unreadable` there, and for a CISO read past the blocks its map covers.
+The recipe's reader stops with a Python error when the file ends before the DOL offset or the DOL's section table, and it hashes what it gets when the file ends later in the DOL. The check says `unreadable` for all of these, and for a CISO read past the blocks its map covers.
 
 The image is read through a file handle a piece at a time, with no read over 1 MiB. A 1.4 GB disc doesn't cost 1.4 GB of memory.
 
