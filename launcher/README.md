@@ -15,12 +15,10 @@ Measured on 2026-10-26 on macOS 26.6.2 with the Command Line Tools 26.6 (`CLTool
 
 | What was run | Result |
 |---|---|
-| `swift build --package-path launcher` | Builds on the default SDK, which is `MacOSX26.5.sdk` now. No `SDKROOT` is needed |
+| `swift build --package-path launcher` | Builds on the default SDK, `MacOSX26.5.sdk`. No `SDKROOT` is needed |
 | `swift test --package-path launcher` | Fails with `no such module 'Testing'` |
 | `swift test` with only `-Xswiftc -F` | The tests compile, then the runner can't load `Testing.framework` |
 | `launcher/tools/swift_test.py` | 11 tests in 3 suites pass |
-
-A run on 2026-10-22 needed `SDKROOT` set to that SDK, because the default then was `MacOSX27.0.sdk` and the tools' compiler refused it. That SDK is gone, so the default links.
 
 ## Why a wrapper runs the tests
 
