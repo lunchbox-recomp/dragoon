@@ -116,6 +116,7 @@ import Testing
             echo '{"event": "step"'
             echo '{"something": "else"}'
             echo '{"event": "unheard-of", "step": "x"}'
+            echo '{"event": "warning", "step": "swap", "message": "no room", "log": "/l"}'
             echo '{"event": "progress", "step": "compile", "done": "many"}'
             echo ''
             echo 'plain text'
@@ -135,6 +136,7 @@ import Testing
             "[stdout] {\"event\": \"progress\", \"step\": \"compile\", \"done\": \"many\"}",
             "[stdout] {\"event\": \"step\"",
             "[stdout] {\"event\": \"unheard-of\", \"step\": \"x\"}",
+            "[stdout] {\"event\": \"warning\", \"step\": \"swap\", \"message\": \"no room\", \"log\": \"/l\"}",
             "[stdout] {\"something\": \"else\"}",
         ]
         #expect(try lines(of: fixture.logPath).sorted() == expected.sorted())

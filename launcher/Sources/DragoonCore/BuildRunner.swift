@@ -56,8 +56,8 @@ public enum BuildEvent: Equatable, Sendable {
     case step(String)
     case progress(step: String, done: Int, total: Int)
     /// The new game is current, at `game`. A cancel that lands after the swap has made the new
-    /// game current ends the stream with this too, and the warmed shader cache may then be
-    /// only partly installed.
+    /// game current ends the stream with this too, and the warmed shader cache may then not
+    /// have been installed.
     case done(game: String)
     /// A step failed. The stream ends with `BuildFailure.failed` right after it. Nothing else
     /// yields this: an error the recipe reports as it refuses its arguments or finds another build
@@ -99,13 +99,14 @@ extension BuildEvent {
 
 /// Why a build's stream ended without the new game being current. The texts are drafts. A build
 /// canceled after the recipe's swap isn't one of these, since its game is current and its stream
-/// ends with `done`.
+/// ends with `done`. Neither is one whose shader cache couldn't be installed after the swap.
 public enum BuildFailure: Error, Equatable, Sendable {
     /// Another build holds the recipe's lock, so this one touched nothing.
     case alreadyRunning
     /// The recipe refused its arguments, or the engine kit that came with the source.
     case refused(message: String, log: String)
-    /// A step failed, or the recipe ended in a way it didn't explain, in which case `step` is nil.
+    /// A step failed before the swap, or the recipe ended in a way it didn't explain, in which
+    /// case `step` is nil.
     case failed(step: String?, message: String, log: String)
     /// `cancel()` stopped it before the swap made the new game current.
     case cancelled

@@ -66,14 +66,14 @@ The recipe's exit code decides how the stream ends.
 
 | Exit | The stream |
 |---|---|
-| 0 | Ends normally, and the new game is current |
-| 1 | Yields the recipe's `error` event, then throws `failed` with its step and message, or with the log's path when there was none |
+| 0 | Ends normally, and the new game is current. A shader cache the recipe couldn't install after the swap is a `warning` line in the log, since that isn't a `BuildEvent` |
+| 1 | A step failed before the swap, so the old game is still current. Yields the recipe's `error` event, then throws `failed` with its step and message, or with the log's path when there was none |
 | 2 | Throws `refused`, with the kit's reason or the recipe's stderr, and yields no `error` event |
 | 3 | Throws `alreadyRunning`, "a build is already running", with no `error` event |
 | Anything else, or a signal | Throws `failed`, with the log's path |
 | `run(_:)` while a build is running | Throws `alreadyRunning` and starts nothing, so `cancel()` still reaches the running build |
 | `cancel()` before the swap | Throws `cancelled`, unless the recipe exits 0 anyway |
-| `cancel()` after the swap | Ends with `done`, since `game/current` is the new game by then. The warmed shader cache may be only partly installed |
+| `cancel()` after the swap | Ends with `done`, since `game/current` is the new game by then. The warmed shader cache may not have been installed |
 
 ## Why a wrapper runs the tests
 
