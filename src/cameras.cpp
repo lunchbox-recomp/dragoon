@@ -16,8 +16,11 @@ namespace {
 
 using dragoon::in_ram;
 
-// Where the caller returns to, given its stack frame. Its prologue saved its return address
-// in the word after its back chain, as the EABI's does. 0 when the frame isn't in RAM.
+// Where the caller returns to, given its stack frame `sp`. The word at sp is the back chain,
+// the address of the frame of the caller's own caller. The caller's prologue saved its return
+// address in that frame's LR save word, the back chain plus 4, as the EABI's prologue does, and
+// that's what this reads. The word at sp plus 4 is the LR save word the hooked function would
+// fill, so it's stale here. 0 when either address isn't in RAM.
 uint32_t callers_return_address(uint32_t sp) {
     const uint32_t back = in_ram(sp) ? mem_r32(sp) : 0;
     return in_ram(back) ? mem_r32(back + 4) : 0;
