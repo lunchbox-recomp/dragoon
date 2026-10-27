@@ -20,7 +20,8 @@ that directory, whatever the directory is called:
 They stay out of Package.swift, since unsafeFlags there would bake one Mac's paths into the
 package. If xcode-select fails, it adds nothing and swift reports what's missing.
 
-Each command prints on stderr with a "+ " as it runs. Exits 2 when swift can't be started.
+The swift command prints on stderr with a "+ " before it runs, and xcode-select prints
+nothing. Exits 2 when swift can't be started.
 """
 from __future__ import annotations
 

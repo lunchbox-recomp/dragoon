@@ -327,7 +327,7 @@ class RunTest(SwiftTestCase):
         self.assertEqual(len(err.splitlines()), 2, err)  # the command, then why it failed
         self.assertIn("swift_test.py: can't run ", err.splitlines()[1])
 
-    def test_the_command_prints_on_stderr_with_a_plus(self):
+    def test_only_the_swift_command_prints_on_stderr_and_with_a_plus(self):
         self.select(self.tools)
         code, out, err = self.run_tool("--filter", "a b")
         self.assertEqual((code, out), (0, ""))
