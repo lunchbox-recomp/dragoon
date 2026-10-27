@@ -590,7 +590,8 @@ class PrepareTest(ModsCase):
                 ("Data is a file on the disc, not a directory", "files/Data",
                  "is a file on the disc, not a directory"),
                 ("data/B.BIN is a directory on the disc, not a file", "files/Data/b.bin",
-                 "is a directory on the disc, not a file"))):
+                 "is a directory on the disc, not a file"),
+                ("Data/b.bin is a symbolic link", "files/Data/b.bin", "is a symbolic link"))):
             with self.subTest(said=said):
                 self.put("disc_overlay.py.refuse", f"error: {said}\n", self.recomp)
                 with self.assertRaises(mods.ModError) as cm:
@@ -629,6 +630,18 @@ class PrepareTest(ModsCase):
             with self.subTest(said=said):
                 self.put("disc_overlay.py.refuse", f"error: {said}\n", self.recomp)
                 with self.assertRaisesRegex(mods.PrepareError, "disc_overlay.py exited 1"):
+                    mods.prepare(self.scan(), self.disc, self.dol, self.tmp / f"out {n}",
+                                 Path(sys.executable), self.recomp)
+
+    def test_overlay_reasons_the_scan_refuses_first_name_no_mod(self) -> None:
+        # disc_overlay.py also refuses a name that isn't ASCII and anything that isn't a file or
+        # a folder. The scan refuses both before prepare clones anything, and a clone keeps its
+        # name and is a file, a folder or a link, so neither can be about a mod's clone.
+        self.put("Mod/files/Data/b.bin")
+        for n, why in enumerate(("has a name that isn't ASCII", "isn't a file or a folder")):
+            with self.subTest(why=why):
+                self.put("disc_overlay.py.refuse", f"error: Data/b.bin {why}\n", self.recomp)
+                with self.assertRaisesRegex(mods.PrepareError, f"exited 1: error: Data/b.bin {why}"):
                     mods.prepare(self.scan(), self.disc, self.dol, self.tmp / f"out {n}",
                                  Path(sys.executable), self.recomp)
 
@@ -816,6 +829,17 @@ class RealToolsTest(ModsCase):
         e = cm.exception
         self.assertEqual((e.mod, e.path, e.why), ("B Mod", "files/Data/readme text.txt",
                                                   "is a file on the disc, not a directory"))
+
+    def test_a_file_swapped_for_a_link_after_the_scan_names_the_mod(self) -> None:
+        swapped = self.put("Big Mod/files/new file.bin", b"new")
+        found = mods.scan(self.mods, self.sha)
+        swapped.unlink()
+        os.symlink(self.put("elsewhere.bin", b"not the mod's", self.tmp), swapped)
+        with self.assertRaises(mods.ModError) as cm:
+            mods.prepare(found, self.disc, self.dol, self.out, Path(sys.executable), FORK)
+        e = cm.exception
+        self.assertEqual((e.mod, e.path, e.why),
+                         ("Big Mod", "files/new file.bin", "is a symbolic link"))
 
     def test_a_layout_past_4_gib_names_no_mod(self) -> None:
         self.put("A Mod/files/the")
