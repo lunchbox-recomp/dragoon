@@ -66,6 +66,7 @@ import Testing
     func aCompressedImageAsksForAnISO(format: UnsupportedDiscFormat) {
         var run = launched(settings: LauncherSettings(welcomeSeen: true), installed: nil)
         run.send(.toolsDetected(.ready(flowToolchain)))
+        run.send(.chooseDiscPressed)
         run.send(.discChosen(path: flowDisc, bookmark: flowBookmark))
         run.send(.discChecked(path: flowDisc, check: .needsConversion(format: format)))
         #expect(run.screen == .disc(.problem(.needsConversion(format))))

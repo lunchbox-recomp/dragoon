@@ -96,8 +96,11 @@ final class EffectRunner {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
             MainActor.assumeIsolated {
+                guard response == .OK, let url = panel.url else {
+                    self?.send(.discPanelCanceled)
+                    return
+                }
                 do {
                     let bookmark = try Bookmark.make(for: url.path)
                     self?.send(.discChosen(path: url.path, bookmark: bookmark))

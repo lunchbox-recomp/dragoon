@@ -59,18 +59,25 @@ extension Flow.State {
 
         case .chooseDiscPressed:
             guard case .disc = screen, waiting == nil else { return [] }
+            waiting = .panel
             return [.openDiscPanel]
         case .changeDiscPressed:
             guard libraryIsIdle else { return [] }
+            waiting = .panel
             return [.openDiscPanel]
         case .discChosen(let path, let bookmark):
-            guard choosesDisc, let source else { return [] }
+            guard waiting == .panel, let source else { return [] }
             screen = .disc(.checking)
             waiting = .disc(path: path, bookmark: bookmark)
             return [.checkDisc(path: path, expected: source.disc)]
         case .discChoiceFailed(let reason):
-            guard choosesDisc else { return [] }
+            guard waiting == .panel else { return [] }
+            waiting = nil
             screen = .disc(.problem(.unreadable(reason: reason)))
+            return []
+        case .discPanelCanceled:
+            guard waiting == .panel else { return [] }
+            waiting = nil
             return []
         case .lookAgainPressed:
             guard screen == .disc(.problem(.moved)), waiting == nil else { return [] }
@@ -248,13 +255,6 @@ extension Flow.State {
     }
 
     // MARK: - Disc
-
-    /// Whether a disc the player chose in the panel is taken now.
-    private var choosesDisc: Bool {
-        guard waiting == nil else { return false }
-        if case .disc = screen { return true }
-        return screen == .library
-    }
 
     /// Resolves the bookmark, or asks for a disc when there is none.
     private mutating func resolveDisc() -> [Effect] {

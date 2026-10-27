@@ -54,6 +54,8 @@ extension Flow {
         case discChosen(path: String, bookmark: Data)
         /// The player chose a disc image the app couldn't make a bookmark to.
         case discChoiceFailed(reason: String)
+        /// The player closed the file panel without choosing.
+        case discPanelCanceled
         case bookmarkResolved(BookmarkResolution)
         case discChecked(path: String, check: DiscCheck)
         case spaceChecked(FreeSpace)
@@ -76,8 +78,8 @@ extension Flow {
         /// Runs `xcode-select --install`, which opens Apple's installer.
         case installTools
         case openSoftwareUpdate
-        /// A file panel for `.iso`, `.gcm` and `.ciso`, which gives `discChosen` or
-        /// `discChoiceFailed`, or nothing when the player cancels it.
+        /// A file panel for `.iso`, `.gcm` and `.ciso`, which gives `discChosen`,
+        /// `discChoiceFailed` or `discPanelCanceled`.
         case openDiscPanel
         /// Gives `bookmarkResolved`.
         case resolveBookmark(Data)

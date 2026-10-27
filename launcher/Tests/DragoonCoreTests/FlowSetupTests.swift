@@ -120,6 +120,7 @@ import Testing
     @Test func aCancelledFirstBuildGoesBackToBuild() {
         var run = launched(settings: LauncherSettings(welcomeSeen: true), installed: nil)
         run.send(.toolsDetected(.ready(flowToolchain)))
+        run.send(.chooseDiscPressed)
         run.send(.discChosen(path: flowDisc, bookmark: flowBookmark))
         run.send(.discChecked(path: flowDisc, check: .ok))
         _ = run.send([
@@ -137,9 +138,28 @@ import Testing
     @Test func aDiscChosenWithoutABookmarkShowsWhy() {
         var run = launched(settings: LauncherSettings(welcomeSeen: true), installed: nil)
         run.send(.toolsDetected(.ready(flowToolchain)))
+        run.send(.chooseDiscPressed)
         #expect(run.send(.discChoiceFailed(reason: "no such file")) == [])
         #expect(run.screen == .disc(.problem(.unreadable(reason: "no such file"))))
+        #expect(run.state.waiting == nil)
         #expect(run.send(.chooseDiscPressed) == [.openDiscPanel])
+    }
+
+    /// The panel doesn't stop the window, so the flow waits on it as on any other result.
+    @Test func whileTheDiscPanelIsOpenTheStepWaitsForIt() {
+        var run = launched(settings: LauncherSettings(welcomeSeen: true), installed: nil)
+        run.send(.toolsDetected(.ready(flowToolchain)))
+        #expect(run.send(.chooseDiscPressed) == [.openDiscPanel])
+        #expect(run.state.waiting == .panel)
+        #expect(run.state.isBusy)
+        #expect(run.send(.chooseDiscPressed) == [])
+        // The player cancels it, and Choose Disc opens it again.
+        #expect(run.send(.discPanelCanceled) == [])
+        #expect(run.screen == .disc(.choose))
+        #expect(run.state.waiting == nil)
+        #expect(run.send(.chooseDiscPressed) == [.openDiscPanel])
+        #expect(run.send(.discChosen(path: flowDisc, bookmark: flowBookmark))
+            == [.checkDisc(path: flowDisc, expected: flowSource.disc)])
     }
 
     @Test func aSourceThatCantBeReadStopsAtLaunch() {

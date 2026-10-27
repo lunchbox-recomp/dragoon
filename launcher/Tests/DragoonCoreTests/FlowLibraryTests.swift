@@ -58,6 +58,7 @@ private let oldCommits = Commits(
         #expect(run.state.canGoBackToLibrary)
         // Picking it again carries the rebuild on.
         let bookmark = Data("a fresh bookmark".utf8)
+        run.send(.chooseDiscPressed)
         run.send(.discChosen(path: flowDisc, bookmark: bookmark))
         #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [
             .saveSettings(LauncherSettings(welcomeSeen: true, disc: bookmark)), .detectTools,
@@ -142,6 +143,41 @@ private let oldCommits = Commits(
         #expect(run.screen == .library)
     }
 
+    /// With Change Disc's panel open, Library's other buttons wait, so the disc picked in the
+    /// panel is the one kept.
+    @Test func whileTheDiscPanelIsOpenLibraryWaitsForIt() {
+        let other = "/Volumes/Backup/Kirby Air Ride (USA).iso"
+        let bookmark = Data("a bookmark to the backup".utf8)
+        var run = launched()
+        #expect(run.send(.changeDiscPressed) == [.openDiscPanel])
+        #expect(!run.state.libraryIsIdle)
+        for event: Flow.Event in [.playPressed, .rebuildPressed, .changeDiscPressed] {
+            #expect(run.send(event) == [], "\(event)")
+        }
+        #expect(run.send(.discChosen(path: other, bookmark: bookmark))
+            == [.checkDisc(path: other, expected: flowSource.disc)])
+        // A cancel that comes after the choice changes nothing.
+        run.send(.discPanelCanceled)
+        #expect(run.state.waiting == .disc(path: other, bookmark: bookmark))
+        #expect(run.send(.discChecked(path: other, check: .ok)) == [
+            .saveSettings(LauncherSettings(welcomeSeen: true, disc: bookmark)), .deleteOldBuilds,
+        ])
+        #expect(run.send(.playPressed) == [.resolveBookmark(bookmark)])
+    }
+
+    @Test func aDiscStepWithThePanelOpenCantGoBackToLibrary() {
+        var run = launched()
+        run.send(.playPressed)
+        run.send(.bookmarkResolved(.missing))
+        #expect(run.state.canGoBackToLibrary)
+        run.send(.chooseDiscPressed)
+        #expect(!run.state.canGoBackToLibrary)
+        #expect(run.send(.backToLibraryPressed) == [])
+        #expect(run.send(.lookAgainPressed) == [])
+        run.send(.discPanelCanceled)
+        #expect(run.send(.backToLibraryPressed) == [.deleteOldBuilds])
+    }
+
     @Test func resultsTheFlowIsntWaitingForChangeNothing() {
         var run = launched()
         let before = run.state
@@ -150,6 +186,8 @@ private let oldCommits = Commits(
             .discChecked(path: flowDisc, check: .ok), .toolsDetected(.ready(flowToolchain)),
             .build(.step("compile")), .buildEnded(nil), .logTailRead(path: flowLog, lines: ["x"]),
             .toolsCheckDue, .cancelBuildPressed, .copyLogPressed, .lookAgainPressed,
+            .discChosen(path: flowDisc, bookmark: flowBookmark), .discChoiceFailed(reason: "x"),
+            .discPanelCanceled,
         ]
         for event in late {
             #expect(run.send(event) == [], "\(event)")

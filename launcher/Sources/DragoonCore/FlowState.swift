@@ -35,6 +35,8 @@ extension Flow {
     /// The result the flow is waiting on. A result it isn't waiting on is ignored, so one that
     /// arrives after the player has moved on changes nothing.
     public enum Waiting: Equatable, Sendable {
+        /// The disc panel is open. It doesn't stop the window, so the flow waits on it.
+        case panel
         case space
         case bookmark
         /// A disc check of `path`. `bookmark` is set for a disc the player just chose, and is
@@ -69,9 +71,10 @@ extension Flow {
         /// on its way and no game running.
         public var libraryIsIdle: Bool { screen == .library && waiting == nil && !gameRunning }
 
-        /// Whether a step can go back to Library, which needs a game and no build running.
+        /// Whether a step can go back to Library, which needs a game, no build running and no
+        /// disc panel open.
         public var canGoBackToLibrary: Bool {
-            installed != nil && screen != .library && waiting != .build
+            installed != nil && screen != .library && waiting != .build && waiting != .panel
         }
 
         /// Whether Library offers a rebuild, because the installed game's stamp names other
