@@ -35,7 +35,7 @@ enum Strings {
     }
 
     /// Finder shows a `:` in a folder's name as `/`.
-    private static func finderName(_ character: Character) -> String {
+    private static func finderName(_ character: Unicode.Scalar) -> String {
         character == ":" ? "/" : String(character)
     }
 

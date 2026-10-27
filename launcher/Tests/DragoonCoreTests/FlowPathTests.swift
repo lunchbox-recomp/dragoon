@@ -24,8 +24,8 @@ import Testing
 
     /// The kit's Makefile refuses these five, so the cases are listed here rather than taken
     /// from the code under test.
-    @Test(arguments: ["$", "\"", "`", ":", ";"] as [Character])
-    func aPathHoldingACharacterTheKitRefusesAsksToBeMoved(character: Character) {
+    @Test(arguments: ["$", "\"", "`", ":", ";"] as [Unicode.Scalar])
+    func aPathHoldingACharacterTheKitRefusesAsksToBeMoved(character: Unicode.Scalar) {
         let path = flowHome + "/Apps \(character) Games/Dragoon.app"
         var run = launched(appPath: path)
         #expect(run.screen == .mustMove(.refusedCharacter(character)))
@@ -36,6 +36,12 @@ import Testing
 
     @Test func theRefusedCharactersAreTheKitsFive() {
         #expect(MoveReason.refusedCharacters == ["$", "\"", "`", ":", ";"])
+    }
+
+    /// The Makefile compares bytes, so a `$` with a combining mark after it is still a `$`.
+    @Test func aRefusedCharacterWithACombiningMarkAfterItStillAsksToBeMoved() {
+        let path = flowHome + "/Games $\u{301}/Dragoon.app"
+        #expect(launched(appPath: path).screen == .mustMove(.refusedCharacter("$")))
     }
 
     @Test func theFirstRefusedCharacterInThePathIsTheOneNamed() {

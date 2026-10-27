@@ -9,10 +9,11 @@ public enum MoveReason: Equatable, Sendable {
     case readOnlyVolume
     /// Its path holds a character the kit's Makefile refuses. Finder shows a `:` in a folder's
     /// name as `/`.
-    case refusedCharacter(Character)
+    case refusedCharacter(Unicode.Scalar)
 
-    /// What the kit's Makefile refuses in a path.
-    public static let refusedCharacters: [Character] = ["$", "\"", "`", ":", ";"]
+    /// What the kit's Makefile refuses in a path. The Makefile compares bytes, so a path is
+    /// checked scalar by scalar, and a combining mark after one of these doesn't hide it.
+    public static let refusedCharacters: [Unicode.Scalar] = ["$", "\"", "`", ":", ";"]
 
     /// Why the app at `appPath` has to move, or nil when it can stay.
     public init?(appPath: String, onReadOnlyVolume: Bool) {
@@ -20,7 +21,7 @@ public enum MoveReason: Equatable, Sendable {
             self = .translocated
         } else if onReadOnlyVolume {
             self = .readOnlyVolume
-        } else if let refused = appPath.first(where: Self.refusedCharacters.contains) {
+        } else if let refused = appPath.unicodeScalars.first(where: Self.refusedCharacters.contains) {
             self = .refusedCharacter(refused)
         } else {
             return nil
