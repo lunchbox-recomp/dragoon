@@ -490,6 +490,61 @@ A first build on an M4 Max, with the Command Line Tools' make 3.81, clang 21 and
 
 `--no-warmup` skips the warm-up. `--keep-build` keeps `<cache>/build`, which is deleted after a good build otherwise.
 
+## mods.py
+
+Which mods does a mods folder hold, and can the game be built with them? Each folder in it whose name doesn't start with a dot is one mod. A mod's `files/` mirrors the disc's root, and its `dol.txt` is a patch list in the format of gcn-recomp's `docs/dol-patches.md`.
+
+Either may be missing, and either name may come in any letter case. The other files beside `dol.txt` are the ones its `section` lines may name, so a section's file sits there and not under `files/`.
+
+Dotfiles and dot folders are skipped everywhere, so a `.DS_Store` never reaches the disc. A loose file in the mods folder isn't a mod.
+
+```
+tools/mods.py check "$HOME/Library/Application Support/Dragoon/mods" --dol-sha1 SHA
+```
+
+`check` prints one JSON object. It lists each mod's name, file count and bytes in folder name order ignoring case, then gives the digest.
+
+A mod holds the files under its `files/`, its `dol.txt` and the other files beside that. The digest is the SHA-256 over each file a mod holds, by the mod's name and its path in the mod, with its size and its SHA-256. In a mod without `dol.txt` the files beside `files/` are left alone, so they're not in it.
+
+Adding, removing, editing or renaming a file a mod holds changes the digest, while a dotfile or a loose file in the mods folder never does. It's `none` when no mod holds a file, and a missing or empty folder has no mods.
+
+A mod is refused for any of these. `check` then prints one object with the error, the mod and the path in it instead.
+
+| Refused | Where |
+|---|---|
+| A link | Under `files/`, anywhere in a mod with a `dol.txt` or in place of the mod's own folder |
+| `files` or `dol.txt` in two letter cases | At the top of a mod |
+| Anything that isn't a file or a folder, or can't be read | Under `files/` or anywhere in a mod with a `dol.txt` |
+| A file of 4 GiB or more | Under `files/` or anywhere in a mod with a `dol.txt` |
+| A folder that can't be read | The mod's own folder |
+| A name that isn't ASCII or holds a control character | Under `files/` |
+| `main.dol` in any letter case, since code changes go in `dol.txt` | At the top of `files/` |
+| Two files that are one disc path ignoring case | Under `files/`, in one mod or two |
+| A file where another file needs a folder | Under `files/`, in one mod or two |
+| Over 1 MiB, not UTF-8 or not starting with a `dol` line that names SHA | `dol.txt` |
+
+It exits 0 when no mod is refused, 1 when one is and 2 on a bad argument or a mods folder it can't read.
+
+`prepare`, for the build, clones every mod's files into a new folder through clone_file.py. Its `files/` holds every file under the mods' `files/` by disc path, and each `dol.txt` goes to `patches/N/` with the files beside it, N counting the mods from 1. When any mod has a `dol.txt`, gcn-recomp's `dol_patch.py` applies the lists in mod order to the game's checked DOL and writes `main.dol` and `main.dol.syms` in the folder.
+
+Then gcn-recomp's `disc_overlay.py` builds the overlay from the clones, with that `main.dol` as the DOL it boots. `prepare` returns the DOL to recompile, the manifest and the digest of the clones. The DOL is the one the overlay boots, and the digest comes from the clones, so a mod edited during a build doesn't change it.
+
+A refusal from either tool that names a mod's list or file comes back naming the mod. Any other failure of either tool is a `PrepareError`, and so is a file that can't be cloned or copied, such as one deleted since the scan, which it names. Both tools run under `-B` with tool_env.py's environment and nothing else, as the recipe's own tools do, so the user's site-packages stay out.
+
+The tests make every mods folder, image and DOL, at paths with spaces. Some run `prepare` against fakes of the two tools, and the rest against the pinned gcn-recomp's own, skipping when it isn't checked out.
+
+## clone_file.py
+
+How does a build copy a file without copying its bytes? `clone` makes an APFS clone through `clonefile`, which shares the original's blocks until either changes, so editing a mod afterwards leaves the build's copy as it was. Where the volume can't clone, or the call fails for any other reason, it copies the bytes instead.
+
+Neither way follows a link, so a clone of a link is a link and a copy of one fails. It has no command line.
+
+## tool_env.py
+
+What environment does a tool the build runs get? `tool_env()` gives only `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, `HOME`, `TMPDIR`, `LANG`, `PYTHONDONTWRITEBYTECODE` and `PYTHONNOUSERSITE`. launcher_build.py runs the recipe's tools with it and mods.py runs gcn-recomp's, so the two can't drift apart.
+
+It has no command line.
+
 ## engine_kit.py
 
 What does a player's Mac need to build the game without CMake, Ninja or SDL's source? engine_kit.py packs it from a build configured with no disc and a deployment target, once `runtime_check` and `SDL3-static` are built. The kit holds `engine.o` (runtime_check's objects joined by `ld -r`, so the link takes all of them), `libSDL3.a`, `recomp.h` and `compat.h`, `kit.mk`, the Makefile from `launcher/kit/` and the licenses of gcn-recomp, SDL and the hidapi inside SDL. `kit.mk` takes `GAME_CFLAGS` from the `game_cflags.txt` gcn-recomp's configure wrote to the build directory, `LINK_FLAGS` from its `game_ldflags.txt` and `GAME_LIBS`, the frameworks and libraries, from its `game_libs.txt`. It also holds `MACOSX_MIN`, the build's deployment target. Its `ENGINE_COMMIT` is the gcn-recomp commit in the `gcn_engine_sha.h` that runtime_check was compiled with. So every flag and framework the game gets comes from CMake, and launcher_build.py can tell which snapshots the kit builds.
