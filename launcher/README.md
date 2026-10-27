@@ -7,7 +7,7 @@ swift build --package-path launcher
 launcher/tools/swift_test.py
 ```
 
-Arguments after `swift_test.py` go to `swift test`, so `launcher/tools/swift_test.py --filter FileSystemTests` runs one suite. Its tests are in `launcher/tools/test_swift_test.py`, and the other launcher tools live beside it.
+Every argument after `swift_test.py` goes to `swift test`, `--help` included, so `launcher/tools/swift_test.py --filter FileSystemTests` runs one suite and the wrapper has no help of its own. Its tests are in `launcher/tools/test_swift_test.py`, and the other launcher tools live beside it.
 
 ## On this Mac
 

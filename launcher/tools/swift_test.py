@@ -4,8 +4,8 @@
 Usage: swift_test.py [ARGUMENT ...]
 
 Runs `swift test --package-path launcher` and hands it every ARGUMENT, such as `--filter NAME`,
-and exits with its status. A signal that ends swift counts as 128 plus its number. `-h` or
-`--help` as the first argument prints this text, so use swift directly for its own help.
+and exits with its status. Every ARGUMENT goes to swift, `--help` included, so this tool has no
+help of its own. A signal that ends swift counts as 128 plus its number.
 
 With Xcode selected, that's all it does. With the Command Line Tools selected, `swift test`
 alone stops at `no such module 'Testing'`, because the tools keep Testing.framework in
@@ -71,9 +71,6 @@ def command(arguments: list[str], developer: Optional[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    if argv[:1] in (["-h"], ["--help"]):
-        print(__doc__)
-        return 0
     cmd = command(argv, selected_developer_dir())
     print("+ " + shlex.join(cmd), file=sys.stderr, flush=True)
     try:

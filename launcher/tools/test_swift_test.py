@@ -295,18 +295,14 @@ class RunTest(SwiftTestCase):
         want += testing_flags(self.tools) + ["--filter", "a b"]
         self.assertEqual(err.splitlines(), ["+ " + shlex.join(want)])
 
-    def test_help_prints_the_usage_and_runs_nothing(self):
-        for flag in ("-h", "--help"):
-            with self.subTest(flag):
-                code, out, err = self.run_tool(flag, "--filter", "x")
-                self.assertEqual((code, err), (0, ""))
-                self.assertIn("Usage: swift_test.py", out)
-                self.assertEqual(self.records_of("call"), [])
-                self.assertEqual(self.records_of("select"), [])
-
-    def test_help_later_in_the_arguments_goes_to_swift(self):
-        self.run_tool("--filter", "--help")
-        self.assertEqual(self.swift_args()[-2:], ["--filter", "--help"])
+    def test_help_flags_go_to_swift_first_or_later(self):
+        for args in (["-h"], ["--help"], ["--help", "--filter", "x"], ["--filter", "--help"]):
+            with self.subTest(args):
+                self.records.unlink(missing_ok=True)
+                code, out, err = self.run_tool(*args)
+                self.assertEqual(code, 0)
+                self.assertNotIn("Usage: swift_test.py", out)
+                self.assertEqual(self.swift_args(), ["test", "--package-path", str(swift_test.LAUNCHER)] + args)
 
 
 if __name__ == "__main__":
