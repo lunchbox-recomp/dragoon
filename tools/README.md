@@ -6,7 +6,7 @@ Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`. The l
 
 ## Conventions
 
-Every tool takes `--help`, which prints its usage and what it reads. Results go to stdout, including the failures a tool checks for. Errors go to stderr as one line naming the file and what's wrong, and so do warnings that leave the exit code alone. A traceback means a bug in the tool.
+Every tool but `swift_test.py`, which hands it to swift, takes `--help` and prints its usage and what it reads. Results go to stdout, including the failures a tool checks for. Errors go to stderr as one line naming the file and what's wrong, and so do warnings that leave the exit code alone. A traceback means a bug in the tool.
 
 | Exit | Means |
 |---|---|
