@@ -27,7 +27,7 @@ Measured on 2026-10-26 on macOS 26.6.2 with the Command Line Tools 26.6 (`CLTool
 
 It runs `xcode-select -p` first, because a developer tool shim under `/usr/bin` would open Apple's install prompt. Then `xcrun --find` names `clang`, `clang++`, `make` and `python3` by full path.
 
-The SDK is the first that compiles and links a C++ file that includes `<cstdio>`. With Xcode selected it tries the one `xcrun --show-sdk-path` names first. Then it tries `SDKs/MacOSX.sdk` and every other `MacOSX*.sdk` newest first, except any newer than the tools.
+The SDK is the first that compiles and links a C++ file that includes `<cstdio>`. With Xcode selected it tries the one `xcrun --show-sdk-path` names first. Then it tries `SDKs/MacOSX.sdk`, then every other `MacOSX*.sdk` newest first, skipping an SDK whose major version is above the tools' own in that last step only.
 
 The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon`. It's probed again when the first line of `clang --version` changes or the SDK is gone.
 
