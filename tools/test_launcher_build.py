@@ -5,9 +5,12 @@ import json
 import os
 import plistlib
 import re
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -27,13 +30,18 @@ OLD = "20260101-000000-old"
 ROUTES = "title 20 60 960\nmenu 20 60 1200 warm-from=title\ncity-trial-4p 30 60 3480 --pads=4\n"
 STEPS = ["recompile", "compile", "warmup", "package", "swap"]
 
-# Each fake appends what it was given to RECORDS, then does its job unless FAIL exists.
+# Each fake appends what it was given to RECORDS, then does its job unless FAIL exists. If TERM
+# exists it sends the recipe a SIGTERM instead, as the launcher's cancel does, and lingers.
 FAKE_HEAD = """#!{python}
-import json, os, sys
+import json, os, signal, sys, time
 with open({records!r}, "a") as f:
     f.write(json.dumps({{"tool": {tool!r}, "script": sys.argv[0], "argv": sys.argv[1:],
                         "cwd": os.getcwd(), "env": dict(os.environ),
                         "nobytecode": sys.flags.dont_write_bytecode}}) + "\\n")
+if os.path.exists({term!r}):
+    os.kill(os.getppid(), signal.SIGTERM)
+    time.sleep(0.3)
+    sys.exit(1)
 FAIL = os.path.exists({fail!r})
 """
 EXTRACT_DOL = """
@@ -140,7 +148,8 @@ class RecipeTestCase(unittest.TestCase):
 
     def fake(self, tool: str, body: str, directory: Path | None = None, name: str = "") -> Path:
         text = FAKE_HEAD.format(python=sys.executable, records=str(self.records), tool=tool,
-                                fail=str(self.fail_marker(tool))) + body
+                                fail=str(self.fail_marker(tool)),
+                                term=str(self.term_marker(tool))) + body
         path = write_file(directory or self.tools, name or tool, text)
         path.chmod(0o755)
         return path
@@ -154,6 +163,9 @@ class RecipeTestCase(unittest.TestCase):
 
     def fail_marker(self, tool: str) -> Path:
         return self.dir / f"fail {tool}"
+
+    def term_marker(self, tool: str) -> Path:
+        return self.dir / f"term {tool}"
 
     def make_snapshot(self, commit: str = COMMIT) -> None:
         for d in ("gcn-recomp/recomp", "tools", "tests/hashes", "analysis", "recomp", "src"):
@@ -492,6 +504,118 @@ class FailureTest(RecipeTestCase):
         (error,) = self.of(events, "error")
         self.assertEqual(error["step"], "recompile")
         self.assertFalse(self.records.exists())
+
+
+class SigtermTest(RecipeTestCase):
+    """A SIGTERM, which is how the launcher cancels, ends the build with 143 and leaves the old
+    game current, the saves as they were and no half-made build or temp file behind."""
+
+    def unstamped_builds(self) -> list[str]:
+        """The names of the builds in <data>/game that have no stamp.json, which are half-made.
+        The old game from old_game() has none and isn't one."""
+        games = self.data / "game"
+        return sorted(p.name for p in games.iterdir()
+                      if p.name not in ("current", OLD) and not (p / "stamp.json").exists())
+
+    def stopped(self, steps: list[str], before: dict[str, object]) -> None:
+        """Run a build that gets the SIGTERM, and check what every stop before the swap has in
+        common: nothing in <data> has changed."""
+        handler = signal.getsignal(signal.SIGTERM)
+        code, events, _ = self.build()
+        self.assertEqual(code, 143)
+        self.assertEqual([e["step"] for e in self.of(events, "step")], steps)
+        self.assertEqual([e for e in events if e["event"] not in ("step", "progress")], [])
+        self.assertEqual(signal.getsignal(signal.SIGTERM), handler)
+        with (self.cache / "build.lock").open("a") as lock:  # the lock is free again
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.assertEqual(self.current(), OLD)
+        self.assertEqual(tree(self.data), before)
+
+    def test_a_sigterm_during_each_tool_leaves_data_alone(self):
+        for steps, tool in ((["recompile"], "extract_dol"), (["recompile"], "recomp"),
+                            (["recompile", "compile"], "make"),
+                            (["recompile", "compile", "warmup"], "warm_shaders"),
+                            (["recompile", "compile", "warmup", "package"], "codesign")):
+            with self.subTest(tool):
+                self.data = self.dir / f"Application Support {tool}" / "Dragoon"
+                self.old_game()
+                before = tree(self.data)
+                write_file(self.dir, f"term {tool}", "")
+                self.stopped(steps, before)
+                self.term_marker(tool).unlink()
+                self.assertEqual(self.unstamped_builds(), [])
+
+    def test_a_sigterm_while_packaging_removes_the_half_made_build(self):
+        self.old_game()
+        write_file(self.dir, "term codesign", "")
+        self.stopped(["recompile", "compile", "warmup", "package"], tree(self.data))
+        self.assertEqual(sorted(os.listdir(self.data / "game")), sorted(["current", OLD]))
+
+    def test_a_sigterm_just_before_the_swap_renames_its_link_leaves_no_link(self):
+        self.old_game()
+        saves = tree(self.data / "saves")
+        rename = os.replace
+
+        def terminated(src, dst, *args, **kwargs):
+            if Path(dst).name == "current":
+                os.kill(os.getpid(), signal.SIGTERM)
+                time.sleep(5)  # the handler raises here
+            return rename(src, dst, *args, **kwargs)
+
+        handler = signal.getsignal(signal.SIGTERM)
+        with mock.patch.object(launcher_build.os, "replace", terminated):
+            code, events, _ = self.build()
+        self.assertEqual(code, 143)
+        self.assertEqual(signal.getsignal(signal.SIGTERM), handler)
+        self.assertEqual(self.of(events, "error") + self.of(events, "done"), [])
+        self.assertEqual(self.current(), OLD)
+        self.assertEqual(self.links_left_in_game(), [])
+        self.assertEqual(tree(self.data / "saves"), saves)
+        self.assertEqual(self.unstamped_builds(), [])  # the finished build stays for the launcher
+
+    def test_a_sigterm_just_after_the_swap_renamed_its_link_is_not_an_error(self):
+        """The rename can finish just before the signal is handled, and the link it renamed is
+        gone by then."""
+        self.old_game()
+        rename = os.replace
+
+        def terminated_after(src, dst, *args, **kwargs):
+            rename(src, dst, *args, **kwargs)
+            if Path(dst).name == "current":
+                os.kill(os.getpid(), signal.SIGTERM)
+                time.sleep(5)  # the handler raises here
+
+        with mock.patch.object(launcher_build.os, "replace", terminated_after):
+            code, events, _ = self.build()
+        self.assertEqual(code, 143)
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertNotEqual(self.current(), OLD)  # the swap had happened
+        self.assertEqual(self.links_left_in_game(), [])
+
+    def test_a_sigterm_while_a_warmed_file_is_copied_leaves_no_temp_file(self):
+        self.old_game()
+        saves = self.data / "saves"
+        copy = shutil.copyfileobj
+
+        def terminated(src, dst, *args, **kwargs):
+            if isinstance(getattr(dst, "name", None), int):  # the temp file, made from a descriptor
+                os.kill(os.getpid(), signal.SIGTERM)
+                time.sleep(5)  # the handler raises here
+            return copy(src, dst, *args, **kwargs)
+
+        with mock.patch.object(shutil, "copyfileobj", terminated):
+            code, events, _ = self.build()
+        self.assertEqual(code, 143)
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertEqual(sorted(p.name for p in saves.glob("*.tmp")), [])
+        self.assertEqual((saves / "shaders.bin").read_bytes(), b"old keys\n")  # whole or not at all
+        self.assertEqual((saves / ".shader-warmup").read_bytes(), b"old stamp\n")
+        self.assertEqual((saves / "memcard_a.raw").read_bytes(), b"the player's card")
+
+    def test_a_build_that_is_not_stopped_leaves_sigterm_as_it_found_it(self):
+        handler = signal.getsignal(signal.SIGTERM)
+        self.assertEqual(self.build()[0], 0)
+        self.assertEqual(signal.getsignal(signal.SIGTERM), handler)
 
 
 class LockTest(RecipeTestCase):

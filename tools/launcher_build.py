@@ -37,7 +37,9 @@ Prints one JSON object per line on stdout:
 
 Exits 0 when the new game is current, 1 when a step failed, 2 on a bad argument and 3 when
 another build holds <cache>/build.lock. A kit of another gcn-recomp commit or another src/ is a
-bad argument, which prints an error event at step "kit" too.
+bad argument, which prints an error event at step "kit" too. A SIGTERM ends the build with 143
+once the step it stopped has cleaned up, so no half-made <data>/game/<id> or temp file in
+<data>/saves is left. It prints no event, since it's the launcher's cancel.
 """
 from __future__ import annotations
 
@@ -51,6 +53,7 @@ import plistlib
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -109,6 +112,20 @@ def tool_env() -> dict[str, str]:
 
 def emit(**event: object) -> None:
     print(json.dumps(event), flush=True)
+
+
+@contextlib.contextmanager
+def exit_on_sigterm() -> Iterator[None]:
+    """Turn a SIGTERM into SystemExit(143) wherever the build is, so the cleanups in the steps
+    run, the lock and the log close, and the exit says what stopped it."""
+    def stop(signum: int, frame: object) -> None:
+        raise SystemExit(128 + signum)
+
+    before = signal.signal(signal.SIGTERM, stop)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, before)
 
 
 def disk_use(*roots: Path) -> int:
@@ -271,7 +288,7 @@ def swap(data: Path, build: Path, warm: Path) -> None:
     try:
         os.replace(link, current)
     except BaseException:
-        link.unlink()
+        link.unlink(missing_ok=True)  # a SIGTERM can land just after the rename
         raise
     for name in WARMED:
         if (warm / name).is_file():
@@ -376,7 +393,7 @@ def main(argv: list[str]) -> int:
         print(f"launcher_build.py: {mismatch}", file=sys.stderr)
         return 2
     a.cache.mkdir(parents=True, exist_ok=True)
-    with (a.cache / "build.lock").open("a") as lock:
+    with exit_on_sigterm(), (a.cache / "build.lock").open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
