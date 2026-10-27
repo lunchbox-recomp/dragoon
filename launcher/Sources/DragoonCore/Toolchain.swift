@@ -104,6 +104,12 @@ private struct Detection {
     /// A fixed PATH keeps a Homebrew tool from answering for one of Apple's, and a fixed
     /// DEVELOPER_DIR keeps every command on the directory `xcode-select -p` named.
     static let path = "/usr/bin:/bin:/usr/sbin:/sbin"
+    /// Seconds a query may take, which is what `xcode-select`, `xcrun`, `pkgutil` and
+    /// `clang --version` get. A query that outlasts it reads as having failed.
+    static let queryTimeout: TimeInterval = 10
+    /// Seconds the probe may take to compile and link. One that outlasts it reads as that SDK
+    /// not linking.
+    static let probeTimeout: TimeInterval = 60
     static let probeSource = """
         #include <cstdio>
 
@@ -181,7 +187,9 @@ private struct Detection {
     private func output(
         _ executable: String, _ arguments: [String], _ environment: [String: String]? = nil
     ) async -> String? {
-        guard let result = try? await runner.run(executable, arguments, environment: environment),
+        guard
+            let result = try? await runner.run(
+                executable, arguments, environment: environment, timeout: Self.queryTimeout),
             result.status == 0
         else { return nil }
         let text = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -208,7 +216,7 @@ private struct Detection {
     ) async -> Bool {
         let result = try? await runner.run(
             toolchain.clangxx, ["-isysroot", sdk, probePath, "-o", "/dev/null"],
-            environment: environment)
+            environment: environment, timeout: Self.probeTimeout)
         return result?.status == 0
     }
 

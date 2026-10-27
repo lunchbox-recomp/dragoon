@@ -68,6 +68,14 @@ private struct FakeMac {
             with: ProcessResult(status: links ? 0 : 1, stderr: links ? "" : "ld: library 'c++' not found"))
     }
 
+    /// Makes the probe against `sdk` outlast its timeout.
+    func setTimesOut(_ sdk: String) {
+        let command = probe(sdk)
+        runner.fail(
+            command[0], Array(command.dropFirst()),
+            with: ProcessTimeout(executable: command[0], seconds: 60))
+    }
+
     func detect() async -> ToolchainStatus {
         await Toolchain.detect(runner: runner, fs: fs, dataDirectory: data)
     }
@@ -262,6 +270,76 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
 
         #expect(await mac.detect() == .missing)
         #expect(mac.commands.last == ["/usr/bin/xcrun", "--find", "make"])
+    }
+
+    @Test func everyQueryGetsTenSecondsAndTheProbeGetsSixty() async {
+        let mac = FakeMac()
+        mac.setToolsPackageVersion("26.6.0.0.1781586589")
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX26.5.sdk", true)
+        _ = await mac.detect()
+
+        let queries = mac.runner.calls.filter { $0.executable != mac.clangxx }
+        #expect(Set(queries.map(\.executable)) == [
+            "/usr/bin/xcode-select", "/usr/bin/xcrun", tools + "/usr/bin/clang", "/usr/sbin/pkgutil",
+        ])
+        #expect(queries.allSatisfy { $0.timeout == 10 })
+        #expect(mac.runner.calls.filter { $0.executable == mac.clangxx }.map(\.timeout) == [60])
+    }
+
+    @Test func anXcodeSelectThatTimesOutIsMissingAndOnlyItRan() async {
+        let mac = FakeMac()
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.runner.fail(
+            "/usr/bin/xcode-select", ["-p"],
+            with: ProcessTimeout(executable: "/usr/bin/xcode-select", seconds: 10))
+
+        #expect(await mac.detect() == .missing)
+        #expect(mac.commands == [["/usr/bin/xcode-select", "-p"]])
+    }
+
+    @Test func anXcrunThatTimesOutIsMissing() async {
+        let mac = FakeMac()
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.runner.fail(
+            "/usr/bin/xcrun", ["--find", "clang++"],
+            with: ProcessTimeout(executable: "/usr/bin/xcrun", seconds: 10))
+
+        #expect(await mac.detect() == .missing)
+        #expect(mac.commands.last == ["/usr/bin/xcrun", "--find", "clang++"])
+    }
+
+    @Test func aProbeThatTimesOutIsThatSDKNotLinkingAndTheNextIsTried() async {
+        let mac = FakeMac()
+        mac.setToolsPackageVersion("26.6.0.0.1781586589")
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.addSDK("MacOSX15.4.sdk")
+        mac.setTimesOut(tools + "/SDKs/MacOSX26.5.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX15.4.sdk", true)
+
+        #expect(await mac.detect() == .ready(cltToolchain(sdk: tools + "/SDKs/MacOSX15.4.sdk")))
+        #expect(mac.probedSDKs == [tools + "/SDKs/MacOSX26.5.sdk", tools + "/SDKs/MacOSX15.4.sdk"])
+    }
+
+    @Test func probesThatAllTimeOutGiveNoLinkableSDK() async {
+        let mac = FakeMac()
+        mac.setToolsPackageVersion("26.6.0.0.1781586589")
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.setTimesOut(tools + "/SDKs/MacOSX26.5.sdk")
+
+        #expect(await mac.detect() == .noLinkableSDK(tried: [tools + "/SDKs/MacOSX26.5.sdk"]))
+    }
+
+    @Test func aPkgutilThatTimesOutSkipsNoSDKForItsVersion() async {
+        let mac = FakeMac()
+        mac.runner.fail(
+            "/usr/sbin/pkgutil", ["--pkg-info=com.apple.pkg.CLTools_Executables"],
+            with: ProcessTimeout(executable: "/usr/sbin/pkgutil", seconds: 10))
+        mac.addSDK("MacOSX26.5.sdk")
+        mac.addSDK("MacOSX27.0.sdk")
+        mac.setLinks(tools + "/SDKs/MacOSX27.0.sdk", true)
+
+        #expect(await mac.detect() == .ready(cltToolchain(sdk: tools + "/SDKs/MacOSX27.0.sdk")))
     }
 
     @Test func everyCommandAfterXcodeSelectRunsOnAFixedPathAndTheFoundDirectory() async {
