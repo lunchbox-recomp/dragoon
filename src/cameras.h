@@ -8,14 +8,30 @@ namespace dragoon {
 // The console's own shape, which the game sets every camera up for.
 constexpr float kConsoleAspect = 4.0f / 3.0f;
 
-// The camera module sets the world cameras' aspect through two calls to HSD_CObjSetAspect,
+// Whether a call to HSD_CObjSetAspect sets a world camera's aspect, from where it returns to
+// and where its caller returns to.
+//
+// During play the camera module sets the world cameras' aspect every frame through two calls,
 // which return to 0x800C2884 in kar_cmreplay__near_800c24e8 and to 0x800C9820 in
-// kar_cmreplay__near_800c9790. The HUD, the minimap and the menus set theirs through the
-// camera library instead, so a call from anywhere else isn't a world camera's. In the race
-// at gcn-recomp 3a8d154, from frame 8,183 after the finish to 13,062, the full-screen world
-// cameras store 1.25538 at 16:9, and neither call sets them.
-inline bool sets_world_aspect(uint32_t return_address) {
-    return return_address == 0x800C2884 || return_address == 0x800C9820;
+// kar_cmreplay__near_800c9790.
+//
+// Each camera is first set up through the camera library, whose calls set up the HUD, minimap
+// and menu cameras too. Those calls are a world camera's when the library was called from one
+// of four places. kar_lbcamera_load_desc_update_aspect returns to 0x80066E4C, called from
+// kar_camera__800b3944 (0x800B3990). The viewport presets for one, two and four views return
+// to 0x80066ECC, 0x80066FF0 and 0x80067148, called from kar_grlib2__near_800babd0 (0x800BAC38),
+// kar_grlib2__near_800bac5c (0x800BACD0) and kar_grlib2__near_800bacf4 (0x800BAD68). The race's
+// cameras after the finish line get their aspect from these alone.
+inline bool sets_world_aspect(uint32_t return_address, uint32_t callers_return_address) {
+    switch (return_address) {
+    case 0x800C2884:
+    case 0x800C9820: return true;
+    case 0x80066E4C: return callers_return_address == 0x800B3990;
+    case 0x80066ECC: return callers_return_address == 0x800BAC38;
+    case 0x80066FF0: return callers_return_address == 0x800BACD0;
+    case 0x80067148: return callers_return_address == 0x800BAD68;
+    default: return false;
+    }
 }
 
 // A world camera's aspect at output aspect `output`: its 4:3 aspect times the output aspect

@@ -30,12 +30,39 @@ TEST(WidenedAspect, AnOutputOfNoWidthLeavesTheAspectAlone) {
     EXPECT_EQ(dragoon::widened_aspect(1.25538f, std::nanf("")), 1.25538f);
 }
 
-TEST(SetsWorldAspect, OnlyTheCameraModulesTwoCallsCount) {
-    EXPECT_TRUE(dragoon::sets_world_aspect(0x800C2884));
-    EXPECT_TRUE(dragoon::sets_world_aspect(0x800C9820));
-    EXPECT_FALSE(dragoon::sets_world_aspect(0x80066E4C));  // the camera library, for a HUD camera
-    EXPECT_FALSE(dragoon::sets_world_aspect(0x800C2880));  // the call itself, not where it returns
-    EXPECT_FALSE(dragoon::sets_world_aspect(0));
+TEST(SetsWorldAspect, TheCameraModulesTwoCallsCountFromAnyCaller) {
+    EXPECT_TRUE(dragoon::sets_world_aspect(0x800C2884, 0x800B35D4));
+    EXPECT_TRUE(dragoon::sets_world_aspect(0x800C9820, 0x800B2FAC));
+    EXPECT_TRUE(dragoon::sets_world_aspect(0x800C9820, 0));
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x800C2880, 0x800B35D4));  // the call, not its return
+    EXPECT_FALSE(dragoon::sets_world_aspect(0, 0));
+}
+
+TEST(SetsWorldAspect, TheCameraLibraryCountsWhenTheCameraModuleOrAViewPresetCalledIt) {
+    EXPECT_TRUE(dragoon::sets_world_aspect(0x80066E4C, 0x800B3990));  // kar_camera__800b3944
+    EXPECT_TRUE(dragoon::sets_world_aspect(0x80066ECC, 0x800BAC38));  // one view
+    EXPECT_TRUE(dragoon::sets_world_aspect(0x80066FF0, 0x800BACD0));  // two views
+    EXPECT_TRUE(dragoon::sets_world_aspect(0x80067148, 0x800BAD68));  // four views
+}
+
+// Callers seen in the census setting up HUD, minimap and menu cameras.
+TEST(SetsWorldAspect, TheCameraLibraryDoesNotCountForTheHudOrTheMenus) {
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80066E4C, 0x8011590C));  // fn_801158C0
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80066E4C, 0x80115B44));  // fn_80115AF4
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80066E4C, 0x8013945C));  // fn_8013941C
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80066F48, 0x80115950));  // preset 1, fn_801158C0
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x8006709C, 0x80115BC8));  // split preset 1
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x800671F4, 0x80115BE0));  // quad preset 1
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80067324, 0x801167D0));  // preset 2, fn_801166B4
+}
+
+// Each library call counts only with its own caller, not another world call's.
+TEST(SetsWorldAspect, ALibraryCallWithAnotherWorldCallsCallerDoesNotCount) {
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80066E4C, 0x800BAC38));
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80066ECC, 0x800B3990));
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80066FF0, 0x800BAD68));
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x80067148, 0x800BACD0));
+    EXPECT_FALSE(dragoon::sets_world_aspect(0x800B3990, 0x80066E4C));  // the pair the wrong way round
 }
 
 }  // namespace
