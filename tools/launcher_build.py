@@ -22,8 +22,8 @@ The steps are:
   package    <data>/game/<id>/Dragoon.app around the game, sealed ad hoc, with a stamp.json
              beside it naming both commits, the SDK and the time
   swap       point <data>/game/current at the new build, then install the warmed cache in
-             <data>/saves, where a file that can't be installed is a warning, since the new
-             game is current and the old cache is whole
+             <data>/saves, where a file that can't be installed is left as it was and is a
+             warning, since the new game is current
 Before the swap nothing in <data> changes but the new game/<id>, and a package step that fails
 removes it. Earlier builds stay in <data>/game for the launcher to delete. After a good build
 the intermediates in <cache> are deleted, except build/ under --keep-build.
@@ -319,9 +319,9 @@ def swap(data: Path, build: Path) -> None:
 
 def install_warmed(b: Build, data: Path, warm: Path) -> None:
     """Install the warmed shader files from WARM in <data>/saves. The new game is current by
-    now, so a file that can't be installed is a warning and the player's old cache stays whole.
-    The files after it are left alone, since a new stamp beside an old cache would skip the next
-    warm-up."""
+    now, so a file that can't be installed is a warning and stays as it was. The files after it
+    are left alone, since a new stamp beside an old cache would skip the next warm-up. A stamp
+    that can't be installed leaves the new cache beside the old stamp, which warms again."""
     for name in WARMED:
         if (warm / name).is_file():
             try:

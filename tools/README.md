@@ -467,7 +467,7 @@ The tools run with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and five other variables
 
 Before the swap nothing in `<data>` changes but the new `game/<id>`. A build that fails before the swap leaves the old game current and `saves/` as it was, and a package step that fails removes its `game/<id>`. Earlier builds stay in `<data>/game` for the launcher to delete.
 
-Once `game/current` points at the new build, the build has succeeded. A shader cache file that can't be installed afterward is a `warning` event, and the run still prints `done` and exits 0 with the old cache whole.
+Once `game/current` points at the new build, the build has succeeded. A shader cache file that can't be installed afterward is a `warning` event, and the run still prints `done` and exits 0 with that file left as it was. When only the stamp can't be installed, the new cache stays beside the old stamp, so the next build warms again.
 
 A SIGTERM, which is how the launcher cancels, exits 143 once the running step has cleaned up. It leaves no half-made `game/<id>` and no temp file in `saves/`, and one that lands after the swap leaves the new game current. A SIGTERM that lands just after the swap makes its `.current.<pid>.partial` link can leave that link, and the next swap removes it.
 
