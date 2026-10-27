@@ -4,9 +4,9 @@
 // Two hooks in recomp/patches.txt call in. One is HSD_CObjSetCurrent (0x80401150) on entry,
 // with the camera it's about to make current. The other is GObj_SetTextureCamera
 // (0x8042A0B4) at its call of each object's render callback, which walks every object drawn
-// through the current camera. src/cameras.cpp also calls in after each HSD_CObjSetAspect,
-// with the camera, where the call and its caller return to and the aspect it was given. Off,
-// each hook returns at once.
+// through the current camera. src/cameras.cpp also calls in after each HSD_CObjSetAspect and
+// each HSD_CObjLoadDesc of a perspective camera, with the camera, where the call and its
+// caller return to and the aspect it was given or loaded with. Off, each hook returns at once.
 //
 // Addresses are this disc's (GKYE01), from analysis/symbols.txt. The HSD_CObj and HSD_GObj
 // layouts are the decomp's (sysdolphin's cobj.h and gobj.h).
@@ -69,7 +69,8 @@ extern "C" void dragoon_census_draw(uint32_t gobj, uint32_t cb) {
     log_pair(mem_r32(kCObjCurrent), gobj, cb, "draw");
 }
 
-// HSD_CObjSetAspect (0x80402C94), once it has stored the aspect, from src/cameras.cpp.
+// HSD_CObjSetAspect (0x80402C94) once it has stored the aspect, or HSD_CObjLoadDesc
+// (0x804031EC) once it has loaded a perspective camera, from src/cameras.cpp.
 void dragoon::census_aspect(uint32_t cam, uint32_t lr, uint32_t lr2, float given) {
     if (!g_on || !in_ram(cam)) return;
     const uint32_t frame = gx::g_frames_submitted.load(std::memory_order_relaxed) + 1;
