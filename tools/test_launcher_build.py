@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import fcntl
 import json
 import os
@@ -488,6 +489,44 @@ class FailureTest(RecipeTestCase):
         self.assertEqual(tree(self.data / "saves"), before)  # not even the warmed files
         self.assertTrue((self.data / "game" / "current").is_dir())
         self.assertEqual(self.links_left_in_game(), [])  # the one this run made is gone
+
+    def test_a_cache_that_cant_be_installed_after_the_swap_is_a_warning_and_the_build_is_done(self):
+        self.old_game()
+        saves = self.data / "saves"
+        before = tree(saves)
+        full = OSError(errno.ENOSPC, "No space left on device")
+        with mock.patch.object(launcher_build.warm_shaders, "install", side_effect=full) as install:
+            code, events, _ = self.build()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.of(events, "error"), [])
+        self.assertEqual(self.of(events, "warning"), [{
+            "event": "warning", "step": "swap", "log": str(self.log),
+            "message": f"couldn't install shaders.bin in {saves}: No space left on device"}])
+        self.assertEqual(events[-1], {"event": "done",
+                                      "game": str(self.data / "game" / "current" / "Dragoon.app")})
+        self.assertNotEqual(self.current(), OLD)  # the new game is current
+        self.assertEqual(install.call_count, 1)  # the stamp isn't installed beside the old cache
+        self.assertEqual(tree(saves), before)
+        self.assertIn("== swap warning: couldn't install shaders.bin", self.log.read_text())
+
+    def test_a_stamp_that_cant_be_installed_leaves_the_new_cache_and_warns(self):
+        self.old_game()
+        saves = self.data / "saves"
+        install = launcher_build.warm_shaders.install
+
+        def refuse_the_stamp(src: Path, dest: Path) -> None:
+            if dest.name == launcher_build.warm_shaders.STAMP:
+                raise OSError(errno.EACCES, "Permission denied")
+            install(src, dest)
+
+        with mock.patch.object(launcher_build.warm_shaders, "install", refuse_the_stamp):
+            code, events, _ = self.build()
+        self.assertEqual(code, 0)
+        (warning,) = self.of(events, "warning")
+        self.assertIn(".shader-warmup", warning["message"])
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertEqual((saves / "shaders.bin").read_bytes(), b"old keys\nwarm\n")
+        self.assertEqual((saves / ".shader-warmup").read_bytes(), b"old stamp\n")  # warmed again next
 
     def test_a_failed_package_removes_the_half_made_build(self):
         self.old_game()

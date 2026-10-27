@@ -22,7 +22,8 @@ The steps are:
   package    <data>/game/<id>/Dragoon.app around the game, sealed ad hoc, with a stamp.json
              beside it naming both commits, the SDK and the time
   swap       point <data>/game/current at the new build, then install the warmed cache in
-             <data>/saves
+             <data>/saves, where a file that can't be installed is a warning, since the new
+             game is current and the old cache is whole
 Before the swap nothing in <data> changes but the new game/<id>, and a package step that fails
 removes it. Earlier builds stay in <data>/game for the launcher to delete. After a good build
 the intermediates in <cache> are deleted, except build/ under --keep-build.
@@ -32,11 +33,12 @@ Prints one JSON object per line on stdout:
   {"event": "progress", "step": "compile", "done": 12, "total": 135}
   {"event": "done", "game": "<data>/game/current/Dragoon.app"}
   {"event": "error", "step": "compile", "message": "...", "log": "<file>"}
+  {"event": "warning", "step": "swap", "message": "...", "log": "<file>"}
 --log gets every line every tool prints, with each command, and each step's time and what
 <data> and <cache> hold after it. A build that loses the lock doesn't open it.
 
-Exits 0 when the new game is current, 1 when a step failed, 2 on a bad argument and 3 when
-another build holds <cache>/build.lock. A kit of another gcn-recomp commit or another src/ is a
+Exits 0 when the new game is current, 1 when a step failed before the swap, 2 on a bad argument
+and 3 when another build holds <cache>/build.lock. A kit of another gcn-recomp commit or another src/ is a
 bad argument, which prints an error event at step "kit" too. A SIGTERM ends the build with 143
 once the step it stopped has cleaned up, so no half-made <data>/game/<id> or temp file in
 <data>/saves is left. It prints no event, since it's the launcher's cancel.
@@ -160,6 +162,10 @@ class Build:
         self.note(f"== {step} failed: {message}")
         emit(event="error", step=step, message=message, log=str(self.log_path))
 
+    def warn(self, message: str) -> None:
+        self.note(f"== {self.step} warning: {message}")
+        emit(event="warning", step=self.step, message=message, log=str(self.log_path))
+
     @contextlib.contextmanager
     def stage(self, step: str) -> Iterator[None]:
         self.step = step
@@ -277,8 +283,8 @@ def package(b: Build, a: argparse.Namespace, game: Path, info: dict[str, str]) -
     return build
 
 
-def swap(data: Path, build: Path, warm: Path) -> None:
-    """Point <data>/game/current at BUILD in one rename, then install the warmed files."""
+def swap(data: Path, build: Path) -> None:
+    """Point <data>/game/current at BUILD in one rename."""
     games = data / "game"
     current = games / "current"
     for leftover in games.glob(f".current.*{PARTIAL}"):  # from a swap that was killed
@@ -290,9 +296,20 @@ def swap(data: Path, build: Path, warm: Path) -> None:
     except BaseException:
         link.unlink(missing_ok=True)  # a SIGTERM can land just after the rename
         raise
+
+
+def install_warmed(b: Build, data: Path, warm: Path) -> None:
+    """Install the warmed shader files from WARM in <data>/saves. The new game is current by
+    now, so a file that can't be installed is a warning and the player's old cache stays whole.
+    The files after it are left alone, since a new stamp beside an old cache would skip the next
+    warm-up."""
     for name in WARMED:
         if (warm / name).is_file():
-            warm_shaders.install(warm / name, data / "saves" / name)
+            try:
+                warm_shaders.install(warm / name, data / "saves" / name)
+            except OSError as e:
+                b.warn(f"couldn't install {name} in {data / 'saves'}: {e.strerror or e}")
+                return
 
 
 def build_game(b: Build, a: argparse.Namespace, info: dict[str, str]) -> Path:
@@ -310,7 +327,8 @@ def build_game(b: Build, a: argparse.Namespace, info: dict[str, str]) -> Path:
     with b.stage("package"):
         game = package(b, a, build / GAME, info)
     with b.stage("swap"):
-        swap(a.data, game, warm)
+        swap(a.data, game)
+        install_warmed(b, a.data, warm)
     return a.data / "game" / "current" / APP
 
 
