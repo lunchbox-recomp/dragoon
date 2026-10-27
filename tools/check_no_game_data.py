@@ -9,7 +9,8 @@ like game data:
     recording, a .wav recording (anywhere, like .raw) or a .bin shader cache or key list
   - a mod's game file by suffix (.dat, .hps, .bnr, .elf or .gct), anywhere
   - anything under a top-level build*/, mods/ or rom/ (except rom/README.md), or under a
-    saves/ at any depth. tests/mods/ is fine, since only a top-level mods/ counts
+    saves/ at any depth. mods/ matches in any letter case, as git's ignore matching does on a
+    Mac. tests/mods/ is fine, since only a top-level mods/ counts
   - a frame dump (frame_NNNNN.png or output_NNNNN.png), stdout.txt or panic.txt anywhere
   - a playtest session's session.json, the input log's inputs.txt and an aid.raw.txt block
     log, wherever GCN_SESSION put them
@@ -46,7 +47,7 @@ def is_game_data(path: str) -> bool:
     if "saves" in parts[:-1]:
         return True
     if len(parts) > 1:
-        return (parts[0].startswith("build") or parts[0] == "mods"
+        return (parts[0].startswith("build") or parts[0].lower() == "mods"
                 or (parts[0] == "rom" and path != "rom/README.md"))
     return False
 

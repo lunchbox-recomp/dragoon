@@ -363,7 +363,7 @@ Is anything from a disc tracked by git? It flags tracked paths that look like ga
 - Disc images and executables by suffix, `.raw` memory cards and audio recordings, `.wav` recordings and `.bin` shader caches and key lists, wherever they sit.
 - A mod's game files by suffix (`.dat`, `.hps`, `.bnr`, `.elf` and `.gct`), wherever they sit.
 - Anything under a top-level `build*/` or `rom/` (except the `rom/` README), and anything under a `saves/` at any depth.
-- Anything under a top-level `mods/`. A `mods/` further down, such as `tests/mods/`, is fine.
+- Anything under a top-level `mods/` in any letter case. A `mods/` further down, such as `tests/mods/`, is fine.
 - Frame dumps (`frame_NNNNN.png` and `output_NNNNN.png`), `stdout.txt` and `panic.txt`, wherever they sit. Other PNG files are fine.
 - A playtest session's `session.json`, the input log's `inputs.txt` and the `aid.raw.txt` block log, wherever `GCN_SESSION` put them. Its `.raw` and `.wav` recordings fall under the suffix rule, and a session under `build/` under the build rule.
 

@@ -57,8 +57,13 @@ class ViolationsTest(unittest.TestCase):
         paths = ["mods/README.md", "mods/Some Mod/patches.txt", "mods/a/b/c.txt"]
         self.assertEqual(check_no_game_data.violations(paths), paths)
 
+    def test_a_top_level_mods_folder_fails_in_any_letter_case(self):
+        paths = ["Mods/a.txt", "MODS/a/b.txt", "mODS/Some Mod/patches.txt"]
+        self.assertEqual(check_no_game_data.violations(paths), paths)
+
     def test_a_mods_folder_below_the_top_passes(self):
-        paths = ["tests/mods/patches.txt", "tests/mods/Some Mod/list.txt", "docs/mods/guide.md", "x/mods/a.txt"]
+        paths = ["tests/mods/patches.txt", "tests/mods/Some Mod/list.txt", "docs/mods/guide.md", "x/mods/a.txt",
+                 "tests/Mods/a.txt", "docs/MODS/a.txt"]
         self.assertEqual(check_no_game_data.violations(paths), [])
 
     def test_lookalikes_pass(self):

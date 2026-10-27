@@ -290,6 +290,11 @@ class PlantedFileTest(BundleTestCase):
         self.assert_findings(f"game data: {SNAP}mods/patches.txt",
                              f"extra in the source: {SNAP}mods/patches.txt")
 
+    def test_a_mods_folder_in_the_snapshot_in_another_letter_case(self):
+        self.plant(SNAP + "Mods/patches.txt", "patches\n")
+        self.assert_findings(f"game data: {SNAP}Mods/patches.txt",
+                             f"extra in the source: {SNAP}Mods/patches.txt")
+
     def test_an_extra_file_in_the_snapshot(self):
         self.plant(SNAP + "docs/notes.md", "mine\n")
         self.assert_findings(f"extra in the source: {SNAP}docs/notes.md")
