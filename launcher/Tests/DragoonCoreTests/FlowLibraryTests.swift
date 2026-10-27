@@ -38,6 +38,41 @@ private let oldCommits = Commits(
         #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
     }
 
+    /// The recipe can start another step between Cancel's signal and its exit.
+    @Test func aStepAfterCancelKeepsTheBuildCanceling() {
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        run.send(.build(.step("compile")))
+        #expect(run.send(.cancelBuildPressed) == [.cancelBuild])
+        run.send(.build(.step("warmup")))
+        #expect(run.screen == .build(.running(BuildProgress(step: "warmup", canceling: true))))
+        #expect(run.send(.cancelBuildPressed) == [])
+        run.send(.build(.progress(step: "warmup", done: 1, total: 8)))
+        #expect(run.screen == .build(.running(BuildProgress(
+            step: "warmup", done: 1, total: 8, canceling: true))))
+    }
+
+    @Test func aLogTailForAnotherLogIsIgnored() {
+        let failure = BuildFailure.failed(step: "compile", message: "make exited 2", log: flowLog)
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        run.send(.buildEnded(failure))
+        #expect(run.send(.logTailRead(path: flowLog + ".old", lines: ["another build"])) == [])
+        #expect(run.screen == .build(.failed(failure, lastLines: [])))
+    }
+
+    /// Play checks the disc from Library, and Library's buttons wait for it.
+    @Test func libraryWaitsWhilePlayChecksTheDisc() {
+        var run = launched()
+        #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
+        #expect(run.screen == .library)
+        #expect(!run.state.libraryIsIdle)
+        for event: Flow.Event in [.playPressed, .rebuildPressed, .changeDiscPressed] {
+            #expect(run.send(event) == [], "\(event)")
+        }
+        #expect(run.state.waiting == .bookmark)
+    }
+
     @Test func aRebuildThatFinishesStampsTheGameWithTheSourcesCommits() {
         var run = launched(installed: InstalledGame(stamp: oldCommits))
         for (event, _) in rebuildToRunning { run.send(event) }
