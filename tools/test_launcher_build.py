@@ -220,7 +220,7 @@ class GoodRunTest(RecipeTestCase):
             code, _, _ = self.build()
             want_env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(Path.home()),
                         "TMPDIR": tempfile.gettempdir(), "LANG": "en_US.UTF-8",
-                        "PYTHONDONTWRITEBYTECODE": "1"}
+                        "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
         self.assertEqual(code, 0)
         build = self.cache / "build"
         recomp = self.source / "gcn-recomp" / "recomp"
