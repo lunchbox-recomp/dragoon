@@ -207,6 +207,20 @@ class SelectionTest(SwiftTestCase):
         self.run_tool()
         self.assertEqual(self.swift_args(), ["test", "--package-path", str(swift_test.LAUNCHER)])
 
+    def test_the_answer_is_the_directory_without_its_newline(self):
+        self.select(self.tools)
+        self.assertEqual(swift_test.selected_developer_dir(), self.tools)
+
+    def test_a_failure_an_empty_answer_and_a_missing_tool_are_no_directory(self):
+        self.assertIsNone(swift_test.selected_developer_dir())
+        self.select("")
+        self.assertIsNone(swift_test.selected_developer_dir())
+        self.select(self.tools)
+        os.environ["FAKE_SELECT_STATUS"] = "1"
+        self.assertIsNone(swift_test.selected_developer_dir())
+        with mock.patch.object(swift_test, "XCODE_SELECT", str(self.dir / "no xcode-select")):
+            self.assertIsNone(swift_test.selected_developer_dir())
+
     def test_a_missing_xcode_select_adds_nothing_and_swift_still_runs(self):
         with mock.patch.object(swift_test, "XCODE_SELECT", str(self.dir / "no xcode-select")):
             code, _, _ = self.run_tool()
