@@ -270,8 +270,12 @@ def digest(mods: list[Mod]) -> str:
 
 
 def _place(src: Path, dst: Path) -> Path:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    clone_file.clone(src, dst)
+    """Clone SRC to DST. A file gone since the scan or a full disk is a PrepareError naming SRC."""
+    try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        clone_file.clone(src, dst)
+    except OSError as e:
+        raise PrepareError(f"{src} can't be copied for the build ({e.strerror or e})") from None
     return dst
 
 
@@ -335,7 +339,9 @@ def prepare(mods: list[Mod], disc: Path, dol: Path, out: Path, python: Path,
 
     Returns the DOL to recompile, which is the one the overlay boots, the manifest and the
     digest of the clones. A tool's refusal that names a mod's list or file is a ModError, and
-    any other failure a PrepareError. A clone that fails falls back to a copy.
+    any other exit but 0 from a tool is a PrepareError. A clone that fails falls back to a copy,
+    and a file that can't be cloned or copied, such as one deleted since the scan, is a
+    PrepareError naming it. An OUT that exists already is a FileExistsError.
     """
     out.mkdir(parents=True)
     (out / FILES).mkdir()
