@@ -678,6 +678,19 @@ class SigtermTest(RecipeTestCase):
         self.assertEqual(self.of(events, "error"), [])
         self.assertEqual(tree(self.data), before)
 
+    def test_a_build_directory_that_cant_be_made_leaves_sigterm_unblocked(self):
+        """The hold around the mkdir ends on the way out of a mkdir that raises, too."""
+        self.old_game()
+        before = signal.pthread_sigmask(signal.SIG_BLOCK, [])
+        self.addCleanup(signal.pthread_sigmask, signal.SIG_SETMASK, before)
+        refused = PermissionError(errno.EACCES, "Permission denied")
+        with mock.patch.object(launcher_build, "new_build_dir", side_effect=refused):
+            code, events, _ = self.build()
+        self.assertEqual(code, 1)
+        (error,) = self.of(events, "error")
+        self.assertEqual(error["step"], "package")
+        self.assertEqual(signal.pthread_sigmask(signal.SIG_BLOCK, []), before)
+
     def test_a_sigterm_just_before_the_swap_renames_its_link_leaves_no_link(self):
         self.old_game()
         saves = tree(self.data / "saves")
