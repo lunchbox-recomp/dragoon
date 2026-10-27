@@ -9,7 +9,16 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
         var data: Data
     }
 
+    /// One call to a reader's `read`, with the bytes it got back.
+    struct Read: Equatable {
+        var path: String
+        var offset: UInt64
+        var count: Int
+        var returned: Int
+    }
+
     private let lock = NSLock()
+    private var readsMade: [Read] = []
     private var files: [String: Data] = [:]
     private var directories: Set<String> = ["/"]
     private var links: [String: String] = [:]
@@ -70,6 +79,14 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
         }
     }
 
+    func openReader(at path: String) throws -> any FileReader {
+        try lock.withLock {
+            let resolved = resolve(path)
+            guard let data = files[resolved] else { throw CocoaError(.fileReadNoSuchFile) }
+            return FakeFileReader(fs: self, path: resolved, data: data)
+        }
+    }
+
     func writeData(_ data: Data, to path: String) throws {
         try lock.withLock {
             if let writeError { throw writeError }
@@ -102,6 +119,13 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
 
     /// Every write that went through, in order, even ones removed since.
     var writes: [Write] { lock.withLock { written } }
+
+    /// Every reader call so far, in order.
+    var reads: [Read] { lock.withLock { readsMade } }
+
+    fileprivate func record(_ read: Read) {
+        lock.withLock { readsMade.append(read) }
+    }
 
     private func exists(_ path: String) -> Bool {
         files[path] != nil || directories.contains(path)
@@ -141,5 +165,21 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
 
     private static func parent(_ path: String) -> String {
         (path as NSString).deletingLastPathComponent
+    }
+}
+
+/// Reads one file of a FakeFileSystem as it was when opened, and tells the file system about
+/// each read.
+private struct FakeFileReader: FileReader {
+    let fs: FakeFileSystem
+    let path: String
+    let data: Data
+
+    func read(at offset: UInt64, count: Int) throws -> Data {
+        let start = Int(clamping: min(offset, UInt64(data.count)))
+        let end = min(start + max(count, 0), data.count)
+        let piece = data.subdata(in: start..<end)
+        fs.record(.init(path: path, offset: offset, count: count, returned: piece.count))
+        return piece
     }
 }

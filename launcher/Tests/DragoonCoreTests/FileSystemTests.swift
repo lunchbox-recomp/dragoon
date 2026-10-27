@@ -137,6 +137,36 @@ private func cleanUp(_ tree: any Tree) {
     }
 
     @Test(arguments: Kind.allCases)
+    func aReaderGivesTheBytesAtAnOffsetAndFewerOnlyAtTheEnd(_ kind: Kind) throws {
+        let tree = try makeTree(kind)
+        defer { cleanUp(tree) }
+        let path = tree.root + "/a dir/disc (USA).gcm"
+        try tree.file(path, "0123456789")
+        let reader = try tree.fs.openReader(at: path)
+
+        #expect(try reader.read(at: 3, count: 4) == Data("3456".utf8))
+        #expect(try reader.read(at: 0, count: 10) == Data("0123456789".utf8))
+        #expect(try reader.read(at: 8, count: 5) == Data("89".utf8))
+        #expect(try reader.read(at: 10, count: 1).isEmpty)
+        #expect(try reader.read(at: 1 << 40, count: 1).isEmpty)
+        #expect(try reader.read(at: UInt64.max, count: 8).isEmpty)
+        #expect(try reader.read(at: 2, count: 0).isEmpty)
+    }
+
+    @Test(arguments: Kind.allCases)
+    func aReaderOfWhatCantBeReadThrows(_ kind: Kind) throws {
+        let tree = try makeTree(kind)
+        defer { cleanUp(tree) }
+        try tree.file(tree.root + "/a dir/disc.gcm", "0123456789")
+        #expect(throws: (any Error).self) {
+            try tree.fs.openReader(at: tree.root + "/no such file")
+        }
+        #expect(throws: (any Error).self) {
+            try tree.fs.openReader(at: tree.root + "/a dir").read(at: 0, count: 1)
+        }
+    }
+
+    @Test(arguments: Kind.allCases)
     func whatIsntThereIsReportedSo(_ kind: Kind) throws {
         let tree = try makeTree(kind)
         defer { cleanUp(tree) }
