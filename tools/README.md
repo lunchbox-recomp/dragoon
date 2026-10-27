@@ -504,16 +504,19 @@ tools/mods.py check "$HOME/Library/Application Support/Dragoon/mods" --dol-sha1 
 
 `check` prints one JSON object. It lists each mod's name, file count and bytes in folder name order ignoring case, then gives the digest.
 
-The digest is the SHA-256 over each file's path in the mods folder, its size and its SHA-256. Adding, removing, editing or renaming a file changes it, while a dotfile never does. It's `none` when no mod holds a file, and a missing or empty folder has no mods.
+A mod holds the files under its `files/`, its `dol.txt` and the other files beside that. The digest is the SHA-256 over each file a mod holds, by the mod's name and its path in the mod, with its size and its SHA-256. In a mod without `dol.txt` the files beside `files/` are left alone, so they're not in it.
+
+Adding, removing, editing or renaming a file a mod holds changes the digest, while a dotfile or a loose file in the mods folder never does. It's `none` when no mod holds a file, and a missing or empty folder has no mods.
 
 A mod is refused for any of these. `check` then prints one object with the error, the mod and the path in it instead.
 
 | Refused | Where |
 |---|---|
-| A link | Anywhere in a mod, or the mod's own folder |
+| A link | Under `files/`, anywhere in a mod with a `dol.txt` or in place of the mod's own folder |
 | `files` or `dol.txt` in two letter cases | At the top of a mod |
-| Anything that isn't a file or a folder, or can't be read | Anywhere in a mod |
-| A file of 4 GiB or more | Anywhere in a mod |
+| Anything that isn't a file or a folder, or can't be read | Under `files/` or anywhere in a mod with a `dol.txt` |
+| A file of 4 GiB or more | Under `files/` or anywhere in a mod with a `dol.txt` |
+| A folder that can't be read | The mod's own folder |
 | A name that isn't ASCII or holds a control character | Under `files/` |
 | `main.dol` in any letter case, since code changes go in `dol.txt` | At the top of `files/` |
 | Two files that are one disc path ignoring case | Under `files/`, in one mod or two |
