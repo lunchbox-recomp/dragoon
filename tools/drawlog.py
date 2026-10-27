@@ -25,7 +25,8 @@ setters prints who set each camera's aspect from frame N to frame M, from DRAGOO
 the call returns to, then where its caller returns to. With --symbols each is named by the
 function that holds its call, the instruction before it, and how far in it is. It ends with the aspect the call was given, the one the camera held after (none
 for a camera that isn't a perspective one) and the frames. --cam ADDR keeps one camera's
-lines.
+lines. When no line is left, it says so on stderr, since a camera whose aspect is set some
+other way has none.
 
 Exits 0 once it has read the log, 1 when aspects finds a camera whose stored aspect changed
 within its viewport, 2 on a bad argument or a log it can't read or that lacks the lines asked
@@ -322,6 +323,9 @@ def setters(args) -> int:
         frame, cam = int(m[1]), int(m[2], 16)
         if args.start <= frame <= args.end and args.cam in (None, cam):
             held.setdefault((cam, int(m[3], 16), int(m[4], 16), m[5], m[6]), []).append(frame)
+    if not held:
+        which = "any camera" if args.cam is None else f"{args.cam:08X}"
+        print(f"{args.log}: no [aspect] lines for {which} in frames {args.start}..{args.end}", file=sys.stderr)
     starts = [f[0] for f in funcs]
     for (cam, lr, lr2, given, stored), frames in held.items():
         print(f"{cam:08X}  from {caller_text(lr, funcs, starts)}  called from {caller_text(lr2, funcs, starts)}"

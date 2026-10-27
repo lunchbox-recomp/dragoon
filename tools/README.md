@@ -144,6 +144,8 @@ Each line names a camera and where the call returns to, then where its caller re
 
 `--symbols` names the function that holds each call by the sizes in `symbols.txt`, with how far in the return address is. The call is the instruction before the return address. `--cam ADDR` keeps one camera's lines.
 
+When no line is left, `setters` says so on stderr. A camera whose aspect the game sets some other way has none.
+
 ```
 tools/probe.sh race 30 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
 tools/drawlog.py cameras build/probe/race/stdout.txt --frame 4200 --symbols analysis/symbols.txt
