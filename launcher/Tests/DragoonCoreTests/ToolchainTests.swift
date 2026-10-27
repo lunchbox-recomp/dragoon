@@ -154,6 +154,20 @@ private func cltToolchain(sdk: String, clangVersion: String = clang26_6) -> Tool
         ])
     }
 
+    @Test func sdksOfOneMajorVersionAreTriedNewestFirstByNumberNotByText() async {
+        let mac = FakeMac()
+        mac.setToolsPackageVersion("26.6.0.0.1781586589")
+        for name in ["MacOSX15.2.sdk", "MacOSX15.4.sdk", "MacOSX10.9.sdk", "MacOSX10.15.sdk"] {
+            mac.addSDK(name)
+            mac.setLinks(tools + "/SDKs/" + name, false)
+        }
+
+        #expect(await mac.detect() == .noLinkableSDK(tried: [
+            tools + "/SDKs/MacOSX15.4.sdk", tools + "/SDKs/MacOSX15.2.sdk",
+            tools + "/SDKs/MacOSX10.15.sdk", tools + "/SDKs/MacOSX10.9.sdk",
+        ]))
+    }
+
     @Test func withoutPkgutilsAnswerNoSDKIsSkippedForItsVersion() async {
         let mac = FakeMac()
         mac.addSDK("MacOSX26.5.sdk")
