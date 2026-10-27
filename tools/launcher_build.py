@@ -60,7 +60,6 @@ import shutil
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -70,8 +69,8 @@ import export_source
 import routes
 import source_info
 import warm_shaders
+from tool_env import TOOL_PATH, tool_env  # TOOL_PATH stays here for test_mutant.py
 
-TOOL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 CODESIGN = "/usr/bin/codesign"
 APP = "Dragoon.app"
 GAME = "dragoon"
@@ -107,11 +106,6 @@ Progress = Callable[[str], Optional[tuple]]
 
 class StepFailed(Exception):
     pass
-
-
-def tool_env() -> dict[str, str]:
-    return {"PATH": TOOL_PATH, "HOME": str(Path.home()), "TMPDIR": tempfile.gettempdir(),
-            "LANG": "en_US.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
 
 
 def emit(**event: object) -> None:

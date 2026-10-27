@@ -525,13 +525,19 @@ It exits 0 when no mod is refused, 1 when one is and 2 on a bad argument or a mo
 
 Then gcn-recomp's `disc_overlay.py` builds the overlay from the clones, with that `main.dol` as the DOL it boots. `prepare` returns the DOL to recompile, the manifest and the digest of the clones. The DOL is the one the overlay boots, and the digest comes from the clones, so a mod edited during a build doesn't change it.
 
-A refusal from either tool that names a mod's list or file comes back naming the mod. Both tools run under `-B` with nothing in the environment but `PATH`, `LANG`, `PYTHONDONTWRITEBYTECODE` and `PYTHONNOUSERSITE`, so the user's site-packages stay out as they do for the recipe's own tools.
+A refusal from either tool that names a mod's list or file comes back naming the mod. Both tools run under `-B` with tool_env.py's environment and nothing else, as the recipe's own tools do, so the user's site-packages stay out.
 
 The tests make every mods folder, image and DOL, at paths with spaces. Some run `prepare` against fakes of the two tools, and the rest against the pinned gcn-recomp's own, skipping when it isn't checked out.
 
 ## clone_file.py
 
 How does a build copy a file without copying its bytes? `clone` makes an APFS clone through `clonefile`, which shares the original's blocks until either changes, so editing a mod afterwards leaves the build's copy as it was. Where the volume can't clone, or the call fails for any other reason, it copies the bytes instead.
+
+It has no command line.
+
+## tool_env.py
+
+What environment does a tool the build runs get? `tool_env()` gives only `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, `HOME`, `TMPDIR`, `LANG`, `PYTHONDONTWRITEBYTECODE` and `PYTHONNOUSERSITE`. launcher_build.py runs the recipe's tools with it and mods.py runs gcn-recomp's, so the two can't drift apart.
 
 It has no command line.
 
