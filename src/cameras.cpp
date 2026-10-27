@@ -5,8 +5,8 @@
 // so the game runs as it always has.
 #include "cameras.h"
 #include "census.h"
+#include "guest_memory.h"
 #include "gx/render.h"
-#include "runtime.h"
 
 // recomp/hle.txt lists HSD_CObjSetAspect (0x80402C94), so its calls come here and its own
 // body is orig_HSD_CObjSetAspect.
@@ -14,7 +14,7 @@ extern "C" void orig_HSD_CObjSetAspect(CPU* c);
 
 namespace {
 
-bool in_ram(uint32_t a) { return a >= 0x80000000u && a - 0x80000000u < RAM_SIZE; }
+using dragoon::in_ram;
 
 // Where the caller returns to, given its stack frame. Its prologue saved its return address
 // in the word after its back chain, as the EABI's does. 0 when the frame isn't in RAM.
