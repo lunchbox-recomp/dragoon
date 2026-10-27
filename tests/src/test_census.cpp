@@ -39,6 +39,11 @@ TEST(CensusLine, UnknownTypeLeavesTheProjectionEmpty) {
               "[census] f=1 cam=80000020 type=none p= vp=0,0,0,0 cb=80000040 cls=3 via=draw");
 }
 
+TEST(AspectLine, ShowsTheCallerAndBothAspects) {
+    EXPECT_EQ(dragoon::aspect_line(4200, 0x8123A0C0, 0x800C2884, 0x800C1F00, 1.25538f, 1.67383f),
+              "[aspect] f=4200 cam=8123A0C0 lr=800C2884 lr2=800C1F00 given=1.25538 stored=1.67383");
+}
+
 TEST(OncePerFrame, RepeatInAFrameIsDropped) {
     dragoon::OncePerFrame once;
     EXPECT_TRUE(once.first(5, "a"));
