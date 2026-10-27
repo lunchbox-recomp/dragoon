@@ -192,7 +192,8 @@ private struct Detection {
         if fs.isDirectory(at: generic), await links(generic) {
             return chosen(generic)
         }
-        // 3. Every other one, newest first, but none from after the tools.
+        // 3. Every other one, newest first, except any whose major version is above the tools'
+        //    own. Only this step skips by version.
         let others = otherSDKs(in: sdks, excluding: tried)
         if !others.isEmpty {
             let toolsMajor = await toolsMajorVersion(environment)
