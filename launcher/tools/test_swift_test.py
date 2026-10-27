@@ -4,6 +4,8 @@ import contextlib
 import io
 import os
 import shlex
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,8 +22,10 @@ LIBS = "Library/Developer/usr/lib"
 # file and switches through the environment. The fake xcode-select records "select" and its
 # arguments to $FAKE_RECORDS and prints $FAKE_DEVELOPER_DIR, or fails with nothing on stdout
 # when that isn't set. $FAKE_SELECT_STATUS makes it exit with that status after printing. The
-# fake swift records "call" and one "arg X" per argument, ends itself with SIGTERM when
-# $FAKE_SWIFT_KILL is set and otherwise exits with $FAKE_SWIFT_STATUS (0 if unset).
+# fake swift records "call" and one "arg X" per argument, prints one line on stdout and one on
+# stderr when $FAKE_SWIFT_SAYS is set (a test that runs the tool in-process would otherwise
+# print them on the real descriptors), ends itself with SIGTERM when $FAKE_SWIFT_KILL is set
+# and otherwise exits with $FAKE_SWIFT_STATUS (0 if unset).
 FAKE_SELECT = r"""#!/bin/sh
 printf 'select %s\n' "$*" >> "$FAKE_RECORDS"
 if [ -z "${FAKE_DEVELOPER_DIR+x}" ]; then
@@ -38,6 +42,10 @@ FAKE_SWIFT = r"""#!/bin/sh
     printf 'arg %s\n' "$arg"
   done
 } >> "$FAKE_RECORDS"
+if [ -n "$FAKE_SWIFT_SAYS" ]; then
+  echo "fake swift says out"
+  echo "fake swift says err" >&2
+fi
 if [ -n "$FAKE_SWIFT_KILL" ]; then
   kill -TERM $$
 fi
@@ -261,6 +269,38 @@ class RealXcodeSelectTest(unittest.TestCase):
     def test_xcode_select_is_run_by_full_path_and_swift_by_name(self):
         self.assertEqual(swift_test.XCODE_SELECT, "/usr/bin/xcode-select")
         self.assertEqual(swift_test.SWIFT, "swift")
+
+
+@unittest.skipUnless(os.path.exists("/usr/bin/xcode-select"), "needs xcode-select")
+class ScriptTest(SwiftTestCase):
+    """The tool run as a script, the way CI runs it. The fake swift sits first on PATH and is
+    found by name, and the real xcode-select answers from DEVELOPER_DIR. A child's output
+    reaches the test only through a pipe, so these are the tests that see what swift prints."""
+
+    def run_script(self, developer: Path, *args: str, status: int = 0) -> subprocess.CompletedProcess:
+        path = os.pathsep.join([str(Path(FAKES["swift"]).parent), os.environ["PATH"]])
+        env = dict(os.environ, DEVELOPER_DIR=str(developer), FAKE_SWIFT_SAYS="1",
+                   FAKE_SWIFT_STATUS=str(status), PATH=path)
+        return subprocess.run([sys.executable, "-B", swift_test.__file__, *args], env=env,
+                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True)
+
+    def test_swifts_lines_status_and_flags_reach_the_caller(self):
+        done = self.run_script(self.tools, "--filter", "a b", status=3)
+        want = ["swift", "test", "--package-path", str(swift_test.LAUNCHER)]
+        want += testing_flags(self.tools) + ["--filter", "a b"]
+        self.assertEqual(done.returncode, 3)
+        self.assertEqual(done.stdout, "fake swift says out\n")
+        self.assertEqual(done.stderr.splitlines(), ["+ " + shlex.join(want), "fake swift says err"])
+        self.assertEqual(self.swift_args(), want[1:])
+
+    def test_under_xcode_swift_gets_no_flags_and_its_lines_still_arrive(self):
+        done = self.run_script(self.xcode)
+        want = ["swift", "test", "--package-path", str(swift_test.LAUNCHER)]
+        self.assertEqual(done.returncode, 0)
+        self.assertEqual(done.stdout, "fake swift says out\n")
+        self.assertEqual(done.stderr.splitlines(), ["+ " + shlex.join(want), "fake swift says err"])
+        self.assertEqual(self.swift_args(), want[1:])
 
 
 class RunTest(SwiftTestCase):
