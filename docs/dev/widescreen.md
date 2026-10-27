@@ -8,7 +8,7 @@ from runs of the routes in `tests/routes/` through `tools/probe.sh`, read with
 The numbers were taken against gcn-recomp `deac351` with `--aspect` and `--dump-output`
 added, the change `6575c67` makes on the fork's `dragoon` branch. At `3a8d154`, the
 race's census at 4:3 and the kept widening's aspects and draws in the race, City Trial, 2P
-and 4P came out the same. The section "Measured on Dragoon `b1f0ae0`" has them again at
+and 4P came out the same. The section "Measured on Dragoon `45c52c5`" has them again at
 gcn-recomp `5e49451`, with the race's cameras after the finish and Top Ride's camera widened
 too.
 
@@ -95,7 +95,7 @@ four of the library are the rule `src/cameras.h` keys on.
 
 After the race's finish line the world camera that's drawn gets its aspect from the library
 alone. At gcn-recomp `3a8d154`, from frame 8,183 to 13,062, the full-screen world cameras
-stored 1.25538 at 16:9. On Dragoon `b1f0ae0` at a load of about 4.5, `drawlog.py setters`
+stored 1.25538 at 16:9. On Dragoon `45c52c5` at a load of about 4.5, `drawlog.py setters`
 showed the camera drawn at frame 8,400 getting its aspect only at frame 8,092 from the first
 two calls in the table, never from the module.
 
@@ -110,7 +110,7 @@ On Dragoon `a2ff7fd` at a load of about 3, at frame 3,600 of `top-ride-grass.txt
 198 of the frame's 236 draws at 4:3 and at 16:9, and fov 25 cameras make the other 38.
 `drawlog.py setters` lists no call to `HSD_CObjSetAspect` for it.
 
-A watch build of Dragoon `c4bba2b`, run at a load of about 20 just after its build, logged each
+A watch build of Dragoon `0159b5e`, run at a load of about 20 just after its build, logged each
 store to the camera's aspect up to frame 3,700. After `_HSD_MemClearDefaultCB` clears the
 camera's memory, the only store is at `0x80403150` in `CObjLoad` (`0x80402FC0`), which copies
 the aspect from the camera's description. `HSD_CObjLoadDesc` (`0x804031EC`) calls it and
@@ -128,9 +128,9 @@ Three places were tried at `--aspect=16:9 --output`, each behind its own switch.
 were these four.
 
 1. Every world camera's projection reads 4/3 times its 4:3 aspect in one player, 2P and 4P,
-   and no HUD or menu camera changes. Before Dragoon `c62cdad` widened the library's four
+   and no HUD or menu camera changes. Before Dragoon `b307f49` widened the library's four
    calls as well, the kept widening met this only until the race's finish. Top Ride's camera
-   met it only once `2845e85` widened it as it loads.
+   met it only once `06d27b1` widened it as it loads.
 2. The stored aspect holds steady over 600 frames, so nothing widens twice.
 3. The race finishes in the same time as at 4:3.
 4. It takes the fewest patch lines.
@@ -163,7 +163,7 @@ Top Ride's world camera never goes through `HSD_CObjSetAspect`, so `HSD_CObjLoad
 function as well. It widens the camera it returns when the pair under "Top Ride" above matches,
 and the census logs each perspective camera it loads.
 
-On Dragoon `b1f0ae0` at 16:9, at loads of 4.3 to 6.3, Top Ride's camera stored 1.57333 from
+On Dragoon `45c52c5` at 16:9, at loads of 4.3 to 6.3, Top Ride's camera stored 1.57333 from
 its load at frame 3,234 to frame 3,833. At frame 3,600 it made 198 draws as at 4:3, and the fov
 25 cameras kept 1.25538. In the output dump the player's and the CPUs' markers sit over their
 karts.
@@ -228,7 +228,7 @@ a released camera, one made later at its address, forgetting every camera and th
 ## World to screen and culling
 
 World to screen reads the world camera's stored aspect, so it needed no change of its own. A
-watch build of gcn-recomp lists every load from a range of guest memory. On Dragoon `c4bba2b`
+watch build of gcn-recomp lists every load from a range of guest memory. On Dragoon `0159b5e`
 at loads of 3.2 to 3.4, in the race at 16:9, these were all the loads of the full-screen world
 camera's field of view and aspect over frames 4,199 and 4,200.
 
@@ -266,9 +266,9 @@ tools/probe.sh readers 300 tests/routes/air-ride-race.txt 100000 --aspect=16:9 G
 the path is absolute. Configure again with `-DCMAKE_C_FLAGS=` and `-DCMAKE_CXX_FLAGS=` for the
 usual build.
 
-## Measured on Dragoon `b1f0ae0`
+## Measured on Dragoon `45c52c5`
 
-These runs are from Dragoon `b1f0ae0` at gcn-recomp `5e49451`, two at a time, at 1-minute loads
+These runs are from Dragoon `45c52c5` at gcn-recomp `5e49451`, two at a time, at 1-minute loads
 of 2.7 to 6.3. Each checkpoint ran at 4:3 and at 16:9 on the same build.
 
 | Checkpoint | World draws at 4:3 | At 16:9 | World aspect at 16:9 | Steady over frames |
@@ -296,7 +296,7 @@ census.
 ## What 16:9 still gets wrong
 
 These come from the output dumps at 16:9 of the race at 4200 and 8400, City Trial at 3300, 2P
-and 4P at 3480, Top Ride on Grass at 3600 and, before `c62cdad`, the mode select at 1200.
+and 4P at 3480, Top Ride on Grass at 3600 and, before `b307f49`, the mode select at 1200.
 
 - Every HUD element is 4/3 too wide. In the race that's the position badge, the timer, the
   minimap box, the lap count, the speedometer, the "ff" bubble and the CPU markers. In 4P
