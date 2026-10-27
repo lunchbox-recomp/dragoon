@@ -11,5 +11,6 @@ const RecompRel g_recomp_rels[1];
 const uint32_t g_recomp_rel_count = 0;
 
 void orig_OSSaveContext(CPU* c) { (void)c; }
-/* src/cameras.cpp's hle_HSD_CObjSetAspect calls the original body. */
+/* src/cameras.cpp's hle_HSD_CObjSetAspect and hle_HSD_CObjLoadDesc call the original bodies. */
 void orig_HSD_CObjSetAspect(CPU* c) { (void)c; }
+void orig_HSD_CObjLoadDesc(CPU* c) { (void)c; }
