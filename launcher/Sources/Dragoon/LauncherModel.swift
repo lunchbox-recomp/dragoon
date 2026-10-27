@@ -44,4 +44,6 @@ struct Places: Sendable {
 
     var sourceInfo: String { bundle + "/Contents/Resources/source/source-info.json" }
     var saves: String { data + "/saves" }
+    /// The current game, which the recipe's swap points `game/current` at.
+    var game: String { data + "/game/current/Dragoon.app" }
 }

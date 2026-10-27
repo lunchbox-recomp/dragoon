@@ -28,6 +28,9 @@ public protocol FileSystem: Sendable {
     /// Removes the file or link at `path`, or the directory and everything in it. A link goes
     /// without what it points to. Throws when nothing is there.
     func removeItem(at path: String) throws
+    /// Moves the file at `path` to `destination`, making the destination's directory first.
+    /// Throws `POSIXError(.EEXIST)` and moves nothing when something is at `destination` already.
+    func moveItem(at path: String, to destination: String) throws
 }
 
 /// The real FileSystem, on FileManager.
@@ -94,6 +97,17 @@ public struct SystemFileSystem: FileSystem {
 
     public func removeItem(at path: String) throws {
         try FileManager.default.removeItem(atPath: path)
+    }
+
+    public func moveItem(at path: String, to destination: String) throws {
+        try FileManager.default.createDirectory(
+            atPath: (destination as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true)
+        // RENAME_EXCL checks and moves in one step, so nothing that turns up at the destination
+        // meanwhile is replaced.
+        if renamex_np(path, destination, UInt32(RENAME_EXCL)) != 0 {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
     }
 }
 

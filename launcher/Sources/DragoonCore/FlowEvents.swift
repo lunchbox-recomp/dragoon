@@ -63,9 +63,11 @@ extension Flow {
         /// The build's stream ended, with nil when the new game is current.
         case buildEnded(BuildFailure?)
         case logTailRead(path: String, lines: [String])
-        case gameExited(status: Int32, panic: String?)
-        /// `play` couldn't start the game, and `reason` says why.
-        case gameCouldNotStart(reason: String)
+        /// The game that the `play` with this launch number started has ended. `panic` is the
+        /// text of the `panic.txt` the runtime wrote, after an ending that isn't a clean exit.
+        case gameExited(launch: Int, exit: GameExit, panic: String?)
+        /// The `play` with this launch number couldn't start the game, and `reason` says why.
+        case gameCouldNotStart(launch: Int, reason: String)
     }
 
     /// What the app does for the flow. Each result comes back as an event.
@@ -95,9 +97,9 @@ extension Flow {
         case readLogTail(String)
         case copyLog(String)
         case showLog(String)
-        /// Starts the current game with the disc at `disc`, which gives `gameExited` once the
-        /// game exits, or `gameCouldNotStart`.
-        case play(disc: String)
+        /// Starts the current game with the disc at `disc`. Its one result is `gameExited` once
+        /// the game ends, or `gameCouldNotStart`, and either echoes `launch`.
+        case play(disc: String, launch: Int)
         case showSaves
         /// `OldBuilds.delete`, sent only while no game and no build is running.
         case deleteOldBuilds

@@ -175,9 +175,11 @@ extension Flow.State {
             return screen == .library ? [.showSaves] : []
         case .backToLibraryPressed:
             return canGoBackToLibrary ? showLibrary() : []
-        case .gameExited(let status, let panic):
-            return gameStopped(status == 0 ? nil : .exited(status: status, panic: panic))
-        case .gameCouldNotStart(let reason):
+        case .gameExited(let launch, let ending, let panic):
+            guard launch == launchNumber else { return [] }
+            return gameStopped(ending == .status(0) ? nil : .exited(ending, panic: panic))
+        case .gameCouldNotStart(let launch, let reason):
+            guard launch == launchNumber else { return [] }
             return gameStopped(.couldNotStart(reason: reason))
         }
     }
@@ -277,7 +279,8 @@ extension Flow.State {
             intent = nil
             screen = .library
             gameRunning = true
-            return [.play(disc: path)]
+            launchNumber += 1
+            return [.play(disc: path, launch: launchNumber)]
         case .build:
             screen = .build(.preparing)
             waiting = .tools(disc: path)

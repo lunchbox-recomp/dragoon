@@ -149,6 +149,29 @@ private func cleanUp(_ tree: any Tree) {
     }
 
     @Test(arguments: Kind.allCases)
+    func moveMakesTheDirectoryAndNeverReplacesWhatsThere(_ kind: Kind) throws {
+        let tree = try makeTree(kind)
+        defer { cleanUp(tree) }
+        let panic = tree.root + "/panic.txt"
+        let moved = tree.root + "/Logs dir/panic one.txt"
+        try tree.file(panic, "first")
+        try tree.fs.moveItem(at: panic, to: moved)
+        #expect(!tree.fs.fileExists(at: panic))
+        #expect(try tree.fs.readData(at: moved) == Data("first".utf8))
+
+        try tree.file(panic, "second")
+        #expect(throws: POSIXError(.EEXIST)) { try tree.fs.moveItem(at: panic, to: moved) }
+        #expect(try tree.fs.readData(at: panic) == Data("second".utf8))
+        #expect(try tree.fs.readData(at: moved) == Data("first".utf8))
+
+        try tree.fs.removeItem(at: panic)
+        #expect(throws: (any Error).self) {
+            try tree.fs.moveItem(at: panic, to: tree.root + "/Logs dir/panic two.txt")
+        }
+        #expect(!tree.fs.fileExists(at: tree.root + "/Logs dir/panic two.txt"))
+    }
+
+    @Test(arguments: Kind.allCases)
     func aReaderGivesTheBytesAtAnOffsetAndFewerOnlyAtTheEnd(_ kind: Kind) throws {
         let tree = try makeTree(kind)
         defer { cleanUp(tree) }
