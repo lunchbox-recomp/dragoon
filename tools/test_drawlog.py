@@ -363,6 +363,30 @@ class SettersCommandTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("812C5260  from 800C2884  called from 800C1F00  given 1.25538 stored none", out)
 
+    def test_window_takes_its_first_and_last_frames(self):
+        lines = [setter(99), setter(100), setter(200), setter(201)]
+        code, out, _ = run_main(drawlog.main, "setters", self.log(*lines), "--from", "100", "--to", "200")
+        self.assertEqual(code, 0)
+        self.assertIn("in frames 100..200 (2 frames)", out)
+
+    def test_missing_log_exits_2(self):
+        code, _, err = run_main(drawlog.main, "setters", str(self.dir / "nothing.txt"))
+        self.assertEqual(code, 2)
+        self.assertIn("nothing.txt", err)
+
+    def test_missing_symbols_exit_2(self):
+        code, _, err = run_main(drawlog.main, "setters", self.log(setter(100)),
+                                "--symbols", str(self.dir / "no-symbols.txt"))
+        self.assertEqual(code, 2)
+        self.assertIn("no-symbols.txt", err)
+
+    def test_a_byte_that_isnt_utf8_is_read_past(self):
+        path = self.dir / "stdout.txt"
+        path.write_bytes(b"OSReport \xff\xfe\n" + setter(100).encode() + b"\n")
+        code, out, _ = run_main(drawlog.main, "setters", str(path))
+        self.assertEqual(code, 0)
+        self.assertIn("81424A80  from 800C2884", out)
+
     def test_a_camera_with_no_lines_is_named_on_stderr(self):
         code, out, err = run_main(drawlog.main, "setters", self.log(setter(100)), "--cam", "80D9B920")
         self.assertEqual(code, 0)
