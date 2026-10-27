@@ -29,8 +29,9 @@ public struct ProcessTimeout: Error, Equatable, Sendable {
 /// path with spaces stays one argument.
 public protocol ProcessRunner: Sendable {
     /// Runs `executable`, a full path, with `arguments`. A nil `environment` passes this
-    /// process's own. A nil `timeout` waits as long as the process takes, and otherwise a
-    /// process still running after that many seconds is killed and `ProcessTimeout` is thrown.
+    /// process's own. A nil `timeout` waits as long as the process takes. Otherwise a process
+    /// still running after that many seconds, or one that has left something running that
+    /// still holds its output open, is killed with its helpers and `ProcessTimeout` is thrown.
     /// Throws when the executable can't be started.
     func run(
         _ executable: String, _ arguments: [String], environment: [String: String]?,
@@ -85,7 +86,8 @@ public struct SystemProcessRunner: ProcessRunner {
         process.standardError = err
         try process.run()
         let watchdog = Watchdog(process)
-        if let timeout { watchdog.arm(after: timeout) }
+        let deadline = timeout.map { DispatchTime.now() + $0 }
+        if let deadline { watchdog.arm(at: deadline) }
         // Both pipes are drained at once, so a child that fills one never waits on the other.
         let outText = Collected()
         let errText = Collected()
@@ -99,12 +101,23 @@ public struct SystemProcessRunner: ProcessRunner {
             }
         }
         process.waitUntilExit()
+        let timedOut = ProcessTimeout(executable: executable, seconds: timeout ?? 0)
         if watchdog.disarm() {
             // Anything the child started that still holds a pipe can't keep this waiting long.
             _ = draining.wait(timeout: .now() + 1)
-            throw ProcessTimeout(executable: executable, seconds: timeout ?? 0)
+            throw timedOut
         }
-        draining.wait()
+        if let deadline {
+            // The child exited, but the deadline covers the pipes too. Whatever still holds one
+            // when it passes is killed with the child's group.
+            if draining.wait(timeout: deadline) == .timedOut {
+                watchdog.killGroup()
+                _ = draining.wait(timeout: .now() + 1)
+                throw timedOut
+            }
+        } else {
+            draining.wait()
+        }
         return ProcessResult(
             status: process.terminationStatus,
             stdout: String(decoding: outText.data, as: UTF8.self),
@@ -121,18 +134,29 @@ private final class Collected: @unchecked Sendable {
 private final class Watchdog: @unchecked Sendable {
     private let lock = NSLock()
     private let process: Process
+    private let pid: pid_t
+    /// Whether the child leads a process group of its own, which takes the helpers it started
+    /// with it. It is read while the child is new, since a child that has exited can't be asked.
+    private let leadsGroup: Bool
     private var timer: DispatchWorkItem?
     private var finished = false
     private var killed = false
 
     init(_ process: Process) {
         self.process = process
+        pid = process.processIdentifier
+        leadsGroup = getpgid(pid) == pid
     }
 
-    func arm(after seconds: TimeInterval) {
+    func arm(at deadline: DispatchTime) {
         let timer = DispatchWorkItem { [self] in fire() }
         lock.withLock { self.timer = timer }
-        DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: timer)
+        DispatchQueue.global().asyncAfter(deadline: deadline, execute: timer)
+    }
+
+    /// Kills what is left of the child's process group once the child itself has exited.
+    func killGroup() {
+        if leadsGroup { killpg(pid, SIGKILL) }
     }
 
     /// Stops the timer, and says whether it already killed the process.
@@ -148,9 +172,7 @@ private final class Watchdog: @unchecked Sendable {
         lock.withLock {
             guard !finished, process.isRunning else { return }
             killed = true
-            let pid = process.processIdentifier
-            // A child that leads its own process group takes the helpers it started with it.
-            if getpgid(pid) == pid {
+            if leadsGroup {
                 killpg(pid, SIGKILL)
             } else {
                 kill(pid, SIGKILL)

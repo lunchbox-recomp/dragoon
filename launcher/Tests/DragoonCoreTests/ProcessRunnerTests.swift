@@ -62,6 +62,26 @@ import Testing
         #expect(await Self.helperIsGone(pidFile))
     }
 
+    @Test func aChildThatExitsLeavingAHelperOnItsPipesIsStillBoundByTheTimeout() async throws {
+        // The shell exits at once, and the sleep it started still holds stdout.
+        let pidFile = Self.pidFile()
+        defer { try? FileManager.default.removeItem(atPath: pidFile) }
+        let started = ContinuousClock.now
+        await #expect(throws: ProcessTimeout(executable: "/bin/sh", seconds: 0.5)) {
+            try await runner.run(
+                "/bin/sh", ["-c", "/bin/sleep 60 & echo $! > \"$1\"; exit 0", "sh", pidFile],
+                environment: nil, timeout: 0.5)
+        }
+        #expect(ContinuousClock.now - started < .seconds(20))
+        #expect(await Self.helperIsGone(pidFile))
+    }
+
+    @Test func aChildThatExitsAndLeavesNothingBehindReturnsItsOutputBeforeTheTimeout() async throws {
+        let result = try await runner.run(
+            "/bin/sh", ["-c", "echo done; exit 3"], environment: nil, timeout: 30)
+        #expect(result == ProcessResult(status: 3, stdout: "done\n"))
+    }
+
     private static func pidFile() -> String {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("Dragoon helper \(UUID().uuidString).pid").path
