@@ -12,7 +12,7 @@ saves/
 *.dol
 *.bin
 # A player's mods, which are game files and patch lists
-/mods/
+/mods
 *.dat
 *.hps
 *.bnr

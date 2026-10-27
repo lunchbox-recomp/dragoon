@@ -85,11 +85,17 @@ class GitignoreTest(unittest.TestCase):
     repository's temporary directory and with the system and global config turned off, so
     neither a config nor a global ignore file of the developer's applies."""
 
+    def make_repo(self, tmp: str) -> dict[str, str]:
+        """Make a repository in TMP holding the repository's own .gitignore, and return the
+        environment git runs in there."""
+        env = {**os.environ, **GIT_ENV, "HOME": tmp, "XDG_CONFIG_HOME": tmp}
+        subprocess.run(["git", "-C", tmp, "init", "-q"], env=env, check=True)
+        shutil.copy(check_no_game_data.ROOT / ".gitignore", Path(tmp, ".gitignore"))
+        return env
+
     def ignored(self, paths: list[str]) -> list[str]:
         with tempfile.TemporaryDirectory() as tmp:
-            env = {**os.environ, **GIT_ENV, "HOME": tmp, "XDG_CONFIG_HOME": tmp}
-            subprocess.run(["git", "-C", tmp, "init", "-q"], env=env, check=True)
-            shutil.copy(check_no_game_data.ROOT / ".gitignore", Path(tmp, ".gitignore"))
+            env = self.make_repo(tmp)
             done = subprocess.run(["git", "-C", tmp, "check-ignore", "--stdin", "-z"],
                                   env=env, input="\0".join(paths), capture_output=True, text=True)
         self.assertIn(done.returncode, (0, 1), done.stderr)
@@ -102,6 +108,15 @@ class GitignoreTest(unittest.TestCase):
     def test_a_top_level_mods_folder_is_ignored(self):
         paths = ["mods/README.md", "mods/Some Mod/patches.txt", "mods/a/b/c.txt"]
         self.assertEqual(self.ignored(paths), paths)
+
+    def test_a_top_level_mods_symlink_is_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.make_repo(tmp)
+            os.symlink("elsewhere", Path(tmp, "mods"))
+            status = subprocess.run(["git", "-C", tmp, "status", "--porcelain", "--ignored"], env=env,
+                                    capture_output=True, text=True, check=True).stdout.splitlines()
+        self.assertIn("!! mods", status)
+        self.assertNotIn("?? mods", status)
 
     def test_a_mods_folder_below_the_top_is_not(self):
         paths = ["tests/mods/patches.txt", "tests/mods/Some Mod/list.txt", "docs/mods/guide.md"]
