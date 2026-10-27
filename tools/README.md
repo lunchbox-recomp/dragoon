@@ -140,7 +140,9 @@ Which cameras does a frame draw through, and what aspect does each hold? It read
 
 `setters` lists who set each camera's aspect from one frame to another. It reads the `[aspect]` line that `DRAGOON_CENSUS=1` prints for each call to `HSD_CObjSetAspect`.
 
-Each line names a camera and where the call returns to, then where its caller returns to. It ends with the aspect the call was given and the one the camera held after, or `none` for a camera that isn't a perspective one. `--symbols` names the function each return address is in and how far in it is, and `--cam ADDR` keeps one camera's lines.
+Each line names a camera and where the call returns to, then where its caller returns to. It ends with the aspect the call was given and the one the camera held after, or `none` for a camera that isn't a perspective one.
+
+`--symbols` names the function that holds each call by the sizes in `symbols.txt`, with how far in the return address is. The call is the instruction before the return address. `--cam ADDR` keeps one camera's lines.
 
 ```
 tools/probe.sh race 30 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
