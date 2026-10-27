@@ -590,7 +590,7 @@ The tests fake codesign, ditto, hdiutil, xcrun and spctl with scripts that recor
 
 How do the launcher's Swift tests run on a Mac with the Command Line Tools and no Xcode? swift_test.py lives in `launcher/tools/` and runs `swift test --package-path launcher` with its own arguments passed on (`--filter NAME` works), exiting with swift's status. Plain `swift test` fails there with `no such module 'Testing'`, because the tools keep `Testing.framework` where neither the compiler nor the test runner looks.
 
-When `xcode-select -p` names a directory called `CommandLineTools` that holds `Library/Developer/Frameworks/Testing.framework`, the tool adds `-Xswiftc -F` for that `Frameworks` directory and `-Xlinker -rpath` for it and for `Library/Developer/usr/lib`, where `lib_TestingInterop.dylib` is. With Xcode selected, or when `xcode-select` fails, it adds nothing. The flags stay out of `Package.swift`, because `unsafeFlags` there would bake one Mac's paths into the package.
+When `xcode-select -p` names a directory that holds `Library/Developer/Frameworks/Testing.framework` and has no `Platforms` directory, whatever the directory is called, the tool adds `-Xswiftc -F` for that `Frameworks` directory and `-Xlinker -rpath` for it and for `Library/Developer/usr/lib`, where `lib_TestingInterop.dylib` is. Xcode's developer directory has a `Platforms` directory, so with Xcode selected, or when `xcode-select` fails, it adds nothing. The flags stay out of `Package.swift`, because `unsafeFlags` there would bake one Mac's paths into the package.
 
 ```
 launcher/tools/swift_test.py

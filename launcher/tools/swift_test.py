@@ -11,8 +11,9 @@ With Xcode selected, that's all it does. With the Command Line Tools selected, `
 alone stops at `no such module 'Testing'`, because the tools keep Testing.framework in
 Library/Developer/Frameworks, where the compiler doesn't look. Given only -F, the test runner
 then can't load that framework or lib_TestingInterop.dylib. So when `xcode-select -p` names a
-directory called CommandLineTools that holds Library/Developer/Frameworks/Testing.framework,
-the tool adds these for that directory:
+directory that holds Library/Developer/Frameworks/Testing.framework and has no Platforms
+directory beside it, as the Command Line Tools do and Xcode's doesn't, the tool adds these for
+that directory, whatever the directory is called:
   -Xswiftc -F -Xswiftc DEV/Library/Developer/Frameworks
   -Xlinker -rpath -Xlinker DEV/Library/Developer/Frameworks
   -Xlinker -rpath -Xlinker DEV/Library/Developer/usr/lib
@@ -32,7 +33,7 @@ from typing import Optional
 XCODE_SELECT = "/usr/bin/xcode-select"
 SWIFT = "swift"
 LAUNCHER = Path(__file__).resolve().parents[1]
-TOOLS = "CommandLineTools"
+PLATFORMS = "Platforms"  # Xcode's developer directory has one, and the Command Line Tools don't
 FRAMEWORKS = "Library/Developer/Frameworks"
 TESTING = f"{FRAMEWORKS}/Testing.framework"
 LIBS = "Library/Developer/usr/lib"
@@ -50,8 +51,9 @@ def selected_developer_dir() -> Optional[Path]:
 
 
 def needs_flags(developer: Path) -> bool:
-    """Is DEVELOPER the Command Line Tools with Testing.framework where the tools keep it?"""
-    return developer.name == TOOLS and (developer / TESTING).is_dir()
+    """Does DEVELOPER hold Testing.framework where the Command Line Tools keep it and no
+    Platforms directory, which Xcode's developer directory has?"""
+    return (developer / TESTING).is_dir() and not (developer / PLATFORMS).is_dir()
 
 
 def testing_flags(developer: Path) -> list[str]:

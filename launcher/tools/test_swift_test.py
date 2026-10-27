@@ -152,11 +152,27 @@ class FlagsTest(SwiftTestCase):
         self.run_tool()
         self.assertEqual(self.swift_args(), ["test", "--package-path", str(swift_test.LAUNCHER)])
 
-    def test_a_directory_not_called_command_line_tools_gets_none_even_with_the_framework(self):
+    def test_a_tools_copy_under_another_name_gets_the_flags(self):
+        copy = make_tools(self.dir / "a copy" / "clt 26.5")
+        self.select(copy)
+        self.run_tool()
+        self.assertEqual(self.swift_args(),
+                         ["test", "--package-path", str(swift_test.LAUNCHER)] + testing_flags(copy))
+
+    def test_an_xcode_shaped_directory_gets_none_even_with_the_framework(self):
         make_tools(self.xcode)
+        self.assertTrue((self.xcode / TESTING).is_dir())
         self.select(self.xcode)
         self.run_tool()
         self.assertEqual(self.swift_args(), ["test", "--package-path", str(swift_test.LAUNCHER)])
+
+    def test_a_platforms_file_does_not_make_it_xcode(self):
+        tools = make_tools(self.dir / "odd platforms" / "CommandLineTools")
+        (tools / "Platforms").write_text("")
+        self.select(tools)
+        self.run_tool()
+        self.assertEqual(self.swift_args(),
+                         ["test", "--package-path", str(swift_test.LAUNCHER)] + testing_flags(tools))
 
     def test_the_tools_without_testing_framework_get_none(self):
         bare = make_tools(self.dir / "bare" / "CommandLineTools", testing=False)

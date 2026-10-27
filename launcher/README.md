@@ -26,7 +26,7 @@ A run on 2026-10-22 needed `SDKROOT` set to that SDK, because the default then w
 
 The Command Line Tools ship Swift Testing, but not where `swift test` looks. `Testing.framework` is in `/Library/Developer/CommandLineTools/Library/Developer/Frameworks` and `lib_TestingInterop.dylib` is in `.../Library/Developer/usr/lib`. The compiler needs the first as a framework search path, and the test runner needs both as rpaths.
 
-`swift_test.py` asks `xcode-select -p` which developer directory is selected. If that's the Command Line Tools and it holds `Library/Developer/Frameworks/Testing.framework`, it runs `swift test --package-path launcher` with these added, for that directory:
+`swift_test.py` asks `xcode-select -p` which developer directory is selected. If that directory holds `Library/Developer/Frameworks/Testing.framework` and has no `Platforms` directory, whatever it's called, it runs `swift test --package-path launcher` with these added, for that directory:
 
 ```
 -Xswiftc -F -Xswiftc DEV/Library/Developer/Frameworks
@@ -34,4 +34,4 @@ The Command Line Tools ship Swift Testing, but not where `swift test` looks. `Te
 -Xlinker -rpath -Xlinker DEV/Library/Developer/usr/lib
 ```
 
-With Xcode selected it adds nothing, so it runs the same command on GitHub's runner as a bare `swift test` would. The flags aren't `unsafeFlags` in `Package.swift`, because that would bake one Mac's paths into the package.
+Xcode's developer directory has a `Platforms` directory, so with Xcode selected it adds nothing. The launcher job on GitHub's runner logs a command with no added flags. The flags aren't `unsafeFlags` in `Package.swift`, because that would bake one Mac's paths into the package.
