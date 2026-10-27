@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 import clone_file
+from tool_env import tool_env
 
 FILES = "files"
 DOL_TXT = "dol.txt"
@@ -50,8 +51,6 @@ LIST_MAX = 1 << 20  # dol_patch.py refuses a bigger patch list
 CHUNK = 1 << 20
 SHA1 = re.compile(r"[0-9a-f]{40}")
 COMMENT = re.compile(r"(?:^|\s)#.*$")  # as dol_patch.py strips one
-TOOL_ENV = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8",
-            "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
 # dol_patch.py's refusal of a list, `patches/N/dol.txt:line: reason` or without the line.
 LIST_SAID = re.compile(r"(patches/[0-9]+/)dol\.txt((?::[0-9]+)?): (.+)", re.S)
 # The reasons disc_overlay.py gives after a path under its files folder.
@@ -260,7 +259,7 @@ def _place(src: Path, dst: Path) -> Path:
 
 def _run(python: Path, tool: Path, args: list[str], cwd: Path) -> tuple[int, str]:
     """Run TOOL from CWD. Its exit code, and what it printed on stderr or else on stdout."""
-    done = subprocess.run([str(python), "-B", str(tool), *args], cwd=cwd, env=TOOL_ENV,
+    done = subprocess.run([str(python), "-B", str(tool), *args], cwd=cwd, env=tool_env(),
                           stdin=subprocess.DEVNULL, capture_output=True)
     said = done.stderr if done.stderr.strip() else done.stdout
     return done.returncode, said.decode("utf-8", "replace").strip()
@@ -314,7 +313,7 @@ def prepare(mods: list[Mod], disc: Path, dol: Path, out: Path, python: Path,
     mod has one, RECOMP's dol_patch.py applies the lists in mod order to DOL, the game's checked
     DOL, giving OUT/main.dol and main.dol.syms. RECOMP's disc_overlay.py then builds the overlay
     for DISC from OUT/files, with main.dol as its DOL when there is one. PYTHON runs both, with
-    -B and only TOOL_ENV in the environment.
+    -B and only tool_env.py's environment.
 
     Returns the DOL to recompile, which is the one the overlay boots, the manifest and the
     digest of the clones. A tool's refusal that names a mod's list or file is a ModError, and
