@@ -88,8 +88,8 @@ public func checkDisc(
     }
     do {
         return try inspect(file, expectedID: expectedID, expectedDOLSHA1: expectedDOLSHA1)
-    } catch let cutShort as DiscUnreadable {
-        return .unreadable(reason: cutShort.reason)
+    } catch let unreadable as DiscUnreadable {
+        return .unreadable(reason: unreadable.reason)
     } catch {
         return .unreadable(
             reason: "The disc image couldn't be read (\(error.localizedDescription)).")
@@ -129,7 +129,12 @@ private enum Magic {
 private struct DiscUnreadable: Error {
     var reason: String
 
+    /// The file ends before the header every disc image starts with does.
     static let cutShort = DiscUnreadable(reason: "The disc image is cut short.")
+    /// The header is there, but the 0x420 word, the section table or the end of the file puts
+    /// main.dol past what the image holds.
+    static let pointsPastTheEnd = DiscUnreadable(
+        reason: "The disc image's main.dol starts or ends past the end of the image.")
 }
 
 private func inspect(
@@ -137,7 +142,7 @@ private func inspect(
 ) throws -> DiscCheck {
     let plain = PlainImage(file: file)
     let image: any DiscBytes
-    switch littleEndianWord(try plain.read(at: 0, count: 4), at: 0) {
+    switch littleEndianWord(try plain.read(at: 0, count: 4, orFailWith: .cutShort), at: 0) {
     case Magic.wia: return .needsConversion(format: .wia)
     case Magic.rvz: return .needsConversion(format: .rvz)
     case Magic.gcz: return .needsConversion(format: .gcz)
@@ -146,14 +151,15 @@ private func inspect(
     default: image = plain
     }
 
-    let header = try image.read(at: 0, count: Layout.headerLength)
+    let header = try image.read(at: 0, count: Layout.headerLength, orFailWith: .cutShort)
     let found = header.prefix(Layout.idLength)
     guard found.elementsEqual(expectedID.utf8) else {
         return .wrongGame(foundID: printable(found))
     }
 
     let dolOffset = UInt64(bigEndianWord(header, at: Layout.dolOffsetWord))
-    let dolHeader = try image.read(at: dolOffset, count: Layout.dolHeaderLength)
+    let dolHeader = try image.read(
+        at: dolOffset, count: Layout.dolHeaderLength, orFailWith: .pointsPastTheEnd)
     var dolLength: UInt64 = 0
     for section in 0..<Layout.dolSectionCount {
         let size = UInt64(bigEndianWord(dolHeader, at: Layout.dolSizesAt + 4 * section))
@@ -169,7 +175,9 @@ private func inspect(
     var done: UInt64 = 0
     while done < dolLength {
         let count = Int(min(dolLength - done, UInt64(Layout.chunkLength)))
-        hash.update(data: try image.read(at: dolOffset + done, count: count))
+        hash.update(
+            data: try image.read(
+                at: dolOffset + done, count: count, orFailWith: .pointsPastTheEnd))
         done += UInt64(count)
     }
     let sha1 = hash.finalize().map { String(format: "%02x", $0) }.joined()
@@ -192,10 +200,26 @@ private func bigEndianWord(_ data: Data, at offset: Int) -> UInt32 {
 
 // MARK: - The image as a run of bytes
 
+/// A read that asked for bytes the image doesn't hold.
+private struct PastTheEnd: Error {}
+
 /// A disc image as one run of bytes, whatever it's stored as.
 private protocol DiscBytes {
-    /// Exactly `count` bytes at `offset`, or `DiscUnreadable` when the image ends first.
+    /// Exactly `count` bytes at `offset`, or `PastTheEnd` when the image ends first.
     func read(at offset: UInt64, count: Int) throws -> Data
+}
+
+extension DiscBytes {
+    /// `read(at:count:)`, with `reason` as the failure when the image ends first.
+    fileprivate func read(
+        at offset: UInt64, count: Int, orFailWith reason: DiscUnreadable
+    ) throws -> Data {
+        do {
+            return try read(at: offset, count: count)
+        } catch is PastTheEnd {
+            throw reason
+        }
+    }
 }
 
 private struct PlainImage: DiscBytes {
@@ -203,7 +227,7 @@ private struct PlainImage: DiscBytes {
 
     func read(at offset: UInt64, count: Int) throws -> Data {
         let data = try file.read(at: offset, count: count)
-        guard data.count == count else { throw DiscUnreadable.cutShort }
+        guard data.count == count else { throw PastTheEnd() }
         return data
     }
 }
@@ -223,7 +247,7 @@ private struct CISOImage: DiscBytes {
 
     init(file: any FileReader) throws {
         let plain = PlainImage(file: file)
-        let header = try plain.read(at: 0, count: Self.headerLength)
+        let header = try plain.read(at: 0, count: Self.headerLength, orFailWith: .cutShort)
         let size = littleEndianWord(header, at: 4)
         guard size != 0 else {
             throw DiscUnreadable(reason: "The disc image is a CISO with a block size of zero.")
@@ -250,7 +274,7 @@ private struct CISOImage: DiscBytes {
         while left > 0 {
             let block = offset / blockSize
             let within = offset % blockSize
-            guard block < UInt64(slots.count) else { throw DiscUnreadable.cutShort }
+            guard block < UInt64(slots.count) else { throw PastTheEnd() }
             let piece = Int(min(UInt64(left), blockSize - within))
             if let slot = slots[Int(block)] {
                 let at = UInt64(Self.headerLength) + slot * blockSize + within

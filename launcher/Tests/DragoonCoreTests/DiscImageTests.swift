@@ -145,6 +145,13 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
     return false
 }
 
+/// The two ways an image can be too short, whose reasons are drafts until the user approves them.
+/// The first is a file that ends inside the header every disc image starts with. The second is a
+/// header that's there, with a main.dol that starts or ends past the end of the image.
+private let cutShortResult = DiscCheck.unreadable(reason: "The disc image is cut short.")
+private let pastTheEndResult = DiscCheck.unreadable(
+    reason: "The disc image's main.dol starts or ends past the end of the image.")
+
 // MARK: Tests
 
 @Suite struct DiscImageTests {
@@ -208,20 +215,20 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
         #expect(isUnreadable(result), "\(result)")
     }
 
-    @Test(arguments: [0x8000 - 1, 0x1000, 0x8, 0x4])
-    func aCISOWithAShortHeaderIsUnreadable(_ cut: Int) {
+    @Test(arguments: [0x8000 - 1, 0x1000, 0x8, 0x4, 0x8000 + 0x100, 0x8000 + 0x43F])
+    func aCISOCutInsideItsHeaderIsCutShort(_ cut: Int) {
         let result = check(Data(makeCISO(from: standardISO).prefix(cut)), expecting: standardDOL)
-        #expect(isUnreadable(result), "\(result)")
+        #expect(result == cutShortResult, "cut at \(cut): \(result)")
     }
 
-    @Test func aCISOWhoseLastStoredBlockIsCutShortIsUnreadable() {
+    @Test func aCISOWhoseLastStoredBlockIsCutShortPointsPastTheEnd() {
         let ciso = makeCISO(from: makeISO(dol: zeroBlockDOL))
         #expect(check(ciso, expecting: zeroBlockDOL) == .ok)
         let result = check(Data(ciso.dropLast(0x10)), expecting: zeroBlockDOL)
-        #expect(isUnreadable(result), "\(result)")
+        #expect(result == pastTheEndResult, "\(result)")
     }
 
-    @Test func aCISOReadPastTheEndOfItsMapIsUnreadable() {
+    @Test func aCISOReadPastTheEndOfItsMapPointsPastTheEnd() {
         // The DOL's first block is the last one the map covers. Its sections run on past the map,
         // where the image has no blocks to read as zeros.
         let mapEnd = mapBlocks * testBlockSize
@@ -231,7 +238,7 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
         discHeader.replaceSubrange(0x420..<0x424, with: be32(UInt32(mapEnd - testBlockSize)))
         let ciso = makeCISO(blocks: [0: discHeader, mapBlocks - 1: dol.prefix(testBlockSize)])
         let result = check(ciso, expecting: dol)
-        #expect(isUnreadable(result), "\(result)")
+        #expect(result == pastTheEndResult, "\(result)")
     }
 
     @Test func anImageOfAnotherGameIsWrongGameWithTheIDItHas() {
@@ -274,12 +281,14 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
         #expect(check(iso, expecting: before) == .wrongRevision(foundSHA1: sha1(standardDOL)))
     }
 
-    @Test func aDOLOffsetBeyondTheEndOfTheImageIsUnreadable() {
-        let image = makeISO(dol: standardDOL)
-        var moved = image
-        moved.replaceSubrange(0x420..<0x424, with: be32(UInt32(image.count)))
-        let result = check(moved, expecting: standardDOL)
-        #expect(isUnreadable(result), "\(result)")
+    @Test(arguments: [UInt32(0x6000), 0x5FFF, 0x5F01, 0x1_0000, 0x8000_0000, 0xFFFF_FF00, 0xFFFF_FFFF])
+    func aDOLOffsetBeyondTheEndOfTheImagePointsPastTheEnd(_ word: UInt32) {
+        // The image is 0x6000 bytes, so a DOL header of 0x100 bytes fits only below 0x5F00.
+        var image = makeISO(dol: standardDOL, tail: 0x6000 - 0x3000 - standardDOL.count)
+        #expect(image.count == 0x6000)
+        image.replaceSubrange(0x420..<0x424, with: be32(word))
+        let result = check(image, expecting: standardDOL)
+        #expect(result == pastTheEndResult, "word \(word): \(result)")
     }
 
     // MARK: The length of the DOL
@@ -309,11 +318,11 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
         #expect(check(makeISO(dol: dol), expecting: dol) == .ok)
     }
 
-    @Test func aSectionThatEndsPastFourGigabytesIsUnreadableNotWrappedAround() {
+    @Test func aSectionThatEndsPastFourGigabytesPointsPastTheEndNotWrappedAround() {
         // 0xFFFFF000 + 0x2000 is 0x100001000, which a 32-bit sum would wrap to 0x1000.
         let dol = makeDOL([Section(index: 0, offset: 0xFFFF_F000, size: 0x2000)], length: 0x400)
         let result = check(makeISO(dol: dol), expecting: dol)
-        #expect(isUnreadable(result), "\(result)")
+        #expect(result == pastTheEndResult, "\(result)")
     }
 
     @Test func aDOLWithNoSectionsIsUnreadable() {
@@ -324,19 +333,24 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
 
     // MARK: Short files
 
-    @Test(arguments: [0, 3, 4, 0x43F, 0x440, 0x3000, 0x3080, 0x30FF, 0x3100, 0x3101, standardDOLEnd - 1])
-    func aTruncatedImageIsUnreadable(_ cut: Int) {
+    @Test(arguments: [0, 3, 4, 0x43F])
+    func anImageCutInsideTheHeaderIsCutShort(_ cut: Int) {
         let result = check(Data(standardISO.prefix(cut)), expecting: standardDOL)
-        #expect(isUnreadable(result), "cut at \(cut): \(result)")
+        #expect(result == cutShortResult, "cut at \(cut): \(result)")
+    }
+
+    @Test(arguments: [0x440, 0x3000, 0x3080, 0x30FF, 0x3100, 0x3101, standardDOLEnd - 1])
+    func anImageCutBeforeTheEndOfItsDOLPointsPastTheEnd(_ cut: Int) {
+        let result = check(Data(standardISO.prefix(cut)), expecting: standardDOL)
+        #expect(result == pastTheEndResult, "cut at \(cut): \(result)")
     }
 
     @Test func anImageThatEndsAtTheDOLsLastByteIsOK() {
         #expect(check(Data(standardISO.prefix(standardDOLEnd)), expecting: standardDOL) == .ok)
     }
 
-    @Test func aFileWithNothingInItIsUnreadable() {
-        let result = check(Data(), expecting: standardDOL)
-        #expect(isUnreadable(result), "\(result)")
+    @Test func aFileWithNothingInItIsCutShort() {
+        #expect(check(Data(), expecting: standardDOL) == cutShortResult)
     }
 
     @Test func aFileThatIsntThereIsUnreadable() {
