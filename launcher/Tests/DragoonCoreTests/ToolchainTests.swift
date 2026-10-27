@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 private let tools = "/Library/Developer/CommandLineTools"
-private let xcode = "/Applications/Xcode.app/Contents/Developer"
+private let xcode = "/Applications/Xcode Beta.app/Contents/Developer"
 private let home = "/Users/Test Player"
 private let data = home + "/Library/Application Support/Dragoon"
 private let cache = home + "/Library/Caches/Dragoon"
