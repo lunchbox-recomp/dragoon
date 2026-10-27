@@ -146,14 +146,22 @@ Each line names a camera and where the call returns to, then where its caller re
 
 When no line is left, `setters` says so on stderr. A camera whose aspect the game sets some other way has none.
 
+`hud` checks that the HUD keeps its 4:3 shape at a wider output. It reads two runs of one route to one frame with `GCN_DRAWLOG=N` and `GCN_DRAWLOG_VERBOSE=1`, the first at 4:3 and the second at `--aspect` (16:9 by default). A HUD draw is one with an anchor or one whose projection both runs drew with, since the world's projections widen and the HUD's don't.
+
+The two runs' HUD draws pair by projection kind, textures and order. An anchored pair fails when its width, its height or its distance to its rect's anchored edge moves by more than 1 display pixel at 480 high. It also fails when it overhangs its view by more than it did at 4:3, its view being the world view its 4:3 box sits in or else the screen.
+
+Each line gives both boxes in display pixels. Pairs with no anchor at either aspect are listed as stretched and don't fail. `hud_boxes.py` holds the check, and `drawlines.py` reads the draw log's lines for both.
+
 ```
 tools/probe.sh race 30 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
 tools/drawlog.py cameras build/probe/race/stdout.txt --frame 4200 --symbols analysis/symbols.txt
 tools/drawlog.py aspects build/probe/race/stdout.txt --from 3600 --to 4199
 tools/drawlog.py setters build/probe/race/stdout.txt --from 4200 --to 4200 --symbols analysis/symbols.txt
+tools/probe.sh race-wide 30 tests/routes/air-ride-race.txt 4200 --aspect=16:9 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
+tools/drawlog.py hud build/probe/race/stdout.txt build/probe/race-wide/stdout.txt --aspect 16:9
 ```
 
-It exits 2 when the log lacks the lines a command needs, naming the setting that makes them.
+It exits 2 when the log lacks the lines a command needs, naming the setting that makes them. `hud` exits 1 when an anchored draw fails.
 
 ## shader_cache.py
 
