@@ -7,8 +7,9 @@ Checks every tracked file and prints one "game data tracked: PATH" line per path
 like game data:
   - a disc image or executable by suffix (.iso, .gcm, .dol, ...), a .raw memory card or audio
     recording, a .wav recording (anywhere, like .raw) or a .bin shader cache or key list
-  - anything under a top-level build*/ or rom/ (except rom/README.md), or under a saves/
-    at any depth
+  - a mod's game file by suffix (.dat, .hps, .bnr, .elf or .gct), anywhere
+  - anything under a top-level build*/, mods/ or rom/ (except rom/README.md), or under a
+    saves/ at any depth. tests/mods/ is fine, since only a top-level mods/ counts
   - a frame dump (frame_NNNNN.png or output_NNNNN.png), stdout.txt or panic.txt anywhere
   - a playtest session's session.json, the input log's inputs.txt and an aid.raw.txt block
     log, wherever GCN_SESSION put them
@@ -28,7 +29,7 @@ from frame_dumps import FRAME_NAME, OUTPUT_NAME
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_SUFFIXES = (".iso", ".gcm", ".ciso", ".rvz", ".gcz", ".wbfs", ".dol", ".rel", ".gci", ".raw",
-                 ".wav", ".bin", ".raw.txt")
+                 ".wav", ".bin", ".raw.txt", ".dat", ".hps", ".bnr", ".elf", ".gct")
 LOG_NAMES = ("stdout.txt", "panic.txt")
 SESSION_NAMES = ("session.json", "inputs.txt")
 
@@ -45,7 +46,8 @@ def is_game_data(path: str) -> bool:
     if "saves" in parts[:-1]:
         return True
     if len(parts) > 1:
-        return parts[0].startswith("build") or (parts[0] == "rom" and path != "rom/README.md")
+        return (parts[0].startswith("build") or parts[0] == "mods"
+                or (parts[0] == "rom" and path != "rom/README.md"))
     return False
 
 

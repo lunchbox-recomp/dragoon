@@ -47,6 +47,7 @@ OBJECTS = {
               "int my_fn_80003100(int x) { return x; }\nconst unsigned g_recompiled = 0;\n",
 }
 X86_OBJECTS = ("sdl.o", "functions.o")
+MOD_SUFFIXES = (".dat", ".hps", ".bnr", ".elf", ".gct")
 SHA1 = "0123456789abcdef0123456789abcdef01234567"
 CMAKE = f"""add_subdirectory(gcn-recomp)
 gcn_add_game(
@@ -181,6 +182,7 @@ class BundleTestCase(unittest.TestCase):
             "CMakeLists.txt": CMAKE,
             "rom/README.md": "Put your disc here.\n",
             "tools/a tool.py": "print('hi')\n",
+            "tests/mods/patches.txt": "patches\n",
         })
         cls.snapshot = cls.root / "snapshot"
         cls.info = export_source.export(cls.repo, cls.snapshot)
@@ -271,6 +273,22 @@ class PlantedFileTest(BundleTestCase):
             self.plant("Contents/Resources/saves/memcard_a.raw")
             self.assert_findings("not on the manifest: Contents/Resources/saves/memcard_a.raw",
                                  "game data: Contents/Resources/saves/memcard_a.raw")
+
+    def test_mod_files_fail_anywhere(self):
+        for suffix in MOD_SUFFIXES:
+            for name, findings in ((f"{LICENSES}mod{suffix}", ["game data: {}"]),
+                                   (f"{SNAP}tools/mod{suffix}", ["game data: {}", "extra in the source: {}"])):
+                with self.subTest(name=name):
+                    path = self.plant(name)
+                    try:
+                        self.assert_findings(*[line.format(name) for line in findings])
+                    finally:
+                        os.unlink(path)
+
+    def test_a_mods_folder_in_the_snapshot(self):
+        self.plant(SNAP + "mods/patches.txt", "patches\n")
+        self.assert_findings(f"game data: {SNAP}mods/patches.txt",
+                             f"extra in the source: {SNAP}mods/patches.txt")
 
     def test_an_extra_file_in_the_snapshot(self):
         self.plant(SNAP + "docs/notes.md", "mine\n")
