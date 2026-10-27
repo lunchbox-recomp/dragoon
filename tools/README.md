@@ -537,7 +537,7 @@ The tests make every mods folder, image and DOL, at paths with spaces. Some run 
 
 How does a build copy a file without copying its bytes? `clone` makes an APFS clone through `clonefile`, which shares the original's blocks until either changes, so editing a mod afterwards leaves the build's copy as it was. Where the volume can't clone, or the call fails for any other reason, it copies the bytes instead.
 
-It has no command line.
+Neither way follows a link, so a clone of a link is a link and a copy of one fails. It has no command line.
 
 ## tool_env.py
 
