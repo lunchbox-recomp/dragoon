@@ -21,7 +21,7 @@ struct DiscView: View {
             if state.canGoBackToLibrary {
                 Button(Strings.backToLibrary) { send(.backToLibraryPressed) }
             }
-            if screen == .problem(.moved) {
+            if screen == .problem(.missing) {
                 Button(Strings.lookAgain) { send(.lookAgainPressed) }
                     .disabled(state.isBusy)
             }

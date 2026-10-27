@@ -81,7 +81,7 @@ The window has the steps on the left and the current step on the right. What it 
 
 The first run walks the steps in order from Welcome down to Library, and every later launch with a built game opens on Library. While the tools are missing, the Tools step offers Apple's installer and looks for them again every 5 seconds. Before each build the launcher wants 2 GB free by `volumeAvailableCapacityForImportantUsage`, then resolves the disc's bookmark and checks the disc, then checks the tools.
 
-Play resolves the bookmark and checks the disc too. A stale bookmark or a disc that's gone goes back to the Disc step, and the game stays where it was.
+Play resolves the bookmark and checks the disc too. A stale bookmark or a disc that's gone goes back to the Disc step, and the game stays where it was. Look Again tries the bookmark again only for a disc that's gone, such as one on an unplugged drive.
 
 From the `play` effect until the game exits or can't start, Library counts the game as running and keeps Play, Rebuild and Change Disc off. In this version `play` doesn't start the game, so it reports at once that the game couldn't start.
 

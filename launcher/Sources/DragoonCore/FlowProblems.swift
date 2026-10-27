@@ -36,8 +36,12 @@ public enum DiscProblem: Equatable, Sendable {
     case wrongRevision(found: String, needed: String)
     case needsConversion(UnsupportedDiscFormat)
     case unreadable(reason: String)
-    /// The bookmark is stale, or the file or its drive is gone.
+    /// The bookmark is stale, as it is after the file is moved or renamed. Resolving it again
+    /// gives the same answer, so only choosing the disc again gets past it.
     case moved
+    /// The file or its drive is gone, as it is while the drive is unplugged, so looking again
+    /// can find it.
+    case missing
 
     /// The problem `check` found, or nil when the disc is the one `expected` names.
     public init?(_ check: DiscCheck, expected: ExpectedDisc) {

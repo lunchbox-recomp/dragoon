@@ -83,6 +83,8 @@ enum Strings {
         case .unreadable(let reason):
             return "Dragoon couldn't read this disc image. \(reason)"
         case .moved:
+            return "Dragoon's record of where your disc image is has gone out of date, as it does when the file is moved or renamed. Choose the disc again."
+        case .missing:
             return "Dragoon can't find your disc image where it was. If its drive is unplugged, plug it in and look again, or choose the disc again."
         }
     }

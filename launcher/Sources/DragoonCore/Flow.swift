@@ -80,17 +80,21 @@ extension Flow.State {
             waiting = nil
             return []
         case .lookAgainPressed:
-            guard screen == .disc(.problem(.moved)), waiting == nil else { return [] }
+            guard screen == .disc(.problem(.missing)), waiting == nil else { return [] }
             return resolveDisc()
         case .bookmarkResolved(let resolution):
             guard waiting == .bookmark, let source else { return [] }
             waiting = nil
-            guard case .found(let path) = resolution else {
+            switch resolution {
+            case .found(let path):
+                waiting = .disc(path: path, bookmark: nil)
+                return [.checkDisc(path: path, expected: source.disc)]
+            case .stale:
                 screen = .disc(.problem(.moved))
-                return []
+            case .missing:
+                screen = .disc(.problem(.missing))
             }
-            waiting = .disc(path: path, bookmark: nil)
-            return [.checkDisc(path: path, expected: source.disc)]
+            return []
         case .discChecked(let path, let check):
             guard case .disc(path, let bookmark) = waiting, let source else { return [] }
             waiting = nil

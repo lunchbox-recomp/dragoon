@@ -75,11 +75,11 @@ import Testing
     }
 
     /// Disc moved or drive unplugged: find it again, or pick it again.
-    @Test func aDiscThatMovedCanBeFoundAgain() {
+    @Test func aDiscThatsGoneCanBeFoundAgain() {
         var run = launched()
         #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
         #expect(run.send(.bookmarkResolved(.missing)) == [])
-        #expect(run.screen == .disc(.problem(.moved)))
+        #expect(run.screen == .disc(.problem(.missing)))
         // The drive is plugged back in.
         #expect(run.send(.lookAgainPressed) == [.resolveBookmark(flowBookmark)])
         #expect(run.send(.bookmarkResolved(.found(flowDisc)))

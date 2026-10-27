@@ -53,6 +53,8 @@ private let oldCommits = Commits(
         #expect(run.send(.bookmarkResolved(.stale)) == [])
         #expect(run.screen == .disc(.problem(.moved)))
         #expect(run.state.step == .disc)
+        // The same bookmark would be stale again, so only a new choice gets past it.
+        #expect(run.send(.lookAgainPressed) == [])
         // The game stays, and Library is one press away.
         #expect(run.state.installed == InstalledGame(stamp: sourceCommits))
         #expect(run.state.canGoBackToLibrary)
