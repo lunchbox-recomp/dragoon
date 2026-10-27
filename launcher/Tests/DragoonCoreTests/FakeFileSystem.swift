@@ -121,6 +121,19 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
         }
     }
 
+    func moveItem(at path: String, to destination: String) throws {
+        try lock.withLock {
+            if let writeError { throw writeError }
+            let source = resolve(path)
+            guard let data = files[source] else { throw POSIXError(.ENOENT) }
+            let target = resolve(destination)
+            guard !exists(target), links[destination] == nil else { throw POSIXError(.EEXIST) }
+            makeDirectories(Self.parent(target))
+            files[source] = nil
+            files[target] = data
+        }
+    }
+
     /// Makes every later write throw `error`.
     func failWrites(with error: any Error) {
         lock.withLock { writeError = error }
