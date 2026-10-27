@@ -586,6 +586,21 @@ launcher/tools/sign_and_package.py --app launcher/dist/Dragoon.app --identity "D
 
 The tests fake codesign, ditto, hdiutil, xcrun and spctl with scripts that record their calls, so they sign nothing.
 
+## swift_test.py
+
+How do the launcher's Swift tests run on a Mac with the Command Line Tools and no Xcode? swift_test.py lives in `launcher/tools/` and runs `swift test --package-path launcher` with its own arguments passed on (`--filter NAME` works), exiting with swift's status. Plain `swift test` fails there with `no such module 'Testing'`, because the tools keep `Testing.framework` where neither the compiler nor the test runner looks.
+
+When `xcode-select -p` names a directory called `CommandLineTools` that holds `Library/Developer/Frameworks/Testing.framework`, the tool adds `-Xswiftc -F` for that `Frameworks` directory and `-Xlinker -rpath` for it and for `Library/Developer/usr/lib`, where `lib_TestingInterop.dylib` is. With Xcode selected, or when `xcode-select` fails, it adds nothing. The flags stay out of `Package.swift`, because `unsafeFlags` there would bake one Mac's paths into the package.
+
+```
+launcher/tools/swift_test.py
+launcher/tools/swift_test.py --filter FileSystemTests
+```
+
+Each command prints on stderr as a `+` line. A signal that ends swift counts as 128 plus its number, and exit 2 means swift couldn't be started. `-h` or `--help` as the first argument prints the usage, so use `swift test --help` for swift's own.
+
+The tests fake `xcode-select` and swift with scripts that record their calls, and they build fake developer directories at paths with spaces. One test asks the real `xcode-select` through `DEVELOPER_DIR`. CI's launcher job runs the tool, and with Xcode on GitHub's runner it adds nothing there.
+
 ## The engine's own tools
 
 Two tools in `gcn-recomp/tools/` matter when debugging here.
