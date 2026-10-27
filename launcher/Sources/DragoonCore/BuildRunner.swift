@@ -135,13 +135,6 @@ extension BuildFailure: LocalizedError {
 /// as a process group of its own, so the recipe, make, clang and the warm-up's game all stop
 /// together.
 public final class BuildRunner: @unchecked Sendable {
-    /// How many `build-*.log` files are kept, the newest.
-    public static let keptLogs = 10
-
-    public static var defaultLogDirectory: String {
-        NSHomeDirectory() + "/Library/Logs/Dragoon"
-    }
-
     private let fs: any FileSystem
     private let logDirectory: String
     let killGrace: TimeInterval
@@ -152,7 +145,7 @@ public final class BuildRunner: @unchecked Sendable {
     /// `killGrace` is the seconds between the SIGTERM and the SIGKILL of a canceled build, which
     /// is 10 unless a test shortens it.
     public init(
-        fs: any FileSystem = SystemFileSystem(), logDirectory: String = BuildRunner.defaultLogDirectory,
+        fs: any FileSystem = SystemFileSystem(), logDirectory: String = LogFolder.defaultPath,
         killGrace: TimeInterval? = nil, now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.fs = fs
@@ -169,7 +162,7 @@ public final class BuildRunner: @unchecked Sendable {
     ///
     /// The recipe's `--log` is `build-<time>.log` in the log directory. Its stdout lines that
     /// aren't events and everything on its stderr go in that log too, beside what the recipe
-    /// writes, and the newest `keptLogs` logs stay.
+    /// writes, and the newest `LogFolder.kept` build logs stay.
     public func run(_ request: BuildRequest) -> AsyncThrowingStream<BuildEvent, Error> {
         AsyncThrowingStream { continuation in
             // The task is made under the lock, so it can't end before it is recorded.
@@ -203,7 +196,7 @@ public final class BuildRunner: @unchecked Sendable {
     private func perform(
         _ request: BuildRequest, _ continuation: AsyncThrowingStream<BuildEvent, Error>.Continuation
     ) async -> BuildFailure? {
-        let logName = "build-" + Self.stamp(now()) + ".log"
+        let logName = "build-" + LogFolder.stamp(now()) + ".log"
         let logPath = logDirectory + "/" + logName
         let fs = fs
         // A log that can't be written to doesn't stop the build.
@@ -252,7 +245,7 @@ public final class BuildRunner: @unchecked Sendable {
         } catch {
             failure = .couldNotStart(error.localizedDescription)
         }
-        pruneLogs(keeping: logName)
+        LogFolder.prune(logDirectory, kind: "build", keeping: logName, fs: fs)
         return failure
     }
 
@@ -313,27 +306,6 @@ public final class BuildRunner: @unchecked Sendable {
         default:
             return unexplained("the recipe ended with status \(outcome.status)")
         }
-    }
-
-    /// Removes all but the newest `keptLogs` files named `build-*.log`. This build's log is
-    /// kept even if a clock set back makes it look old, and it counts as one of the newest.
-    private func pruneLogs(keeping current: String) {
-        let logs = ((try? fs.contentsOfDirectory(at: logDirectory)) ?? [])
-            .filter { $0.hasPrefix("build-") && $0.hasSuffix(".log") }
-            .sorted()
-        let room = Self.keptLogs - (logs.contains(current) ? 1 : 0)
-        for name in logs.filter({ $0 != current }).dropLast(room) {
-            try? fs.removeItem(at: logDirectory + "/" + name)
-        }
-    }
-
-    /// UTC, so names sort by time even across a change of clocks, with no colons.
-    static func stamp(_ date: Date) -> String {
-        let format = DateFormatter()
-        format.locale = Locale(identifier: "en_US_POSIX")
-        format.timeZone = TimeZone(identifier: "UTC")
-        format.dateFormat = "yyyy-MM-dd'T'HH-mm-ss.SSS'Z'"
-        return format.string(from: date)
     }
 }
 
