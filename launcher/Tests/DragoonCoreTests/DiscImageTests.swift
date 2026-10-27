@@ -239,6 +239,13 @@ private func isWrongGame(_ check: DiscCheck) -> Bool {
         #expect(check(image, expecting: standardDOL) == .wrongGame(foundID: "GMSE01"))
     }
 
+    @Test(arguments: ["GKYE02", "GKYE81", "GKYP01", "GKXE01"])
+    func anIDThatMatchesOnlyItsFirstBytesIsWrongGame(_ id: String) {
+        let image = makeISO(id: Array(id.utf8), dol: standardDOL)
+        #expect(check(image, expecting: standardDOL) == .wrongGame(foundID: id))
+        #expect(check(makeCISO(from: image), expecting: standardDOL) == .wrongGame(foundID: id))
+    }
+
     @Test func anIDThatIsntPrintableASCIIIsShownWithQuestionMarks() {
         let image = makeISO(id: [0x47, 0x00, 0xFF, 0x4D, 0x53, 0x7F], dol: standardDOL)
         #expect(check(image, expecting: standardDOL) == .wrongGame(foundID: "G??MS?"))
