@@ -58,7 +58,7 @@ The image is read through a file handle a piece at a time, with no read over 1 M
 
 The recipe gets an environment of its own with a fixed `PATH`, `HOME`, `TMPDIR`, `LANG`, `PYTHONDONTWRITEBYTECODE`, `PYTHONNOUSERSITE` and `DEVELOPER_DIR`. Nothing from the player's shell or their user site-packages reaches its Python.
 
-It starts as the leader of a new process group, so the recipe, make, clang and the warm-up's game stop together. `BuildRunner.cancel()` sends that group SIGTERM, and SIGKILL 10 seconds later if anything is left. Dropping the stream does the same. Every `SystemProcessRunner` call starts its process this way too, so cancelling a task that waits on `Toolchain.detect` stops its command the same way.
+It starts as the leader of a new process group, so the recipe, make, clang and the warm-up's game stop together. `BuildRunner.cancel()` or dropping the stream sends that group SIGTERM, and SIGKILL 10 seconds later if anything is left. Every `SystemProcessRunner` call starts its process this way too, so canceling a task that waits on `Toolchain.detect` stops its command the same way.
 
 A stdout line that isn't an event is logged and never counted as an error. Everything the recipe prints on stderr is logged too. Both go into `~/Library/Logs/Dragoon/build-<time>.log` beside what the recipe writes there, and the newest 10 logs stay.
 
