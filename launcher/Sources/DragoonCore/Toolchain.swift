@@ -98,8 +98,9 @@ extension Toolchain {
     /// that shims a developer tool runs until it has found a directory. The choice is kept in
     /// `<dataDirectory>/toolchain.json`, and the SDKs are probed again when `clang --version`
     /// says something new. The probe's source is written to `cacheDirectory` and removed again.
-    /// Canceling the calling task stops the command it is waiting on and gives `cancelled`,
-    /// unless it had its answer already.
+    /// Canceling the calling task stops the command it is waiting on and gives `cancelled`.
+    /// Only a `ready` answer survives that, so a check that had found its tools already keeps
+    /// them.
     public static func detect(
         runner: any ProcessRunner, fs: any FileSystem,
         dataDirectory: String = Toolchain.defaultDataDirectory,
