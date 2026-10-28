@@ -943,9 +943,9 @@ Built on Dragoon `ddb1901` with gcn-recomp `f11c013`, `tools/frame_hashes.py che
 routes still reached their last frame, and `tools/audio_hashes.py check` found both rows
 changed on every route.
 
-Recorded on that build and checked again, all 1,906 frames and 48 audio rows matched. Of the
-checkpoint frames in the table above 21 changed, and 19 of them still show what their rows
-say. In the other two Kirby is in another place, fourth in Celestial Valley after Fantasy
+Recorded on that build and checked again, all 1,906 frames and 48 audio rows matched.
+Twenty-one of the checkpoint frames in the table above changed, and 19 of them still show
+what their rows say. In the other two Kirby is in another place, fourth in Celestial Valley after Fantasy
 Meadows and third in Beanstalk Park after Machine Passage (table above).
 
 The runtime of `f11c013` differs from `bad7160`'s only in when `GCN_AXVOICES` prints a loop
