@@ -211,6 +211,36 @@ them, 98.9%, were source type 0 with coefficient set 0, and the other 496,390 we
 nearly all the voice time the game plays now goes through the polyphase filter. 25 setup
 commands started a bus off zero in the 1,449 windows.
 
+## Music that stopped
+
+In the playtest on 2026-10-27 the menu music played for a few seconds and stopped, while the
+sound effects carried on. The game streams music through HAL's sound library, the one Melee's
+decompilation calls `HSD_Synth`. Two ADPCM voices play 32 KB a channel from 64 KB slots in
+ARAM, and `HSD_SynthPStreamMasterClockCallback` moves their end and loop addresses from slot
+to slot as the music plays.
+
+The voices need the loop flag from the stream's header, which the header callback sets with
+`AXSetVoiceAddr`. The first data callback then sets the loop, end and current addresses one at
+a time. The SDK's `__AXServiceVPB` copies those fields alone when any of them is marked and
+copies the whole address with its loop flag only when none is, so the two callbacks have to
+land in different 5 ms audio frames.
+
+On a console the disc read between them takes tens of milliseconds. gcn-recomp read the disc
+at 64 MB/s, so both callbacks often landed in one frame, and the voices played their first
+slot (1.79 s) and ended. Replays of two playtest sessions showed it on every stream, not only
+the menu's.
+
+gcn-recomp `04c025f` times disc reads as a console's drive does, with Dolphin's model, and
+`f19f98d` moves DIMAR and DILENGTH when a read completes. `1f5e5a3` and `ac8a1f4` loop a voice
+only on the sample at its end address, which ends a 10 ms stall on a slot's first sample at
+some slot changes. `GCN_AXVOICES` (`1b25342`) logs each voice's start, changes, loops and end,
+which is how this was traced.
+
+On the menu route at the pin, the menu stream starts at list 4,476 with its loop flag set and
+is still playing at list 17,000, with a peak of 12,289. The Melee native port found the same
+two causes behind the same symptom
+([its notes](https://github.com/HexDump0/melee/blob/main/native/AI/handoffs/2026-09-13-P-648-menu-bgm.md)).
+
 ## What was done and what is left
 
 Generic runtime work in `runtime/hw/`.
@@ -226,6 +256,9 @@ Generic runtime work in `runtime/hw/`.
 | Depop words | `mix_add` at `e1016b8` | Done in `3b025ac` |
 | Polyphase resampling through worked-out coefficient sets | `make_polyphase`, `resample_polyphase` at `e1016b8` | Done in `cce9fbc` and `795ccc4` |
 | Loop counter and signed envelope | `ax.cpp:178-186`, `:292-296` | Not done |
+| Loop or stop a voice only on the sample at its end address | `Accel::sample` | Done in `1f5e5a3` and `ac8a1f4` |
+| Disc reads timed as a console's drive times them | `drive.h`, `di.cpp` | Done in `04c025f` and `f19f98d` |
+| A log of each voice's start, changes, loops and end | `GCN_AXVOICES` | Done in `1b25342` |
 
 The polyphase sets aren't the console's own, which need the DSP's ROM.
 
