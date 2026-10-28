@@ -112,7 +112,7 @@ Which of the pad's controls reached the game in a playtest, and on which port? I
 tools/pad_report.py build/playtest/20261022-161851
 ```
 
-For each port the game saw plugged in, it prints the gamepads put on it and taken off, from the session's `stdout.txt`. A gamepad line goes after the last frame the log timed before it, and times are given at 60 frames a second. Next come the buttons in the order they were first pressed, with how many times.
+For each port the game saw plugged in, it prints the gamepads put on it and taken off, from the session's `stdout.txt`. A gamepad line goes after the last frame `stdout.txt` timed before it, and times are given at 60 frames a second. Next come the buttons in the order they were first pressed, with how many times.
 
 Each stick gets how far it went from the middle and which of its eight directions it reached, and each trigger gets its highest value and how many levels it took. A trigger that only ever read 255 was on or off. Last come the controls nobody used on that port, where a stick counts once it reaches a direction.
 
