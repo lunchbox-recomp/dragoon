@@ -39,3 +39,6 @@ __pycache__/
 /controls.txt
 # The launcher's SwiftPM builds
 launcher/.build/
+# What tools/ci.py's kit job leaves
+/engine kit/
+/stub game/

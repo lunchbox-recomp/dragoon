@@ -382,6 +382,17 @@ It prints one line per path and exits 1 if it found any, so it can run in CI. It
 tools/check_no_game_data.py
 ```
 
+## ci.py
+
+Does the commit pass CI? ci.py runs every step of CI's four jobs, `tools`, `macos`, `kit` and `launcher`, from the repository's root. The workflow runs each job by name, so a Mac without a runner runs the same steps. It stops at the first step that fails and exits 1, and an unknown job exits 2.
+
+The `kit` job leaves the kit in `engine kit/` and links it against stub tables in `stub game/`, with a space in each name because a player's path may have one. The builds go to `build-nodisc/` and `build-kit/`, so run it in a clean checkout to start them fresh.
+
+```
+tools/ci.py
+tools/ci.py tools launcher
+```
+
 ## mutant.py
 
 Do the tests notice when the code breaks? It changes a copy of a commit, runs a test directory there and reports whether the tests failed. A changed copy is a mutant. It's killed when the tests fail and survives when they pass, and a survivor is a gap in the tests. A spec file holds the changes, so someone checking a new test keeps it in place of a throwaway script. It can live anywhere, and it's worth committing when others should be able to run the same check.

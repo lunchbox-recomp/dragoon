@@ -6,21 +6,16 @@ on:
 permissions:
   contents: read
 jobs:
+  # tools/ci.py holds every job's steps, so a Mac runs the same ones with `tools/ci.py`.
   tools:
     runs-on: macos-26
-    strategy:
-      fail-fast: false
-      matrix:
-        python: [python3, /usr/bin/python3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
           persist-credentials: false
-      - name: No game data in the tree
-        run: ${{ matrix.python }} tools/check_no_game_data.py
-      - name: Tool tests
-        run: ${{ matrix.python }} -m unittest discover -s tools -p 'test_*.py'
+      - name: Tools job
+        run: python3 tools/ci.py tools
   macos:
     runs-on: macos-26
     steps:
@@ -30,17 +25,10 @@ jobs:
           persist-credentials: false
       - name: Dependencies
         run: brew install ninja
-      - name: Configure without a disc
-        run: cmake -S . -B build-nodisc -G Ninja -DDRAGOON_TESTS=ON
-      - name: Compile the runtime
-        run: ninja -C build-nodisc runtime_check
-      - name: Engine and src/ unit tests
-        run: ninja -C build-nodisc unit
+      - name: Engine and src/ job
+        run: python3 tools/ci.py macos
   kit:
     runs-on: macos-26
-    env:
-      # A player's kit may sit under a path with spaces, so this one does too.
-      KIT: ${{ github.workspace }}/engine kit
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,27 +36,12 @@ jobs:
           persist-credentials: false
       - name: Dependencies
         run: brew install ninja
-      - name: Configure without a disc
-        run: >-
-          cmake -S . -B build-kit -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DGAME_ISO=
-      - name: Compile the engine and SDL
-        run: ninja -C build-kit runtime_check SDL3-static
-      - name: Make the kit
-        run: python3 tools/engine_kit.py --build build-kit --out "$KIT" --strip-debug
-      # The stub tables stand in for the recompiler's output, so a framework missing from
-      # game_libs.txt fails this link.
-      - name: Link the kit against stub tables
-        run: |
-          mkdir -p "stub game/gen"
-          cp tests/kit/stub_tables.c "stub game/gen/"
-          cd "stub game"
-          make -f "$KIT/Makefile" KIT="$KIT" SDK="$(xcrun --show-sdk-path)" CC=clang CXX=clang++
-          test -x dragoon
+      - name: Kit job
+        run: python3 tools/ci.py kit
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: engine-kit
-          path: ${{ env.KIT }}
+          path: ${{ github.workspace }}/engine kit
           if-no-files-found: error
   launcher:
     runs-on: macos-26
@@ -77,10 +50,5 @@ jobs:
         with:
           submodules: true
           persist-credentials: false
-      - name: Launcher tool tests
-        run: python3 -m unittest discover -s launcher/tools -p 'test_*.py'
-      - name: Launcher tool tests, system Python
-        run: /usr/bin/python3 -m unittest discover -s launcher/tools -p 'test_*.py'
-      - name: Swift tests
-        if: ${{ hashFiles('launcher/Package.swift') != '' }}
-        run: python3 launcher/tools/swift_test.py
+      - name: Launcher job
+        run: python3 tools/ci.py launcher
