@@ -110,8 +110,8 @@ class Jobs(unittest.TestCase):
 
 
 class KitSteps(unittest.TestCase):
-    """link_stub with an xcrun that prints a path with a space and a make that logs where and
-    with what it ran, and links only when MAKE_LINKS is set."""
+    """link_stub with an xcrun that prints a path with a space, or fails when XCRUN_FAILS is
+    set, and a make that logs where and with what it ran and links only when MAKE_LINKS is set."""
 
     def setUp(self) -> None:
         self.root = in_temp_dir(self)
@@ -119,7 +119,7 @@ class KitSteps(unittest.TestCase):
         Path("tests/kit/stub_tables.c").write_text("// stub tables\n")
         bin_dir = self.root / "bin"
         bin_dir.mkdir()
-        self.tool(bin_dir / "xcrun", "#!/bin/sh\necho '/sdk dir'\n")
+        self.tool(bin_dir / "xcrun", '#!/bin/sh\n[ -n "$XCRUN_FAILS" ] && exit 1\necho "/sdk dir"\n')
         self.tool(bin_dir / "make", '#!/bin/sh\n'
                                     'pwd -P > "$MAKE_LOG"\n'
                                     'for a in "$@"; do echo "$a" >> "$MAKE_LOG"; done\n'
@@ -156,9 +156,15 @@ class KitSteps(unittest.TestCase):
     def test_a_failing_make_fails_with_its_code(self):
         self.assertEqual(self.link(MAKE_LINKS="1", MAKE_EXIT="2")[0], 2)
 
-    def test_a_missing_stub_or_xcrun_fails_without_a_traceback(self):
+    def test_a_missing_stub_fails_without_a_traceback(self):
         Path("tests/kit/stub_tables.c").unlink()
         code, out = self.link(MAKE_LINKS="1")
+        self.assertEqual(code, 1)
+        self.assertIn("couldn't set up stub game", out)
+        self.assertFalse(self.log.exists())
+
+    def test_a_failing_xcrun_fails_without_a_traceback(self):
+        code, out = self.link(MAKE_LINKS="1", XCRUN_FAILS="1")
         self.assertEqual(code, 1)
         self.assertIn("couldn't set up stub game", out)
         self.assertFalse(self.log.exists())
