@@ -6,8 +6,8 @@ the PB mixer control word with the 2001 layout for that hash only. Every other h
 included, gets the later layout. The compressor command runs on the same hash test, so at the
 pinned gcn-recomp (since `b839cf6`) it follows the ucode hash alone and `GCN_AX_LAYOUT` leaves
 it be. The newer build's low-pass filter still isn't applied. The `ax.cpp` line numbers below
-are at gcn-recomp `fd1f6a8`. The pin is now `e1016b8`, where `compress` starts at line 492
-and `ax_init` at 536.
+are at gcn-recomp `fd1f6a8`. The pin is now `bad7160`, where `compress` starts at line 573
+and `ax_init` at 617.
 
 ## The ucode
 
@@ -231,14 +231,20 @@ slot (1.79 s) and ended. Replays of two playtest sessions showed it on every str
 the menu's.
 
 gcn-recomp `04c025f` times disc reads as a console's drive does, with Dolphin's model, and
-`f19f98d` moves DIMAR and DILENGTH when a read completes. `1f5e5a3` and `ac8a1f4` loop a voice
-only on the sample at its end address, which ends a 10 ms stall on a slot's first sample at
-some slot changes. `GCN_AXVOICES` (`1b25342`) logs each voice's start, changes, loops and end,
-which is how this was traced.
+`f19f98d` moves DIMAR and DILENGTH when a read completes. `GCN_AXVOICES` (`1b25342`) logs each
+voice's start, changes, loops and end, which is how this was traced.
 
-On the menu route at the pin, the menu stream starts at list 4,476 with its loop flag set and
-is still playing at list 17,000, with a peak of 12,289. The Melee native port found the same
-two causes behind the same symptom
+Two more fixes came out of the trace. `1f5e5a3` loops or stops a voice only on the sample at
+its end address, which ends a 10 ms stall on a slot's first sample at some slot changes.
+`ac8a1f4` wraps an ADPCM voice whose end address is on a frame's header byte to its loop
+address, without stopping it or loading the loop's predictor, as Dolphin's hardware tests
+show the DSP does.
+
+The menu route was run at gcn-recomp `f11c013`, whose runtime differs from `bad7160`'s only
+in when `GCN_AXVOICES` prints a loop line. Its menu stream starts at list 4,476 with its loop
+flag set and is still playing at list 17,000, 85 s in, with peaks of 12,289 and 12,479. The
+Melee native port traced the same stop to the same merged address update, and fixed the same
+end check
 ([its notes](https://github.com/HexDump0/melee/blob/main/native/AI/handoffs/2026-09-13-P-648-menu-bgm.md)).
 
 ## What was done and what is left
@@ -256,7 +262,8 @@ Generic runtime work in `runtime/hw/`.
 | Depop words | `mix_add` at `e1016b8` | Done in `3b025ac` |
 | Polyphase resampling through worked-out coefficient sets | `make_polyphase`, `resample_polyphase` at `e1016b8` | Done in `cce9fbc` and `795ccc4` |
 | Loop counter and signed envelope | `ax.cpp:178-186`, `:292-296` | Not done |
-| Loop or stop a voice only on the sample at its end address | `Accel::sample` | Done in `1f5e5a3` and `ac8a1f4` |
+| Loop or stop a voice only on the sample at its end address | `Accel::sample` | Done in `1f5e5a3` |
+| Wrap an ADPCM voice whose end is on a frame's header to its loop address | `Accel::sample` | Done in `ac8a1f4`, logged as a loop since `545c784` |
 | Disc reads timed as a console's drive times them | `drive.h`, `di.cpp` | Done in `04c025f` and `f19f98d` |
 | A log of each voice's start, changes, loops and end | `GCN_AXVOICES` | Done in `1b25342` |
 
