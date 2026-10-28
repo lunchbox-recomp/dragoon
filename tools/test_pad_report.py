@@ -18,6 +18,11 @@ def state(frame: int, chan: int = 0, buttons: int = 0, stick=(0x80, 0x80), cstic
             f" {stick[0]:02X} {stick[1]:02X} {cstick[0]:02X} {cstick[1]:02X} {triggers[0]:02X} {triggers[1]:02X}")
 
 
+def ft(n: int) -> str:
+    return (f"[ft] f{n} guest  16.67ms  fe   1.20ms (tex  0.10)  draws  462/ 167  verts  12419  idx  33993"
+            f"  states  120  newtex   2 (16KB)  queue 0")
+
+
 class DirectionTest(unittest.TestCase):
     def test_eight_directions_clockwise_from_up(self):
         pushes = [(0, 90), (70, 70), (90, 0), (70, -70), (0, -90), (-70, -70), (-90, 0), (-70, 70)]
@@ -69,6 +74,8 @@ class ParseTest(unittest.TestCase):
     def test_a_short_line_names_its_number(self):
         with self.assertRaisesRegex(ValueError, "line 5 is not a pad state"):
             pad_report.parse(HEADER + [state(1), "2 2 0 1 0000 80 80 80 80 00"])
+        with self.assertRaisesRegex(ValueError, "line 4 is not a pad state"):
+            pad_report.parse(HEADER + ["5 1 0"])
 
     def test_a_version_1_log_is_refused(self):
         with self.assertRaisesRegex(ValueError, "version 1 log"):
@@ -77,12 +84,19 @@ class ParseTest(unittest.TestCase):
 
 class GamepadLinesTest(unittest.TestCase):
     def test_a_gamepad_line_takes_the_frame_timed_before_it(self):
-        lines = ['gamepads: "Test Pad" on port 1', "[ft] f40 guest  16.67ms  fe", "[ft] f41 guest  16.67ms  fe",
-                 'gamepads: "Test Pad" pulled out of port 1', "[ft] f99 guest  16.67ms  fe",
+        lines = ['gamepads: "Test Pad" on port 1', ft(40), ft(41), "[ft] f42 guest  16.6",
+                 'gamepads: "Test Pad" pulled out of port 1', ft(99),
                  'gamepads: "Test Pad" on port 2', 'gamepads: "Other Pad" left out: no port is free']
         events, left_out = pad_report.gamepad_lines(lines)
         self.assertEqual(events, {0: [(None, True, "Test Pad"), (41, False, "Test Pad")], 1: [(99, True, "Test Pad")]})
         self.assertEqual(left_out, ["Other Pad"])
+
+
+class WhenTest(unittest.TestCase):
+    def test_tenths_round_before_the_minutes_split(self):
+        self.assertEqual(pad_report.when(3598), "frame 3598 (1:00.0)")
+        self.assertEqual(pad_report.when(3593), "frame 3593 (0:59.9)")
+        self.assertEqual(pad_report.when(7230), "frame 7230 (2:00.5)")
 
 
 class MainTest(unittest.TestCase):
@@ -106,7 +120,7 @@ class MainTest(unittest.TestCase):
         self.assertEqual(out.splitlines(), [
             "the log ends at frame 5400 (1:30.0)",
             "port 1",
-            '  gamepad "Test Pad" on at the start',
+            '  gamepad "Test Pad" on before the first timed frame',
             "  plugged in at frame 0 (0:00.0)",
             "  buttons, in the order first pressed:",
             "    A         1 from frame 120 (0:02.0)",
@@ -131,6 +145,36 @@ class MainTest(unittest.TestCase):
         _, out, _ = run_main(pad_report.main, str(self.session(lines + [state(2, triggers=(0x60, 0xFF))])))
         self.assertIn("  every control used", out)
         self.assertIn("  L        trigger up to 96, 2 levels", out)
+
+    def test_only_a_trigger_that_read_255_was_on_or_off(self):
+        _, out, _ = run_main(pad_report.main, str(self.session([state(1, triggers=(0x40, 0xFF)), state(2)])))
+        self.assertIn("  L        trigger up to 64, 1 level\n", out)
+        self.assertIn("  R        trigger up to 255, on or off\n", out)
+
+    def test_gamepads_coming_and_going_and_a_late_port(self):
+        lines = [state(0), state(0, chan=1, plugged=0), state(0, chan=3, plugged=0), state(500, chan=1),
+                 state(700, chan=1, plugged=0)]
+        stdout = "\n".join(['gamepads: "Test Pad" on port 1', ft(300), 'gamepads: "Test Pad" pulled out of port 1',
+                            ft(480), 'gamepads: "Test Pad" on port 2', 'gamepads: "Other Pad" left out: no port is free'])
+        _, out, _ = run_main(pad_report.main, str(self.session(lines, stdout + "\n")))
+        self.assertIn('port 1\n  gamepad "Test Pad" on before the first timed frame\n'
+                      '  gamepad "Test Pad" pulled out after frame 300 (0:05.0)\n', out)
+        self.assertIn('port 2\n  gamepad "Test Pad" on after frame 480 (0:08.0)\n'
+                      "  unplugged at frame 0 (0:00.0), plugged in at frame 500 (0:08.3),"
+                      " unplugged at frame 700 (0:11.7)\n", out)
+        self.assertTrue(out.endswith('never plugged in: port 4\ngamepad "Other Pad" left out: no port was free\n'))
+
+    def test_each_run_of_a_reset_session_reads_its_own_gamepad_lines(self):
+        stdout = "\n".join(["[session] one", 'gamepads: "Test Pad" on port 1', ft(599), "[session] two", ft(10),
+                            'gamepads: "Other Pad" on port 1'])
+        self.session([state(0)], stdout + "\n")
+        run2 = self.dir / "run-2" / "inputs"
+        run2.mkdir(parents=True)
+        write_file(run2, "inputs.txt", "\n".join(HEADER + [state(0)]) + "\n")
+        _, out, _ = run_main(pad_report.main, str(self.dir))
+        self.assertIn('  gamepad "Test Pad" on before the first timed frame\n  plugged', out)
+        _, out, _ = run_main(pad_report.main, str(self.dir / "run-2"))
+        self.assertIn('  gamepad "Other Pad" on after frame 10 (0:00.2)\n  plugged', out)
 
     def test_no_log_or_no_pad_state_exits_2(self):
         code, _, err = run_main(pad_report.main, str(self.dir))
