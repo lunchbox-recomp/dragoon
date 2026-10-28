@@ -9,7 +9,8 @@ one that fails stops the run. .github/workflows/ci.yml installs what a runner la
 each job by name, so a step changes here and nowhere else.
 
 The kit job leaves the engine kit in `engine kit/` and links it against stub tables in
-`stub game/`. Both names have a space, as a player's path may.
+`stub game/`. Both names have a space, as a player's path may, and the job deletes both
+before it starts.
 
 Exits 0 when every step passed, 1 when a step failed and 2 on an unknown job.
 """
@@ -30,14 +31,25 @@ STUB = "stub game"
 Step = tuple[str, "list[str] | Callable[[], int]"]
 
 
+def clear_kit() -> int:
+    """Delete the last run's kit and stub game, since engine_kit.py won't write over a kit."""
+    for path in (KIT, STUB):
+        shutil.rmtree(path, ignore_errors=True)
+    return 0
+
+
 def link_stub() -> int:
     """Link the kit against stub tables that stand in for the recompiler's output, so a
     framework missing from game_libs.txt fails the link."""
     gen = Path(STUB, "gen")
-    gen.mkdir(parents=True, exist_ok=True)
-    shutil.copy("tests/kit/stub_tables.c", gen)
-    sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True,
-                         check=True).stdout.strip()
+    try:
+        gen.mkdir(parents=True, exist_ok=True)
+        shutil.copy("tests/kit/stub_tables.c", gen)
+        sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True,
+                             check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"couldn't set up {STUB}: {e}", flush=True)
+        return 1
     kit = os.path.abspath(KIT)
     code = subprocess.run(["make", "-f", f"{kit}/Makefile", f"KIT={kit}", f"SDK={sdk}",
                            "CC=clang", "CXX=clang++"], cwd=STUB).returncode
@@ -70,6 +82,7 @@ JOBS: dict[str, Callable[[], list[Step]]] = {
         ("Engine and src/ unit tests", ["ninja", "-C", "build-nodisc", "unit"]),
     ],
     "kit": lambda: [
+        ("Delete the last kit", clear_kit),
         ("Configure without a disc", ["cmake", "-S", ".", "-B", "build-kit", "-G", "Ninja",
                                       "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
                                       "-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0", "-DGAME_ISO="]),
