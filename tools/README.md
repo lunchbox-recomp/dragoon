@@ -116,7 +116,9 @@ For each port the game saw plugged in, it prints the gamepads put on it and take
 
 Each stick gets how far it went from the middle and which of its eight directions it reached, and each trigger gets its highest value and how many levels it took. A trigger that only ever read 255 was on or off. Last come the controls nobody used on that port, where a stick counts once it reaches a direction.
 
-A run-N directory, made when the game reset the console, reads its own part of the session's `stdout.txt`.
+Under each gamepad come the engine's own lines about its port. As it lands they give its type, connection, USB IDs, rumble and face labels. As it leaves or the game quits they give every button it sent with each axis's raw range and how its rumble calls went, and a line said again straight after is counted, not repeated.
+
+A log of version 5 or later also records the game's rumble motor, so each port says how many times the game ran it and for how long. Comparing what the pad sent with what reached the game shows whether a control was pressed and lost, or never pressed. A run-N directory, made when the game reset the console, reads its own part of the session's `stdout.txt`.
 
 It also reads an input log's own directory, such as one in `saves/inputs/`, without the gamepad lines. Port 1 takes the keyboard as well, so its presses may be keys. It exits 2 on a bad argument, a directory without `inputs.txt` or `inputs/inputs.txt`, a log older than version 2 or one with no pad state.
 

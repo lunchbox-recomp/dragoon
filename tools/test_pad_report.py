@@ -36,23 +36,23 @@ class DirectionTest(unittest.TestCase):
 class ParseTest(unittest.TestCase):
     def test_a_press_counts_once_however_its_other_buttons_change(self):
         A, B = 0x0100, 0x0200
-        ports, _ = pad_report.parse(HEADER + [state(10, buttons=A), state(11, buttons=A | B), state(12, buttons=B),
+        ports, _, _ = pad_report.parse(HEADER + [state(10, buttons=A), state(11, buttons=A | B), state(12, buttons=B),
                                               state(13, buttons=A | B), state(14)])
         self.assertEqual(ports[0].presses, {"A": [10, 13], "B": [11]})
 
     def test_buttons_keep_the_order_they_were_first_pressed(self):
-        ports, _ = pad_report.parse(HEADER + [state(5, buttons=0x0008), state(6), state(7, buttons=0x1000),
+        ports, _, _ = pad_report.parse(HEADER + [state(5, buttons=0x0008), state(6), state(7, buttons=0x1000),
                                               state(8), state(9, buttons=0x0008)])
         self.assertEqual(list(ports[0].presses), ["Up", "Start"])
 
     def test_each_channel_counts_its_own_presses(self):
-        ports, _ = pad_report.parse(HEADER + [state(3, chan=0, buttons=0x0010), state(3, chan=2, buttons=0x0010),
+        ports, _, _ = pad_report.parse(HEADER + [state(3, chan=0, buttons=0x0010), state(3, chan=2, buttons=0x0010),
                                               state(4, chan=2), state(5, chan=2, buttons=0x0010)])
         self.assertEqual(ports[0].presses, {"Z": [3]})
         self.assertEqual(ports[2].presses, {"Z": [3, 5]})
 
     def test_sticks_keep_their_range_from_the_middle_and_directions(self):
-        ports, _ = pad_report.parse(HEADER + [state(1, stick=(0xE4, 0x80)), state(2, stick=(0x80, 0x1C)),
+        ports, _, _ = pad_report.parse(HEADER + [state(1, stick=(0xE4, 0x80)), state(2, stick=(0x80, 0x1C)),
                                               state(3, stick=(0x90, 0x90), cstick=(0x30, 0xD0)), state(4)])
         stick = ports[0].stick
         self.assertEqual((stick.low, stick.high), ([0, -100], [100, 16]))
@@ -60,14 +60,14 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(ports[0].cstick.reached, {7})
 
     def test_triggers_count_their_levels(self):
-        ports, _ = pad_report.parse(HEADER + [state(1, triggers=(0x40, 0xFF)), state(2, triggers=(0x90, 0)),
+        ports, _, _ = pad_report.parse(HEADER + [state(1, triggers=(0x40, 0xFF)), state(2, triggers=(0x90, 0)),
                                               state(3, triggers=(0x40, 0xFF)), state(4)])
         self.assertEqual(ports[0].levels, {"L": {0x40, 0x90}, "R": {0xFF}})
 
     def test_plugged_in_changes_and_the_end_line(self):
         lines = HEADER + [state(0, plugged=0), state(30), state(31, buttons=0x0100), state(90, plugged=0),
                           "jump 1000 20", "pose head 3 0", "# end 400 100"]
-        ports, end = pad_report.parse(lines)
+        ports, end, _ = pad_report.parse(lines)
         self.assertEqual(ports[0].plugged, [(0, False), (30, True), (90, False)])
         self.assertEqual(end, 100)
 
@@ -82,13 +82,41 @@ class ParseTest(unittest.TestCase):
             pad_report.parse(["# gcn-recomp input log v1", "5 0 1 0000 80 80 80 80 00 00"])
 
 
+class MotorTest(unittest.TestCase):
+    def test_motor_lines_keep_each_channels_changes(self):
+        lines = ["# gcn-recomp input log v5", state(0), "motor 1 100 0 1", "motor 2 160 0 0", "motor 3 90 2 1"]
+        ports, _, version = pad_report.parse(lines)
+        self.assertEqual(version, 5)
+        self.assertEqual(ports[0].motor, [(100, True), (160, False)])
+        self.assertEqual(ports[2].motor, [(90, True)])
+
+    def test_the_rumble_line_adds_up_the_time_on_to_the_end(self):
+        port = pad_report.Port(motor=[(100, True), (160, False), (300, True)])
+        self.assertEqual(pad_report.rumble_line(port, 400, 5),
+                         "  rumble   run by the game 2 times, 2.7 s in all, first at frame 100 (0:01.7)")
+        self.assertEqual(pad_report.rumble_line(pad_report.Port(motor=[(60, True), (120, False)]), None, 5),
+                         "  rumble   run by the game 1 time, 1.0 s in all, first at frame 60 (0:01.0)")
+        self.assertEqual(pad_report.rumble_line(pad_report.Port(), 400, 5), "  rumble   never run by the game")
+
+    def test_a_motor_still_on_in_a_log_with_no_end_line_says_so(self):
+        port = pad_report.Port(motor=[(100, True), (160, False), (300, True)])
+        self.assertEqual(pad_report.rumble_line(port, None, 5),
+                         "  rumble   run by the game 2 times, at least 1.0 s in all, first at frame 100 (0:01.7),"
+                         " still on when the log ends")
+        self.assertEqual(pad_report.rumble_line(pad_report.Port(motor=[(60, True)]), None, 5),
+                         "  rumble   run by the game 1 time, at least 0.0 s in all, first at frame 60 (0:01.0),"
+                         " still on when the log ends")
+        self.assertEqual(pad_report.rumble_line(port, 400, 4), "  rumble   not in the log, which is older than version 5")
+
+
 class GamepadLinesTest(unittest.TestCase):
     def test_a_gamepad_line_takes_the_frame_timed_before_it(self):
         lines = ['gamepads: "Test Pad" on port 1', ft(40), ft(41), "[ft] f42 guest  16.6",
                  'gamepads: "Test Pad" pulled out of port 1', ft(99),
                  'gamepads: "Test Pad" on port 2', 'gamepads: "Other Pad" left out: no port is free']
         events, left_out = pad_report.gamepad_lines(lines)
-        self.assertEqual(events, {0: [(None, True, "Test Pad"), (41, False, "Test Pad")], 1: [(99, True, "Test Pad")]})
+        self.assertEqual(events, {0: [(None, 'gamepad "Test Pad" on', True), (41, 'gamepad "Test Pad" pulled out', True)],
+                                  1: [(99, 'gamepad "Test Pad" on', True)]})
         self.assertEqual(left_out, ["Other Pad"])
 
 
@@ -128,6 +156,7 @@ class MainTest(unittest.TestCase):
             "  c-stick  x +0 to +0, y +0 to +0, no direction",
             "  L        trigger up to 255, on or off",
             "  R        trigger never moved",
+            "  rumble   not in the log, which is older than version 5",
             "  never used: B, X, Y, Z, L, R, Start, Up, Down, Left, Right, c-stick, R trigger",
             "never plugged in: ports 2, 3",
         ])
@@ -163,6 +192,19 @@ class MainTest(unittest.TestCase):
                       "  unplugged at frame 0 (0:00.0), plugged in at frame 500 (0:08.3),"
                       " unplugged at frame 700 (0:11.7)\n", out)
         self.assertTrue(out.endswith('never plugged in: port 4\ngamepad "Other Pad" left out: no port was free\n'))
+
+    def test_what_was_said_of_a_port_goes_under_its_gamepad(self):
+        stdout = "\n".join(['gamepads: "Test Pad" on port 1', "gamepads: port 1 is switchpro, wireless, rumble yes",
+                            ft(50), "gamepads: port 1 rumble failed: no", "gamepads: port 1 rumble failed: no",
+                            'gamepads: "Test Pad" pulled out of port 1', "gamepads: port 1 sent south 3",
+                            "gamepads: port 1 rumble failed: no"])
+        _, out, _ = run_main(pad_report.main, str(self.session([state(0)], stdout + "\n")))
+        self.assertIn('port 1\n  gamepad "Test Pad" on before the first timed frame\n'
+                      "    is switchpro, wireless, rumble yes\n"
+                      "    rumble failed: no (2 times)\n"
+                      '  gamepad "Test Pad" pulled out after frame 50 (0:00.8)\n'
+                      "    sent south 3\n"
+                      "    rumble failed: no\n  plugged in", out)
 
     def test_each_run_of_a_reset_session_reads_its_own_gamepad_lines(self):
         stdout = "\n".join(["[session] one", 'gamepads: "Test Pad" on port 1', ft(599), "[session] two", ft(10),

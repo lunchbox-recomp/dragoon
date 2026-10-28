@@ -8,11 +8,14 @@ input log's own directory, such as one in saves/inputs/. Reads the log's inputs.
 a session, the gamepad lines of stdout.txt.
 
 For each port the game saw plugged in, it prints the gamepads gcn-recomp put on it and took
-off it, then each button in the order it was first pressed with how many times. Then how far
-each stick went from the middle and which of its eight directions it reached, and each
-trigger's highest value with how many levels it took. A trigger that only ever read 255 was
-on or off. Last come the pad's controls nobody used on that port, where a stick counts once
-it reaches a direction.
+off it. Under each go gcn-recomp's own lines about the port, which give its type and labels
+as it landed, and what it sent and how its rumble went as it left or the game quit. Then
+each button in the order it was first pressed with how many times, how far each stick went
+from the middle and which of its eight directions it reached, and each trigger's highest
+value with how many levels it took. A trigger that only ever read 255 was on or off. Then
+how often and how long the game ran the rumble motor, from a log of version 5 or later. Last
+come the pad's controls nobody used on that port, where a stick counts once it reaches a
+direction.
 
 Times are the game's frames, with minutes and seconds at 60 frames a second. A gamepad line
 is placed after the last frame stdout.txt timed before it. A run-N directory, made when the
@@ -47,8 +50,10 @@ FRAMES_PER_SECOND = 60
 
 VERSION = re.compile(r"^# gcn-recomp input log v(\d+)")
 END = re.compile(r"^# end (\d+) (\d+)")
+MOTOR = re.compile(r"^motor \d+ (\d+) (\d+) ([01])$")
 GAMEPAD = re.compile(r'^gamepads: "(.*)" (on|pulled out of) port (\d)$')
 LEFT_OUT = re.compile(r'^gamepads: "(.*)" left out: no port is free$')
+SAID = re.compile(r"^gamepads: port (\d) (.+)$")
 
 
 def direction(dx: int, dy: int) -> int | None:
@@ -80,21 +85,27 @@ class Port:
     stick: Stick = field(default_factory=Stick)
     cstick: Stick = field(default_factory=Stick)
     levels: dict[str, set[int]] = field(default_factory=lambda: {"L": set(), "R": set()})
+    motor: list[tuple[int, bool]] = field(default_factory=list)  # frame and state, at each change
 
 
-def parse(lines) -> tuple[dict[int, Port], int | None]:
-    """The ports by channel (0 for port 1) and the frame the run ended at, if the log says."""
+def parse(lines) -> tuple[dict[int, Port], int | None, int | None]:
+    """The ports by channel (0 for port 1), the frame the run ended at and the log's version,
+    each if the log says."""
     ports: dict[int, Port] = {}
     held: dict[int, int] = {}
-    end = None
+    end = version = None
     for n, raw in enumerate(lines, 1):
         line = raw.strip()
         if m := VERSION.match(line):
-            if int(m[1]) < 2:
-                raise ValueError(f"version {m[1]} log; this reads version 2 and later")
+            version = int(m[1])
+            if version < 2:
+                raise ValueError(f"version {version} log; this reads version 2 and later")
             continue
         if m := END.match(line):
             end = int(m[2])
+            continue
+        if m := MOTOR.match(line):
+            ports.setdefault(int(m[2]), Port()).motor.append((int(m[1]), m[3] == "1"))
             continue
         if not line or line.startswith(("#", "jump ", "pose ")):
             continue
@@ -119,21 +130,25 @@ def parse(lines) -> tuple[dict[int, Port], int | None]:
         for name, level in (("L", tl), ("R", tr)):
             if level:
                 port.levels[name].add(level)
-    return ports, end
+    return ports, end, version
 
 
-def gamepad_lines(lines) -> tuple[dict[int, list[tuple[int | None, bool, str]]], list[str]]:
-    """Each port's (0 for port 1) gamepads coming and going, as (the frame timed last before,
-    on, name), and the names of those no port was free for."""
+def gamepad_lines(lines) -> tuple[dict[int, list[tuple[int | None, str, bool]]], list[str]]:
+    """Each port's (0 for port 1) events, as (the frame timed last before, what was said,
+    whether it's timed): its gamepads coming and going are, and what gcn-recomp said of the
+    port between them isn't. Also the names of the gamepads no port was free for."""
     frame = None
-    events: dict[int, list[tuple[int | None, bool, str]]] = {}
+    events: dict[int, list[tuple[int | None, str, bool]]] = {}
     left_out = []
     for raw in lines:
         line = raw.rstrip("\n")
         if m := FT.match(line):
             frame = int(m[1])
         elif m := GAMEPAD.match(line):
-            events.setdefault(int(m[3]) - 1, []).append((frame, m[2] == "on", m[1]))
+            what = "on" if m[2] == "on" else "pulled out"
+            events.setdefault(int(m[3]) - 1, []).append((frame, f'gamepad "{m[1]}" {what}', True))
+        elif m := SAID.match(line):
+            events.setdefault(int(m[1]) - 1, []).append((frame, m[2], False))
         elif m := LEFT_OUT.match(line):
             left_out.append(m[1])
     return events, left_out
@@ -152,7 +167,45 @@ def stick_line(name: str, s: Stick) -> str:
             f" {len(s.reached)} of 8 directions: {which}")
 
 
-def report(ports: dict[int, Port], end: int | None, events, left_out: list[str]) -> list[str]:
+def event_lines(events: list[tuple[int | None, str, bool]]) -> list[str]:
+    """A timed event says when, and what was said of the port goes under it. The same thing
+    said again straight after is counted rather than repeated."""
+    shown: list[list] = []
+    for frame, text, timed in events:
+        if timed:
+            line = f"  {text} {'before the first timed frame' if frame is None else f'after {when(frame)}'}"
+        else:
+            line = f"    {text}"
+        if not timed and shown and shown[-1][0] == line:
+            shown[-1][1] += 1
+        else:
+            shown.append([line, 1])
+    return [line if n == 1 else f"{line} ({n} times)" for line, n in shown]
+
+
+def rumble_line(port: Port, end: int | None, version: int | None) -> str:
+    if version is None or version < 5:
+        return "  rumble   not in the log, which is older than version 5"
+    starts = [frame for frame, on in port.motor if on]
+    if not starts:
+        return "  rumble   never run by the game"
+    frames, since = 0, None
+    for frame, on in port.motor:
+        if on:
+            since = frame
+        elif since is not None:
+            frames += frame - since
+            since = None
+    still_on = since is not None and end is None
+    if since is not None and end is not None:
+        frames += end - since
+    return (f"  rumble   run by the game {len(starts)} time{'s' if len(starts) > 1 else ''},"
+            f" {'at least ' if still_on else ''}{frames / FRAMES_PER_SECOND:.1f} s in all,"
+            f" first at {when(starts[0])}{', still on when the log ends' if still_on else ''}")
+
+
+def report(ports: dict[int, Port], end: int | None, version: int | None, events,
+           left_out: list[str]) -> list[str]:
     out = [f"the log ends at {when(end)}" if end is not None else "the log has no end line"]
     unplugged = []
     for chan in sorted(ports):
@@ -161,9 +214,7 @@ def report(ports: dict[int, Port], end: int | None, events, left_out: list[str])
             unplugged.append(str(chan + 1))
             continue
         out.append(f"port {chan + 1}")
-        for frame, on, name in events.get(chan, []):
-            at = "before the first timed frame" if frame is None else f"after {when(frame)}"
-            out.append(f"  gamepad \"{name}\" {'on' if on else 'pulled out'} {at}")
+        out += event_lines(events.get(chan, []))
         out.append("  " + ", ".join(f"{'plugged in' if on else 'unplugged'} at {when(f)}" for f, on in port.plugged))
         out.append("  buttons, in the order first pressed:" if port.presses else "  no button pressed")
         for name, frames in port.presses.items():
@@ -176,6 +227,7 @@ def report(ports: dict[int, Port], end: int | None, events, left_out: list[str])
                 out.append(f"  {name:8} trigger up to {max(levels)}, {kind}")
             else:
                 out.append(f"  {name:8} trigger never moved")
+        out.append(rumble_line(port, end, version))
         unused = [name for name, _ in BUTTONS if name not in port.presses]
         unused += [name for name, s in (("stick", port.stick), ("c-stick", port.cstick)) if not s.reached]
         unused += [f"{name} trigger" for name, levels in port.levels.items() if not levels]
@@ -203,7 +255,7 @@ def main(argv: list[str]) -> int:
         path = log_path(args.dir)
         with path.open(encoding="utf-8") as f:
             try:
-                ports, end = parse(f)
+                ports, end, version = parse(f)
             except ValueError as e:
                 raise ValueError(f"{path}: {e}") from None
         if not ports:
@@ -214,7 +266,7 @@ def main(argv: list[str]) -> int:
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
         return 2
-    print("\n".join(report(ports, end, events, left_out)))
+    print("\n".join(report(ports, end, version, events, left_out)))
     return 0
 
 
