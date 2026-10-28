@@ -14,7 +14,7 @@ Every tool but `swift_test.py`, which hands it to swift, takes `--help` and prin
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py, ax_stats.py, session_report.py and pad_report.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py, ax_stats.py, stream_voices.py, session_report.py and pad_report.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -301,6 +301,26 @@ tools/audio_hashes.py check
 tools/ax_stats.py build/probe/audio-title/stdout.txt build/probe/audio-air-ride-race/stdout.txt
 tools/ax_stats.py before/stdout.txt build/probe/audio-title/stdout.txt --until 20000
 ```
+
+## stream_voices.py
+
+Which voices did the mixer stop that the game didn't? It reads the `[axv]` lines of a run made with `GCN_AXVOICES=1` and lists each voice that ran with `stream=1` or `looping=1`, or that ended early, by parameter block address. A block that runs again after it stopped or ended counts as a voice for each run.
+
+Each row gives the list the voice started at, the loop address it started with, how many times it looped and its last level peak, which reads `none` for a voice last mixed after the log's last level line. Then it says how the voice ended. That's `still running` at the end of the log, `stopped by the game`, `ended by the mixer` or `ended early`.
+
+The mixer only ends a voice whose loop flag is clear, and the AX library can drop a stream's flag, so a clear flag proves nothing. A voice ended early when any of its lines had a stream's loop address, which is `018xxxxx` or the PCM16 ring at `0062A280` or `0062A780`, or when a `set` line moved its loop or end address while it ran and it never had `stream=1` or `looping=1`. Those rows come last, with the rule, the list and the time at 5 ms a list.
+
+The game starts new samples on blocks that still run an effect, so away from a stream address a voice that had a loop flag and lost it isn't called early. Neither is one whose `set` put `cur` on the new loop address, which restarts the block and moves nothing. A failure outside the stream addresses with no `set` between its `run` and its `end` shows only in the count of other voices.
+
+A voice that never had either flag is listed only when it ended early, and a line of its own counts the other voices the mixer ended. A run lists hundreds of voices, because sound effects start with the loop flag set too. The music streams start at an address in `018xxxxx`, and some scenes play a PCM16 ring at `0062A280` and `0062A780` instead, so filter the `at` column for those.
+
+```
+tools/probe.sh voices 60 tests/routes/menu.txt 100000 GCN_AXVOICES=1
+tools/stream_voices.py build/probe/voices/stdout.txt | grep -E "  at (018|0062A)"
+tools/stream_voices.py build/probe/voices/stdout.txt | grep "ended early"
+```
+
+It only reports, so it never exits 1. It exits 2 on a bad argument, or on a log it can't read or that has no `[axv]` lines.
 
 ## warm_shaders.py
 
