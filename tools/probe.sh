@@ -117,7 +117,7 @@ if [ -n "$bench" ]; then
   exit 0
 fi
 # At --scale=1 a dump is 640x480 and 1.2 MB, uncompressed; N times each side at --scale=N.
-env SDL_AUDIO_DRIVER=dummy GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$game" --hidden $fast $no_input_log \
+env SDL_AUDIO_DRIVER=dummy GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$game" --hidden --no-gamepads $fast $no_input_log \
   ${log:+"$log"} ${aspect:+"$aspect"} ${output:+--dump-output} ${replay:+--replay="$replay"} \
   ${exit_after:+"$exit_after"} --pads="$pads" --scale="$scale" \
   --dump-dir="$out" --dump-every="$every" ${disc:+"$disc"} >"$out/stdout.txt" 2>&1 &

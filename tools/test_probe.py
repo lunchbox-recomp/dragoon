@@ -222,13 +222,15 @@ class ProbeTreeTest(unittest.TestCase):
                 self.assertIn(f"no input log at {shown}/inputs.txt", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
-    def test_a_windowed_run_is_hidden_and_silent_whatever_the_callers_audio_driver(self):
+    def test_a_windowed_run_is_hidden_silent_and_off_the_controllers_whatever_the_callers_audio_driver(self):
         self.add_game("dragoon", "printf '%s\\n' \"$@\" > args.txt\nprintf '%s' \"$SDL_AUDIO_DRIVER\" > driver.txt\n")
         r = subprocess.run([str(self.script), NAME, "1", "", "60"], capture_output=True, text=True, timeout=10,
                            env={**os.environ, "SDL_AUDIO_DRIVER": "coreaudio"})
         self.assertEqual(r.returncode, 0, r.stderr)
         run = self.root / "build" / "probe" / NAME
-        self.assertIn("--hidden", (run / "args.txt").read_text().splitlines())
+        args = (run / "args.txt").read_text().splitlines()
+        self.assertIn("--hidden", args)
+        self.assertIn("--no-gamepads", args)  # a controller left on beside it is never opened
         self.assertEqual((run / "driver.txt").read_text(), "dummy")
 
     def test_exit_after_must_be_a_positive_whole_number(self):

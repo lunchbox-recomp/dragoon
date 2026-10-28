@@ -260,7 +260,8 @@ class WarmTest(WarmTestCase):
         write_file(self.routes, "menu.txt", "1:A:1\n")
         code, out, _ = self.warm()
         self.assertEqual(code, 0)
-        self.assertEqual([l.split()[4] for l in self.game_lines()], [TITLE_EXIT, FOUR_EXIT])
+        self.assertEqual([a for l in self.game_lines() for a in l.split() if a.startswith("--exit-after=")],
+                         [TITLE_EXIT, FOUR_EXIT])
         self.assertIn("warm: 2 passes", out)
 
     def test_each_pass_prints_one_pass_line(self):
@@ -280,11 +281,11 @@ class WarmTest(WarmTestCase):
                          {k: v for k, v in before.items() if k != "shaders.bin"})
         self.assertEqual(set(after) - set(before), {"shaders.bin", ".shader-warmup"})
 
-    def test_children_are_hidden_fast_silent_and_run_in_scratch(self):
+    def test_children_are_hidden_fast_silent_off_the_controllers_and_run_in_scratch(self):
         self.assertEqual(self.warm()[0], 0)
         title, four = self.game_lines()
         for line in (title, four):
-            for flag in ("--hidden", "--fast", "--no-input-log"):
+            for flag in ("--hidden", "--fast", "--no-input-log", "--no-gamepads"):
                 self.assertIn(flag, line.split())
             self.assertIn("SDL=dummy", line.split())
             self.assertNotIn("INPUT=999:B:1", line.split())  # the parent's GCN_INPUT never reaches it
@@ -301,7 +302,7 @@ class WarmTest(WarmTestCase):
         self.addCleanup(os.chdir, cwd)
         self.assertEqual(self.warm("--disc", disc.name)[0], 0)
         title, four = self.game_lines()
-        self.assertTrue(title.startswith(f"--hidden --fast --no-input-log --pads=1 {TITLE_EXIT} "
+        self.assertTrue(title.startswith(f"--hidden --fast --no-input-log --no-gamepads --pads=1 {TITLE_EXIT} "
                                          f"{disc.resolve()} SDL=dummy "), title)
         self.assertIn(f" {FOUR_EXIT} {disc.resolve()} SDL=dummy ", four)
 
