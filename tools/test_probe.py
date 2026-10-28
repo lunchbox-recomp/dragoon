@@ -29,6 +29,7 @@ class ProbeArgumentsTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn("Usage:", r.stdout)
         self.assertIn("--disc=PATH", r.stdout)
+        self.assertIn("--disc=fast|console", r.stdout)
         self.assertTrue(r.stdout.endswith("under --bench) isn't built.\n"), r.stdout)
         self.assertNotIn("set -e", r.stdout)
 
@@ -144,6 +145,59 @@ class ProbeTreeTest(unittest.TestCase):
         r = probe(NAME, "1", "", "60", "--disc=no such.iso", script=self.script, cwd=self.root)
         self.assertEqual(r.returncode, 2)
         self.assertIn(f"{self.root}/no such.iso", r.stderr)
+        self.assertFalse((self.root / "build" / "probe").exists())
+
+    def test_a_disc_speed_reaches_the_windowed_game_and_is_not_taken_for_a_path(self):
+        for speed in ("fast", "console"):
+            with self.subTest(speed=speed):
+                args = self.game_args(f"--disc={speed}")
+                self.assertIn(f"--disc={speed}", args)
+                self.assertEqual([a for a in args if not a.startswith("--")], [])
+
+    def test_no_disc_speed_setting_passes_no_disc_argument(self):
+        self.assertEqual([a for a in self.game_args() if a.startswith("--disc")], [])
+
+    def test_a_disc_speed_and_a_disc_path_go_together_in_either_order(self):
+        disc = self.disc()
+        for settings in (("--disc=console", f"--disc={disc}"), (f"--disc={disc}", "--disc=console")):
+            with self.subTest(settings=settings):
+                args = self.game_args(*settings)
+                self.assertIn("--disc=console", args)
+                self.assertEqual(args[-1], str(disc))
+
+    def test_the_last_disc_speed_wins_at_the_game(self):
+        args = self.game_args("--disc=console", "--disc=fast")
+        self.assertEqual([a for a in args if a.startswith("--disc")], ["--disc=fast"])
+
+    def test_a_disc_file_named_like_a_speed_is_a_path_with_a_dot_slash(self):
+        write_file(self.root, "console", b"a disc")
+        args = self.game_args("--disc=./console")
+        self.assertEqual(args[-1], f"{self.root}/./console")
+        self.assertEqual([a for a in args if a.startswith("--disc")], [])
+
+    def test_any_other_disc_value_exits_2_before_making_a_run_directory(self):
+        self.add_game("dragoon", "")
+        for bad in ("--disc=slow", "--disc=Console", "--disc=fast ", "--disc="):
+            with self.subTest(bad=bad):
+                r = probe(NAME, "1", "", "60", bad, script=self.script, cwd=self.root)
+                self.assertEqual(r.returncode, 2)
+                self.assertIn("--disc", r.stderr)
+        self.assertFalse((self.root / "build" / "probe").exists())
+
+    def test_a_refused_disc_path_says_the_speeds_too(self):
+        self.add_game("dragoon", "")
+        r = probe(NAME, "1", "", "60", "--disc=slow", script=self.script, cwd=self.root)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn(f"no disc image at {self.root}/slow", r.stderr)
+        self.assertIn("fast or console", r.stderr)
+
+    def test_a_disc_speed_with_bench_exits_2_before_making_a_run_directory(self):
+        self.add_game("dragoon_bench", "echo 'whole run'\n")
+        for speed in ("--disc=fast", "--disc=console"):
+            with self.subTest(speed=speed):
+                r = probe(NAME, "1", "", "60", speed, "--bench", script=self.script)
+                self.assertEqual(r.returncode, 2)
+                self.assertIn(f"{speed} needs a windowed run", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
     def test_log_list_reaches_the_windowed_game(self):
