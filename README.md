@@ -13,9 +13,9 @@ Tested on one Mac, an M4 Max on macOS 26.
 | Title and menus | Work. The preview on the right of the mode select shows a race |
 | Air Ride | All eight courses a blank card can pick race past the countdown. Nebula Belt is locked on a blank card |
 | City Trial | Runs with one player, or four in split screen at full speed. An effect the tested routes don't reach can stutter the first time it shows up |
-| Stadium | Drag Race plays out to its results with one player or four. Target Flight and Destruction Derby haven't been played |
+| Stadium | Reached from City Trial. Drag Race plays out to its results with one player or four. Target Flight and Destruction Derby haven't been played |
 | Top Ride | All seven courses a fresh save offers race past the countdown, with one player and three CPUs |
-| Audio | Partial. Voices send to the effect buses and the game's compressor runs. Most voices resample through a polyphase filter, but the low-pass filter isn't applied. Nobody has compared it with a real console ([details](docs/dev/audio.md)) |
+| Audio | Partial. Voices send to the effect buses and the game's compressor runs. Nearly all voices resample through a polyphase filter, but the low-pass filter isn't applied. Nobody has compared it with a real console ([details](docs/dev/audio.md)) |
 | Controllers | Up to four gamepads, one per port. Each takes the port of its player number when that port is free, and otherwise the lowest free one. Pulling one out frees its port. Each one's port is saved in `saves/ports.txt` and taken again at the next launch when it's free. The keyboard is on port 1. Tested with simulated gamepads, not with four real ones or Steam Input |
 | Picture | 4:3 by default. `--aspect=16:9` widens the world in the race, City Trial and Top Ride routes it was measured on, but the HUD and menus stretch with it |
 | Other platforms | Not tested |
@@ -43,7 +43,7 @@ build/dragoon
 
 The first build also runs the game hidden and silent, for about a minute on an M4 Max, so the shaders it draws are compiled before you play. If that run fails, the build stops and says how to skip it. To skip it from the start, add `-DDRAGOON_WARMUP=OFF` to the `cmake` line.
 
-The game keeps its memory card and shader cache in `saves/`, in the folder you start it from. Start it from the same folder each time, or it begins with a blank card.
+The game keeps its memory card and shader cache in `saves/`, in the folder you start it from. The build's warm-up puts its shaders in the clone's own `saves/`, so start `build/dragoon` from the clone's top folder. Started anywhere else, it begins with a blank card and compiles shaders as it goes.
 
 The wrong disc stops the configure step and prints the disc ID it found.
 
