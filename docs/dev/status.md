@@ -42,7 +42,7 @@ routes still match (under gcn-recomp `5e49451` below).
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
 | Disc path with spaces | Works | Configures, and its `dragoon_bench` builds and runs |
-| Running from another directory | Works | The configured disc path is compiled in |
+| Running from another directory | Works | The configured disc path is compiled in. The memory card and shader cache are in `saves/` in the current folder, so a run from another folder starts with a blank card and compiles shaders as it goes |
 | Network during the build | SDL only | The first configure in a build directory downloads SDL 3.4.18's source release (15.7 MB) and checks its SHA-256. `-DGCN_SYSTEM_SDL=ON` uses an installed SDL3 instead, with no download |
 | Idle loop | Works | `recomp/idle.txt` 803D9FCC is the `IDLE_CHECK` branch in the generated C |
 
