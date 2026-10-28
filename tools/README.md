@@ -1,6 +1,6 @@
 # Tools
 
-Each tool answers one question. Start with probe.sh, which makes the runs the others read. To playtest with sound, run playtest.sh and read the session with session_report.py.
+Each tool answers one question. Start with probe.sh, which makes the runs the others read. To playtest with sound, run playtest.sh and read the session with session_report.py, and with pad_report.py for the controls.
 
 Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`. The launcher's own helpers live in `launcher/tools/` with their tests beside them, so run those with `python3 -m unittest discover -s launcher/tools -p 'test_*.py'` too. Both run under the Command Line Tools' Python 3.9 and under a newer one.
 
@@ -14,7 +14,7 @@ Every tool but `swift_test.py`, which hands it to swift, takes `--help` and prin
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py, ax_stats.py and session_report.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py, ax_stats.py, session_report.py and pad_report.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -48,7 +48,7 @@ tools/playtest.sh
 
 That's all a playtester runs. It runs from the repository's root, so it plays on the card and shader cache in `saves/` as `build/dragoon` does. Nothing needs sending back.
 
-The session stays in `build/playtest/`, and session_report.py and replay_session.py read it there. The recordings, the input log and the card snapshot are the player's own game data. `.gitignore` ignores them, and check_no_game_data.py fails on any that's tracked.
+The session stays in `build/playtest/`, and session_report.py, pad_report.py and replay_session.py read it there. The recordings, the input log and the card snapshot are the player's own game data. `.gitignore` ignores them, and check_no_game_data.py fails on any that's tracked.
 
 `--pads=N` plugs in more controllers and `--scale=N` sets the render scale. `GCN_*=value` sets any other switch, and one the session sets itself, like `GCN_WAV`, takes the value given instead. `--dry-run` prints the directory and the command without running anything, which is how its tests check it.
 
@@ -103,6 +103,18 @@ tools/replay_session.py build/playtest/20261022-161851
 The replay runs to 600 frames more than 60 for each second of the session's mixer audio. probe.sh gives it twice the session's length plus two minutes. The input log is copied into the replay's directory first, since a replay keeps a scratch copy of the memory card beside the log it reads, so the session stays as it was.
 
 An earlier replay's directory is deleted first. It exits 0 when the mixer audio matches, 1 when it differs or the replay stops short, and 2 on a bad argument, a session without `inputs/` or with an `aid.raw` of less than one frame, or a probe.sh run that failed.
+
+## pad_report.py
+
+Which of the pad's controls reached the game in a playtest, and on which port? It reads a session's input log, the state of each pad every time the game polled it, so it shows what the game got from the controller rather than what the controller sent.
+
+```
+tools/pad_report.py build/playtest/20261022-161851
+```
+
+For each port the game saw plugged in, it prints the gamepads put on it and taken off, from the session's `stdout.txt`. Then each button in the order it was first pressed with how many times, how far each stick went from the middle and which of its eight directions it reached, and each trigger's highest value with how many levels it took. A trigger with one level is on or off. Last come the controls nobody used on that port.
+
+It also reads an input log's own directory, such as one in `saves/inputs/`, without the gamepad lines. Port 1 takes the keyboard as well, so its presses may be keys. It exits 2 on a bad argument, a directory without `inputs.txt` or `inputs/inputs.txt`, a log older than version 2 or one with no pad state.
 
 ## frametime.py
 
