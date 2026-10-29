@@ -945,8 +945,8 @@ routes still reached their last frame, and `tools/audio_hashes.py check` found b
 changed on every route.
 
 Recorded on that build and checked again, all 1,906 frames and 48 audio rows matched.
-Twenty-one of the checkpoint frames in the table above changed, and 19 of them still show
-what their rows say. In the other two Kirby was in another place, fourth in Celestial Valley
+Twenty-one of the checkpoint frames in the table above changed, and 19 of them showed
+what their rows said. In the other two Kirby was in another place, fourth in Celestial Valley
 after Fantasy Meadows and third in Beanstalk Park after Machine Passage.
 
 The runtime of `f11c013` differs from `bad7160`'s only in when `GCN_AXVOICES` prints a loop
@@ -994,8 +994,8 @@ changes' reads at 2,960.75 KiB and 1,267.56 KiB. Those read counts and drive tim
 ones a fast run measured before gcn-recomp took the change.
 
 At `fast` the route's first read of 32 bytes took 601 us. Its 3rd to 12th reads of 16 KiB took
-1,088 us each. At `console` the first took 65,815 us, and the 3rd to 12th took 1,088 us and
-15,686 us or 15,687 us by turns.
+1,088 us each. At `console` the first took 65,815 us, and the 16 KiB reads that followed took
+1,088 us and 15,686 us or 15,687 us by turns.
 
 Of the first 20 reads under 4 KiB, every one took 601 us to 701 us at `fast`, while at
 `console` 3 took 601 us to 648 us and the other 17 took 10 ms to 138 ms.
