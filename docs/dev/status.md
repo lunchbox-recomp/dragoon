@@ -38,7 +38,7 @@ again at fast reads (under gcn-recomp `b5ec329` below).
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. With the clock cut to three minutes and the stadium set to Drag Race in Game Settings, one player (`city-trial-stadium.txt`) or four (`city-trial-stadium-4p.txt`) play out the clock and reach Drag Race 3 and its results. A fresh save offers only Drag Race, Target Flight and Destruction Derby, besides Shuffle. Target Flight and Destruction Derby weren't played |
 | Top Ride | Runs | All seven courses a fresh save offers (Grass, Sand, Sky, Fire, Light, Water and Metal) race past the countdown with one player and three CPUs (`top-ride-<course>.txt`) |
 | Audio | Partial | The mixer reads the control word the game's ucode (`07F88145`) uses. The compressor command runs. On the race route the windows with a main peak over 32,767 fell from 13 to 2 and the samples the output clamp changed from 4,435 to 923. AuxA sound went from 22 windows to 97 and AuxB from none to 20 (table under Audio). All 1,211 `[ax] cmds` lines of ten runs (484,400 command lists) count 0 unknown and 0 skipped commands. Source type 2 voices no longer resample, and on the title route the clicks in the DMA's blocks fell from 928 to 19 (table under Audio). Since gcn-recomp `b97c019` source type 0, 98.9% of the voice time in twelve unpaced runs, resamples through a polyphase filter whose coefficients the runtime works out, because the console's are in the DSP's ROM. None of those runs turned the low-pass filter on, and the runtime doesn't apply it. It was listened to once, before the type 2 fix. It crackled. Nobody has listened since. Nothing has been compared with recordings from a real console. `tools/audio_hashes.py check` holds the output hashes. [`scorecard.md`](scorecard.md) runs the routes on gcn-recomp `caf12a2` (before any of the audio work) and on `b848158`. On the title route played to 91 s in real time the clicks in the DMA's blocks fell from 1,097 and 979 to 22 and 22. Over the five routes the device stage's clicks a minute fell from 57.9 to 36.3 and from 45.1 to 33.1. Unpaced, over those routes' 324 s, the DMA's blocks went from 132 clicks to 136 and from 208 clipped runs to 25, and a bisect on 2026-10-22 agrees with 131 to 135 and 203 to 25. The audio work up to `b848158` didn't reduce the clicks over those seconds. Rescored with `audio_scorecard.py --no-run`, the title's first 91 s (`--margin 75`) went from 1,085 clicks to 19 and the mode select's first 170 s (`--margin 150`) from 118 to 16, so on those two routes the clicks that fell are past the scored seconds, in the same recordings (`scorecard.md`). In the scored seconds what it cut was clipping. Real-time runs showed the DMA's clicks rising, and the bisect found that most of that rise came from playing in real time. Pass 5 scored `b848158` against `b97c019`, and the pin `e1016b8` changes no audio file after it. Unpaced, over the same 324 s, the DMA's blocks went from 136 clicks to 94 and from 35 clicks on a block join to 7. In one real-time run of each build the device stage's clicks went from 191 to 70. Since gcn-recomp `bad7160` the menu music no longer stops after a few seconds. With disc reads timed by Dolphin's model of the console's drive, the menu route's music was still playing 85 s in, at command list 17,000. Since `b5ec329` the disc reads fast by default, as Dolphin's "Speed up disc transfer rate" does, and `disc console` in `settings.txt` or `--disc=console` keeps the console's timing. With every route played once at each speed, no music stream ended early. Details in `audio.md` |
-| Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Since gcn-recomp `0e6c9a7` each gamepad's port is saved in `saves/ports.txt`, and it takes that port again at the next launch when it's free. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
+| Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Since gcn-recomp `0e6c9a7` each gamepad's port is saved in `saves/ports.txt`, and it takes that port again at the next launch when it's free. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Since gcn-recomp `b5ec329` the GameCube's A, B, X and Y are the face buttons with those labels (`29ce20e`). A pad whose faces carry no letters has them where an Xbox pad does. On a Nintendo-layout pad such as an 8BitDo in Switch mode GameCube A moved from the south button to the east one, while on an Xbox pad B and X traded places. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with the HUD stretched | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD and the menus stretch with it (`widescreen.md`) |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
 | Build from the disc | Works | 23 s from an empty build directory: 3.5 s to configure, 19.5 s for Ninja |
@@ -138,8 +138,8 @@ need `--pads=4`.
 | Beanstalk Park | `air-ride-beanstalk-park.txt` | 4200 | Lap 1 of 2, 0:14, first, on a grass slope with beanstalks against the clouds |
 | Machine Passage | `air-ride-machine-passage.txt` | 4200 | Lap 1 of 2, 0:14, fourth, stopped against a dark metal wall |
 | Checker Knights | `air-ride-checker-knights.txt` | 4200 | Lap 1 of 2, 0:14, fourth, beside the sea with checkered blocks overhead |
-| Fantasy Meadows after Sky Sands | `air-ride-courses-1.txt` | 17300 | Lap 1 of 3, 0:14, fourth, at a tunnel mouth with a CPU in it |
-| Celestial Valley after Fantasy Meadows | `air-ride-courses-1.txt` | 22900 | Lap 1 of 2, 0:14, fourth, on a grass ledge over the night clouds |
+| Fantasy Meadows after Sky Sands | `air-ride-courses-1.txt` | 17300 | Lap 1 of 3, 0:14, first, at a tunnel mouth in a burst of light with a spiked enemy overhead |
+| Celestial Valley after Fantasy Meadows | `air-ride-courses-1.txt` | 22900 | Lap 1 of 2, 0:14, third, on a grass ledge over the night clouds with two CPUs ahead |
 | Machine Passage after Magma Flows | `air-ride-courses-2.txt` | 15600 | Lap 1 of 2, 0:14, fourth, stopped against a dark metal wall |
 | Beanstalk Park after Machine Passage | `air-ride-courses-2.txt` | 19400 | Lap 1 of 2, 0:14, third, on a grass slope with CPUs ahead |
 | City Trial | `city-trial.txt` | 3300 | The city, 4:54 left |
@@ -152,7 +152,7 @@ need `--pads=4`.
 | Stadium results | `city-trial-stadium.txt` | 20400 | P1 fourth in 0:50.87 behind CPUs on 0:35.83, 0:47.36 and 0:47.62, waiting for START |
 | Four-player stadium | `city-trial-stadium-4p.txt` | 17100 | Drag Race 3 in four views, 0:06 on the clock |
 | Four-player results | `city-trial-stadium-4p.txt` | 21000 | P3 first in 0:53.31, then P2, P4 and P1 in 1:00.15, under confetti |
-| Top Ride race | `top-ride-<course>.txt` | 3600 | Each course 3.62 s into the race. Seven laps on Grass and Sand, six on Sky, Fire and Light, five on Water and Metal |
+| Top Ride race | `top-ride-<course>.txt` | 3600 | Each course 3.63 s into the race. Seven laps on Grass and Sand, six on Sky, Fire and Light, five on Water and Metal |
 | Top Ride courses in turn | `top-ride-courses.txt` | 6100 to 18600 | Sand, Sky, Metal, Water, Light and then Fire, every 2,500 frames, each race under way after the one before |
 
 Left alone, the race route finishes three laps in 1:14.68 and reaches the results screen by
@@ -946,8 +946,8 @@ changed on every route.
 
 Recorded on that build and checked again, all 1,906 frames and 48 audio rows matched.
 Twenty-one of the checkpoint frames in the table above changed, and 19 of them still show
-what their rows say. In the other two Kirby is in another place, fourth in Celestial Valley after Fantasy
-Meadows and third in Beanstalk Park after Machine Passage (table above).
+what their rows say. In the other two Kirby was in another place, fourth in Celestial Valley
+after Fantasy Meadows and third in Beanstalk Park after Machine Passage.
 
 The runtime of `f11c013` differs from `bad7160`'s only in when `GCN_AXVOICES` prints a loop
 line. Built on Dragoon `ddb1901` with gcn-recomp `bad7160`, `tools/frame_hashes.py check`
@@ -958,9 +958,13 @@ matched all twenty-four routes and 1,906 frames, and `tools/audio_hashes.py chec
 
 The pin moved from `bad7160` to `b5ec329`, 30 commits. Nine read the disc fast by default and
 write the speed into the input log and `session.json`, while a `disc console` line in
-`settings.txt` or `--disc=console` keeps the console's timing. The other 21 add
-`--no-gamepads`, log the game's rumble motor with what each gamepad sent and shut the pads
-down at a reset and at exit.
+`settings.txt` or `--disc=console` keeps the console's timing.
+
+Of the other 21, two are CI commits (`11fa40c`, `a95e94d`). The rest add `--no-gamepads`, log
+the game's rumble motor with what each gamepad sent and shut the pads down at a reset and at
+exit. They also map the GameCube's A, B, X and Y to the face buttons with those labels
+(`29ce20e` on the desktop, `46258d3` and `069937f` on the headset), so GameCube A moves from
+the south button to the east one on a Nintendo-layout pad such as an 8BitDo in Switch mode.
 
 At `fast` a read costs 600 us and its length at 32 MiB/s, as Dolphin's "Speed up disc
 transfer rate" has it. At `console` reads are timed as they were at `bad7160`. A replay reads
@@ -969,7 +973,8 @@ replays at `console`.
 
 The menu route ran hidden in real time to frame 1,500 with `--log=dvd`, `GCN_FRAMETIME=1` and
 `GCN_CLOCKLOG=1`, once at each speed, on Dragoon `39c8d8f`. The intervals are guest time from
-`tools/frametime.py --late 100`, and the reads are the `[DVD] read` lines inside them.
+`tools/frametime.py --late 100`, and the reads are the `[DVD] read` lines inside them, with
+KiB rounded down.
 
 | Interval | `fast` | `console` |
 |---|---|---|
@@ -980,25 +985,32 @@ The menu route ran hidden in real time to frame 1,500 with `--log=dvd`, `GCN_FRA
 | Route reads | 1,005, 31.4 MiB, 1,584 ms drive | 760, 27.4 MiB, 11,781 ms drive |
 
 gcn-recomp's diagnostics give this route's two scene changes as 400 ms and 213 ms at `fast`
-and 1,485 ms and 1,458 ms at `console`. The fast run matches that within a millisecond and to
-the read. The console run's two stalls came out 17 ms and 56 ms longer, with 2 fewer reads in
-the second.
+and 1,485 ms and 1,458 ms at `console`. The fast run came within 2 ms of both, and the console
+run's two stalls came out 17 ms and 56 ms longer.
 
-At `fast` the first 32-byte read took 601 us and the 16 KiB reads after it 1,088 us each. At
-`console` the same 32-byte read took 65,815 us, and those 16 KiB reads took 1,088 us and
-15,687 us by turns. Of the small reads after them, the ones that needed a seek took 10 ms to
-138 ms at `console`, and every one took 601 us to 701 us at `fast`.
+A second fast run made the same number of reads in each interval with the same drive time, and
+its three intervals came within 2 ms of the first run's. Its byte counts put the two scene
+changes' reads at 2,960.75 KiB and 1,267.56 KiB. Those read counts and drive times are the
+ones a fast run measured before gcn-recomp took the change.
 
-A playtest's input log recorded at `bad7160`, with no disc line, was replayed the same way to
-frame 1,500. The game printed this, and its first 32-byte read took 69,464 us.
+At `fast` the route's first read of 32 bytes took 601 us. Its 3rd to 12th reads of 16 KiB took
+1,088 us each. At `console` the first took 65,815 us, and the 3rd to 12th took 1,088 us and
+15,686 us or 15,687 us by turns.
+
+Of the first 20 reads under 4 KiB, every one took 601 us to 701 us at `fast`, while at
+`console` 3 took 601 us to 648 us and the other 17 took 10 ms to 138 ms.
+
+A playtest's input log recorded at `bad7160`, with no disc line, was replayed hidden and
+unpaced to frame 1,500 with `--log=dvd`. The game printed this, and its first 32-byte read took
+69,464 us.
 
 ```
 [input] the log has no disc line, so the replay reads at disc console and not at disc fast
 ```
 
-The log the replay wrote says `# disc console`, and in those 1,500 frames the replay never said
-it had parted from its recording. `session.json` gave `"disc": "fast"` in the fast run and `"disc": "console"` in
-the console run and the replay.
+The log the replay wrote says `# disc console`, and in those 1,500 frames the replay printed no
+line saying it had parted from its recording. `session.json` gave `"disc": "fast"` in the fast
+run and `"disc": "console"` in the console run and the replay.
 
 `dragoon_bench` reads neither `settings.txt` nor `--disc`, so it reads fast outside a replay.
 `tools/audio_hashes.py` runs it, so the audio goldens are recorded and checked at fast reads.
@@ -1021,8 +1033,17 @@ and 48 rows on every route.
 | `city-trial-stadium` and `-4p` | 54 of 68 and 52 of 70 |
 
 The menu's frames 1,020 to 1,200 hash as they did from `e1016b8` to `5e49451`, before reads
-were timed. Nobody looked at the changed frames, so the checkpoint table under How far it gets
-describes the frames `bad7160` drew, and the race's 1:14.68 is from `5e49451`.
+were timed. The race's 1:14.68 is from `5e49451` and wasn't run again.
+
+Twenty-four checkpoint frames changed. Each was dumped again on Dragoon `0bc2902`, matched its
+golden and was looked at. Fourteen still show what their rows under How far it gets say, among
+them both stadium results to the hundredth, and `top-ride-courses` frame 3600 has no row and is
+byte for byte `top-ride-grass` frame 3600.
+
+The other nine changed three rows, which now say what the frames show. Kirby is now first at
+the tunnel mouth in Fantasy Meadows after Sky Sands and third in Celestial Valley after Fantasy
+Meadows, fourth in both before. Each of the seven Top Ride courses shows 3.63 s at frame 3600,
+where it showed 3.62 s.
 
 With the drive code `b5ec329` has, every route ran once at each speed under `GCN_AXVOICES=1`.
 `tools/stream_voices.py` found no music stream that ended early in any of the 48 runs
