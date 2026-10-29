@@ -6,8 +6,8 @@ the PB mixer control word with the 2001 layout for that hash only. Every other h
 included, gets the later layout. The compressor command runs on the same hash test, so at the
 pinned gcn-recomp (since `b839cf6`) it follows the ucode hash alone and `GCN_AX_LAYOUT` leaves
 it be. The newer build's low-pass filter still isn't applied. The `ax.cpp` line numbers below
-are at gcn-recomp `fd1f6a8`. The pin is now `bad7160`, where `compress` starts at line 573
-and `ax_init` at 617.
+are at gcn-recomp `fd1f6a8`. The pin is now `b5ec329`, where `compress` still starts at line
+573 and `ax_init` at 617.
 
 ## The ucode
 
@@ -247,6 +247,40 @@ Melee native port traced the same stop to the same merged address update, and fi
 end check
 ([its notes](https://github.com/HexDump0/melee/blob/main/native/AI/handoffs/2026-09-13-P-648-menu-bgm.md)).
 
+## Music at fast reads
+
+Since gcn-recomp `b5ec329` the disc reads fast by default (`22bc2c8`, `7968abc`). Every block
+reads as one the drive has read ahead, so a read costs 600 us and its length at 32 MiB/s, as
+Dolphin's "Speed up disc transfer rate" has it. `disc console` in `settings.txt` or
+`--disc=console` keeps the console's timing above, and `status.md` has the menu route's loads at
+both speeds.
+
+The two callbacks still land in different audio frames. With the drive code `b5ec329` has, each
+of the twenty-four routes in `tests/hashes/manifest.txt` ran once at each speed under
+`GCN_AXVOICES=1`. `tools/stream_voices.py` found no stream voice that ended early in any of the
+48 runs, and a separate pass over every voice at a stream address found none that started
+without its loop flag or that the mixer ended.
+
+| Menu route | `fast` | `console` |
+|---|---|---|
+| Stream start (80579F88 and 8057A074) | list 3,555, `looping=1` | list 4,476, `looping=1` |
+| Loops, with no `end` | 52 | 50 |
+| 80579F88's `run` and `set` lines through list 19,400 | 2 lists apart all 46 times | 16 gaps of 2 to 44 lists |
+
+At `fast` the paired updates leave one audio frame more than the loop flag needs. Nineteen
+routes played as many stream voices at each speed. Four-player City Trial, the Sand, Fire and
+Light Top Ride routes and `top-ride-courses` each had two more at `fast`, from a track change
+further along before the run's time ran out.
+
+In the four-player City Trial run at `fast`, the stream pair 8057938C and 80579478 faded to a
+peak of 0 by list 27,400 with `cur` frozen and its loop flag set. A new pair had started at list
+27,189, and nothing stopped the old pair before the log ended at list 36,385. The console run
+never reached that scene.
+
+`tools/audio_hashes.py` plays the routes on `dragoon_bench`, which reads neither `settings.txt`
+nor `--disc`, so the audio goldens are recorded at fast reads. At `b5ec329` all 48 rows changed
+and were recorded again (`status.md`).
+
 ## What was done and what is left
 
 Generic runtime work in `runtime/hw/`.
@@ -264,7 +298,8 @@ Generic runtime work in `runtime/hw/`.
 | Loop counter and signed envelope | `ax.cpp:178-186`, `:292-296` | Not done |
 | Loop or stop a voice only on the sample at its end address | `Accel::sample` | Done in `1f5e5a3` |
 | Wrap an ADPCM voice whose end is on a frame's header to its loop address | `Accel::sample` | Done in `ac8a1f4`, logged as a loop since `545c784` |
-| Disc reads timed as a console's drive times them | `drive.h`, `di.cpp` | Done in `04c025f` and `f19f98d` |
+| Disc reads timed as a console's drive times them | `drive.h`, `di.cpp` | Done in `04c025f` and `f19f98d`. Since `b5ec329` it's `disc console` |
+| Disc reads at the read-ahead rate by default | `drive.h`, `di.cpp`, `main.cpp` | Done in `22bc2c8` and `7968abc` |
 | A log of each voice's start, changes, loops and end | `GCN_AXVOICES` | Done in `1b25342` |
 
 The polyphase sets aren't the console's own, which need the DSP's ROM.
