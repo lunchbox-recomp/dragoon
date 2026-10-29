@@ -265,12 +265,13 @@ without its loop flag or that the mixer ended.
 |---|---|---|
 | Stream start (80579F88 and 8057A074) | list 3,555, `looping=1` | list 4,476, `looping=1` |
 | Loops, with no `end` | 52 | 50 |
-| 80579F88's `run` and `set` lines through list 19,400 | 2 lists apart all 46 times | 16 gaps of 2 to 44 lists |
+| 80579F88's `run` and `set` lines | 2 lists apart all 46 times through list 19,400 | 16 under 50 lists, from 2 to 44 |
 
-At `fast` the paired updates leave one audio frame more than the loop flag needs. Nineteen
-routes played as many stream voices at each speed. Four-player City Trial, the Sand, Fire and
-Light Top Ride routes and `top-ride-courses` each had two more at `fast`, from a track change
-further along before the run's time ran out.
+At `fast` the paired updates leave one audio frame more than the loop flag needs. Four-player
+City Trial, the Sand, Fire and Light Top Ride routes and `top-ride-courses` each had two more
+stream voices at `fast`, from a track change further along before the run's time ran out. The
+other nineteen matched, but the title and Top Ride's Sky course differed in the check's first
+pass and matched in this one, so some of the difference is from run to run.
 
 In the four-player City Trial run at `fast`, the stream pair 8057938C and 80579478 faded to a
 peak of 0 by list 27,400 with `cur` frozen and its loop flag set. A new pair had started at list
@@ -283,7 +284,7 @@ and were recorded again (`status.md`).
 
 ## What was done and what is left
 
-Generic runtime work in `runtime/hw/`.
+Generic runtime work in `runtime/`.
 
 | Change | Where | State |
 |---|---|---|
