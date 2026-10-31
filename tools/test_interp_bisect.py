@@ -5,6 +5,7 @@ import os
 import re
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from unittest import mock
 
@@ -97,6 +98,18 @@ class NarrowTest(unittest.TestCase):
 
         return interp_bisect.narrow(list(range(n)), fails), calls
 
+    def stuck(self, n: int, rule: Callable[[set[int]], bool]) -> tuple[interp_bisect.Irreducible, list[list[int]]]:
+        """What narrow raises over functions 0 to N-1 when a list fails by RULE, and the lists it ran."""
+        calls: list[list[int]] = []
+
+        def fails(funcs: list[int]) -> bool:
+            calls.append(list(funcs))
+            return rule(set(funcs))
+
+        with self.assertRaises(interp_bisect.Irreducible) as caught:
+            interp_bisect.narrow(list(range(n)), fails)
+        return caught.exception, calls
+
     def test_finds_every_set_of_bad_functions_in_a_short_list(self):
         for n in range(1, 9):
             for size in range(1, n + 1):
@@ -104,7 +117,38 @@ class NarrowTest(unittest.TestCase):
                     with self.subTest(n=n, bad=bad):
                         found, calls = self.narrow(n, set(bad))
                         self.assertEqual(found, list(bad))
-                        self.assertLessEqual(len(calls), size * (math.ceil(math.log2(n)) + 1))
+                        self.assertLessEqual(len(calls), size * (math.ceil(math.log2(n)) + 2))
+                        self.assertEqual(len({tuple(c) for c in calls}), len(calls))
+
+    def test_a_function_reached_by_a_passing_left_half_is_run_alone_before_it_is_named(self):
+        found, calls = self.narrow(8, {7})
+        self.assertEqual(found, [7])
+        self.assertEqual(calls, [[0, 1, 2, 3], [4, 5], [6], [7]])
+
+    def test_a_pair_that_fails_only_together_is_not_blamed_on_the_last_function(self):
+        # 0 changes the route alone. The pair changes it only when both are listed, and 7 is innocent.
+        for pair in ({5, 6}, {2, 6}):
+            with self.subTest(pair=pair):
+                stuck, calls = self.stuck(8, lambda s: 0 in s or pair <= s)
+                self.assertEqual((stuck.found, stuck.smallest), ([0], [1, 2, 3, 4, 5, 6, 7]))
+                self.assertEqual(calls[-1], [7])
+
+    def test_a_pair_in_the_followed_half_stops_the_search_before_a_function_that_fails_alone(self):
+        # 7 changes the route alone, but the left half holds the pair 1 and 2, and 3 is innocent.
+        stuck, calls = self.stuck(8, lambda s: 7 in s or {1, 2} <= s)
+        self.assertEqual((stuck.found, stuck.smallest), ([], [0, 1, 2, 3]))
+        self.assertEqual(calls[-1], [3])
+
+    def test_lists_too_long_to_reach_the_checkpoints_are_not_blamed_on_the_last_function(self):
+        # 2 changes the route alone, and any list of 4 or more changes it by running too slowly.
+        stuck, calls = self.stuck(8, lambda s: 2 in s or len(s) >= 4)
+        self.assertEqual((stuck.found, stuck.smallest), ([2], [3, 4, 5, 6, 7]))
+        self.assertEqual(calls[-1], [7])
+
+    def test_a_lone_pair_that_fails_only_together_is_not_blamed_on_the_last_function(self):
+        stuck, calls = self.stuck(8, lambda s: {1, 6} <= s)
+        self.assertEqual((stuck.found, stuck.smallest), ([], list(range(8))))
+        self.assertEqual(calls, [[0, 1, 2, 3], [4, 5], [6], [7]])
 
     def test_only_ever_runs_lists_in_address_order_of_functions_it_was_given(self):
         _, calls = self.narrow(20, {3, 11, 12})
@@ -118,12 +162,12 @@ class NarrowTest(unittest.TestCase):
             with self.subTest(bad=bad):
                 found, calls = self.narrow(20003, {bad})
                 self.assertEqual(found, [bad])
-                self.assertLessEqual(len(calls), math.ceil(math.log2(20003)) + 1)
+                self.assertLessEqual(len(calls), math.ceil(math.log2(20003)) + 2)
 
     def test_two_functions_take_about_twice_that(self):
         found, calls = self.narrow(20003, {17, 19000})
         self.assertEqual(found, [17, 19000])
-        self.assertLessEqual(len(calls), 2 * (math.ceil(math.log2(20003)) + 1))
+        self.assertLessEqual(len(calls), 2 * (math.ceil(math.log2(20003)) + 2))
 
     def test_adjacent_and_far_apart_functions_are_both_found(self):
         for bad in ({100, 101}, {0, 20002}, {5000, 15000}):
@@ -212,7 +256,7 @@ class MainTest(unittest.TestCase):
                 code, out, err = self.main("title", "--slow=3")
                 self.assertEqual(code, 1, err)
                 self.assertEqual(self.found(out), [(f"{addr(i):08X}", f"func{i}") for i in bad])
-                self.assertLessEqual(len(self.runs()), 2 * (math.log2(64) + 1) + 3)
+                self.assertLessEqual(len(self.runs()), 2 * (math.log2(64) + 2) + 3)
 
     def test_a_route_that_nothing_changes_exits_0_after_two_runs(self):
         code, out, err = self.main("title", "--slow=3")
@@ -238,13 +282,49 @@ class MainTest(unittest.TestCase):
                 self.assertIn("frame_hashes.py exited 2", err)
                 self.assertEqual(self.found(out), [])
 
-    def test_functions_that_change_the_route_only_together_exit_2_with_the_list(self):
+    def test_functions_that_change_the_route_only_together_exit_2_with_the_smallest_list(self):
         self.install(fails_together(1, 6))
         code, out, err = self.main("title", "--slow=3")
         self.assertEqual(code, 2)
-        self.assertIn("leaves title matching", err)
-        self.assertIn(str(self.bisect / "title-frames-found.txt"), err)
+        smallest = self.bisect / "title-frames-smallest.txt"
+        self.assertIn(f"Interpreting the 8 functions in {smallest} changes title", err)
+        self.assertIn("several functions together, or a list ran too slowly", err)
+        self.assertEqual(smallest.read_text(), "".join(f"{addr(i):08X}\n" for i in range(8)))
+        self.assertFalse((self.bisect / "title-frames-found.txt").exists())
         self.assertEqual(self.found(out), [])
+
+    def test_a_function_found_alone_before_the_search_gives_out_is_left_in_the_found_list(self):
+        # 2 changes the route alone, and any list of 4 or more changes it by running too slowly.
+        self.install(f"{addr(2)} in listed or len(listed) >= 4")
+        code, out, err = self.main("title", "--slow=3")
+        self.assertEqual(code, 2)
+        smallest, found = self.bisect / "title-frames-smallest.txt", self.bisect / "title-frames-found.txt"
+        self.assertEqual(smallest.read_text(), "".join(f"{addr(i):08X}\n" for i in range(3, 8)))
+        self.assertEqual(found.read_text(), f"{addr(2):08X}\n")
+        self.assertIn(f"Interpreting the 5 functions in {smallest} changes title", err)
+        self.assertIn(f"found alone before that are listed in {found}", err)
+        self.assertEqual(self.found(out), [])
+
+    def test_a_function_reached_without_a_run_is_run_alone_once_before_it_is_named(self):
+        self.install(fails_on(7))
+        code, out, err = self.main("title", "--slow=3")
+        self.assertEqual(code, 1, err)
+        self.assertEqual(self.found(out), [(f"{addr(7):08X}", "func7")])
+        # native, all 8, then 4 and 2 and 1 functions that pass, then function 7 alone, which the final
+        # check of what was found doesn't repeat.
+        self.assertEqual([r["listed"] for r in self.runs()][-2:], [[addr(6)], [addr(7)]])
+        self.assertEqual(len(self.runs()), 6)
+
+    def test_functions_that_change_the_route_alone_but_not_together_exit_2_naming_them(self):
+        # 2 and 5 each change the route alone, and listed together they don't.
+        self.install(f"({address_set((2, 5))} & set(listed)) and len(listed) != 2")
+        code, out, err = self.main("title", "--slow=3")
+        self.assertEqual(code, 2)
+        found = self.bisect / "title-frames-found.txt"
+        self.assertEqual(found.read_text(), f"{addr(2):08X}\n{addr(5):08X}\n")
+        self.assertIn(f"Interpreting the 2 functions found together leaves title matching, though each changes "
+                      f"it alone. They're listed in {found}.", err)
+        self.assertNotIn("mix", err)
 
     def test_audio_runs_the_audio_tool_and_frames_is_the_default(self):
         self.install(fails_on(2))
@@ -309,11 +389,14 @@ class MainTest(unittest.TestCase):
         self.bisect.mkdir(parents=True)
         stale = write_file(self.bisect, "title-frames-31.txt", "80001000\n")
         stale_found = write_file(self.bisect, "title-frames-found.txt", "80001000\n")
+        stale_smallest = write_file(self.bisect, "title-frames-smallest.txt", "80001000\n")
         kept = [write_file(self.bisect, name, "x\n") for name in
-                ("title-audio-01.txt", "menu-frames-01.txt", "title-frames-4p-01.txt", "notes.txt")]
+                ("title-audio-01.txt", "title-audio-smallest.txt", "menu-frames-01.txt", "title-frames-4p-01.txt",
+                 "notes.txt")]
         self.install(fails_on(2))
         self.main("title", "--slow=3")
         self.assertFalse(stale.exists())
+        self.assertFalse(stale_smallest.exists())
         self.assertNotEqual(stale_found.read_text(), "80001000\n")
         self.assertTrue(all(p.exists() for p in kept))
 

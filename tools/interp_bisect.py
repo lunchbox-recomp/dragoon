@@ -6,13 +6,23 @@ Usage: interp_bisect.py ROUTE --slow=N [--frames|--audio]
 Reads every function start from analysis/symbols.txt and checks ROUTE with
 tools/frame_hashes.py, or with tools/audio_hashes.py under --audio, passing --slow=N on. Each
 check sets GCN_INTERPRET to a list of starts, a file in build/bisect/ with one hex address a
-line, named by its absolute path. ROUTE has to match with nothing interpreted and change with
-every function listed. From there the list is halved and a half that changes the route is
-followed, and the functions not yet cleared are checked once more in case others change it too.
+line, named by its absolute path. ROUTE has to match with nothing interpreted, and the bisect
+starts from the list of every function.
+
+The list is halved and a half that changes the route is followed. When the left half doesn't
+change it, the change is taken to be in the right half without a run, and a function reached
+that way is checked alone before it's accepted. Once one is found, the functions not yet
+cleared are checked together and searched again if they change ROUTE too.
 
 It prints each function that changes ROUTE on its own with its name, and writes them to
 build/bisect/ROUTE-KIND-found.txt, where KIND is frames or audio. Each check takes ROUTE's
-seconds times N. One function takes about log2 of the function count in checks.
+seconds times N. One function among the 20,003 starts in symbols.txt takes at most 19 checks,
+and each further one takes at most 18 more.
+
+When the search ends on a function that doesn't change ROUTE alone, the change needs several
+functions together, or a list ran too slowly to reach ROUTE's checkpoints. The shortest list
+known to change ROUTE goes to build/bisect/ROUTE-KIND-smallest.txt, and any functions found
+alone before that go to the found file.
 
 Exits 0 when interpreting every function leaves ROUTE matching, 1 when it names the functions
 that change it, 2 on a bad argument, a hash tool that couldn't run, a ROUTE that changes with
@@ -61,29 +71,51 @@ def list_text(addrs: list[int]) -> str:
     return "".join(f"{a:08X}\n" for a in addrs)
 
 
+class Irreducible(ValueError):
+    """A change that a search can't pin on one function. FOUND are the functions it had found to
+    change the route alone, and SMALLEST the shortest list of the rest known to change it."""
+
+    def __init__(self, found: list[int], smallest: list[int]) -> None:
+        super().__init__(f"no single function reproduces the change in {len(smallest)} functions")
+        self.found, self.smallest = found, smallest
+
+
 def narrow(funcs: list[int], fails: Callable[[list[int]], bool]) -> list[int]:
     """The functions of FUNCS that change the route on their own, in address order.
 
-    FUNCS as a whole changes it, and so does any list holding one of those functions. FAILS runs
-    a list and says whether it changes the route. Halving finds one function in about log2 of
-    the length of FUNCS in runs. Each time it follows the left half, the right half is left
-    unrun. After a function is found, all the halves left unrun are checked in one run, and the
-    search goes on in them only if they change the route too.
+    FUNCS as a whole changes it. FAILS runs a list and says whether it changes the route. The
+    search halves FUNCS and follows the left half if it fails, which finds one function in about
+    log2 of the length of FUNCS in runs.
+
+    A left half that passes means the change is in the right half, which is taken as failing
+    without a run. A function reached that way is run alone, and if it passes the search stops
+    with Irreducible, since the change then needs several functions together or a list that ran
+    too slowly. After a function is found, the halves left unrun are checked in one run, and the
+    search goes on in them only if they fail too.
     """
     found: list[int] = []
     while True:
-        group, rest = funcs, []
+        group, rest, smallest, ran = funcs, [], funcs, True
         while len(group) > 1:
             half = len(group) // 2
             left, right = group[:half], group[half:]
             if fails(left):
-                group, rest = left, right + rest
+                group, rest, smallest, ran = left, right + rest, left, True
             else:
-                group = right  # the left half is clear, so the change is in this one
+                group, ran = right, False  # the left half is clear, so the change should be in this one
+        if not ran and not fails(group):
+            raise Irreducible(found, smallest)
         found += group
         if not rest or not fails(rest):
             return found
         funcs = rest
+
+
+def write_list(stem: str, name: str, addrs: list[int]) -> Path:
+    """Write ADDRS to build/bisect/STEM-NAME.txt and return its absolute path."""
+    path = (BISECT / f"{stem}-{name}.txt").absolute()
+    path.write_text(list_text(addrs))
+    return path
 
 
 class Checks:
@@ -102,8 +134,7 @@ class Checks:
         if addrs is None:
             what = "nothing interpreted"
         else:
-            listing = (BISECT / f"{self.stem}-{self.count:02d}.txt").absolute()
-            listing.write_text(list_text(addrs))
+            listing = write_list(self.stem, f"{self.count:02d}", addrs)
             env["GCN_INTERPRET"] = str(listing)
             what = f"{len(addrs)} functions in {listing.name}"
         began = time.monotonic()
@@ -129,7 +160,7 @@ def bisect(route: str, slow: int, kind: str, starts: list[tuple[int, str]]) -> i
     stem = f"{route}-{kind}"
     BISECT.mkdir(parents=True, exist_ok=True)
     for old in list(BISECT.iterdir()):
-        if re.fullmatch(re.escape(stem) + r"-(\d+|found)\.txt", old.name):
+        if re.fullmatch(re.escape(stem) + r"-(\d+|found|smallest)\.txt", old.name):
             old.unlink()  # an earlier bisect's lists
     checks = Checks(TOOLS[kind], route, slow, stem)
     if checks.check(None):
@@ -137,12 +168,20 @@ def bisect(route: str, slow: int, kind: str, starts: list[tuple[int, str]]) -> i
     if not checks.changes(addrs):
         print(f"Interpreting all {len(addrs)} functions leaves {route} matching, so none of them changes it.")
         return 0
-    found = narrow(addrs, checks.changes)
-    listing = (BISECT / f"{stem}-found.txt").absolute()
-    listing.write_text(list_text(found))
+    try:
+        found = narrow(addrs, checks.changes)
+    except Irreducible as e:
+        smallest = write_list(stem, "smallest", e.smallest)
+        text = (f"Interpreting the {len(e.smallest)} functions in {smallest} changes {route}, but the search "
+                f"ended on a function that doesn't change it alone. The change needs several functions "
+                f"together, or a list ran too slowly to reach the route's checkpoints.")
+        if e.found:
+            text += f" The functions found alone before that are listed in {write_list(stem, 'found', e.found)}."
+        raise ValueError(text) from None
+    listing = write_list(stem, "found", found)
     if not checks.changes(found):
-        raise ValueError(f"Interpreting only the functions found leaves {route} matching, so the "
-                         f"change takes a mix of them and others. They're listed in {listing}.")
+        raise ValueError(f"Interpreting the {len(found)} functions found together leaves {route} matching, "
+                         f"though each changes it alone. They're listed in {listing}.")
     print(f"Functions that change {route} when interpreted alone ({len(found)}), listed in {listing}.")
     for a in found:
         print(f"  {a:08X}  {names[a]}")

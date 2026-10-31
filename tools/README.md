@@ -220,16 +220,20 @@ A bench that crashes prints no report, and probe.sh exits 1. That counts as a ro
 
 Which functions change a route when the interpreter runs them? It reads every function start from `analysis/symbols.txt` and checks ROUTE with frame_hashes.py, or with audio_hashes.py under `--audio`, passing `--slow=N` on. Each check sets `GCN_INTERPRET` to a list of starts, a file in `build/bisect/` with one hex address a line, named by absolute path.
 
-ROUTE has to match with nothing interpreted and change with every function listed. From there the bisect halves the list and follows a half that changes the route. Once it finds a function, it checks the halves it left alone in one run, and goes on in them only if they change the route too.
+ROUTE has to match with nothing interpreted, and the bisect starts from the list of every function. It halves the list and follows the left half if that changes the route. When the left half matches, the change should be in the right half, so it goes there without a run.
+
+A function reached that way is checked alone before it's named. Once it finds a function, it checks the halves it left alone in one run, and goes on in them only if they change the route too.
+
+If a function reached that way doesn't change ROUTE alone, the change needs several functions together, or a list ran too slowly to reach ROUTE's checkpoints. The bisect stops there and writes the shortest list it ran that changes ROUTE to `build/bisect/ROUTE-KIND-smallest.txt`, with any functions it found alone before that in the found file.
 
 ```
 tools/interp_bisect.py title --slow=20
 tools/interp_bisect.py air-ride-race --slow=20 --audio
 ```
 
-It prints each function that changes ROUTE on its own with its name, and writes them to `build/bisect/ROUTE-KIND-found.txt`, where KIND is `frames` or `audio`. Each check takes ROUTE's seconds times N. One function among the 20,003 starts in `symbols.txt` takes at most 19 checks, and each further one takes at most 16 more.
+It prints each function that changes ROUTE on its own with its name, and writes them to `build/bisect/ROUTE-KIND-found.txt`, where KIND is `frames` or `audio`. Each check takes ROUTE's seconds times N. One function among the 20,003 starts in `symbols.txt` takes at most 19 checks, and each further one takes at most 18 more.
 
-It exits 0 when interpreting every function leaves ROUTE matching, 1 when it names functions and 2 when it can't run or can't narrow the change, such as a ROUTE that changes with nothing interpreted. A build that doesn't read `GCN_INTERPRET` runs every list natively, so it exits 0.
+It exits 0 when interpreting every function leaves ROUTE matching, 1 when it names functions and 2 when it can't run or can't narrow the change, such as a ROUTE that changes with nothing interpreted or a change that needs several functions together. A build that doesn't read `GCN_INTERPRET` runs every list natively, so it exits 0.
 
 ## audio_clicks.py
 
