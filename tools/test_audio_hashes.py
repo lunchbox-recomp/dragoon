@@ -143,6 +143,15 @@ class HashRouteTest(unittest.TestCase):
                           str(routes.route_file("title")), "60", "GCN_AXSTATS=1", "--bench", "--pads=4"])
         self.assertEqual(got, {400: A, 800: B})
 
+    def test_slow_multiplies_the_seconds_and_changes_nothing_else(self):
+        run = mock.Mock()
+        with (mock.patch.object(audio_hashes, "remove_run"),
+              mock.patch.object(subprocess, "run", run)):
+            audio_hashes.hash_route(self.route, 3)
+        self.assertEqual(run.call_args.args[0],
+                         [str(audio_hashes.PROBE), "audio-title", "60",
+                          str(routes.route_file("title")), "60", "GCN_AXSTATS=1", "--bench", "--pads=4"])
+
     def test_runs_it_with_sdls_dummy_audio_driver(self):
         run = mock.Mock()
         self.hash_route(run)
@@ -255,6 +264,38 @@ class MainTest(unittest.TestCase):
         self.assertIn("nope", err)
         hash_route.assert_not_called()
 
+    def test_every_route_runs_once_at_the_given_slow(self):
+        write_file(self.hashes, "manifest.txt", "title 20 60 120\nmenu 10 60 60\n")
+        self.golden(f"400 {A}\n")
+        write_file(self.hashes / "audio", "menu.txt", f"400 {A}\n")
+        for argv in (("--slow=3",), ("--slow", "3")):
+            with self.subTest(argv=argv):
+                code, _, _, hash_route = self.main({400: A}, "check", *argv)
+                self.assertEqual(code, 0)
+                self.assertEqual([(c.args[0].name, c.args[1]) for c in hash_route.call_args_list],
+                                 [("title", 3), ("menu", 3)])
+
+    def test_a_run_is_not_slowed_unless_asked(self):
+        self.golden(f"400 {A}\n")
+        _, _, _, hash_route = self.main({400: A}, "check")
+        self.assertEqual(hash_route.call_args.args[1], 1)
+
+    def test_a_slow_that_is_not_a_whole_number_from_1_exits_2_without_running_the_game(self):
+        self.golden(f"400 {A}\n")
+        for bad in ("0", "-1", "x", "1.5", ""):
+            with self.subTest(bad=bad):
+                code, _, err, hash_route = self.main({400: A}, "check", f"--slow={bad}")
+                self.assertEqual(code, 2)
+                self.assertIn(f"--slow={bad} isn't a whole number from 1", err)
+                hash_route.assert_not_called()
+
+    def test_record_refuses_slow(self):
+        code, _, err, hash_route = self.main({400: A}, "record", "--lists", "400", "--slow=2")
+        self.assertEqual(code, 2)
+        self.assertIn("--slow is for check", err)
+        hash_route.assert_not_called()
+        self.assertFalse(self.path.exists())
+
     def test_a_list_count_that_is_not_a_number_exits_2(self):
         code, _, err, hash_route = self.main({}, "record", "--lists", "400,x")
         self.assertEqual(code, 2)
@@ -297,6 +338,7 @@ class MainTest(unittest.TestCase):
         code, out, _ = run_main(audio_hashes.main, "--help")
         self.assertEqual(code, 0)
         self.assertIn("Usage:", out)
+        self.assertIn("--slow=N", out)
 
 
 if __name__ == "__main__":

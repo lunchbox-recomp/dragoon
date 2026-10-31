@@ -190,8 +190,11 @@ Did a change alter what the renderer draws? It runs each route in `tests/hashes/
 
 The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. A `check` of all twelve routes took 302 s while other copies of the game ran on the same machine.
 
+`check --slow=N` gives each route N times its seconds, for a build that runs slower than the one the goldens came from. N is a whole number from 1, the default. The dump interval and the frames a route must reach don't change, and `record` refuses it.
+
 ```
 tools/frame_hashes.py check title
+tools/frame_hashes.py check title --slow=4
 ```
 
 ## audio_hashes.py
@@ -204,6 +207,8 @@ tools/audio_hashes.py record title --lists 7200,20000
 ```
 
 A `check` of all twelve routes took 300 s while other copies of the game ran on the same machine. Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is deleted first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
+
+`check --slow=N` gives each route N times its seconds, as in frame_hashes.py. The rows are list counts, not times, so a slower build is held to the same ones. `record` refuses it.
 
 ## audio_clicks.py
 
@@ -377,9 +382,9 @@ What does a source snapshot hold? Its `source-info.json` names the Dragoon and g
 
 ## probe_dirs.py
 
-What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error.
+What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error. `slow_factor` reads the N of a `--slow=N` and refuses anything but a whole number from 1.
 
-`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py, replay_session.py and the scorecard use both. It has no command line.
+`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py, replay_session.py and the scorecard use `remove_run` and `run_probe`, and the two hash tools use `slow_factor`. It has no command line.
 
 ## aid_blocks.py
 

@@ -1,9 +1,20 @@
 """What the hash tools and the scorecard do with probe.sh and a probe run's directory in build/probe/."""
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
+
+SLOW = re.compile(r"[1-9][0-9]*")  # ASCII digits only, with no sign, underscore or leading 0
+
+
+def slow_factor(text: str) -> int:
+    """The N of a --slow=N, which multiplies a route's seconds. TEXT has to be a whole number
+    from 1, or it's a ValueError that names it."""
+    if not SLOW.fullmatch(text):
+        raise ValueError(f"--slow={text} isn't a whole number from 1")
+    return int(text)
 
 
 def remove_run(directory: Path) -> None:

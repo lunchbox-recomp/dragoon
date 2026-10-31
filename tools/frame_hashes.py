@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Did a change alter what the renderer draws? Run routes and compare their frame hashes.
 
-Usage: frame_hashes.py check  [ROUTE ...]
+Usage: frame_hashes.py check  [ROUTE ...] [--slow=N]
        frame_hashes.py record [ROUTE ...]
 
 Routes and their probe settings are in tests/hashes/manifest.txt; with no ROUTE every route
@@ -10,6 +10,10 @@ frame. check prints one status line per route and one line per frame that change
 reached. record rewrites the goldens, and writes none for a route that skipped a dump. A
 check reads every golden before it runs the game. The frames come from the player's disc, so
 they're deleted once hashed and never committed.
+
+--slow=N gives each route N times its seconds, for a build that runs slower than the one the
+goldens came from. N is a whole number from 1 and defaults to 1. Nothing else about a run
+changes, and record refuses it, since goldens come from a build at full speed.
 
 Exits 0 when every route matches (or is recorded), 1 when a frame changed or wasn't reached,
 2 on a bad argument, a missing or malformed golden, or a probe.sh run that failed.
@@ -23,7 +27,7 @@ import sys
 from pathlib import Path
 
 from frame_dumps import frame_files
-from probe_dirs import remove_run, run_probe
+from probe_dirs import remove_run, run_probe, slow_factor
 from routes import MANIFEST, Route, route_file, select_routes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,17 +74,17 @@ def reached(got: dict[int, str], needed: int) -> str:
     return f"reached frame {max(got)} (needs {needed})"
 
 
-def probe_args(route: Route, name: str) -> list[str]:
-    return [str(PROBE), name, str(route.seconds), str(route_file(route.name)),
+def probe_args(route: Route, name: str, slow: int) -> list[str]:
+    return [str(PROBE), name, str(route.seconds * slow), str(route_file(route.name)),
             str(route.dump_every), *route.extra]
 
 
-def hash_route(route: Route) -> dict[int, str]:
+def hash_route(route: Route, slow: int = 1) -> dict[int, str]:
     out = ROOT / "build" / "probe" / f"hashes-{route.name}"
     if out.exists():
         remove_run(out)  # a blank memory card, and no frames from an older build
     try:
-        run_probe(probe_args(route, out.name), ROOT, route.name)
+        run_probe(probe_args(route, out.name, slow), ROOT, route.name)
         return hash_frames(out)
     finally:
         if out.exists():
@@ -117,14 +121,19 @@ def main(argv: list[str]) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=["check", "record"])
     ap.add_argument("routes", nargs="*")
+    ap.add_argument("--slow", default=None, metavar="N",
+                    help="check: give each route N times its seconds (default 1)")
     args = ap.parse_args(argv)
+    if args.mode == "record" and args.slow is not None:
+        ap.error("--slow is for check")
     try:
+        slow = 1 if args.slow is None else slow_factor(args.slow)
         routes = select_routes(args.routes, MANIFEST)
         paths = {r.name: HASHES / "gl" / f"{r.name}.txt" for r in routes}
         goldens = {r.name: read_golden(paths[r.name]) for r in routes} if args.mode == "check" else {}
         failed = 0
         for route in routes:
-            got = hash_route(route)
+            got = hash_route(route, slow)
             if args.mode == "record":
                 ok = record_route(route, got, paths[route.name])
             else:

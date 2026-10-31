@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Did a change alter what the AX mixer outputs? Run routes and compare their audio hashes.
 
-Usage: audio_hashes.py check  [ROUTE ...]
+Usage: audio_hashes.py check  [ROUTE ...] [--slow=N]
        audio_hashes.py record [ROUTE ...] [--lists N,N,...]
 
 Routes and their probe settings are in tests/hashes/manifest.txt; with no ROUTE every route
@@ -16,6 +16,10 @@ run that stops short of a golden's last list count fails. record rewrites the go
 that didn't reach one. A check reads every golden before it runs the game. No audio is
 captured or kept, only the hashes.
 
+--slow=N gives each route N times its seconds, for a build that runs slower than the one the
+goldens came from. N is a whole number from 1 and defaults to 1. Nothing else about a run
+changes, and record refuses it, since goldens come from a build at full speed.
+
 Exits 0 when every route matches (or is recorded), 1 when a hash changed or a list count
 wasn't reached, 2 on a bad argument, a missing or malformed golden, or a probe.sh run that
 failed.
@@ -28,7 +32,7 @@ import re
 import sys
 from pathlib import Path
 
-from probe_dirs import remove_run, run_probe
+from probe_dirs import remove_run, run_probe, slow_factor
 from routes import MANIFEST, Route, route_file, select_routes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,17 +92,17 @@ def reached(got: dict[int, str], needed: int) -> str:
     return f"reached list {max(got)} (needs {needed})"
 
 
-def probe_args(route: Route, name: str) -> list[str]:
-    return [str(PROBE), name, str(route.seconds), str(route_file(route.name)),
+def probe_args(route: Route, name: str, slow: int) -> list[str]:
+    return [str(PROBE), name, str(route.seconds * slow), str(route_file(route.name)),
             str(route.dump_every), "GCN_AXSTATS=1", "--bench", *route.extra]
 
 
-def hash_route(route: Route) -> dict[int, str]:
+def hash_route(route: Route, slow: int = 1) -> dict[int, str]:
     out = ROOT / "build" / "probe" / f"audio-{route.name}"
     if out.exists():
         remove_run(out)  # a blank memory card; the last run stays after this one, for its [ax] lines
     name = out.name
-    run_probe(probe_args(route, name), ROOT, route.name, {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
+    run_probe(probe_args(route, name, slow), ROOT, route.name, {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
     return parse_hashes((out / "stdout.txt").read_text())
 
 
@@ -151,10 +155,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("mode", choices=["check", "record"])
     ap.add_argument("routes", nargs="*")
     ap.add_argument("--lists", default=None, help="record: comma-separated list counts")
+    ap.add_argument("--slow", default=None, metavar="N",
+                    help="check: give each route N times its seconds (default 1)")
     args = ap.parse_args(argv)
     if args.mode == "check" and args.lists is not None:
         ap.error("--lists is for record")
+    if args.mode == "record" and args.slow is not None:
+        ap.error("--slow is for check")
     try:
+        slow = 1 if args.slow is None else slow_factor(args.slow)
         chosen = parse_lists(args.lists) if args.lists is not None else []
         if args.lists is not None and not chosen:
             raise ValueError("--lists names no list counts")
@@ -165,7 +174,7 @@ def main(argv: list[str]) -> int:
                   if args.mode == "record" else {})
         failed = 0
         for route in routes:
-            got = hash_route(route)
+            got = hash_route(route, slow)
             if args.mode == "record":
                 ok = record_route(route, got, wanted[route.name], paths[route.name])
             else:

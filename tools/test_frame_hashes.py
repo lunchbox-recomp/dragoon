@@ -81,6 +81,18 @@ class HashRouteTest(unittest.TestCase):
                           str(routes.route_file("title")), "60"])
         self.assertEqual(self.got, {60: A})
 
+    def test_slow_multiplies_the_seconds_and_changes_nothing_else(self):
+        route = frame_hashes.Route("title", 20, 60, [120], ["--pads=4"])
+        run = mock.Mock()
+        with (mock.patch.object(frame_hashes, "remove_run"),
+              mock.patch.object(subprocess, "run", run),
+              mock.patch.object(frame_hashes, "hash_frames", return_value={60: A}),
+              mock.patch.object(Path, "exists", return_value=False)):
+            frame_hashes.hash_route(route, 3)
+        self.assertEqual(run.call_args.args[0],
+                         [str(frame_hashes.PROBE), "hashes-title", "60",
+                          str(routes.route_file("title")), "60", "--pads=4"])
+
     def test_removes_a_directory_left_from_an_earlier_run_before_and_after(self):
         remove = self.run_route(True, mock.Mock())
         self.assertEqual(remove.call_args_list, [mock.call(self.out), mock.call(self.out)])
@@ -182,10 +194,43 @@ class MainTest(unittest.TestCase):
         self.assertIn("nope", err)
         hash_route.assert_not_called()
 
+    def test_every_route_runs_once_at_the_given_slow(self):
+        write_file(self.hashes, "manifest.txt", "title 20 60 120\nmenu 10 60 60\n")
+        self.golden(frame_hashes.format_golden({60: A, 120: B}, 120))
+        write_file(self.hashes / "gl", "menu.txt", frame_hashes.format_golden({60: A}, 60))
+        for argv in (("--slow=3",), ("--slow", "3")):
+            with self.subTest(argv=argv):
+                code, _, _, hash_route = self.main({60: A, 120: B}, "check", *argv)
+                self.assertEqual(code, 0)
+                self.assertEqual([(c.args[0].name, c.args[1]) for c in hash_route.call_args_list],
+                                 [("title", 3), ("menu", 3)])
+
+    def test_a_run_is_not_slowed_unless_asked(self):
+        self.golden(frame_hashes.format_golden({60: A, 120: B}, 120))
+        _, _, _, hash_route = self.main({60: A, 120: B}, "check")
+        self.assertEqual(hash_route.call_args.args[1], 1)
+
+    def test_a_slow_that_is_not_a_whole_number_from_1_exits_2_without_running_the_game(self):
+        self.golden(frame_hashes.format_golden({60: A, 120: B}, 120))
+        for bad in ("0", "-1", "x", "1.5", ""):
+            with self.subTest(bad=bad):
+                code, _, err, hash_route = self.main({60: A, 120: B}, "check", f"--slow={bad}")
+                self.assertEqual(code, 2)
+                self.assertIn(f"--slow={bad} isn't a whole number from 1", err)
+                hash_route.assert_not_called()
+
+    def test_record_refuses_slow(self):
+        code, _, err, hash_route = self.main({60: A, 120: B}, "record", "--slow=2")
+        self.assertEqual(code, 2)
+        self.assertIn("--slow is for check", err)
+        hash_route.assert_not_called()
+        self.assertFalse((self.hashes / "gl" / "title.txt").exists())
+
     def test_help_exits_0(self):
         code, out, _ = run_main(frame_hashes.main, "--help")
         self.assertEqual(code, 0)
         self.assertIn("Usage:", out)
+        self.assertIn("--slow=N", out)
 
 
 if __name__ == "__main__":

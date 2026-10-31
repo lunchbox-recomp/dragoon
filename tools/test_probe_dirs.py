@@ -130,5 +130,19 @@ class RunProbeTest(unittest.TestCase):
             probe_dirs.run_probe(["probe.sh"], Path("/clone"), "base title")
 
 
+class SlowFactorTest(unittest.TestCase):
+    def test_reads_a_whole_number_from_1(self):
+        for text, n in (("1", 1), ("20", 20), ("100", 100)):
+            with self.subTest(text=text):
+                self.assertEqual(probe_dirs.slow_factor(text), n)
+
+    def test_refuses_anything_else_naming_the_value(self):
+        for bad in ("0", "-1", "+2", "01", "1.5", "2x", "", " 3", "3 ", "3\n", "٣"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError) as caught:
+                    probe_dirs.slow_factor(bad)
+                self.assertEqual(str(caught.exception), f"--slow={bad} isn't a whole number from 1")
+
+
 if __name__ == "__main__":
     unittest.main()
