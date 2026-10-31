@@ -1,0 +1,345 @@
+{
+  "scene.major": {
+    "address": "805361AC",
+    "type": "u8",
+    "means": "Which part of the game is up. It changes as a mode starts, before the mode's movie.",
+    "values": {
+      "2": "the opening movie and the title",
+      "3": "the main menu",
+      "4": "Air Ride",
+      "5": "Top Ride",
+      "6": "City Trial",
+      "18": "booting"
+    },
+    "route": "city-trial-stadium.txt",
+    "frames": [2, 20100]
+  },
+  "scene.minor": {
+    "address": "805361AF",
+    "type": "u8",
+    "means": "Which screen is up. A course or the city loads between two frames the link sends, so loading has no screen of its own.",
+    "values": {
+      "0": "the opening movie and the title",
+      "2": "the main menu",
+      "5": "City Trial's Game Settings",
+      "6": "Air Ride's course select",
+      "7": "Top Ride's course select",
+      "8": "Air Ride's machine select",
+      "9": "Top Ride's machine select",
+      "10": "City Trial's player select",
+      "11": "Air Ride's results",
+      "13": "a stadium's results",
+      "16": "City Trial's machine stats after the clock",
+      "17": "the card that names the stadium",
+      "18": "an Air Ride race, the city or a stadium",
+      "19": "a Top Ride race",
+      "23": "Air Ride's movie",
+      "24": "Top Ride's movie",
+      "25": "City Trial's movie",
+      "38": "booting"
+    },
+    "route": "city-trial-stadium.txt",
+    "frames": [2, 20100]
+  },
+  "menu.page": {
+    "address": "80535A0B",
+    "type": "u8",
+    "means": "Which page of the main menu is up.",
+    "values": {
+      "0": "the mode select",
+      "1": "the mode's own menu"
+    },
+    "route": "top-ride-grass.txt",
+    "frames": [1350, 1450]
+  },
+  "menu.mode": {
+    "address": "80535A0C",
+    "type": "u8",
+    "means": "The mode the main menu's cursor is on.",
+    "values": {
+      "0": "Air Ride",
+      "1": "Top Ride",
+      "2": "City Trial"
+    },
+    "route": "city-trial.txt",
+    "frames": [1250, 1450]
+  },
+  "menu.item": {
+    "address": "80535A0D",
+    "type": "u8",
+    "means": "The row the cursor is on in a mode's own menu, from 0 at the top.",
+    "values": {
+      "0": "Start Game",
+      "3": "Game Settings, in City Trial's"
+    },
+    "route": "city-trial-stadium.txt",
+    "frames": [1750, 3350]
+  },
+  "course_select.cursor": {
+    "address": "80535AAE",
+    "type": "u8",
+    "means": "The course Air Ride's course select has the cursor on, five to a row from the top left.",
+    "values": {
+      "0": "Fantasy Meadows",
+      "1": "Celestial Valley",
+      "2": "Sky Sands",
+      "6": "Machine Passage"
+    },
+    "route": "air-ride-courses-1.txt",
+    "frames": [2000, 20750]
+  },
+  "settings.row": {
+    "address": "8055962C",
+    "path": ["2C", "14"],
+    "type": "u8",
+    "means": "The row the cursor is on in City Trial's Game Settings, from 0 at the top. None off that screen.",
+    "values": {
+      "0": "Time",
+      "2": "Stadium"
+    },
+    "route": "city-trial-stadium.txt",
+    "frames": [2150, 2950]
+  },
+  "machine_select.port1": {
+    "address": "80535B03",
+    "type": "u8",
+    "means": "Where port 1 is on Air Ride's machine select.",
+    "values": {
+      "0": "not in",
+      "1": "in, choosing a machine",
+      "3": "OK"
+    },
+    "route": "air-ride-courses-1.txt",
+    "frames": [2210, 16000]
+  },
+  "player_select.port1": {
+    "address": "80535BC9",
+    "type": "u8",
+    "means": "Where port 1 is on City Trial's player select.",
+    "values": {
+      "0": "not in",
+      "3": "in and OK"
+    },
+    "route": "city-trial-4p.txt",
+    "frames": [2110, 2650]
+  },
+  "player_select.port2": {
+    "address": "80535BCA",
+    "type": "u8",
+    "means": "Where port 2 is on City Trial's player select.",
+    "values": {
+      "0": "not in",
+      "3": "in and OK"
+    },
+    "route": "city-trial-4p.txt",
+    "frames": [2110, 2650]
+  },
+  "player_select.port3": {
+    "address": "80535BCB",
+    "type": "u8",
+    "means": "Where port 3 is on City Trial's player select.",
+    "values": {
+      "0": "not in",
+      "3": "in and OK"
+    },
+    "route": "city-trial-4p.txt",
+    "frames": [2110, 2650]
+  },
+  "player_select.port4": {
+    "address": "80535BCC",
+    "type": "u8",
+    "means": "Where port 4 is on City Trial's player select.",
+    "values": {
+      "0": "not in",
+      "3": "in and OK"
+    },
+    "route": "city-trial-4p.txt",
+    "frames": [2110, 2650]
+  },
+  "players.count": {
+    "address": "8053646D",
+    "type": "u8",
+    "means": "How many play the race or the city, people and CPUs. It reads 1 at the menus.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "players.humans": {
+    "address": "8053646E",
+    "type": "s8",
+    "means": "How many of them are people. It reads 1 at the menus.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player1.kind": {
+    "address": "805364A0",
+    "type": "u8",
+    "means": "Who plays port 1 in a race or the city. It's set when the race or the city starts and holds through its results.",
+    "values": {
+      "0": "a person",
+      "1": "a CPU",
+      "4": "nobody"
+    },
+    "route": "air-ride-courses-1.txt",
+    "frames": [2000, 20650]
+  },
+  "player2.kind": {
+    "address": "805364D0",
+    "type": "u8",
+    "means": "Who plays port 2 in a race or the city. It's set when the race or the city starts and holds through its results.",
+    "values": {
+      "0": "a person",
+      "1": "a CPU",
+      "4": "nobody"
+    },
+    "route": "air-ride-courses-1.txt",
+    "frames": [2000, 20650]
+  },
+  "player3.kind": {
+    "address": "80536500",
+    "type": "u8",
+    "means": "Who plays port 3 in a race or the city. It's set when the race or the city starts and holds through its results.",
+    "values": {
+      "0": "a person",
+      "1": "a CPU",
+      "4": "nobody"
+    },
+    "route": "air-ride-courses-1.txt",
+    "frames": [2000, 20650]
+  },
+  "player4.kind": {
+    "address": "80536530",
+    "type": "u8",
+    "means": "Who plays port 4 in a race or the city. It's set when the race or the city starts and holds through its results.",
+    "values": {
+      "0": "a person",
+      "1": "a CPU",
+      "4": "nobody"
+    },
+    "route": "air-ride-courses-1.txt",
+    "frames": [2000, 20650]
+  },
+  "player1.speed": {
+    "address": "8053627C",
+    "type": "f32",
+    "means": "Port 1's speed in a race or the city, 0 before the start. The last value holds after the end.",
+    "route": "air-ride-courses-1.txt",
+    "frames": [3200, 20170]
+  },
+  "player2.speed": {
+    "address": "80536280",
+    "type": "f32",
+    "means": "Port 2's speed in a race or the city, 0 before the start. The last value holds after the end.",
+    "route": "air-ride-courses-1.txt",
+    "frames": [3200, 20170]
+  },
+  "player3.speed": {
+    "address": "80536284",
+    "type": "f32",
+    "means": "Port 3's speed in a race or the city, 0 before the start. The last value holds after the end.",
+    "route": "air-ride-courses-1.txt",
+    "frames": [3200, 20170]
+  },
+  "player4.speed": {
+    "address": "80536288",
+    "type": "f32",
+    "means": "Port 4's speed in a race or the city, 0 before the start. The last value holds after the end.",
+    "route": "air-ride-courses-1.txt",
+    "frames": [3200, 20170]
+  },
+  "player1.x": {
+    "address": "8055AA2C",
+    "path": ["2C", "300"],
+    "type": "f32",
+    "means": "Where port 1's Kirby is, across. None when there's no Kirby, though the main menu has one.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player1.y": {
+    "address": "8055AA2C",
+    "path": ["2C", "304"],
+    "type": "f32",
+    "means": "Where port 1's Kirby is, up. None when there's no Kirby, though the main menu has one.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player1.z": {
+    "address": "8055AA2C",
+    "path": ["2C", "308"],
+    "type": "f32",
+    "means": "Where port 1's Kirby is, along. None when there's no Kirby, though the main menu has one.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player2.x": {
+    "address": "8055B338",
+    "path": ["2C", "300"],
+    "type": "f32",
+    "means": "Where port 2's Kirby is, across. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player2.y": {
+    "address": "8055B338",
+    "path": ["2C", "304"],
+    "type": "f32",
+    "means": "Where port 2's Kirby is, up. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player2.z": {
+    "address": "8055B338",
+    "path": ["2C", "308"],
+    "type": "f32",
+    "means": "Where port 2's Kirby is, along. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player3.x": {
+    "address": "8055BC44",
+    "path": ["2C", "300"],
+    "type": "f32",
+    "means": "Where port 3's Kirby is, across. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player3.y": {
+    "address": "8055BC44",
+    "path": ["2C", "304"],
+    "type": "f32",
+    "means": "Where port 3's Kirby is, up. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player3.z": {
+    "address": "8055BC44",
+    "path": ["2C", "308"],
+    "type": "f32",
+    "means": "Where port 3's Kirby is, along. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player4.x": {
+    "address": "8055C550",
+    "path": ["2C", "300"],
+    "type": "f32",
+    "means": "Where port 4's Kirby is, across. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player4.y": {
+    "address": "8055C550",
+    "path": ["2C", "304"],
+    "type": "f32",
+    "means": "Where port 4's Kirby is, up. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  },
+  "player4.z": {
+    "address": "8055C550",
+    "path": ["2C", "308"],
+    "type": "f32",
+    "means": "Where port 4's Kirby is, along. None when there's no Kirby.",
+    "route": "city-trial-4p.txt",
+    "frames": [2000, 3520]
+  }
+}

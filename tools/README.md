@@ -95,6 +95,38 @@ The session `run` makes keeps the input log and records no audio, because the ru
 
 A game that resets the console connects again and the bot goes on with it, with `Link.starts` counting the connections. The tests stand a fake probe.sh in for the game, so they need no disc.
 
+## ram_peek.py
+
+What does guest RAM hold at the frames I name, along a route? It plays the game through bot_link.py with a bot that presses nothing, so the route's presses are the only ones. At each frame it prints one line with every item's value.
+
+```
+tools/ram_peek.py --script tests/routes/air-ride-race.txt --at 3200,3400-3600/100 race-peek 100 scene.minor player1.speed player1.x 8053627C:f32x4 -- --exit-after=3610
+```
+
+An item is a name from kar_ram.json, which prints with what its value means when the table says. Or it's a raw read, where `ADDR:LEN` prints LEN bytes as hex and `ADDR:TYPE` or `ADDR:TYPExN` prints one or N values of u8, s8, u16, s16, u32, s32 or f32. ADDR can go on with `/OFF` for each pointer to follow as the table's paths do, and a value behind a null pointer prints as `none`.
+
+`--at` takes frames and ranges, `A-B` for each frame from A to B and `A-B/S` for every Sth. The engine's frame numbers can jump, so a frame is read at the first one the engine steps the bot at from then on, and the line names that frame. `--script`, `--pads`, `--every`, `--hang` and the settings after `--` are bot_link.py's, and `--table PATH` reads another table.
+
+It prints how the run ended as bot_link.py does, with a line naming any frame it never reached. It exits 0 when the run ended as a bot run is meant to and every frame was read, and 1 when the run ended another way or a frame was never reached.
+
+A bad argument, an unknown name, a table that won't load or a game that never connected exits 2. The tests stand a fake link in for the game, so they need no disc.
+
+## kar_ram.py
+
+Where does Kirby Air Ride keep what a bot needs to see? `kar_ram.json` names each value by its address and type, as stable-retro's `data.json` does. Each entry says what the value is, what the confirmed values mean and the route and frames it was watched on.
+
+`load(path=None)` reads the table into `Entry` records by name. It raises `ValueError` naming the file and the entry for one that's malformed or reaches outside main RAM, `80000000` to `817FFFFF`. `decode(entry, data)` turns the bytes read for an entry into an int, a float or, for a run of bytes, the bytes.
+
+`read(link, name)` reads a value through a bot's `Link` and decodes it, and `read(link, name, table)` looks the name up in a table `load` gave. ram_peek.py prints the names along a route. It has no command line.
+
+A type is a big-endian `u8`, `s8`, `u16`, `s16`, `u32` or `s32`, an `f32` or `bytes` with a `length` from 1 to 256. A value the game keeps in an object it allocates, such as a player's position, has a `path` of hex offsets. The address then holds a pointer, and each offset is added to the pointer read before it.
+
+`read` returns None when a pointer on the way is null or leads outside main RAM, as for a player who isn't in the race. The players are numbered by port, as the game's slots are.
+
+`scene.major` says which mode is up and `scene.minor` which screen. A course or the city loads between two frames the link sends, so loading has no screen of its own. The menu values are only right on their own screens and the player values only in a race or the city, so a bot reads the screen first.
+
+Top Ride's races keep their players elsewhere, so there the player values read as if nobody played.
+
 ## playtest.sh
 
 What happened while I played? It runs the game in its window with sound, as `build/dragoon` runs for a player. It sets `GCN_SESSION` to `build/playtest/<date>-<time>/` ("Playtest sessions" in gcn-recomp's `docs/diagnostics.md`).
