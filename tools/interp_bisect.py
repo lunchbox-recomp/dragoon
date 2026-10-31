@@ -23,15 +23,20 @@ checks, and each further one takes at most 18 more.
 When the search ends on a function that doesn't change ROUTE alone, the change needs several
 functions together, or a list ran too slowly to reach ROUTE's checkpoints. The shortest list
 known to change ROUTE goes to build/bisect/ROUTE-KIND-smallest.txt, and any functions found
-alone before that go to the found file.
+alone before that go to the found file. The functions after the one it stopped on weren't
+searched.
+
+It names at most 16 functions. A 17th makes it stop, with the 16 in the found file and the
+output of the run with every function shown, since a build that fails every list (it refuses
+the list file, or the interpreter stops at start) looks like this.
 
 A run that goes as expected prints one progress line and none of the hash tool's output. The
-output goes to stderr when the first check changes ROUTE, when a check exits 2 and when the
-functions found leave ROUTE matching together.
+output goes to stderr when a check exits 2 or the first check changes ROUTE. It goes there too
+when the functions found leave ROUTE matching together.
 
 Exits 0 when interpreting every function leaves ROUTE matching, 1 when it names the functions
 that change it, 2 on a bad argument, a hash tool that couldn't run, a ROUTE that changes with
-nothing interpreted or a change that no single function reproduces.
+nothing interpreted, a change that no single function reproduces or more than 16 functions.
 """
 from __future__ import annotations
 
@@ -76,6 +81,9 @@ def list_text(addrs: list[int]) -> str:
     return "".join(f"{a:08X}\n" for a in addrs)
 
 
+MOST_FOUND = 16  # a build that fails every list would otherwise be searched for every function
+
+
 class Irreducible(ValueError):
     """A change that a search can't pin on one function. FOUND are the functions it had found to
     change the route alone, and SMALLEST the shortest list of the rest known to change it."""
@@ -85,7 +93,15 @@ class Irreducible(ValueError):
         self.found, self.smallest = found, smallest
 
 
-def narrow(funcs: list[int], fails: Callable[[list[int]], bool]) -> list[int]:
+class TooManyFound(ValueError):
+    """A search that found more than its limit of functions. FOUND are the ones it kept."""
+
+    def __init__(self, found: list[int]) -> None:
+        super().__init__(f"more than {len(found)} functions change the route alone")
+        self.found = found
+
+
+def narrow(funcs: list[int], fails: Callable[[list[int]], bool], limit: int = MOST_FOUND) -> list[int]:
     """The functions of FUNCS that change the route on their own, in address order.
 
     FUNCS as a whole changes it. FAILS runs a list and says whether it changes the route. The
@@ -97,6 +113,9 @@ def narrow(funcs: list[int], fails: Callable[[list[int]], bool]) -> list[int]:
     with Irreducible, since the change then needs several functions together or a list that ran
     too slowly. After a function is found, the halves left unrun are checked in one run, and the
     search goes on in them only if they fail too.
+
+    Once LIMIT functions are found and the halves left still fail, the search stops with
+    TooManyFound.
     """
     found: list[int] = []
     while True:
@@ -113,6 +132,8 @@ def narrow(funcs: list[int], fails: Callable[[list[int]], bool]) -> list[int]:
         found += group
         if not rest or not fails(rest):
             return found
+        if len(found) == limit:
+            raise TooManyFound(found)
         funcs = rest
 
 
@@ -124,20 +145,22 @@ def write_list(stem: str, name: str, addrs: list[int]) -> Path:
 
 
 class Checks:
-    """The hash tool's check of one route, run for each list of functions. OUTPUT is what the
-    latest run printed, kept for show_output."""
+    """The hash tool's check of one route, run for each list of functions. OUTPUTS is what each
+    run printed, by run number, kept for show_output."""
 
     def __init__(self, tool: Path, route: str, slow: int, stem: str) -> None:
         self.tool, self.route, self.slow, self.stem = tool, route, slow, stem
         self.count = 0
-        self.output = ""
+        self.outputs: dict[int, str] = {}
         self.known: dict[tuple[int, ...], bool] = {}
 
-    def show_output(self) -> None:
-        """Print what the latest run's hash tool printed to stderr, to explain an error."""
-        if self.output:
-            print(f"{self.tool.name} printed this on run {self.count}:", file=sys.stderr)
-            print(self.output, end="", file=sys.stderr)
+    def show_output(self, run: int | None = None) -> None:
+        """Print what the hash tool printed in run number RUN (the latest by default) to stderr,
+        to explain an error."""
+        run = run or self.count
+        if self.outputs.get(run):
+            print(f"{self.tool.name} printed this on run {run}:", file=sys.stderr)
+            print(self.outputs[run], end="", file=sys.stderr)
 
     def check(self, addrs: list[int] | None) -> bool:
         """Run the hash tool once with GCN_INTERPRET naming a new list of ADDRS, or not set for
@@ -156,7 +179,7 @@ class Checks:
         slow = [] if addrs is None else [f"--slow={self.slow}"]
         done = subprocess.run([sys.executable, str(self.tool), "check", self.route, *slow],
                               env=env, stdout=subprocess.PIPE, text=True, errors="replace")
-        code, self.output = done.returncode, done.stdout
+        code, self.outputs[self.count] = done.returncode, done.stdout
         if code not in (0, 1):
             self.show_output()
             raise ValueError(f"{self.tool.name} exited {code} on run {self.count}, with {what}")
@@ -187,16 +210,24 @@ def bisect(route: str, slow: int, kind: str, starts: list[tuple[int, str]]) -> i
     if not checks.changes(addrs):
         print(f"Interpreting all {len(addrs)} functions leaves {route} matching, so none of them changes it.")
         return 0
+    everything = checks.count  # the run of every function, whose output explains a build that fails any list
     try:
         found = narrow(addrs, checks.changes)
     except Irreducible as e:
         smallest = write_list(stem, "smallest", e.smallest)
         text = (f"Interpreting the {len(e.smallest)} functions in {smallest} changes {route}, but the search "
                 f"ended on a function that doesn't change it alone. The change needs several functions "
-                f"together, or a list ran too slowly to reach the route's checkpoints.")
+                f"together, or a list ran too slowly to reach the route's checkpoints. The search stopped "
+                f"there, so the functions after it weren't searched.")
         if e.found:
             text += f" The functions found alone before that are listed in {write_list(stem, 'found', e.found)}."
         raise ValueError(text) from None
+    except TooManyFound as e:
+        checks.show_output(everything)
+        raise ValueError(f"More than {MOST_FOUND} functions change {route} alone, so the search stopped at "
+                         f"the first {MOST_FOUND}, listed in {write_list(stem, 'found', e.found)}. A build that "
+                         f"fails every list looks like this, whether it refuses the list file or stops at "
+                         f"start, so check what the run with every function printed (run {everything}).") from None
     listing = write_list(stem, "found", found)
     if not checks.changes(found):
         checks.show_output()

@@ -150,6 +150,29 @@ class NarrowTest(unittest.TestCase):
         self.assertEqual((stuck.found, stuck.smallest), ([], list(range(8))))
         self.assertEqual(calls, [[0, 1, 2, 3], [4, 5], [6], [7]])
 
+    def test_stops_once_the_limit_is_found_and_the_halves_left_still_fail(self):
+        with self.assertRaises(interp_bisect.TooManyFound) as caught:
+            interp_bisect.narrow(list(range(20)), lambda s: True, limit=3)
+        self.assertEqual(caught.exception.found, [0, 1, 2])
+
+    def test_the_limit_itself_is_not_too_many(self):
+        for bad in ({3, 4, 5}, {0, 10, 19}):
+            with self.subTest(bad=bad):
+                found = interp_bisect.narrow(list(range(20)), lambda s: bool(set(s) & bad), limit=3)
+                self.assertEqual(found, sorted(bad))
+
+    def test_one_more_than_the_limit_stops_with_the_first_ones_found(self):
+        bad = {3, 4, 9, 15}
+        with self.assertRaises(interp_bisect.TooManyFound) as caught:
+            interp_bisect.narrow(list(range(20)), lambda s: bool(set(s) & bad), limit=3)
+        self.assertEqual(caught.exception.found, [3, 4, 9])
+
+    def test_the_limit_is_16_functions_unless_one_is_given(self):
+        self.assertEqual(interp_bisect.MOST_FOUND, 16)
+        with self.assertRaises(interp_bisect.TooManyFound) as caught:
+            interp_bisect.narrow(list(range(100)), lambda s: True)
+        self.assertEqual(caught.exception.found, list(range(16)))
+
     def test_only_ever_runs_lists_in_address_order_of_functions_it_was_given(self):
         _, calls = self.narrow(20, {3, 11, 12})
         for funcs in calls:
@@ -306,9 +329,37 @@ class MainTest(unittest.TestCase):
         smallest = self.bisect / "title-frames-smallest.txt"
         self.assertIn(f"Interpreting the 8 functions in {smallest} changes title", err)
         self.assertIn("several functions together, or a list ran too slowly", err)
+        self.assertIn("the functions after it weren't searched", err)
         self.assertEqual(smallest.read_text(), "".join(f"{addr(i):08X}\n" for i in range(8)))
         self.assertFalse((self.bisect / "title-frames-found.txt").exists())
         self.assertEqual(self.found(out), [])
+
+    def test_a_build_that_fails_every_list_stops_at_16_functions_and_shows_the_full_list_run(self):
+        self.functions(64)
+        self.install("True")
+        code, out, err = self.main("title", "--slow=3")
+        self.assertEqual(code, 2)
+        found = self.bisect / "title-frames-found.txt"
+        self.assertEqual(found.read_text(), "".join(f"{addr(i):08X}\n" for i in range(16)))
+        self.assertIn(f"More than 16 functions change title alone, so the search stopped at the first 16, "
+                      f"listed in {found}.", err)
+        self.assertIn("A build that fails every list looks like this", err)
+        self.assertIn("frame_hashes.py printed this on run 2:\nfake report: 64 functions\n", err)
+        self.assertEqual(err.count("fake report"), 1)
+        self.assertEqual(self.found(out), [])
+        self.assertLessEqual(len(self.runs()), 2 + 16 * (math.log2(64) + 2))
+
+    def test_16_functions_are_named_and_17_are_too_many(self):
+        for count, code in ((16, 1), (17, 2)):
+            with self.subTest(count=count):
+                self.functions(68)
+                self.records.unlink(missing_ok=True)
+                self.install(fails_on(*range(0, 4 * count, 4)))
+                got, out, err = self.main("title", "--slow=3")
+                self.assertEqual(got, code, err)
+                listed = (self.bisect / "title-frames-found.txt").read_text()
+                self.assertEqual(listed, "".join(f"{addr(i):08X}\n" for i in range(0, 64, 4)))
+                self.assertEqual(len(self.found(out)), 16 if count == 16 else 0)
 
     def test_a_function_found_alone_before_the_search_gives_out_is_left_in_the_found_list(self):
         # 2 changes the route alone, and any list of 4 or more changes it by running too slowly.

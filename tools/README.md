@@ -226,18 +226,20 @@ The bisect starts from the list of every function. It halves the list and follow
 
 A function reached that way is checked alone before it's named. Once it finds a function, it checks the halves it left alone in one run, and goes on in them only if they change the route too.
 
-If a function reached that way doesn't change ROUTE alone, the change needs several functions together, or a list ran too slowly to reach ROUTE's checkpoints. The bisect stops there and writes the shortest list it ran that changes ROUTE to `build/bisect/ROUTE-KIND-smallest.txt`, with any functions it found alone before that in the found file.
+If a function reached that way doesn't change ROUTE alone, the change needs several functions together, or a list ran too slowly to reach ROUTE's checkpoints. The bisect stops there and writes the shortest list it ran that changes ROUTE to `build/bisect/ROUTE-KIND-smallest.txt`, where KIND is `frames` or `audio`. Any functions it found alone before that go to `build/bisect/ROUTE-KIND-found.txt`, and the functions after the one it stopped on aren't searched.
 
-A check that goes as expected prints one progress line. The hash tool's own output goes to stderr only when the first check changes ROUTE, when a check exits 2, or when the functions found leave ROUTE matching together.
+It names at most 16 functions. If more would follow, it exits 2 with the 16 in the found file and shows what the run with every function printed. A build that fails every list looks like this, whether it refuses the list file or stops at start.
+
+A check that goes as expected prints one progress line. The hash tool's own output goes to stderr when a check exits 2 or the first check changes ROUTE. It goes there too when the functions found leave ROUTE matching together.
 
 ```
 tools/interp_bisect.py title --slow=20
 tools/interp_bisect.py air-ride-race --slow=20 --audio
 ```
 
-It prints each function that changes ROUTE on its own with its name, and writes them to `build/bisect/ROUTE-KIND-found.txt`, where KIND is `frames` or `audio`. Each check but the first takes ROUTE's seconds times N. One function among the 20,003 starts in `symbols.txt` takes at most 19 checks, and each further one takes at most 18 more.
+It prints each function that changes ROUTE on its own with its name, and writes them to the found file. Each check but the first takes ROUTE's seconds times N. One function among the 20,003 starts in `symbols.txt` takes at most 19 checks, and each further one takes at most 18 more.
 
-It exits 0 when interpreting every function leaves ROUTE matching, 1 when it names functions and 2 when it can't run or can't narrow the change, such as a ROUTE that changes with nothing interpreted or a change that needs several functions together. A build that doesn't read `GCN_INTERPRET` runs every list natively, so it exits 0.
+It exits 0 when interpreting every function leaves ROUTE matching, 1 when it names functions and 2 when it can't run or can't narrow the change. A ROUTE that changes with nothing interpreted does that, and so does a change that needs several functions together or one that takes more than 16. A build that doesn't read `GCN_INTERPRET` runs every list natively, so it exits 0.
 
 ## audio_clicks.py
 
