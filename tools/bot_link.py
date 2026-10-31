@@ -355,6 +355,11 @@ def _tail(path: Path, size: int = TAIL) -> str:
         return ""
 
 
+def _last_line(path: Path) -> str | None:
+    lines = [t for t in _tail(path).splitlines() if t.strip()]
+    return lines[-1] if lines else None
+
+
 def _last(pattern: re.Pattern, text: str) -> str | None:
     found = pattern.findall(text)
     return found[-1] if found else None
@@ -381,6 +386,16 @@ def _session_lines(log: Path) -> tuple[str | None, str | None]:
     except OSError:
         pass
     return session, reset
+
+
+def _reset_count(log: Path) -> int:
+    """How many restart and hot-reset `[reset]` lines a game's stdout.txt has, whatever follows
+    them. A shutdown isn't one, since the game doesn't start again."""
+    try:
+        with open(log, errors="replace") as f:
+            return sum(1 for line in f if session_log.RESET.match(line) and session_log.SHUTDOWN not in line)
+    except OSError:
+        return 0
 
 
 def _input_log(run_dir: Path, session: str | None) -> Path | None:
@@ -426,7 +441,7 @@ def _game_verdict(run_dir: Path, starts: int, probe_err: str, input_log: Path | 
         return NEVER_LINKED, probe_err.strip() or (lines[-1] if lines else "the game ended before it connected")
     if restarted is not None:
         return GAME_DIED, f"{restarted}, and no session began after it"
-    end =END_LINE.findall(_tail(input_log / "inputs.txt", LOG_TAIL)) if input_log is not None else []
+    end = END_LINE.findall(_tail(input_log / "inputs.txt", LOG_TAIL)) if input_log is not None else []
     if not end:
         return GAME_DIED, lines[-1] if lines else "the game wrote nothing"
     frame = int(end[-1][1])
@@ -454,8 +469,8 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
     `settings` sets GCN_WAV or GCN_AIDWAV. At `seconds`, and at a hang, the game is ended with
     the link still open, so the engine doesn't log that the bot hung up. The game connects again
     after it resets the console, and the bot goes on with it; `hang` counts the wait for that
-    too, but not the wait for the first connection, which `seconds` bounds and which a game that
-    never makes is a NEVER_LINKED. Raises ValueError for an argument probe.sh or the link would
+    too, but not the wait after a game that exited, nor the wait for the first connection, which
+    `seconds` bounds and which a game that never makes is a NEVER_LINKED. Raises ValueError for an argument probe.sh or the link would
     refuse, and LinkSetupError when no run could be started."""
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", name):
         raise ValueError(f"{name!r}: not a name for a run's directory")
@@ -481,6 +496,7 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
     ours = [s for s in settings if s.startswith("GCN_SESSION=") and len(s) > len("GCN_SESSION=")]
     session = run_dir / (ours[-1][len("GCN_SESSION="):] if ours else "session")  # an absolute one wins
     link, proc = Link(), None
+    resets = 0  # the restart and hot-reset lines in stdout.txt that links have ended on
     started = time.monotonic()
     state = _State(started + seconds)
     err: str | None = None
@@ -502,9 +518,17 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
         except OSError as e:
             raise LinkSetupError(f"can't run {probe_path}: {e}") from None
         while True:
-            # The hang clock runs from the end of the last link, for a game that was connected
-            # once and has reset the console. A game that hasn't connected yet has the deadline.
-            hang_at = time.monotonic() + hang if hang is not None and link.starts else None
+            # The hang clock runs from the end of a link the game ended by resetting the console,
+            # which it says in stdout.txt before the relaunch closes the link. Any other end is
+            # the game exiting, and probe.sh only notices at its next one-second tick. A game
+            # that hasn't connected yet has the deadline. The reset lines are counted, since the
+            # new process may have printed its [session] line by the time this looks.
+            hang_at = None
+            if hang is not None and link.starts:
+                reset_lines = _reset_count(run_dir / "stdout.txt")
+                if reset_lines > resets:
+                    hang_at = time.monotonic() + hang
+                resets = reset_lines
             try:
                 conn = _accept(listener, proc, state.deadline, hang_at)
             except _TimeUp as e:
@@ -550,7 +574,9 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
         reason, detail = TIME_LIMIT, f"the time limit, {seconds} s"
     elif state.ended == HANG:
         if state.unconnected:
-            detail = f"no new connection for {hang:g} s after the link closed"
+            last = _last_line(run_dir / "stdout.txt")
+            detail = f"no new connection for {hang:g} s after the link closed" + (
+                f", and its last line is {last!r}" if last else "")
         else:
             after = "it connected" if state.last_frame is None else f"frame {state.last_frame}"
             detail = f"no frame for {hang:g} s after {after}"

@@ -33,9 +33,11 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #                    shutdown the game asks for), "died" (no `# end`, as after an abort),
 #                    "panic", "fatal", "garbage" (sends a line that isn't a frame) or "reset"
 #                    (a console reset: it hangs up and starts again as a new process, to play
-#                    "then", another plan, which may have a "connect_after" of its own); "reset_fails"
-#                    (the reset, and the restart never happens, as when execv fails) or "reset_dies"
-#                    (the restarted process says its [session] line and dies before its input log)
+#                    "then", another plan, which may have a "connect_after" of its own and may
+#                    have "session_first", which says its [session] line before the hang-up),
+#                    "reset_fails" (the reset, and the restart never happens, as when execv
+#                    fails) or "reset_dies" (the restarted process says its [session] line and
+#                    dies before its input log)
 #   "forever"        goes on sending frames after the listed ones, for as long as the bot answers
 #   "refuse"         the text of a refusal on stderr; it exits 2 without a game, as probe.sh does
 #   "connect_fails"  the game's failed connect, without one
@@ -47,6 +49,7 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #   "ignore_hangup"  waits instead of exiting when the bot hangs up
 #   "moving"         makes RAM change from frame to frame
 #   "kind"           what a reset says it is: "restart" (the default), "hot reset" or "shutdown"
+#   "exit_late"      seconds the probe lingers after a plain exit, with the link closed
 # A read outside 80000000 to 817FFFFF, or of fewer than 1 or more than 256 bytes, stops the game.
 FAKE_PROBE = r'''#!@PYTHON@
 import atexit, json, os, signal, socket, sys, time
@@ -198,9 +201,10 @@ def numbers(frames, forever):
         n += 1
 
 
-def play(frames, forever=False, connect_after=0):
+def play(frames, forever=False, connect_after=0, begun=False):
     global conn, lines, last
-    begin_log()
+    if not begun:
+        begin_log()
     if plan.get("boot_says"):
         say(plan["boot_says"])
     if connect_after:
@@ -242,16 +246,23 @@ elif after == "garbage":
 elif after in ("reset", "reset_fails", "reset_dies"):
     say("[reset] the game reset the console (%s, code 0)\n" % plan.get("kind", "restart"))
     end_log()
+    early = after == "reset" and plan["then"].get("session_first")
+    if early:  # the new process is quick, and says its [session] line as the old one lets go
+        begin_log()
     lines.close()
     conn.close()
     if after == "reset_dies":
         begin_log(open_log=False)
         sys.exit(1)
     if after == "reset":
-        play(plan["then"]["frames"], connect_after=plan["then"].get("connect_after", 0))
+        play(plan["then"]["frames"], connect_after=plan["then"].get("connect_after", 0), begun=bool(early))
         end_log()
 else:
     end_log()
+if plan.get("exit_late"):  # probe.sh sees its game gone only at its next one-second tick
+    lines.close()
+    conn.close()
+    time.sleep(plan["exit_late"])
 '''
 
 # A stand-in for the game alone, for probe.sh itself to run in build/dragoon.
@@ -671,8 +682,38 @@ class OutcomeTest(FakeProbeCase):
         outcome = self.go(neutral, hang=0.5)
         self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 2, 1))
-        self.assertEqual(outcome.detail, "no new connection for 0.5 s after the link closed")
+        self.assertEqual(outcome.detail, "no new connection for 0.5 s after the link closed, and its last line "
+                                         f"is '[session] {self.run_dir() / 'session' / 'run-2'}'")
         self.assertEqual(outcome.input_log, self.run_dir() / "session" / "run-2" / "inputs")  # it began a session
+
+    def test_the_hang_clock_is_armed_by_a_reset_even_when_the_new_process_has_already_said_its_session(self):
+        self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 20, "session_first": True})
+        began = time.monotonic()
+        outcome = self.go(neutral, hang=0.5)
+        self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.HANG, 2))
+
+    def test_resets_are_counted_whatever_follows_them_and_a_shutdown_is_not_one(self):
+        log = self.root / "stdout.txt"
+        self.assertEqual(bot_link._reset_count(log), 0)  # no file
+        write_file(self.root, "stdout.txt", "[session] /a/session\n"
+                                            "[reset] the game reset the console (restart, code 0)\n"
+                                            "[session] /a/session/run-2\n"
+                                            "[reset] the game reset the console (hot reset, code 1)\n"
+                                            "[session] /a/session/run-3\n"
+                                            "  [reset] indented, so not the engine's (restart, code 0)\n"
+                                            "[reset] the game reset the console (shutdown, code 0)\n")
+        self.assertEqual(bot_link._reset_count(log), 2)
+
+    def test_a_game_that_exits_is_not_a_reconnect_the_hang_clock_runs_on_while_probe_notices(self):
+        self.plan([0, 1], exit_late=1.5)
+        outcome = self.go(neutral, hang=0.5)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 2))
+
+    def test_a_shutdown_is_not_a_reconnect_the_hang_clock_runs_on_either(self):
+        self.plan([0, 1], after="shutdown", exit_late=1.5)
+        outcome = self.go(neutral, hang=0.5)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.SHUTDOWN, 2))
 
     def test_a_game_that_resets_and_does_not_connect_again_runs_into_the_time_limit_without_a_hang(self):
         self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 20})
@@ -966,15 +1007,29 @@ class SetupTest(FakeProbeCase):
 
 
 class RealProbeTest(unittest.TestCase):
+    def tree(self, tmp: str) -> tuple[Path, Path]:
+        """The real probe.sh over FAKE_GAME in a temp tree: the tree's root and its probe.sh."""
+        root = Path(tmp).resolve()
+        (root / "tools").mkdir()
+        (root / "build").mkdir()
+        probe = root / "tools" / "probe.sh"
+        shutil.copy(REAL_PROBE, probe)
+        game = write_file(root / "build", "dragoon", FAKE_GAME.replace("@PYTHON@", sys.executable))
+        game.chmod(0o755)
+        return root, probe
+
+    def test_a_game_that_exited_is_not_a_hang_however_late_probe_sh_notices(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, probe = self.tree(tmp)
+            began = time.monotonic()
+            outcome = run("t", 20, neutral, settings=["--exit-after=1500"], hang=0.5, probe=probe)
+            took = time.monotonic() - began
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.EXIT_AFTER, 3))
+        self.assertLess(took, 10)  # probe.sh's next one-second tick, not the run's 20 s
+
     def test_gcn_bot_the_session_and_the_settings_pass_through_probe_sh(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            (root / "tools").mkdir()
-            (root / "build").mkdir()
-            probe = root / "tools" / "probe.sh"
-            shutil.copy(REAL_PROBE, probe)
-            game = write_file(root / "build", "dragoon", FAKE_GAME.replace("@PYTHON@", sys.executable))
-            game.chmod(0o755)
+            root, probe = self.tree(tmp)
             outcome = run("t", 20, neutral, pads=2, script="120:A:5", every=30,
                           settings=["--exit-after=1500", "GCN_FRAMETIME=1"], probe=probe)
             record = json.loads((root / "build" / "probe" / "t" / "record.json").read_text())
