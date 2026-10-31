@@ -30,6 +30,7 @@ class ProbeArgumentsTest(unittest.TestCase):
         self.assertIn("Usage:", r.stdout)
         self.assertIn("--disc=PATH", r.stdout)
         self.assertIn("--disc=fast|console", r.stdout)
+        self.assertIn("--bin=PATH", r.stdout)
         self.assertTrue(r.stdout.endswith("under --bench) isn't built.\n"), r.stdout)
         self.assertNotIn("set -e", r.stdout)
 
@@ -55,6 +56,11 @@ class ProbeArgumentsTest(unittest.TestCase):
         r = probe(NAME, "1", "", "60", "--aspect=")
         self.assertEqual(r.returncode, 2)
         self.assertIn("--aspect=", r.stderr)
+
+    def test_empty_bin_exits_2(self):
+        r = probe(NAME, "1", "", "60", "--bin=")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("--bin=", r.stderr)
 
 
 class ProbeTreeTest(unittest.TestCase):
@@ -304,6 +310,86 @@ class ProbeTreeTest(unittest.TestCase):
                 self.assertEqual(r.returncode, 2)
                 self.assertIn(setting.split("=")[0] + " needs a windowed run", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
+
+    def other_game(self, body: str, name: str = "dragoon-b") -> Path:
+        """An executable game outside build/, in a folder with a space as a player's path may have."""
+        folder = self.root / "other builds"
+        folder.mkdir(exist_ok=True)
+        game = write_file(folder, name, "#!/bin/sh\n" + body)
+        game.chmod(game.stat().st_mode | stat.S_IXUSR)
+        return game
+
+    def run_dir(self) -> Path:
+        return self.root / "build" / "probe" / NAME
+
+    def test_bin_runs_that_game_instead_of_build_dragoon(self):
+        self.add_game("dragoon", "touch ran-build-dragoon\n")
+        game = self.other_game("touch ran-other\n")
+        r = probe(NAME, "1", "", "60", f"--bin={game}", script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.run_dir() / "ran-other").exists())
+        self.assertFalse((self.run_dir() / "ran-build-dragoon").exists())
+
+    def test_bin_runs_that_game_instead_of_build_dragoon_bench_under_bench(self):
+        self.add_game("dragoon_bench", "touch ran-build-bench\n")
+        self.add_game("dragoon", "touch ran-build-dragoon\n")
+        game = self.other_game("printf '%s\\n' \"$@\" > args.txt\necho 'whole run'\n")
+        r = probe(NAME, "7", "", "60", f"--bin={game}", "--bench", script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("whole run", r.stdout)
+        self.assertIn("--seconds=7", (self.run_dir() / "args.txt").read_text().splitlines())
+        self.assertEqual([p.name for p in self.run_dir().iterdir() if p.name.startswith("ran-")], [])
+
+    def test_bin_needs_no_build_of_its_own(self):
+        game = self.other_game("touch ran-other\necho 'whole run'\n")
+        for settings in ((), ("--bench",)):
+            with self.subTest(settings=settings):
+                r = probe(NAME, "1", "", "60", f"--bin={game}", *settings, script=self.script)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertTrue((self.run_dir() / "ran-other").exists())
+
+    def test_a_relative_bin_is_taken_from_where_probe_was_run(self):
+        self.other_game("touch ran-other\n")
+        r = probe(NAME, "1", "", "60", "--bin=other builds/dragoon-b", script=self.script, cwd=self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.run_dir() / "ran-other").exists())
+
+    def test_a_link_to_a_game_is_a_game(self):
+        game = self.other_game("touch ran-other\n")
+        link = self.root / "dragoon-link"
+        link.symlink_to(game)
+        r = probe(NAME, "1", "", "60", f"--bin={link}", script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.run_dir() / "ran-other").exists())
+
+    def test_bin_is_not_passed_on_to_the_game(self):
+        game = self.other_game("printf '%s\\n' \"$@\" > args.txt\n")
+        r = probe(NAME, "1", "", "60", f"--bin={game}", script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        args = (self.run_dir() / "args.txt").read_text().splitlines()
+        self.assertIn("--hidden", args)
+        self.assertEqual([a for a in args if "--bin" in a or str(game) in a], [])
+
+    def test_a_bin_that_is_not_an_executable_file_exits_2_before_making_a_run_directory(self):
+        self.add_game("dragoon", "")
+        self.add_game("dragoon_bench", "")
+        plain = write_file(self.root, "plain", "#!/bin/sh\n")  # no execute bit
+        folder = self.root / "a folder"
+        folder.mkdir()
+        for bad in (self.root / "nowhere", plain, folder):
+            for settings in ((), ("--bench",)):
+                with self.subTest(bad=bad.name, settings=settings):
+                    r = probe(NAME, "1", "", "60", f"--bin={bad}", *settings, script=self.script)
+                    self.assertEqual(r.returncode, 2)
+                    self.assertIn("--bin", r.stderr)
+                    self.assertIn(str(bad), r.stderr)
+                    self.assertFalse((self.root / "build" / "probe").exists())
+
+    def test_without_bin_the_builds_still_run(self):
+        self.add_game("dragoon", "touch ran-build-dragoon\n")
+        r = probe(NAME, "1", script=self.script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.run_dir() / "ran-build-dragoon").exists())
 
     def test_a_game_that_exits_ends_the_run_early(self):
         self.add_game("dragoon", "exit 0\n")

@@ -38,13 +38,17 @@
 #                   does. A relative DIR is taken from where probe.sh was run, like --disc.
 #                   Windowed runs only
 #     --exit-after=N  quit once N frames have been presented. Windowed runs only
+#     --bin=PATH    run PATH instead of build/dragoon, or instead of build/dragoon_bench under
+#                   --bench, so two builds can be run in turn. A relative PATH is taken from
+#                   where probe.sh was run, like --disc
 # The game runs inside build/probe/NAME/, so a new NAME starts from a blank memory card and
 # a NAME that's run again keeps the card its last run left behind.
 # Exits 0 once the run ends, 1 when the bench printed no report, 2 on a bad argument, a
-# --disc that's neither fast, console nor a file, a --replay without an inputs.txt or
-# when the game binary (build/dragoon, or build/dragoon_bench under --bench) isn't built.
+# --disc that's neither fast, console nor a file, a --replay without an inputs.txt, a --bin
+# that isn't an executable file or when the game binary (build/dragoon, or build/dragoon_bench
+# under --bench) isn't built.
 set -e
-case ${1:-} in -h|--help) sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case ${1:-} in -h|--help) sed -n '2,49p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 if [ $# -lt 2 ]; then
   echo "usage: tools/probe.sh NAME SECONDS [INPUT_SCRIPT [DUMP_EVERY [SETTING ...]]] (--help for more)" >&2
   exit 2
@@ -68,6 +72,7 @@ aspect=
 output=
 replay=
 exit_after=
+bin=
 no_input_log=--no-input-log
 # Keeps the GCN_ and DRAGOON_ settings in "$@" and takes the rest out.
 for s in "$@"; do
@@ -88,12 +93,14 @@ for s in "$@"; do
     --exit-after=[1-9]*)
       case ${s#--exit-after=} in *[!0-9]*) echo "not a setting (see tools/probe.sh --help): $s" >&2; exit 2 ;; esac
       exit_after=$s ;;
+    --bin=?*) bin=${s#--bin=} ;;
     *) echo "not a setting (see tools/probe.sh --help): $s" >&2; exit 2 ;;
   esac
 done
 # The game runs in the run's directory, so a relative path is taken from here first.
 case $disc in ''|/*) ;; *) disc=$PWD/$disc ;; esac
 case $replay in ''|/*) ;; *) replay=$PWD/$replay ;; esac
+case $bin in ''|/*) ;; *) bin=$PWD/$bin ;; esac
 if [ -n "$disc" ] && [ ! -f "$disc" ]; then
   echo "no disc image at $disc (--disc= also takes fast or console)" >&2
   exit 2
@@ -119,6 +126,10 @@ fi
 if [ -n "$replay" ] && [ ! -f "$replay/inputs.txt" ]; then echo "no input log at $replay/inputs.txt" >&2; exit 2; fi
 game=$root/build/dragoon
 if [ -n "$bench" ]; then game=${game}_bench; fi
+if [ -n "$bin" ]; then
+  if [ ! -f "$bin" ] || [ ! -x "$bin" ]; then echo "--bin needs an executable file, and $bin isn't one" >&2; exit 2; fi
+  game=$bin
+fi
 if [ ! -x "$game" ]; then echo "no $game; build the game first" >&2; exit 2; fi
 mkdir -p "$out"
 cd "$out"
