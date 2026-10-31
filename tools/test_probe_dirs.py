@@ -129,6 +129,13 @@ class RunProbeTest(unittest.TestCase):
               self.assertRaisesRegex(ValueError, "^base title: probe.sh exited 3$")):
             probe_dirs.run_probe(["probe.sh"], Path("/clone"), "base title")
 
+    def test_a_failed_run_says_what_status_it_exited_with(self):
+        with mock.patch.object(subprocess, "run", side_effect=subprocess.CalledProcessError(1, "probe")):
+            with self.assertRaises(probe_dirs.ProbeFailed) as caught:
+                probe_dirs.run_probe(["probe.sh"], Path("/clone"), "x")
+        self.assertEqual(caught.exception.returncode, 1)
+        self.assertIsInstance(caught.exception, ValueError)
+
 
 class SlowFactorTest(unittest.TestCase):
     def test_reads_a_whole_number_from_1(self):

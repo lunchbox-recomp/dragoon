@@ -212,6 +212,8 @@ A `check` of all twelve routes took 300 s while other copies of the game ran on 
 
 `check --slow=N` gives each route N times its seconds, as in frame_hashes.py. The rows are list counts, not times, so a slower build is held to the same ones. `record` refuses it.
 
+A bench that crashes prints no report, and probe.sh exits 1. That counts as a route that doesn't match, so `check` says the bench printed no report and fails the lists it didn't reach. Any other probe.sh failure exits 2.
+
 ## interp_bisect.py
 
 Which functions change a route when the interpreter runs them? It reads every function start from `analysis/symbols.txt` and checks ROUTE with frame_hashes.py, or with audio_hashes.py under `--audio`, passing `--slow=N` on. Each check sets `GCN_INTERPRET` to a list of starts, a file in `build/bisect/` with one hex address a line, named by absolute path.
@@ -399,7 +401,7 @@ What does a source snapshot hold? Its `source-info.json` names the Dragoon and g
 
 ## probe_dirs.py
 
-What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error. `slow_factor` reads the N of a `--slow=N` and refuses anything but a whole number from 1.
+What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into a `ProbeFailed` error that keeps the status. `slow_factor` reads the N of a `--slow=N` and refuses anything but a whole number from 1.
 
 `remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py, replay_session.py and the scorecard use `remove_run` and `run_probe`, and the two hash tools and interp_bisect.py use `slow_factor`. It has no command line.
 

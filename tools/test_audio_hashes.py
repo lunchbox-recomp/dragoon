@@ -1,3 +1,5 @@
+import contextlib
+import io
 import subprocess
 import tempfile
 import unittest
@@ -158,9 +160,71 @@ class HashRouteTest(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["env"]["SDL_AUDIO_DRIVER"], "dummy")
 
     def test_a_failed_probe_is_an_error_naming_the_route(self):
-        run = mock.Mock(side_effect=subprocess.CalledProcessError(1, "probe"))
-        with self.assertRaisesRegex(ValueError, "title: probe.sh exited 1"):
+        run = mock.Mock(side_effect=subprocess.CalledProcessError(2, "probe"))
+        with self.assertRaisesRegex(ValueError, "title: probe.sh exited 2"):
             self.hash_route(run)
+
+    def test_a_bench_that_printed_no_report_is_a_run_with_the_hashes_it_got_to_and_says_so(self):
+        write_file(self.out, "stdout.txt", f"[ax] hash list=400 fnv={A}\n")  # then it crashed
+        run = mock.Mock(side_effect=subprocess.CalledProcessError(1, "probe"))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            got, _ = self.hash_route(run)
+        self.assertEqual(got, {400: A})
+        self.assertEqual(out.getvalue(), "title: the bench printed no report\n")
+
+    def test_a_bench_that_printed_no_report_and_no_hashes_is_a_run_with_none(self):
+        write_file(self.out, "stdout.txt", "")
+        with contextlib.redirect_stdout(io.StringIO()):
+            got, _ = self.hash_route(mock.Mock(side_effect=subprocess.CalledProcessError(1, "probe")))
+        self.assertEqual(got, {})
+
+
+class CrashedBenchTest(unittest.TestCase):
+    """main on a bench whose probe.sh exits with a status, after the hashes it printed first."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        out = self.root / "build" / "probe" / "audio-title"
+        out.mkdir(parents=True)
+        write_file(out, "stdout.txt", f"[ax] hash list=400 fnv={A}\n")
+        hashes = self.root / "hashes"
+        (hashes / "audio").mkdir(parents=True)
+        write_file(hashes, "manifest.txt", MANIFEST)
+        write_file(hashes / "audio", "title.txt", f"400 {A}\n800 {B}\n")
+        for patch in (mock.patch.object(audio_hashes, "ROOT", self.root),
+                      mock.patch.object(audio_hashes, "HASHES", hashes),
+                      mock.patch.object(audio_hashes, "MANIFEST", hashes / "manifest.txt"),
+                      mock.patch.object(audio_hashes, "remove_run")):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def check(self, status: int) -> tuple[int, str, str]:
+        with mock.patch.object(subprocess, "run", side_effect=subprocess.CalledProcessError(status, "probe")):
+            return run_main(audio_hashes.main, "check")
+
+    def test_a_bench_with_no_report_is_a_route_that_does_not_match_and_exits_1(self):
+        code, out, err = self.check(1)
+        self.assertEqual(code, 1)
+        self.assertEqual(err, "")
+        self.assertIn("title: the bench printed no report", out)
+        self.assertIn("list 800: not reached", out)
+
+    def test_any_other_probe_failure_still_exits_2(self):
+        for status in (2, 3, 127):
+            with self.subTest(status=status):
+                code, out, err = self.check(status)
+                self.assertEqual(code, 2)
+                self.assertEqual(out, "")
+                self.assertIn(f"title: probe.sh exited {status}", err)
+
+    def test_a_bench_with_no_report_and_no_stdout_file_exits_2_naming_the_file(self):
+        (self.root / "build" / "probe" / "audio-title" / "stdout.txt").unlink()
+        code, _, err = self.check(1)
+        self.assertEqual(code, 2)
+        self.assertIn("stdout.txt", err)
 
 
 class MainTest(unittest.TestCase):

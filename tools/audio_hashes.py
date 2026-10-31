@@ -20,9 +20,13 @@ captured or kept, only the hashes.
 goldens came from. N is a whole number from 1 and defaults to 1. Nothing else about a run
 changes, and record refuses it, since goldens come from a build at full speed.
 
-Exits 0 when every route matches (or is recorded), 1 when a hash changed or a list count
-wasn't reached, 2 on a bad argument, a missing or malformed golden, or a probe.sh run that
-failed.
+A bench that crashes prints no report, and probe.sh exits 1. That counts as a route that doesn't
+match, so check says the bench printed no report and fails the lists it didn't reach. Any other
+probe.sh failure is an error.
+
+Exits 0 when every route matches (or is recorded), 1 when a hash changed, a list count wasn't
+reached or the bench printed no report, 2 on a bad argument, a missing or malformed golden, or
+a probe.sh run that failed any other way.
 """
 from __future__ import annotations
 
@@ -32,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-from probe_dirs import remove_run, run_probe, slow_factor
+from probe_dirs import ProbeFailed, remove_run, run_probe, slow_factor
 from routes import MANIFEST, Route, route_file, select_routes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,7 +106,12 @@ def hash_route(route: Route, slow: int = 1) -> dict[int, str]:
     if out.exists():
         remove_run(out)  # a blank memory card; the last run stays after this one, for its [ax] lines
     name = out.name
-    run_probe(probe_args(route, name, slow), ROOT, route.name, {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
+    try:
+        run_probe(probe_args(route, name, slow), ROOT, route.name, {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
+    except ProbeFailed as e:
+        if e.returncode != 1:  # 1 is the bench printing no report, which a crash does
+            raise
+        print(f"{route.name}: the bench printed no report")
     return parse_hashes((out / "stdout.txt").read_text())
 
 
