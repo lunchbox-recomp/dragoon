@@ -44,7 +44,7 @@ That prints the run's directory as an absolute path, then a frame count (140 on 
 
 Can a program play the game one frame at a time? It listens on a Unix socket first and then runs probe.sh with `GCN_BOT` set to that socket, so the game connects with nothing left to chance. The bot is called once for each frame the engine steps it at.
 
-The bot reads guest RAM and returns the pad for each port it drives. The pads go in below the input log, so a bot run replays with no bot. The protocol is the engine's, under "Bots" in `gcn-recomp/docs/diagnostics.md`.
+The bot reads guest RAM and returns the pad for each port it drives. The pads go in below the input log, and the run is a session (`GCN_SESSION`), which is what makes probe.sh keep a log, so every run leaves an input log that replays with no bot. The protocol is the engine's, under "Bots" in `gcn-recomp/docs/diagnostics.md`.
 
 ```
 tools/bot_link.py --script tests/routes/menu.txt --watch 80000000:4 menu-bot 60 -- --exit-after=1500
@@ -52,27 +52,40 @@ tools/bot_link.py --script tests/routes/menu.txt --watch 80000000:4 menu-bot 60 
 
 That plays the menu route with a bot that presses nothing. It prints the four bytes at `80000000` when they change and says how the link ended. `--pads N` sets how many ports the bot drives (1 by default).
 
-`--every N` sets the dump interval, and everything after `--` is more probe.sh settings. `--send N` makes the bot send ports 1 to N whatever `--pads` says, to see the engine refuse a port the game doesn't have or one the bot left out.
+`--every N` sets the dump interval, and everything after `--` is more probe.sh settings. `--hang SECONDS` ends the run when the game sends no frame for that long (30 by default, 0 for never). `--send N` makes the bot send ports 1 to N whatever `--pads` says, to see the engine refuse a port the game doesn't have or one the bot left out.
 
-Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=)`. `bot(link)` gets a `Link` whose `frame` is the last frame number and whose `read(addr, length)` returns 1 to 256 bytes of RAM. It returns `{port: Pad(...)}`, and a port it leaves out stays out, so the engine stops the game and names the port.
+Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, hang=)`. `bot(link)` gets a `Link` whose `frame` is the last frame number and whose `read(addr, length)` returns 1 to 256 bytes of RAM. It returns `{port: Pad(...)}`, and a port it leaves out stays out, so the engine stops the game and names the port.
 
-`Pad()` is a pad at rest and `BUTTONS` holds the PADStatus bits. `run` returns an `Outcome` with `frames`, `last_frame`, `reason`, `detail`, `run_dir` and `error`. The reason comes from the link's own end and what the game wrote to `build/probe/NAME/`, never from probe.sh's exit status, which is 0 whatever the game did.
+`Pad()` is a pad at rest and `BUTTONS` holds the PADStatus bits. A `Pad` value the engine would refuse is a `ValueError`, so a bot that computes one raises.
+
+`run` owns the deadline. It gives probe.sh a few seconds more than SECONDS and ends the game itself at SECONDS, or at a hang, with the link open until the game has exited. The engine then doesn't log that the bot hung up, and its input log is whole.
+
+`run` returns an `Outcome` with `frames`, `last_frame`, `reason`, `detail`, `run_dir`, `input_log` and `error`. `input_log` is the directory `tools/probe.sh NAME SECONDS "" 60 --replay=DIR` takes, the last process's after a console reset. The reason comes from the link's own end, what the game wrote to `build/probe/NAME/` and that input log, never from probe.sh's exit status, which is 0 whatever the game did.
 
 | Reason | Means | Detail |
 |---|---|---|
+| `time_limit` | SECONDS were up | The seconds |
+| `exit_after` | The `--exit-after` frames were shown | The setting |
+| `shutdown` | The game shut the console down by itself | Its `[reset]` line |
+| `game_exited` | The game ended cleanly some other way | The frame it ended at |
+| `game_died` | The game ended and its input log has no `# end` line | The last line of `stdout.txt` |
+| `hang` | No frame for `hang` seconds | How long, and after which frame |
 | `engine_stop` | The engine stopped the game | Its `[bot] frame N: ...` line from `stdout.txt` |
 | `connect_failed` | The engine couldn't connect | Its `--bot PATH: ...` line |
 | `panic` | The game crashed | The first line of `panic.txt`, or the `FATAL` or `FAULT` line |
 | `bot_raised` | The bot raised | The exception, which `error` holds too |
-| `game_ended` | The time limit, `--exit-after` or the game exiting by itself | Which one |
 | `never_linked` | The game ended without connecting or saying why | What probe.sh printed, or the last line of `stdout.txt` |
 | `bad_link` | The engine sent what isn't the protocol | The line |
 
-The command exits 0 for `game_ended` and 1 for any other reason. It exits 2 when no run could start, because of a bad argument, a socket another bot is listening on or a probe.sh that won't run.
+The engine writes `# end` in its input log on every way out it chooses, so a game that ends without one was aborted or killed from outside. An `exit_after` needs the end line's frame to reach the `--exit-after` count, and a `shutdown` wins over it.
 
-The socket is `build/probe/NAME/bot.sock`, or a short path in `/tmp` when that would pass the 103 bytes a Unix socket takes. `bot.sock.lock` stays beside it, and a second run on the same socket is refused while the first holds the lock. A socket file an earlier run left is replaced.
+The command exits 0 for `time_limit`, `exit_after`, `shutdown` and `game_exited`. It exits 1 for the other reasons, apart from `never_linked`, which is a run that couldn't start. That exits 2, like a bad argument, a socket another bot is listening on or a probe.sh that won't run.
 
-A `stdout.txt` or `panic.txt` that an earlier run of NAME left is deleted first, but its frames stay, so give each run a new NAME. A game that resets the console connects again and the bot goes on with it, with `Link.starts` counting the connections. The tests stand a fake probe.sh in for the game, so they need no disc.
+The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when that would pass the 103 bytes a Unix socket takes. Its lock is the same path with `.lock` on the end, and a second run on the same socket is refused while the first holds it. A socket file an earlier run left is replaced.
+
+A `stdout.txt`, a `panic.txt` or a `session/` that an earlier run of NAME left is deleted first, but its frames stay, so give each run a new NAME. A `GCN_SESSION` in `settings` is used in place of `session/`, and a relative one is taken from `build/probe/NAME/`. A session also records the sound beside the log, about 10 MB for each minute of game time.
+
+A game that resets the console connects again and the bot goes on with it, with `Link.starts` counting the connections. The tests stand a fake probe.sh in for the game, so they need no disc.
 
 ## playtest.sh
 
