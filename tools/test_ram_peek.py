@@ -35,7 +35,7 @@ class FakeLink:
 TABLE = {
     "made.flag": {"address": "80001000", "type": "u8", "means": "a made-up flag",
                   "values": {"1": "on"}, "route": "menu.txt", "frames": [1, 2]},
-    "made.where": {"address": "80002000", "path": ["2C"], "type": "f32", "means": "a made-up place",
+    "made.where": {"address": "80002000", "path": ["1C"], "type": "f32", "means": "a made-up place",
                    "route": "menu.txt", "frames": [1, 2]},
     "made.name": {"address": "80003000", "type": "bytes", "length": 2, "means": "a made-up name",
                   "route": "menu.txt", "frames": [1, 2]},
@@ -75,22 +75,22 @@ class ItemTest(unittest.TestCase):
         self.link.put(0x80000010, struct.pack(">Hh", 7, -2))
         self.assertEqual(show(self.link, parse_item("80000010:u16", None)), "7")
         self.assertEqual(show(self.link, parse_item("80000010:s16x2", None)), "7,-2")
-        self.link.put(0x80000020, struct.pack(">ff", 1 / 3, -28.8847))
-        self.assertEqual(show(self.link, parse_item("80000020:f32x2", None)), "0.3333333,-28.8847")
+        self.link.put(0x80000020, struct.pack(">ff", 1 / 3, -12.0625))
+        self.assertEqual(show(self.link, parse_item("80000020:f32x2", None)), "0.3333333,-12.0625")
 
     def test_a_short_or_lowercase_address(self) -> None:
-        self.assertEqual(parse_item("8053abcd:u8", None).address, 0x8053ABCD)
+        self.assertEqual(parse_item("8012abcd:u8", None).address, 0x8012ABCD)
 
     def test_a_path_follows_pointers(self) -> None:
         self.link.put(0x80000010, struct.pack(">I", 0x81000000))
-        self.link.put(0x8100002C, struct.pack(">I", 0x81100000))
-        self.link.put(0x81100300, struct.pack(">f", 19.5))
-        item = parse_item("80000010/2C/300:f32", None)
-        self.assertEqual(item.path, (0x2C, 0x300))
-        self.assertEqual(show(self.link, item), "19.5")
+        self.link.put(0x8100001C, struct.pack(">I", 0x81100000))
+        self.link.put(0x81100240, struct.pack(">f", 0.125))
+        item = parse_item("80000010/1C/240:f32", None)
+        self.assertEqual(item.path, (0x1C, 0x240))
+        self.assertEqual(show(self.link, item), "0.125")
 
     def test_a_null_pointer_prints_none(self) -> None:
-        self.assertEqual(show(self.link, parse_item("80000010/2C/300:f32x3", None)), "none")
+        self.assertEqual(show(self.link, parse_item("80000010/1C/240:f32x3", None)), "none")
 
     def test_bad_raw_items(self) -> None:
         for text in ("80000000:0", "80000000:257", "80000000:u64", "80000000:u32x65", "80000000:u8x0",
@@ -113,8 +113,8 @@ class ItemTest(unittest.TestCase):
         item = parse_item("made.where", self.table)
         self.assertEqual(show(self.link, item), "none")
         self.link.put(0x80002000, struct.pack(">I", 0x81000000))
-        self.link.put(0x8100002C, struct.pack(">f", -3.5))
-        self.assertEqual(show(self.link, item), "-3.5")
+        self.link.put(0x8100001C, struct.pack(">f", 42.25))
+        self.assertEqual(show(self.link, item), "42.25")
 
     def test_an_unknown_name(self) -> None:
         with self.assertRaises(ValueError):
@@ -143,6 +143,7 @@ class MainTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.table = write_file(self.dir, "table.json", json.dumps(TABLE))
+        self.probe = self.dir / "tools" / "probe.sh"  # never run, since bot_link.run is a fake
         self.link = FakeLink()
         self.link.put(0x80001000, b"\x01")
         self.frames = [1, 2, 3, 5]
@@ -162,7 +163,7 @@ class MainTest(unittest.TestCase):
 
     def peek(self, *argv: str) -> tuple[int, str, str]:
         with mock.patch.object(bot_link, "run", side_effect=self.fake_run):
-            return run_main(main, *argv)
+            return run_main(main, "--probe", str(self.probe), *argv)
 
     def test_a_run_that_reads_every_frame(self) -> None:
         code, out, err = self.peek("--table", str(self.table), "--at", "2,4", "--pads", "3", "--script",
@@ -178,7 +179,20 @@ class MainTest(unittest.TestCase):
         name, seconds, kw = self.calls[0]
         self.assertEqual((name, seconds), ("peek", 60))
         self.assertEqual(kw, {"pads": 3, "script": "menu.txt", "every": 100, "settings": ["--exit-after=5"],
-                              "hang": 5.0, "probe": None})
+                              "hang": 5.0, "probe": str(self.probe)})
+
+    def test_a_run_dumps_no_frames_unless_asked(self) -> None:
+        self.peek("--at", "1", "peek", "60", "80001000:1")
+        self.assertIsNone(self.calls[0][2]["every"])
+
+    def test_a_name_an_earlier_run_left_is_refused(self) -> None:
+        old = self.dir / "build" / "probe" / "peek"
+        old.mkdir(parents=True)
+        code, out, err = self.peek("--at", "1", "peek", "60", "80001000:1")
+        self.assertEqual((code, out, self.calls), (2, "", []))
+        self.assertEqual(err, f"ram_peek.py: {old} is there already, and a run in it would start from its memory "
+                              "card, not the blank one the routes start from, so give the run a new NAME\n")
+        self.assertEqual(self.peek("--at", "1", "peek-2", "60", "80001000:1")[0], 0)
 
     def test_raw_items_need_no_table(self) -> None:
         with mock.patch.object(kar_ram, "TABLE", self.dir / "missing.json"):
@@ -229,15 +243,15 @@ class MainTest(unittest.TestCase):
 
     def test_a_run_that_couldnt_start(self) -> None:
         with mock.patch.object(bot_link, "run", side_effect=bot_link.LinkSetupError("socket taken")):
-            code, _, err = run_main(main, "--at", "1", "peek", "60", "80001000:1")
+            code, _, err = run_main(main, "--probe", str(self.probe), "--at", "1", "peek", "60", "80001000:1")
         self.assertEqual(code, 2)
         self.assertIn("socket taken", err)
 
     def test_the_real_table_names_work(self) -> None:
-        self.link.put(0x805361AC, b"\x03")
+        self.link.put(kar_ram.load()["scene.major"].address, b"\x5a")
         code, out, _ = self.peek("--at", "1", "peek", "60", "scene.major", "player1.x")
         self.assertEqual(code, 0)
-        self.assertTrue(out.startswith("frame 1  scene.major=3 (the main menu)  player1.x=none\n"), out)
+        self.assertTrue(out.startswith("frame 1  scene.major=90  player1.x=none\n"), out)
 
 
 if __name__ == "__main__":

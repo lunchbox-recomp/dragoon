@@ -10,10 +10,13 @@ and prints one line, `frame N` and then ITEM=VALUE for each. The engine's frame 
 jump, so a frame is read at the first one the engine steps the bot at that's as late or later,
 and the line names that frame.
 
+NAME has to be new. A run in a build/probe/NAME/ an earlier run left starts from that run's
+memory card, and every route starts from a blank one, so such a NAME is refused.
+
 FRAMES is a comma-separated list of frames and of ranges, A-B for every frame from A to B and
 A-B/S for every Sth. An ITEM is one of these:
-  NAME        an entry in kar_ram.json (or the --table one), its value and, when the table
-              says what that value means, the meaning in brackets
+  ENTRY       a name in kar_ram.json (or the --table one), its value and, when the table says
+              what that value means, the meaning in brackets
   ADDR:LEN    LEN bytes at ADDR (hex address, decimal length up to 256), in hex
   ADDR:TYPE   a value of TYPE at ADDR, TYPE being u8, s8, u16, s16, u32, s32 or f32, and
               ADDR:TYPExN for N of them one after the other, comma-separated
@@ -21,12 +24,13 @@ ADDR may go on with /OFF for each pointer to follow, as kar_ram.json's paths do.
 reads the pointer at 8055AA2C, then the pointer at 2C past it, and reads the value at 300 past
 that. A value behind a null pointer prints as none.
 
-ROUTE, --pads, --every, --hang and the SETTINGs are bot_link.py's. The run's end is printed
-after the lines, as bot_link.py prints it, with a line naming the frames the run never reached.
+ROUTE, --pads, --hang and the SETTINGs are bot_link.py's. The run dumps no frames unless
+--every N asks for every Nth, as bot_link.py's --every does. The run's end is printed after the
+lines, as bot_link.py prints it, with a line naming the frames the run never reached.
 
 Exits 0 when the run ended as a bot run is meant to and every frame was read, 1 when it ended
-any other way or a frame wasn't reached, and 2 on a bad argument, an unknown name, a table that
-won't load or a game that never connected.
+any other way or a frame wasn't reached, and 2 on a bad argument, a NAME that isn't new, an
+unknown name, a table that won't load or a game that never connected.
 """
 from __future__ import annotations
 
@@ -148,25 +152,18 @@ class Sampler:
 
 
 def main(argv: list[str]) -> int:
-    settings: list[str] = []
-    if "--" in argv:
-        split = argv.index("--")
-        argv, settings = argv[:split], argv[split + 1:]
+    argv, settings = bot_link.split_settings(argv)
     ap = argparse.ArgumentParser(prog="ram_peek.py", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--at", required=True, metavar="FRAMES")
-    ap.add_argument("--script", default="", metavar="ROUTE")
-    ap.add_argument("--pads", type=int, choices=range(1, 5), default=1, metavar="N")
-    ap.add_argument("--every", type=int, default=60, metavar="N")
-    ap.add_argument("--hang", type=float, default=30, metavar="SECONDS")
+    bot_link.add_play_arguments(ap)
+    bot_link.add_run_arguments(ap, every=None)
     ap.add_argument("--table", metavar="PATH")
-    ap.add_argument("--probe", help=argparse.SUPPRESS)
     ap.add_argument("name")
     ap.add_argument("seconds", type=int)
     ap.add_argument("items", nargs="+", metavar="ITEM")
     args = ap.parse_args(argv)
-    if args.hang < 0:
-        ap.error("--hang is a number of seconds from 0")
+    options = bot_link.run_options(ap, args)
     try:
         frames = parse_frames(args.at)
     except ValueError as e:
@@ -183,22 +180,20 @@ def main(argv: list[str]) -> int:
     except ValueError as e:
         print(f"ram_peek.py: {e}", file=sys.stderr)
         return 2
+    directory = bot_link.run_directory(args.name, args.probe)
+    if directory.exists():
+        print(f"ram_peek.py: {directory} is there already, and a run in it would start from its memory "
+              "card, not the blank one the routes start from, so give the run a new NAME", file=sys.stderr)
+        return 2
     sampler = Sampler(items, frames, args.pads, sys.stdout)
     try:
-        outcome = bot_link.run(args.name, args.seconds, sampler, pads=args.pads, script=args.script,
-                               every=args.every, settings=settings, hang=args.hang or None,
-                               probe=args.probe)
+        outcome = bot_link.run(args.name, args.seconds, sampler, settings=settings, **options)
     except (ValueError, bot_link.LinkSetupError) as e:
         print(f"ram_peek.py: {e}", file=sys.stderr)
         return 2
+    bot_link.print_outcome(outcome, "ram_peek.py")
     if outcome.reason == bot_link.NEVER_LINKED:
-        print(f"ram_peek.py: the game never connected: {outcome.detail}", file=sys.stderr)
         return 2
-    last = "no frame" if outcome.last_frame is None else f"the last frame {outcome.last_frame}"
-    print(f"{outcome.run_dir}: {outcome.reason}, {outcome.frames} frames answered, {last}")
-    print(f"  {outcome.detail}")
-    if outcome.input_log is not None:
-        print(f"  input log {outcome.input_log}")
     if sampler.left:
         print(f"  never reached {', '.join(map(str, sampler.left))}")
     return 0 if outcome.reason in bot_link.CLEAN and not sampler.left else 1

@@ -65,6 +65,8 @@ CLOSE_WAIT = 10
 # thing the game says, and `# end` is the last line of an input log.
 TAIL = 1 << 17
 LOG_TAIL = 1 << 12
+# probe.sh always takes a dump interval, so a run that dumps no frames gets one no run reaches.
+NO_DUMPS = 1_000_000_000
 # The PADStatus button bits that are buttons (gcn-recomp's runtime/hw/pad.h), as the engine takes them.
 BUTTON_MASK = 0x1F7F
 
@@ -454,15 +456,23 @@ def _game_verdict(run_dir: Path, starts: int, probe_err: str, input_log: Path | 
     return GAME_EXITED, f"the game ended at frame {frame}"
 
 
+def run_directory(name: str, probe: str | os.PathLike | None = None) -> Path:
+    """build/probe/NAME/, where a run of NAME keeps its output, as probe.sh finds it beside
+    `probe` (tools/probe.sh by default)."""
+    probe_path = Path(os.path.abspath(probe if probe is not None else PROBE))
+    return probe_path.parent.parent / "build" / "probe" / name
+
+
 def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads: int = 1,
-        script: str = "", every: int = 60, settings: Sequence[str] = (), hang: float | None = None,
+        script: str = "", every: int | None = 60, settings: Sequence[str] = (), hang: float | None = None,
         probe: str | os.PathLike | None = None) -> Outcome:
     """Plays the game as NAME in build/probe/NAME/ for up to `seconds`, calling `bot` once for
     each frame the engine steps it at. `bot` may read RAM through the Link and returns the pad
     for each port it drives, ports 1 to `pads`. `script` is probe.sh's INPUT_SCRIPT, `every`
-    its DUMP_EVERY and `settings` more of its settings. `hang` is the wall seconds without a
-    frame before the run stops as a hang, None for never. `probe` is a probe.sh-compatible
-    program for a fake in a test; its run directory is where probe.sh's would be.
+    its DUMP_EVERY (None for no dumps) and `settings` more of its settings. `hang` is the wall
+    seconds without a frame before the run stops as a hang, None for never. `probe` is a
+    probe.sh-compatible program for a fake in a test; its run directory is where probe.sh's
+    would be.
 
     The run is a session, build/probe/NAME/session unless `settings` names a GCN_SESSION, so
     its input log replays with no bot. A session the run makes records no audio, unless
@@ -474,7 +484,7 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
     refuse, and LinkSetupError when no run could be started."""
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", name):
         raise ValueError(f"{name!r}: not a name for a run's directory")
-    if seconds < 1 or every < 1:
+    if seconds < 1 or (every is not None and every < 1):
         raise ValueError("seconds and every are whole numbers from 1")
     if hang is not None and hang <= 0:
         raise ValueError("hang is a number of seconds above 0, or None")
@@ -486,7 +496,7 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
     probe_path = Path(os.path.abspath(probe if probe is not None else PROBE))
     if not probe_path.is_file():
         raise LinkSetupError(f"no {probe_path}")
-    run_dir = probe_path.parent.parent / "build" / "probe" / name  # as probe.sh finds it
+    run_dir = run_directory(name, probe_path)
     run_dir.mkdir(parents=True, exist_ok=True)
     sock = socket_path(run_dir)
     try:
@@ -510,7 +520,8 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
             remove_run(session)
         # An empty GCN_WAV or GCN_AIDWAV is a recording the engine can't open, so it makes none.
         silent = [f"{var}=" for var in ("GCN_WAV", "GCN_AIDWAV") if not any(s.startswith(f"{var}=") for s in settings)]
-        argv = [str(probe_path), name, str(seconds + DEADLINE_SLACK), script, str(every), *settings,
+        argv = [str(probe_path), name, str(seconds + DEADLINE_SLACK), script,
+                str(every if every is not None else NO_DUMPS), *settings,
                 *([] if ours else [f"GCN_SESSION={session}", *silent]), f"--pads={pads}", f"GCN_BOT={sock}"]
         try:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -594,25 +605,63 @@ def _watch_arg(text: str) -> tuple[int, int]:
     return int(m[1], 16), int(m[2])
 
 
-def main(argv: list[str]) -> int:
-    settings: list[str] = []
-    if "--" in argv:
-        split = argv.index("--")
-        argv, settings = argv[:split], argv[split + 1:]
-    ap = argparse.ArgumentParser(prog="bot_link.py", description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+def split_settings(argv: Sequence[str]) -> tuple[list[str], list[str]]:
+    """A command's own arguments in ARGV, and the probe.sh settings after its first `--`."""
+    argv = list(argv)
+    if "--" not in argv:
+        return argv, []
+    split = argv.index("--")
+    return argv[:split], argv[split + 1:]
+
+
+def add_play_arguments(ap: argparse.ArgumentParser) -> None:
+    """Gives AP the arguments that say what `run` plays: --script and --pads."""
     ap.add_argument("--script", default="", metavar="ROUTE")
     ap.add_argument("--pads", type=int, choices=range(1, 5), default=1, metavar="N")
-    ap.add_argument("--send", type=int, choices=range(1, 5), metavar="N")
-    ap.add_argument("--every", type=int, default=60, metavar="N")
+
+
+def add_run_arguments(ap: argparse.ArgumentParser, every: int | None = 60) -> None:
+    """Gives AP the arguments that say how `run` goes: --every (EVERY when it's not given, None
+    for no dumps), --hang and the hidden --probe a test points at a fake."""
+    ap.add_argument("--every", type=int, default=every, metavar="N")
     ap.add_argument("--hang", type=float, default=30, metavar="SECONDS")
-    ap.add_argument("--watch", type=_watch_arg, action="append", default=[], metavar="ADDR:LEN")
     ap.add_argument("--probe", help=argparse.SUPPRESS)
+
+
+def run_options(ap: argparse.ArgumentParser, args: argparse.Namespace) -> dict:
+    """The keywords for `run` from the arguments add_play_arguments and add_run_arguments gave
+    AP. A negative --hang is AP's error, and --hang 0 is no hang."""
+    if args.hang < 0:
+        ap.error("--hang is a number of seconds from 0")
+    return {"pads": args.pads, "script": args.script, "every": args.every, "hang": args.hang or None,
+            "probe": args.probe}
+
+
+def print_outcome(outcome: Outcome, prog: str) -> None:
+    """Prints how OUTCOME's run ended. A game that never connected is PROG's error on stderr, and
+    any other end goes to stdout with its detail and its input log."""
+    if outcome.reason == NEVER_LINKED:
+        print(f"{prog}: the game never connected: {outcome.detail}", file=sys.stderr)
+        return
+    last = "no frame" if outcome.last_frame is None else f"the last frame {outcome.last_frame}"
+    print(f"{outcome.run_dir}: {outcome.reason}, {outcome.frames} frames answered, {last}")
+    print(f"  {outcome.detail}")
+    if outcome.input_log is not None:
+        print(f"  input log {outcome.input_log}")
+
+
+def main(argv: list[str]) -> int:
+    argv, settings = split_settings(argv)
+    ap = argparse.ArgumentParser(prog="bot_link.py", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    add_play_arguments(ap)
+    ap.add_argument("--send", type=int, choices=range(1, 5), metavar="N")
+    add_run_arguments(ap)
+    ap.add_argument("--watch", type=_watch_arg, action="append", default=[], metavar="ADDR:LEN")
     ap.add_argument("name")
     ap.add_argument("seconds", type=int)
     args = ap.parse_args(argv)
-    if args.hang < 0:
-        ap.error("--hang is a number of seconds from 0")
+    options = run_options(ap, args)
     send = args.send or args.pads
     seen: dict[tuple[int, int], bytes] = {}
 
@@ -625,19 +674,13 @@ def main(argv: list[str]) -> int:
         return {port: Pad() for port in range(1, send + 1)}
 
     try:
-        outcome = run(args.name, args.seconds, bot, pads=args.pads, script=args.script, every=args.every,
-                      settings=settings, hang=args.hang or None, probe=args.probe)
+        outcome = run(args.name, args.seconds, bot, settings=settings, **options)
     except (ValueError, LinkSetupError) as e:
         print(f"bot_link.py: {e}", file=sys.stderr)
         return 2
+    print_outcome(outcome, "bot_link.py")
     if outcome.reason == NEVER_LINKED:
-        print(f"bot_link.py: the game never connected: {outcome.detail}", file=sys.stderr)
         return 2
-    last = "no frame" if outcome.last_frame is None else f"the last frame {outcome.last_frame}"
-    print(f"{outcome.run_dir}: {outcome.reason}, {outcome.frames} frames answered, {last}")
-    print(f"  {outcome.detail}")
-    if outcome.input_log is not None:
-        print(f"  input log {outcome.input_log}")
     return 0 if outcome.reason in CLEAN else 1
 
 

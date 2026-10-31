@@ -56,6 +56,8 @@ That plays the menu route with a bot that presses nothing. It prints the four by
 
 Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, hang=)`. `bot(link)` gets a `Link` whose `frame` is the last frame number and whose `read(addr, length)` returns 1 to 256 bytes of RAM. It returns `{port: Pad(...)}`, and a port it leaves out stays out, so the engine stops the game and names the port.
 
+`every=None` dumps no frames, since probe.sh then gets an interval no run reaches. `split_settings`, `add_play_arguments`, `add_run_arguments`, `run_options` and `print_outcome` give another tool this command's `--` split, its run arguments and its outcome lines, as ram_peek.py does. `run_directory(name)` is the `build/probe/NAME/` a run of NAME keeps its output in.
+
 `Pad()` is a pad at rest and `BUTTONS` holds the PADStatus bits. A `Pad` value the engine would refuse is a `ValueError`, so a bot that computes one raises.
 
 `run` owns the deadline. It gives probe.sh a few seconds more than SECONDS and ends the game itself at SECONDS, or at a hang, with the link open until the game has exited. The engine then doesn't log that the bot hung up, and its input log is whole.
@@ -105,15 +107,17 @@ tools/ram_peek.py --script tests/routes/air-ride-race.txt --at 3200,3400-3600/10
 
 An item is a name from kar_ram.json, which prints with what its value means when the table says. Or it's a raw read, where `ADDR:LEN` prints LEN bytes as hex and `ADDR:TYPE` or `ADDR:TYPExN` prints one or N values of u8, s8, u16, s16, u32, s32 or f32. ADDR can go on with `/OFF` for each pointer to follow as the table's paths do, and a value behind a null pointer prints as `none`.
 
-`--at` takes frames and ranges, `A-B` for each frame from A to B and `A-B/S` for every Sth. The engine's frame numbers can jump, so a frame is read at the first one the engine steps the bot at from then on, and the line names that frame. `--script`, `--pads`, `--every`, `--hang` and the settings after `--` are bot_link.py's, and `--table PATH` reads another table.
+`--at` takes frames and ranges, `A-B` for each frame from A to B and `A-B/S` for every Sth. The engine's frame numbers can jump, so a frame is read at the first one the engine steps the bot at from then on, and the line names that frame. `--script`, `--pads`, `--hang` and the settings after `--` are bot_link.py's, and `--table PATH` reads another table.
+
+NAME has to be new. A run in a `build/probe/NAME/` an earlier run left starts from that run's memory card, while every route starts from a blank one, so ram_peek.py refuses such a NAME. The run dumps no frames unless `--every N` asks for every Nth.
 
 It prints how the run ended as bot_link.py does, with a line naming any frame it never reached. It exits 0 when the run ended as a bot run is meant to and every frame was read, and 1 when the run ended another way or a frame was never reached.
 
-A bad argument, an unknown name, a table that won't load or a game that never connected exits 2. The tests stand a fake link in for the game, so they need no disc.
+A bad argument, a NAME that isn't new, an unknown name, a table that won't load or a game that never connected exits 2. The tests stand a fake link in for the game, so they need no disc.
 
 ## kar_ram.py
 
-Where does Kirby Air Ride keep what a bot needs to see? `kar_ram.json` names each value by its address and type, as stable-retro's `data.json` does. Each entry says what the value is, what the confirmed values mean and the route and frames it was watched on.
+Where does Kirby Air Ride keep what a bot needs to see? `kar_ram.json` names each value by its address and type, as stable-retro's `data.json` does. Each entry says what the value is, what the confirmed values mean and the route and frames it was watched on. A value watched on another route names that route and its frame in its meaning.
 
 `load(path=None)` reads the table into `Entry` records by name. It raises `ValueError` naming the file and the entry for one that's malformed or reaches outside main RAM, `80000000` to `817FFFFF`. `decode(entry, data)` turns the bytes read for an entry into an int, a float or, for a run of bytes, the bytes.
 

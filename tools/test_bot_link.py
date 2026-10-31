@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import json
 import os
@@ -880,6 +881,18 @@ class SetupTest(FakeProbeCase):
                           "GCN_FRAMETIME=1", f"GCN_SESSION={self.run_dir() / 'session'}", "GCN_WAV=",
                           "GCN_AIDWAV=", "--pads=2", f"GCN_BOT={sock}"])
 
+    def test_every_none_is_an_interval_no_run_reaches(self):
+        self.plan([0])
+        self.go(neutral, every=None)
+        self.assertEqual(self.record()["argv"][3], str(bot_link.NO_DUMPS))
+        self.assertGreaterEqual(bot_link.NO_DUMPS, 10 ** 9)
+
+    def test_the_run_directory_is_beside_the_probe_as_probe_sh_finds_it(self):
+        self.assertEqual(bot_link.run_directory("t", self.probe), self.run_dir())
+        self.assertEqual(bot_link.run_directory("t"), bot_link.PROBE.parent.parent / "build" / "probe" / "t")
+        self.plan([0])
+        self.assertEqual(self.go(neutral).run_dir, self.run_dir())
+
     def test_a_session_the_run_makes_records_no_audio_unless_settings_say_where(self):
         self.plan([0])
         for settings, expected in ((["GCN_WAV=/x/out.wav"], ["GCN_WAV=/x/out.wav", "GCN_AIDWAV="]),
@@ -1149,6 +1162,50 @@ class CommandTest(FakeProbeCase):
         code, _, err = self.main("t", "30", "--", "--pads=2")
         self.assertEqual(code, 2)
         self.assertIn("run sets GCN_BOT and --pads itself", err)
+
+
+class CommandHelperTest(unittest.TestCase):
+    def parser(self, **kwargs) -> argparse.ArgumentParser:
+        ap = argparse.ArgumentParser(prog="tool.py")
+        bot_link.add_play_arguments(ap)
+        bot_link.add_run_arguments(ap, **kwargs)
+        return ap
+
+    def test_settings_are_what_follows_the_first_double_dash(self):
+        self.assertEqual(bot_link.split_settings(["a", "--", "--exit-after=5", "--", "x"]),
+                         (["a"], ["--exit-after=5", "--", "x"]))
+        self.assertEqual(bot_link.split_settings(("a", "b")), (["a", "b"], []))
+
+    def test_the_run_arguments_become_runs_keywords(self):
+        ap = self.parser()
+        args = ap.parse_args(["--script", "r.txt", "--pads", "2", "--every", "9", "--hang", "4", "--probe", "p"])
+        self.assertEqual(bot_link.run_options(ap, args),
+                         {"pads": 2, "script": "r.txt", "every": 9, "hang": 4.0, "probe": "p"})
+        args = ap.parse_args(["--hang", "0"])
+        self.assertEqual(bot_link.run_options(ap, args),
+                         {"pads": 1, "script": "", "every": 60, "hang": None, "probe": None})
+        ap = self.parser(every=None)
+        self.assertIsNone(bot_link.run_options(ap, ap.parse_args([]))["every"])
+
+    def test_a_negative_hang_is_the_parsers_error(self):
+        ap = self.parser()
+        code, _, err = run_main(lambda argv: bot_link.run_options(ap, ap.parse_args(argv)), "--hang", "-1")
+        self.assertEqual(code, 2)
+        self.assertIn("tool.py: error: --hang is a number of seconds from 0", err)
+
+    def test_the_outcome_prints_where_how_and_the_input_log(self):
+        outcome = Outcome(3, 2, bot_link.EXIT_AFTER, "--exit-after=2", Path("/r"), Path("/r/session/inputs"))
+        code, out, err = run_main(lambda argv: bot_link.print_outcome(outcome, "tool.py"))
+        self.assertEqual((out, err), ("/r: exit_after, 3 frames answered, the last frame 2\n  --exit-after=2\n"
+                                      "  input log /r/session/inputs\n", ""))
+        outcome = Outcome(0, None, bot_link.GAME_DIED, "gone", Path("/r"))
+        self.assertEqual(run_main(lambda argv: bot_link.print_outcome(outcome, "tool.py"))[1],
+                         "/r: game_died, 0 frames answered, no frame\n  gone\n")
+
+    def test_a_game_that_never_connected_is_the_tools_error(self):
+        outcome = Outcome(0, None, bot_link.NEVER_LINKED, "no build/dragoon", Path("/r"))
+        _, out, err = run_main(lambda argv: bot_link.print_outcome(outcome, "tool.py"))
+        self.assertEqual((out, err), ("", "tool.py: the game never connected: no build/dragoon\n"))
 
 
 if __name__ == "__main__":
