@@ -1,5 +1,5 @@
-"""What the hash tools and the scorecard do with probe.sh: run it, delete a probe run's directory in
-build/probe/, and read the N of a --slow=N."""
+"""What the hash tools and the scorecard do with probe.sh: run it and delete the directory a run
+leaves in build/probe/. It also reads the N of a --slow=N."""
 from __future__ import annotations
 
 import shutil
