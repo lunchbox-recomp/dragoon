@@ -17,8 +17,11 @@ that didn't reach one. A check reads every golden before it runs the game. No au
 captured or kept, only the hashes.
 
 --slow=N gives each route N times its seconds, for a build that runs slower than the one the
-goldens came from. N is a whole number from 1 and defaults to 1. Nothing else about a run
-changes, and record refuses it, since goldens come from a build at full speed.
+goldens came from. N is a whole number from 1 and defaults to 1. record refuses it, since
+goldens come from a build at full speed.
+
+A bench takes no --exit-after, so a fast build spends all N times the seconds. Nothing else
+about a run changes.
 
 A bench that crashes prints no report, and probe.sh exits 1. That counts as a route that doesn't
 match, so check says the bench printed no report and fails the lists it didn't reach. Any other

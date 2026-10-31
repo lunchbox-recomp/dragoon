@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -82,17 +83,30 @@ class HashRouteTest(unittest.TestCase):
                           str(routes.route_file("title")), "60"])
         self.assertEqual(self.got, {60: A})
 
-    def test_slow_multiplies_the_seconds_and_changes_nothing_else(self):
-        route = frame_hashes.Route("title", 20, 60, [120], ["--pads=4"])
+    def probe_line(self, route: frame_hashes.Route, slow: int) -> list[str]:
         run = mock.Mock()
         with (mock.patch.object(frame_hashes, "remove_run"),
               mock.patch.object(subprocess, "run", run),
               mock.patch.object(frame_hashes, "hash_frames", return_value={60: A}),
               mock.patch.object(Path, "exists", return_value=False)):
-            frame_hashes.hash_route(route, 3)
-        self.assertEqual(run.call_args.args[0],
-                         [str(frame_hashes.PROBE), "hashes-title", "60",
-                          str(routes.route_file("title")), "60", "--pads=4"])
+            frame_hashes.hash_route(route, slow)
+        return run.call_args.args[0]
+
+    def test_slow_multiplies_the_seconds_and_stops_the_run_one_dump_past_the_last_frame(self):
+        route = frame_hashes.Route("title", 20, 60, [60, 120], ["--pads=4"])
+        self.assertEqual(self.probe_line(route, 3),
+                         [str(frame_hashes.PROBE), "hashes-title", "60", str(routes.route_file("title")), "60",
+                          "--exit-after=180", "--pads=4"])
+
+    def test_the_last_frame_is_the_largest_of_the_required_frames_whatever_their_order(self):
+        route = frame_hashes.Route("city", 80, 100, [22900, 4200, 19100], [])
+        self.assertIn("--exit-after=23000", self.probe_line(route, 2))
+
+    def test_a_slow_of_1_is_the_plain_check(self):
+        route = frame_hashes.Route("title", 20, 60, [120], ["--pads=4"])
+        self.assertEqual(self.probe_line(route, 1),
+                         [str(frame_hashes.PROBE), "hashes-title", "20", str(routes.route_file("title")), "60",
+                          "--pads=4"])
 
     def test_removes_a_directory_left_from_an_earlier_run_before_and_after(self):
         remove = self.run_route(True, mock.Mock())
@@ -141,6 +155,56 @@ class EnvironmentTest(unittest.TestCase):
               mock.patch.dict(os.environ, {"GCN_INTERPRET": "/lists/one.txt"})):
             frame_hashes.hash_route(frame_hashes.Route("title", 20, 60, [120], []))
         self.assertEqual(seen.read_text(), "/lists/one.txt")
+
+
+# A stand-in for the game that dumps a frame every --dump-every, up to the frame --exit-after
+# quits on (a dump on that frame is still written, as gcn-recomp's docs/diagnostics.md says), or
+# up to frame 900 when it has no --exit-after, the way a build at full speed would run out the seconds.
+FAKE_GAME = """#!/bin/sh
+every=60
+after=900
+for a in "$@"; do
+  case $a in
+    --dump-every=*) every=${a#--dump-every=} ;;
+    --exit-after=*) after=${a#--exit-after=} ;;
+    --dump-dir=*) dir=${a#--dump-dir=} ;;
+  esac
+done
+n=$every
+while [ "$n" -le "$after" ]; do
+  : > "$dir/frame_$(printf %05d "$n").png"
+  n=$((n + every))
+done
+"""
+
+
+class SlowRunTest(unittest.TestCase):
+    """hash_route through the real probe.sh, in a copy of the tree whose game is FAKE_GAME."""
+
+    route = frame_hashes.Route("title", 20, 60, [60, 120], [])
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name).resolve()
+        (self.root / "tools").mkdir()
+        (self.root / "build").mkdir()
+        shutil.copy(frame_hashes.PROBE, self.root / "tools" / "probe.sh")
+        write_file(self.root / "build", "dragoon", FAKE_GAME).chmod(0o755)
+        for patch in (mock.patch.object(frame_hashes, "ROOT", self.root),
+                      mock.patch.object(frame_hashes, "PROBE", self.root / "tools" / "probe.sh")):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def test_a_plain_run_dumps_until_the_game_stops_on_its_own(self):
+        self.assertEqual(sorted(frame_hashes.hash_route(self.route)), list(range(60, 901, 60)))
+
+    def test_a_slowed_run_quits_one_dump_past_the_last_frame_and_still_dumps_it(self):
+        self.assertEqual(sorted(frame_hashes.hash_route(self.route, 20)), [60, 120, 180])
+
+    def test_a_slowed_run_of_a_route_whose_dumps_are_far_apart_still_dumps_its_last_frame(self):
+        route = frame_hashes.Route("stadium", 60, 300, [300, 900], [])
+        self.assertEqual(sorted(frame_hashes.hash_route(route, 5)), [300, 600, 900, 1200])
 
 
 class MainTest(unittest.TestCase):

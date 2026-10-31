@@ -12,8 +12,12 @@ check reads every golden before it runs the game. The frames come from the playe
 they're deleted once hashed and never committed.
 
 --slow=N gives each route N times its seconds, for a build that runs slower than the one the
-goldens came from. N is a whole number from 1 and defaults to 1. Nothing else about a run
-changes, and record refuses it, since goldens come from a build at full speed.
+goldens came from. N is a whole number from 1 and defaults to 1. record refuses it, since
+goldens come from a build at full speed.
+
+With N above 1 a route also quits one dump interval past its last frame (probe.sh
+--exit-after), so a fast build doesn't spend the extra seconds. Nothing else about a run
+changes.
 
 Exits 0 when every route matches (or is recorded), 1 when a frame changed or wasn't reached,
 2 on a bad argument, a missing or malformed golden, or a probe.sh run that failed.
@@ -75,8 +79,9 @@ def reached(got: dict[int, str], needed: int) -> str:
 
 
 def probe_args(route: Route, name: str, slow: int) -> list[str]:
+    stop = [f"--exit-after={max(route.required) + route.dump_every}"] if slow > 1 else []
     return [str(PROBE), name, str(route.seconds * slow), str(route_file(route.name)),
-            str(route.dump_every), *route.extra]
+            str(route.dump_every), *stop, *route.extra]
 
 
 def hash_route(route: Route, slow: int = 1) -> dict[int, str]:

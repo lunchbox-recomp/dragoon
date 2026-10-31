@@ -192,7 +192,9 @@ Did a change alter what the renderer draws? It runs each route in `tests/hashes/
 
 The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. A `check` of all twelve routes took 302 s while other copies of the game ran on the same machine.
 
-`check --slow=N` gives each route N times its seconds, for a build that runs slower than the one the goldens came from. N is a whole number from 1, the default. The dump interval and the frames a route must reach don't change, and `record` refuses it.
+`check --slow=N` gives each route N times its seconds, for a build that runs slower than the one the goldens came from. N is a whole number from 1, the default. With N above 1 the game quits one dump interval past the route's last frame (probe.sh `--exit-after`), so a fast build doesn't spend the extra seconds.
+
+The dump interval and the frames a route must reach don't change, and `record` refuses `--slow`.
 
 ```
 tools/frame_hashes.py check title
@@ -210,7 +212,7 @@ tools/audio_hashes.py record title --lists 7200,20000
 
 A `check` of all twelve routes took 300 s while other copies of the game ran on the same machine. Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is deleted first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
 
-`check --slow=N` gives each route N times its seconds, as in frame_hashes.py. The rows are list counts, not times, so a slower build is held to the same ones. `record` refuses it.
+As in frame_hashes.py, `check --slow=N` gives each route N times its seconds, and `record` refuses it. The rows are list counts, not times, so a slower build is held to the same ones. A bench takes no `--exit-after`, so a fast build spends all of the seconds.
 
 A bench that crashes prints no report, and probe.sh exits 1. That counts as a route that doesn't match, so `check` says the bench printed no report and fails the lists it didn't reach. Any other probe.sh failure exits 2.
 
