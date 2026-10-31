@@ -60,7 +60,7 @@ Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, h
 
 `run` owns the deadline. It gives probe.sh a few seconds more than SECONDS and ends the game itself at SECONDS, or at a hang, with the link open until the game has exited. The engine then doesn't log that the bot hung up, and its input log is whole.
 
-`hang` also counts the wait for the game to connect again after it resets the console. It doesn't count the first connection, so a game that hasn't connected when SECONDS are up is `never_linked`.
+`hang` also counts the wait for the game to connect again after it resets the console, which the `[reset]` line in `stdout.txt` shows. It doesn't count the first connection, so a game that hasn't connected when SECONDS are up is `never_linked`. Nor does it count the wait after a game that exited, since probe.sh notices that only at its next one-second tick.
 
 `run` returns an `Outcome` with `frames`, `last_frame`, `reason`, `detail`, `run_dir`, `input_log` and `error`. `input_log` is the directory `tools/probe.sh NAME SECONDS "" 60 --replay=DIR` takes. It comes from the last `[session]` line in `stdout.txt`, so after a console reset it's the last process's. The reason comes from the link's own end, what the game wrote to `build/probe/NAME/` and that input log, never from probe.sh's exit status, which is 0 whatever the game did.
 
@@ -71,7 +71,7 @@ Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, h
 | `shutdown` | The game shut the console down by itself | Its `[reset]` line |
 | `game_exited` | The game ended some other way and left its input log whole | The frame it ended at |
 | `game_died` | The game ended and its input log has no `# end` line, or it reset the console and the new process began no session | The last line of `stdout.txt`, or the `[reset]` line |
-| `hang` | No frame for `hang` seconds, or no new connection that long after a reset | How long, and after which frame |
+| `hang` | No frame for `hang` seconds, or no new connection that long after a reset | How long, and after which frame, or after a reset the game's last line |
 | `engine_stop` | The engine stopped the game | Its `[bot] frame N: ...` line from `stdout.txt` |
 | `connect_failed` | The engine couldn't connect | Its `--bot PATH: ...` line |
 | `panic` | The game crashed | The first line of `panic.txt`, or the `FATAL` or `FAULT` line |
@@ -83,7 +83,9 @@ The engine writes `# end` in its input log on the ways out it chooses, and that 
 
 A game that left no `# end` is `game_died`, and so is one that resets the console and starts again but never begins a session. The input log is then the first process's, which ends with the reset, so a `[session]` line has to follow the `[reset]` line in `stdout.txt`. An `exit_after` needs the end line's frame to reach the `--exit-after` count, and a `shutdown` wins over it.
 
-The command exits 0 for `time_limit`, `exit_after` and `shutdown`. It exits 1 for every other reason except `never_linked`, `game_exited` included, since nothing in a bot run asks for the game to end some other way (a SIGTERM from outside does it). `never_linked` is a run that couldn't start, so it exits 2, like a bad argument, a socket another bot is listening on or a probe.sh that won't run.
+The command exits 0 for `time_limit`, `exit_after` and `shutdown`. It exits 1 for the reasons that mean something went wrong, and `game_exited` is one of them. Nothing in a bot run asks for the game to end some other way, and a SIGTERM from outside does it.
+
+`never_linked` is a run that couldn't start, so it exits 2 like a bad argument, a socket another bot is listening on or a probe.sh that won't run.
 
 The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when that would pass the 103 bytes a Unix socket takes. Its lock is the same path with `.lock` on the end, and a second run on the same socket is refused while the first holds it. A socket file an earlier run left is replaced.
 
