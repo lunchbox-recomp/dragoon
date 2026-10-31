@@ -12,10 +12,11 @@ the bot send pads for ports 1 to N, which is only different from --pads when you
 engine refuse a port it doesn't drive or one the bot leaves out. --hang stops the run when the
 game sends no frame for SECONDS (30 by default, 0 for never).
 
-The run is a session (GCN_SESSION), so it keeps an input log that replays with no bot, and the
-result names it. Exits 0 when the run ended by itself or at the time limit (time_limit,
-exit_after, shutdown and game_exited), 1 when it ended any other way (a stop, a crash, a hang,
-a game that died, a bot that raised) and 2 on a bad argument or when the game never connected.
+The run is a session (GCN_SESSION) that keeps an input log, which replays with no bot, and
+records no audio. The result names the log. Exits 0 when the run ended as a bot run is meant to
+(time_limit, exit_after and shutdown), 1 when it ended any other way (a stop, a crash, a hang,
+a game that died or exited, a bot that raised) and 2 on a bad argument or when the game never
+connected, which includes not connecting before the time limit.
 
 As a module, `run` does the same with a bot of your own:
 
@@ -72,11 +73,11 @@ BUTTONS = {
     "L": 0x0040, "A": 0x0100, "B": 0x0200, "X": 0x0400, "Y": 0x0800, "START": 0x1000,
 }
 
-# How a run's link ended. The first four are the run ending as asked or by itself.
+# How a run's link ended. The first three are the run ending as a bot run is meant to.
 TIME_LIMIT = "time_limit"          # the run's SECONDS were up
 EXIT_AFTER = "exit_after"          # --exit-after frames were shown
 SHUTDOWN = "shutdown"              # the game shut the console down by itself
-GAME_EXITED = "game_exited"        # the game ended cleanly some other way
+GAME_EXITED = "game_exited"        # the game ended some other way that left its input log whole
 GAME_DIED = "game_died"            # the game ended with no `# end` in its input log
 HANG = "hang"                      # no frame for `hang` seconds
 ENGINE_STOP = "engine_stop"        # the engine reported a stop, its `[bot] frame N: ...` line
@@ -85,8 +86,8 @@ PANIC = "panic"                    # panic.txt, or the engine's FATAL or FAULT l
 BOT_RAISED = "bot_raised"          # the bot callback raised
 NEVER_LINKED = "never_linked"      # the game ended without connecting and without saying why
 BAD_LINK = "bad_link"              # the engine sent something that isn't the protocol
-# The reasons of a run that ended as asked or by itself.
-CLEAN = (TIME_LIMIT, EXIT_AFTER, SHUTDOWN, GAME_EXITED)
+# The reasons of a run that ended as a bot run is meant to.
+CLEAN = (TIME_LIMIT, EXIT_AFTER, SHUTDOWN)
 
 STOP_LINE = re.compile(r"^\[bot\] frame \d+: .*$", re.M)
 CONNECT_LINE = re.compile(r"^--bot .+: .+$", re.M)
@@ -94,7 +95,6 @@ END_LINE = re.compile(r"^# end (\d+) (\d+)$", re.M)
 FRAME_LINE = re.compile(rb"frame (\d+)\n")
 DATA_LINE = re.compile(rb"data ((?:[0-9a-fA-F]{2})*)\n")
 EXIT_AFTER_ARG = re.compile(r"--exit-after=(\d+)")
-RUN_DIR = re.compile(r"run-(\d+)")
 
 
 @dataclass(frozen=True)
@@ -147,7 +147,11 @@ class _TimedOut(BaseException):
 
 
 class _TimeUp(Exception):
-    """The run's deadline passed while the game hadn't connected."""
+    """The run's deadline (TIME_LIMIT) or the hang (HANG) passed while the game hadn't connected."""
+
+    def __init__(self, why: str) -> None:
+        super().__init__(why)
+        self.why = why
 
 
 class Link:
@@ -212,6 +216,7 @@ class _State:
     error: BaseException | None = None
     bad_line: bytes | None = None
     ended: str | None = None  # TIME_LIMIT or HANG, the run's own ends
+    unconnected: bool = False  # the hang was the wait for the game to connect again
 
 
 def encode_pads(pads: Mapping[int, Pad]) -> bytes:
@@ -268,13 +273,18 @@ def _listen(path: str) -> tuple[socket.socket, int]:
     return listener, lock
 
 
-def _accept(listener: socket.socket, proc: subprocess.Popen, deadline: float) -> socket.socket | None:
+def _accept(listener: socket.socket, proc: subprocess.Popen, deadline: float,
+            hang_at: float | None = None) -> socket.socket | None:
     """The game's next connection, or None once probe.sh has exited without one. It's a _TimeUp
-    when `deadline` passes first."""
+    when `deadline` passes first (TIME_LIMIT) or `hang_at` does (HANG), both on time.monotonic()'s
+    clock."""
+    stop, why = deadline, TIME_LIMIT
+    if hang_at is not None and hang_at < deadline:
+        stop, why = hang_at, HANG
     while True:
-        left = deadline - time.monotonic()
+        left = stop - time.monotonic()
         if left <= 0:
-            raise _TimeUp()
+            raise _TimeUp(why)
         ready, _, _ = select.select([listener], [], [], min(0.2, left))
         if ready:
             return listener.accept()[0]
@@ -354,28 +364,45 @@ def _last_crash(text: str) -> str | None:
     return next((line for line in reversed(text.splitlines()) if session_log.FATAL.match(line)), None)
 
 
-def _input_log(session: Path, since: float) -> Path | None:
-    """The input log of the last process to write one under `session`, written since `since`
-    (a time.time()): its inputs/, or inputs/ in the highest run-N, which is where a game that
-    reset the console and started again goes on. It's what probe.sh's --replay= takes."""
-    best: tuple[int, Path] | None = None
-    found = [(1, session)] + [(int(m[1]), p) for p in session.glob("run-*") if (m := RUN_DIR.fullmatch(p.name))]
-    for n, directory in found:
-        try:
-            fresh = (directory / "inputs" / "inputs.txt").stat().st_mtime >= since
-        except OSError:
-            continue
-        if fresh and (best is None or n > best[0]):
-            best = (n, directory / "inputs")
-    return best[1] if best else None
+def _session_lines(log: Path) -> tuple[str | None, str | None]:
+    """What the game's stdout.txt says of its last process's session: the directory in its last
+    `[session] DIR` line, and the `[reset]` line of a restart or hot reset that came after it.
+    The second means the game started again and the new process never began a session. Every
+    line is looked at, since a process says this at its start and a long run says much after."""
+    session = reset = None
+    try:
+        with open(log, errors="replace") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if m := session_log.SESSION.match(line):
+                    session, reset = m[1], None
+                elif session_log.RESET.match(line) and session_log.SHUTDOWN not in line:
+                    reset = line
+    except OSError:
+        pass
+    return session, reset
+
+
+def _input_log(run_dir: Path, session: str | None) -> Path | None:
+    """The inputs/ directory of the session a `[session] DIR` line names (an absolute DIR is
+    used as it is and a relative one is taken from `run_dir`), when it holds an input log. It's
+    what probe.sh's --replay= takes."""
+    if session is None:
+        return None
+    inputs = run_dir / session / "inputs"
+    return inputs if (inputs / "inputs.txt").is_file() else None
 
 
 def _game_verdict(run_dir: Path, starts: int, probe_err: str, input_log: Path | None,
-                  settings: Sequence[str]) -> tuple[str, str]:
+                  settings: Sequence[str], restarted: str | None = None,
+                  timed_out: bool = False) -> tuple[str, str]:
     """How a run the game ended, and not the run, ended, from what the game wrote. Before the
     input log, the engine's own lines: a failed connect, a crash and a stop. Then the input log:
     the engine writes `# end POLL FRAME` on every way out it chooses (a clean exit, a reset, a
-    signal, a stop or a fault), and a game that left none died."""
+    signal, a stop or a fault), and a game that left none died. So did one that reset the console
+    and started again (`restarted` is its `[reset]` line) without the new process getting as far
+    as a session, since the log is then the first process's, which ended with the reset.
+    `timed_out` is for a game still booting when the run's time was up."""
     tail = _tail(run_dir / "stdout.txt")
     line = _last(CONNECT_LINE, tail)
     if line is not None:
@@ -393,8 +420,13 @@ def _game_verdict(run_dir: Path, starts: int, probe_err: str, input_log: Path | 
         return ENGINE_STOP, line
     lines = [t for t in tail.splitlines() if t.strip()]
     if starts == 0:
+        if timed_out:
+            return NEVER_LINKED, "the game hadn't connected when the time limit came" + (
+                f", and its last line is {lines[-1]!r}" if lines else "")
         return NEVER_LINKED, probe_err.strip() or (lines[-1] if lines else "the game ended before it connected")
-    end = END_LINE.findall(_tail(input_log / "inputs.txt", LOG_TAIL)) if input_log is not None else []
+    if restarted is not None:
+        return GAME_DIED, f"{restarted}, and no session began after it"
+    end =END_LINE.findall(_tail(input_log / "inputs.txt", LOG_TAIL)) if input_log is not None else []
     if not end:
         return GAME_DIED, lines[-1] if lines else "the game wrote nothing"
     frame = int(end[-1][1])
@@ -418,10 +450,13 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
     program for a fake in a test; its run directory is where probe.sh's would be.
 
     The run is a session, build/probe/NAME/session unless `settings` names a GCN_SESSION, so
-    its input log replays with no bot. At `seconds`, and at a hang, the game is ended with the
-    link still open, so the engine doesn't log that the bot hung up. The game connects again
-    after it resets the console, and the bot goes on with it. Raises ValueError for an argument
-    probe.sh or the link would refuse, and LinkSetupError when no run could be started."""
+    its input log replays with no bot. A session the run makes records no audio, unless
+    `settings` sets GCN_WAV or GCN_AIDWAV. At `seconds`, and at a hang, the game is ended with
+    the link still open, so the engine doesn't log that the bot hung up. The game connects again
+    after it resets the console, and the bot goes on with it; `hang` counts the wait for that
+    too, but not the wait for the first connection, which `seconds` bounds and which a game that
+    never makes is a NEVER_LINKED. Raises ValueError for an argument probe.sh or the link would
+    refuse, and LinkSetupError when no run could be started."""
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", name):
         raise ValueError(f"{name!r}: not a name for a run's directory")
     if seconds < 1 or every < 1:
@@ -446,7 +481,6 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
     ours = [s for s in settings if s.startswith("GCN_SESSION=") and len(s) > len("GCN_SESSION=")]
     session = run_dir / (ours[-1][len("GCN_SESSION="):] if ours else "session")  # an absolute one wins
     link, proc = Link(), None
-    since = time.time() - 2  # file times can be coarser than the clock
     started = time.monotonic()
     state = _State(started + seconds)
     err: str | None = None
@@ -458,18 +492,23 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
                 pass
         if not ours and session.exists():
             remove_run(session)
+        # An empty GCN_WAV or GCN_AIDWAV is a recording the engine can't open, so it makes none.
+        silent = [f"{var}=" for var in ("GCN_WAV", "GCN_AIDWAV") if not any(s.startswith(f"{var}=") for s in settings)]
         argv = [str(probe_path), name, str(seconds + DEADLINE_SLACK), script, str(every), *settings,
-                *([] if ours else [f"GCN_SESSION={session}"]), f"--pads={pads}", f"GCN_BOT={sock}"]
+                *([] if ours else [f"GCN_SESSION={session}", *silent]), f"--pads={pads}", f"GCN_BOT={sock}"]
         try:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, text=True)
         except OSError as e:
             raise LinkSetupError(f"can't run {probe_path}: {e}") from None
         while True:
+            # The hang clock runs from the end of the last link, for a game that was connected
+            # once and has reset the console. A game that hasn't connected yet has the deadline.
+            hang_at = time.monotonic() + hang if hang is not None and link.starts else None
             try:
-                conn = _accept(listener, proc, state.deadline)
-            except _TimeUp:
-                state.ended = TIME_LIMIT
+                conn = _accept(listener, proc, state.deadline, hang_at)
+            except _TimeUp as e:
+                state.ended, state.unconnected = e.why, e.why == HANG
                 break
             if conn is None:
                 break
@@ -501,18 +540,24 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
             pass
         # Only now, or a bot that took the lock first could have its new socket file removed.
         os.close(lock)
-    input_log = _input_log(session, since)
+    session_dir, restarted = _session_lines(run_dir / "stdout.txt")
+    input_log = _input_log(run_dir, session_dir)
     if state.error is not None:
         reason, detail = BOT_RAISED, f"{type(state.error).__name__}: {state.error}"
     elif state.bad_line is not None:
         reason, detail = BAD_LINK, f"the engine sent {state.bad_line!r}, not a frame or data line"
-    elif state.ended == TIME_LIMIT:
-        reason, detail = TIME_LIMIT, f"the time limit, {seconds} s" + ("" if link.starts else ", the game hadn't connected")
+    elif state.ended == TIME_LIMIT and link.starts:
+        reason, detail = TIME_LIMIT, f"the time limit, {seconds} s"
     elif state.ended == HANG:
-        after = "it connected" if state.last_frame is None else f"frame {state.last_frame}"
-        reason, detail = HANG, f"no frame for {hang:g} s after {after}"
+        if state.unconnected:
+            detail = f"no new connection for {hang:g} s after the link closed"
+        else:
+            after = "it connected" if state.last_frame is None else f"frame {state.last_frame}"
+            detail = f"no frame for {hang:g} s after {after}"
+        reason = HANG
     else:
-        reason, detail = _game_verdict(run_dir, link.starts, err, input_log, settings)
+        reason, detail = _game_verdict(run_dir, link.starts, err, input_log, settings, restarted,
+                                       timed_out=state.ended == TIME_LIMIT)
     return Outcome(state.frames, state.last_frame, reason, detail, run_dir, input_log, state.error)
 
 

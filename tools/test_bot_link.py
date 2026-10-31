@@ -33,16 +33,20 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #                    shutdown the game asks for), "died" (no `# end`, as after an abort),
 #                    "panic", "fatal", "garbage" (sends a line that isn't a frame) or "reset"
 #                    (a console reset: it hangs up and starts again as a new process, to play
-#                    "then", another plan)
+#                    "then", another plan, which may have a "connect_after" of its own); "reset_fails"
+#                    (the reset, and the restart never happens, as when execv fails) or "reset_dies"
+#                    (the restarted process says its [session] line and dies before its input log)
 #   "forever"        goes on sending frames after the listed ones, for as long as the bot answers
 #   "refuse"         the text of a refusal on stderr; it exits 2 without a game, as probe.sh does
 #   "connect_fails"  the game's failed connect, without one
 #   "connect_after"  seconds to wait before it connects
+#   "boot_says"      a line it prints after its [session] line and before it connects
 #   "die_at"         exits just after sending that frame, without waiting for the answer
 #   "partial_data"   answers the first read with half a line and exits
 #   "bad_data"       answers a read with what isn't a data line
 #   "ignore_hangup"  waits instead of exiting when the bot hangs up
 #   "moving"         makes RAM change from frame to frame
+#   "kind"           what a reset says it is: "restart" (the default), "hot reset" or "shutdown"
 # A read outside 80000000 to 817FFFFF, or of fewer than 1 or more than 256 bytes, stops the game.
 FAKE_PROBE = r'''#!@PYTHON@
 import atexit, json, os, signal, socket, sys, time
@@ -76,7 +80,7 @@ def say(text, file="stdout.txt"):
         f.write(text)
 
 
-def begin_log():
+def begin_log(open_log=True):
     global log
     if not session:
         return
@@ -86,10 +90,12 @@ def begin_log():
         while os.path.exists(os.path.join(where, "run-%d" % n, "session.json")):
             n += 1
         where = os.path.join(where, "run-%d" % n)
-    os.makedirs(os.path.join(where, "inputs"))
+    os.makedirs(os.path.join(where, "inputs") if open_log else where)
     with open(os.path.join(where, "session.json"), "w") as f:
         f.write("{}")
     say("[session] %s\n" % where)
+    if not open_log:
+        return
     log = open(os.path.join(where, "inputs", "inputs.txt"), "w")
     log.write("# gcn-recomp input log v5\n")
     log.flush()
@@ -192,11 +198,13 @@ def numbers(frames, forever):
         n += 1
 
 
-def play(frames, forever=False):
+def play(frames, forever=False, connect_after=0):
     global conn, lines, last
     begin_log()
-    if plan.get("connect_after"):
-        time.sleep(plan["connect_after"])
+    if plan.get("boot_says"):
+        say(plan["boot_says"])
+    if connect_after:
+        time.sleep(connect_after)
     if plan.get("connect_fails"):
         say("--bot %s: can't connect: Connection refused\n" % path)
         end_log()
@@ -213,7 +221,7 @@ def play(frames, forever=False):
 if plan.get("refuse"):
     print(plan["refuse"], file=sys.stderr)
     sys.exit(2)
-play(plan["frames"], plan.get("forever", False))
+play(plan["frames"], plan.get("forever", False), plan.get("connect_after", 0))
 after = plan.get("after", "exit")
 if after == "linger":
     time.sleep(int(seconds))
@@ -231,13 +239,17 @@ elif after == "garbage":
     conn.sendall(b"hello\n")
     lines.readline()
     end_log()
-elif after == "reset":
-    say("[reset] the game reset the console (restart, code 0)\n")
+elif after in ("reset", "reset_fails", "reset_dies"):
+    say("[reset] the game reset the console (%s, code 0)\n" % plan.get("kind", "restart"))
     end_log()
     lines.close()
     conn.close()
-    play(plan["then"]["frames"])
-    end_log()
+    if after == "reset_dies":
+        begin_log(open_log=False)
+        sys.exit(1)
+    if after == "reset":
+        play(plan["then"]["frames"], connect_after=plan["then"].get("connect_after", 0))
+        end_log()
 else:
     end_log()
 '''
@@ -246,6 +258,7 @@ else:
 FAKE_GAME = r'''#!@PYTHON@
 import json, os, socket, sys
 
+print("[session] " + os.environ["GCN_SESSION"], file=sys.stderr, flush=True)
 conn = socket.socket(socket.AF_UNIX)
 conn.connect(os.environ["GCN_BOT"])
 lines = conn.makefile("rb")
@@ -538,15 +551,83 @@ class OutcomeTest(FakeProbeCase):
         self.assertEqual(bot_link._game_verdict(run_dir, 1, "", None, []),
                          (bot_link.GAME_DIED, "the game wrote nothing"))
 
-    def test_the_input_log_is_the_highest_run_written_since_the_run_began(self):
-        session = self.root / "s"
-        for where, age in ((session, 0), (session / "run-2", 0), (session / "run-3", 3600), (session / "run-x", 0)):
-            (where / "inputs").mkdir(parents=True)
-            log = write_file(where / "inputs", "inputs.txt", "# end 0 0\n")
-            os.utime(log, (time.time() - age, time.time() - age))
-        self.assertEqual(bot_link._input_log(session, time.time() - 60), session / "run-2" / "inputs")
-        self.assertEqual(bot_link._input_log(session, time.time() + 60), None)
-        self.assertEqual(bot_link._input_log(self.root / "nowhere", 0), None)
+    def test_the_session_is_the_last_session_line_and_a_reset_after_it_is_a_restart_that_never_began_one(self):
+        log = self.root / "stdout.txt"
+        self.assertEqual(bot_link._session_lines(log), (None, None))  # no file
+        write_file(self.root, "stdout.txt", "boot\n[session] /a/session\n")
+        self.assertEqual(bot_link._session_lines(log), ("/a/session", None))
+        write_file(self.root, "stdout.txt", "[session] /a/session\n"
+                                            "[reset] the game reset the console (restart, code 0)\n")
+        self.assertEqual(bot_link._session_lines(log),
+                         ("/a/session", "[reset] the game reset the console (restart, code 0)"))
+        write_file(self.root, "stdout.txt", "[session] /a/session\n"
+                                            "[reset] the game reset the console (restart, code 0)\n"
+                                            "[session] /a/session/run-2\n"
+                                            "[session] can't write /x/run-3, so no session is recorded\n"
+                                            "[reset] the game reset the console (hot reset, code 1)\n")
+        self.assertEqual(bot_link._session_lines(log),
+                         ("/a/session/run-2", "[reset] the game reset the console (hot reset, code 1)"))
+        with open(log, "a") as f:
+            f.write("[session] /a/session/run-3\n")
+        self.assertEqual(bot_link._session_lines(log), ("/a/session/run-3", None))
+
+    def test_a_shutdown_after_the_session_is_not_a_restart(self):
+        write_file(self.root, "stdout.txt", "[session] /a/session\n"
+                                            "[reset] the game reset the console (shutdown, code 0)\n")
+        self.assertEqual(bot_link._session_lines(self.root / "stdout.txt"), ("/a/session", None))
+
+    def test_the_session_line_is_found_however_much_the_game_says_after_it(self):
+        write_file(self.root, "stdout.txt", "[session] /a/session\n" + "[frametime] 16.6\n" * (bot_link.TAIL // 8))
+        self.assertGreater((self.root / "stdout.txt").stat().st_size, 2 * bot_link.TAIL)
+        self.assertEqual(bot_link._session_lines(self.root / "stdout.txt"), ("/a/session", None))
+
+    def test_the_input_log_is_the_inputs_of_the_named_session_when_it_holds_one(self):
+        (self.root / "s" / "inputs").mkdir(parents=True)
+        write_file(self.root / "s" / "inputs", "inputs.txt", "# end 0 0\n")
+        (self.root / "t" / "inputs").mkdir(parents=True)  # a session whose game never opened its log
+        self.assertEqual(bot_link._input_log(self.root, str(self.root / "s")), self.root / "s" / "inputs")
+        self.assertEqual(bot_link._input_log(self.root, "s"), self.root / "s" / "inputs")  # relative: from the run
+        self.assertIsNone(bot_link._input_log(self.root, "t"))
+        self.assertIsNone(bot_link._input_log(self.root, "nowhere"))
+        self.assertIsNone(bot_link._input_log(self.root, None))
+
+    def test_a_restart_that_never_began_a_session_is_game_died_and_the_first_log_is_not_its_end(self):
+        run_dir = self.root / "run"
+        (run_dir / "session" / "inputs").mkdir(parents=True)
+        write_file(run_dir / "session" / "inputs", "inputs.txt", "# end 9 1500\n")
+        write_file(run_dir, "stdout.txt", f"[session] {run_dir / 'session'}\n"
+                                          "[reset] the game reset the console (restart, code 0)\n")
+        log = run_dir / "session" / "inputs"
+        reset = "[reset] the game reset the console (restart, code 0)"
+        self.assertEqual(bot_link._game_verdict(run_dir, 1, "", log, ["--exit-after=1500"], reset),
+                         (bot_link.GAME_DIED, f"{reset}, and no session began after it"))
+        self.assertEqual(bot_link._game_verdict(run_dir, 1, "", log, ["--exit-after=1500"])[0], bot_link.EXIT_AFTER)
+
+    def test_a_game_that_restarts_and_never_relaunches_is_game_died(self):
+        self.plan([0, 1], after="reset_fails")  # execv fails, and the game exits 0
+        outcome = self.go(neutral)
+        self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.GAME_DIED, 2, 1))
+        self.assertEqual(outcome.detail, "[reset] the game reset the console (restart, code 0), "
+                                         "and no session began after it")
+        self.assertEqual(outcome.input_log, self.run_dir() / "session" / "inputs")  # the first process's
+
+    def test_a_hot_reset_that_never_relaunches_is_game_died_too(self):
+        self.plan([0], after="reset_fails", kind="hot reset")
+        outcome = self.go(neutral)
+        self.assertEqual(outcome.reason, bot_link.GAME_DIED)
+        self.assertIn("(hot reset, code 0)", outcome.detail)
+
+    def test_a_restart_that_dies_before_its_input_log_opens_is_game_died_with_no_input_log(self):
+        self.plan([0, 1], after="reset_dies")
+        outcome = self.go(neutral)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_DIED, 2))
+        self.assertEqual(outcome.detail, f"[session] {self.run_dir() / 'session' / 'run-2'}")
+        self.assertIsNone(outcome.input_log)  # not the first process's, which ended with the reset
+
+    def test_a_shutdown_is_not_a_restart_that_died(self):
+        self.plan([0], after="reset_fails", kind="shutdown")
+        outcome = self.go(neutral)
+        self.assertEqual(outcome.reason, bot_link.SHUTDOWN)
 
     def test_a_game_that_runs_to_the_time_limit_is_cut_off_there_with_the_link_open(self):
         self.plan([0, 1], after="linger")
@@ -565,12 +646,39 @@ class OutcomeTest(FakeProbeCase):
         self.assertGreater(outcome.frames, 1)
         self.assertEqual(self.record()["link_at_term"], "open")
 
-    def test_the_time_limit_can_pass_before_the_game_connects(self):
+    def test_a_game_that_has_not_connected_when_the_time_is_up_never_linked_and_says_where_it_got_to(self):
         self.plan([0], connect_after=20)
+        began = time.monotonic()
         outcome = self.go(neutral, seconds=1)
-        self.assertEqual(outcome.reason, bot_link.TIME_LIMIT)
-        self.assertEqual(outcome.detail, "the time limit, 1 s, the game hadn't connected")
-        self.assertEqual(outcome.frames, 0)
+        self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)
+        self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.NEVER_LINKED, 0, None))
+        self.assertEqual(outcome.detail, "the game hadn't connected when the time limit came, and its last line "
+                                         f"is '[session] {self.run_dir() / 'session'}'")
+
+    def test_a_game_that_has_not_connected_at_the_time_limit_is_a_crash_when_it_said_so(self):
+        self.plan([0], connect_after=20, boot_says="FATAL: boot: no window\n")
+        outcome = self.go(neutral, seconds=1)
+        self.assertEqual((outcome.reason, outcome.detail), (bot_link.PANIC, "FATAL: boot: no window"))
+
+    def test_the_hang_clock_does_not_run_while_the_game_first_boots(self):
+        self.plan([0], connect_after=1.5)
+        outcome = self.go(neutral, hang=0.5)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 1))
+
+    def test_a_game_that_resets_and_does_not_connect_again_is_a_hang_when_hang_is_set(self):
+        self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 20})
+        began = time.monotonic()
+        outcome = self.go(neutral, hang=0.5)
+        self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)
+        self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 2, 1))
+        self.assertEqual(outcome.detail, "no new connection for 0.5 s after the link closed")
+        self.assertEqual(outcome.input_log, self.run_dir() / "session" / "run-2" / "inputs")  # it began a session
+
+    def test_a_game_that_resets_and_does_not_connect_again_runs_into_the_time_limit_without_a_hang(self):
+        self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 20})
+        outcome = self.go(neutral, seconds=2)
+        self.assertEqual((outcome.reason, outcome.frames, outcome.detail),
+                         (bot_link.TIME_LIMIT, 2, "the time limit, 2 s"))
 
     def test_a_game_that_stops_sending_frames_is_a_hang_with_the_link_open(self):
         self.plan([0, 1, 2], after="linger")
@@ -728,8 +836,28 @@ class SetupTest(FakeProbeCase):
         sock = socket_path(self.run_dir())
         self.assertEqual(self.record()["argv"],
                          ["t", str(17 + bot_link.DEADLINE_SLACK), "120:A:5", "30", "--exit-after=900",
-                          "GCN_FRAMETIME=1", f"GCN_SESSION={self.run_dir() / 'session'}", "--pads=2",
-                          f"GCN_BOT={sock}"])
+                          "GCN_FRAMETIME=1", f"GCN_SESSION={self.run_dir() / 'session'}", "GCN_WAV=",
+                          "GCN_AIDWAV=", "--pads=2", f"GCN_BOT={sock}"])
+
+    def test_a_session_the_run_makes_records_no_audio_unless_settings_say_where(self):
+        self.plan([0])
+        for settings, expected in ((["GCN_WAV=/x/out.wav"], ["GCN_WAV=/x/out.wav", "GCN_AIDWAV="]),
+                                   (["GCN_AIDWAV=/x/aid.raw"], ["GCN_AIDWAV=/x/aid.raw", "GCN_WAV="]),
+                                   (["GCN_WAV=/x/out.wav", "GCN_AIDWAV=/x/aid.raw"],
+                                    ["GCN_WAV=/x/out.wav", "GCN_AIDWAV=/x/aid.raw"])):
+            with self.subTest(settings=settings):
+                self.go(neutral, settings=settings)
+                argv = self.record()["argv"]
+                self.assertEqual(sorted(a for a in argv if a.startswith(("GCN_WAV=", "GCN_AIDWAV="))),
+                                 sorted(expected))
+                self.assertEqual(len([a for a in argv if a.startswith("GCN_WAV=")]), 1)  # the caller's, not both
+                self.assertEqual(len([a for a in argv if a.startswith("GCN_AIDWAV=")]), 1)
+
+    def test_a_session_the_caller_names_is_left_to_the_engine_to_record_as_it_does(self):
+        self.plan([0])
+        self.go(neutral, settings=[f"GCN_SESSION={self.root / 'mine'}"])
+        argv = self.record()["argv"]
+        self.assertFalse([a for a in argv if a.startswith(("GCN_WAV", "GCN_AIDWAV"))])
 
     def test_a_session_in_settings_is_the_runs_and_a_relative_one_is_taken_from_the_run_directory(self):
         self.plan([0])
@@ -745,7 +873,9 @@ class SetupTest(FakeProbeCase):
         self.plan([0])
         outcome = self.go(neutral, settings=["GCN_SESSION="])
         self.assertEqual(outcome.input_log, self.run_dir() / "session" / "inputs")
-        self.assertEqual(self.record()["argv"][-3], f"GCN_SESSION={self.run_dir() / 'session'}")
+        argv = self.record()["argv"]
+        self.assertIn(f"GCN_SESSION={self.run_dir() / 'session'}", argv)
+        self.assertIn("GCN_WAV=", argv)  # the run's own session, so it records no audio
 
     def test_arguments_the_run_sets_itself_are_refused(self):
         for settings in (["GCN_BOT=/x"], ["--pads=2"]):
@@ -855,6 +985,7 @@ class RealProbeTest(unittest.TestCase):
         self.assertEqual(record["env"]["GCN_SESSION"], str(root / "build" / "probe" / "t" / "session"))
         self.assertEqual(record["env"]["GCN_INPUT"], "120:A:5")
         self.assertEqual(record["env"]["GCN_FRAMETIME"], "1")
+        self.assertEqual((record["env"]["GCN_WAV"], record["env"]["GCN_AIDWAV"]), ("", ""))  # set, and empty
         self.assertIn("--pads=2", record["argv"])
         self.assertIn("--exit-after=1500", record["argv"])
         self.assertIn("--dump-every=30", record["argv"])
@@ -875,11 +1006,21 @@ class CommandTest(FakeProbeCase):
                               f"  input log {self.run_dir()}/session/inputs\n")
         self.assertIn("--exit-after=2", self.record()["argv"])
 
-    def test_the_time_limit_and_a_game_that_exited_exit_0(self):
+    def test_the_time_limit_and_a_shutdown_exit_0(self):
         self.plan([0], after="linger")
         self.assertEqual(self.main("--hang", "0", "t", "1")[0], 0)  # --hang 0 is never
+        self.plan([0, 1], after="shutdown")
+        code, out, _ = self.main("t", "30")
+        self.assertEqual(code, 0)
+        self.assertIn(": shutdown, 2 frames answered", out)
+
+    def test_a_game_that_exited_exits_1_as_nothing_in_a_bot_run_asks_for_that(self):
         self.plan([0, 1])
-        self.assertEqual(self.main("t", "30")[0], 0)
+        code, out, err = self.main("t", "30")
+        self.assertEqual((code, err), (1, ""))
+        self.assertIn(": game_exited, 2 frames answered", out)
+        self.assertIn("  the game ended at frame 1\n", out)
+        self.assertNotIn(bot_link.GAME_EXITED, bot_link.CLEAN)
 
     def test_a_game_that_died_or_hung_or_stopped_exits_1(self):
         self.plan([0], after="died")
@@ -899,6 +1040,18 @@ class CommandTest(FakeProbeCase):
         self.assertEqual((code, out), (2, ""))
         self.assertEqual(err, "bot_link.py: the game never connected: no build/dragoon; build the game first\n")
 
+    def test_a_game_that_had_not_connected_at_the_time_limit_exits_2_on_stderr(self):
+        self.plan([0], connect_after=20)
+        code, out, err = self.main("t", "1")
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("bot_link.py: the game never connected: the game hadn't connected when the time limit came", err)
+
+    def test_a_game_that_did_not_connect_again_after_a_reset_exits_1_as_a_hang(self):
+        self.plan([0], after="reset", then={"frames": [0], "connect_after": 20})
+        code, out, _ = self.main("--hang", "0.5", "t", "30")
+        self.assertEqual(code, 1)
+        self.assertIn(": hang, 1 frames answered", out)
+
     def test_a_stop_exits_1_with_the_engines_line(self):
         self.plan([4])
         code, out, _ = self.main("--watch", "817FFFFF:2", "t", "30")
@@ -916,7 +1069,7 @@ class CommandTest(FakeProbeCase):
         self.assertIn("done without a pad line for port 2", out)
 
     def test_watch_prints_a_value_when_it_changes(self):
-        self.plan([5, 6, 7])
+        self.plan([5, 6, 7], after="shutdown")
         code, out, _ = self.main("--watch", "80000010:2", "t", "30")
         self.assertEqual(code, 0)
         self.assertEqual(out.splitlines()[:1], ["frame 5 80000010 1011"])
