@@ -385,6 +385,23 @@ class ProbeTreeTest(unittest.TestCase):
                     self.assertIn(str(bad), r.stderr)
                     self.assertFalse((self.root / "build" / "probe").exists())
 
+    def test_a_bin_with_an_equals_sign_in_its_path_exits_2_before_making_a_run_directory(self):
+        # env would read the path as a VAR=value setting and run the game's arguments as the command
+        folder = self.root / "builds a=b"
+        folder.mkdir()
+        for name in ("dragoon", "dragoon=2"):
+            game = write_file(folder, name, "#!/bin/sh\ntouch ran-other\n")
+            game.chmod(game.stat().st_mode | stat.S_IXUSR)
+        for given in (str(folder / "dragoon"), "builds a=b/dragoon", str(self.root / "builds a=b" / "dragoon=2")):
+            for settings in ((), ("--bench",)):
+                with self.subTest(given=given, settings=settings):
+                    r = probe(NAME, "1", "", "60", f"--bin={given}", *settings, script=self.script, cwd=self.root)
+                    self.assertEqual(r.returncode, 2)
+                    self.assertIn("--bin", r.stderr)
+                    self.assertIn("builds a=b", r.stderr)
+                    self.assertIn("env would read", r.stderr)
+                    self.assertFalse((self.root / "build" / "probe").exists())
+
     def test_without_bin_the_builds_still_run(self):
         self.add_game("dragoon", "touch ran-build-dragoon\n")
         r = probe(NAME, "1", script=self.script)

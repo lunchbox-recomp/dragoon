@@ -30,7 +30,7 @@ After the NAME and seconds come an input script or a route file from `tests/rout
 
 Both need a windowed run, so probe.sh refuses either with `--bench`. A run ends early when the game exits.
 
-`--bin=PATH` runs PATH in place of `build/dragoon`, or of `build/dragoon_bench` under `--bench`, so two builds can be benched in turn from one clone. A relative PATH is taken from where probe.sh was run, like a `--disc` path. A PATH that isn't an executable file exits 2.
+`--bin=PATH` runs PATH in place of `build/dragoon`, or of `build/dragoon_bench` under `--bench`, so two builds can be benched in turn from one clone. A relative PATH is taken from where probe.sh was run, like a `--disc` path. A PATH that isn't an executable file, or has an `=` in it, exits 2, since `env` would read the `=` as a setting.
 
 A run keeps no input log unless `GCN_SESSION=DIR` records a session. A relative DIR is taken from the run's directory, `build/probe/NAME/`, for this one. The session's `inputs/` lands in that DIR.
 

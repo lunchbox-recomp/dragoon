@@ -40,15 +40,16 @@
 #     --exit-after=N  quit once N frames have been presented. Windowed runs only
 #     --bin=PATH    run PATH instead of build/dragoon, or instead of build/dragoon_bench under
 #                   --bench, so two builds can be run in turn. A relative PATH is taken from
-#                   where probe.sh was run, like --disc
+#                   where probe.sh was run, like --disc. A PATH with an = in it exits 2, since
+#                   env would read it as a setting
 # The game runs inside build/probe/NAME/, so a new NAME starts from a blank memory card and
 # a NAME that's run again keeps the card its last run left behind.
 # Exits 0 once the run ends, 1 when the bench printed no report, 2 on a bad argument, a
 # --disc that's neither fast, console nor a file, a --replay without an inputs.txt, a --bin
-# that isn't an executable file or when the game binary (build/dragoon, or build/dragoon_bench
-# under --bench) isn't built.
+# that isn't an executable file or has an = in its path, or when the game binary (build/dragoon,
+# or build/dragoon_bench under --bench) isn't built.
 set -e
-case ${1:-} in -h|--help) sed -n '2,49p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case ${1:-} in -h|--help) sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 if [ $# -lt 2 ]; then
   echo "usage: tools/probe.sh NAME SECONDS [INPUT_SCRIPT [DUMP_EVERY [SETTING ...]]] (--help for more)" >&2
   exit 2
@@ -127,6 +128,7 @@ if [ -n "$replay" ] && [ ! -f "$replay/inputs.txt" ]; then echo "no input log at
 game=$root/build/dragoon
 if [ -n "$bench" ]; then game=${game}_bench; fi
 if [ -n "$bin" ]; then
+  case $bin in *=*) echo "--bin can't use $bin, since env would read the = in it as a setting" >&2; exit 2 ;; esac
   if [ ! -f "$bin" ] || [ ! -x "$bin" ]; then echo "--bin needs an executable file, and $bin isn't one" >&2; exit 2; fi
   game=$bin
 fi
