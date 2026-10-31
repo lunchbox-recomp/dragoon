@@ -76,11 +76,11 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual(decode(entry("s8"), b"\xfe"), -2)
         self.assertEqual(decode(entry("u16"), b"\x12\x34"), 0x1234)
         self.assertEqual(decode(entry("s16"), b"\xff\xfe"), -2)
-        self.assertEqual(decode(entry("u32"), b"\x80\x53\x61\xac"), 0x805361AC)
+        self.assertEqual(decode(entry("u32"), b"\x12\x34\x56\x78"), 0x12345678)
         self.assertEqual(decode(entry("s32"), b"\xff\xff\xff\xfd"), -3)
 
     def test_a_float(self) -> None:
-        self.assertEqual(decode(entry("f32"), struct.pack(">f", -28.5)), -28.5)
+        self.assertEqual(decode(entry("f32"), struct.pack(">f", 6.25)), 6.25)
 
     def test_a_run_of_bytes_comes_back_as_bytes(self) -> None:
         self.assertEqual(decode(entry("bytes", 3), bytearray(b"abc")), b"abc")
@@ -116,18 +116,23 @@ class FollowTest(unittest.TestCase):
         self.assertEqual(follow(self.ram, 0x80001000, (), 4), 0x80001000)
         self.assertEqual(self.ram.reads, [])
 
+    def test_no_path_outside_ram_leads_nowhere(self) -> None:
+        self.assertIsNone(follow(self.ram, 0x81800000, (), 1))
+        self.assertIsNone(follow(self.ram, 0x817FFFFE, (), 4))
+        self.assertEqual(self.ram.reads, [])
+
     def test_each_offset_is_added_to_the_pointer_read_before_it(self) -> None:
         self.ram.pointer(0x80001000, 0x81000000)
-        self.ram.pointer(0x8100002C, 0x81200000)
-        self.assertEqual(follow(self.ram, 0x80001000, (0x2C, 0x300), 4), 0x81200300)
-        self.assertEqual(self.ram.reads, [(0x80001000, 4), (0x8100002C, 4)])
+        self.ram.pointer(0x8100001C, 0x81200000)
+        self.assertEqual(follow(self.ram, 0x80001000, (0x1C, 0x240), 4), 0x81200240)
+        self.assertEqual(self.ram.reads, [(0x80001000, 4), (0x8100001C, 4)])
 
     def test_a_null_pointer_leads_nowhere(self) -> None:
-        self.assertIsNone(follow(self.ram, 0x80001000, (0x2C, 0x300), 4))
+        self.assertIsNone(follow(self.ram, 0x80001000, (0x1C, 0x240), 4))
         self.assertEqual(self.ram.reads, [(0x80001000, 4)])
         self.ram.pointer(0x80001000, 0x81000000)
-        self.assertIsNone(follow(self.ram, 0x80001000, (0x2C, 0x300), 4))
-        self.assertEqual(self.ram.reads, [(0x80001000, 4), (0x80001000, 4), (0x8100002C, 4)])
+        self.assertIsNone(follow(self.ram, 0x80001000, (0x1C, 0x240), 4))
+        self.assertEqual(self.ram.reads, [(0x80001000, 4), (0x80001000, 4), (0x8100001C, 4)])
 
     def test_a_null_pointer_with_an_offset_into_ram_still_leads_nowhere(self) -> None:
         self.assertIsNone(follow(self.ram, 0x80001000, (0x80000000,), 4))
@@ -153,7 +158,7 @@ class ReadTest(TableCase):
         self.ram = FakeRam()
         self.made_up = load(self.table({
             "made.flag": GOOD,
-            "made.where": {"address": "80002000", "path": ["2C", "300"], "type": "f32",
+            "made.where": {"address": "80002000", "path": ["1C", "240"], "type": "f32",
                            "means": "a made-up position", "route": "menu.txt", "frames": [1, 2]},
             "made.name": {"address": "80003000", "type": "bytes", "length": 4,
                           "means": "a made-up name", "route": "menu.txt", "frames": [1, 2]},
@@ -165,9 +170,9 @@ class ReadTest(TableCase):
 
     def test_a_value_behind_pointers(self) -> None:
         self.ram.pointer(0x80002000, 0x81000000)
-        self.ram.pointer(0x8100002C, 0x81100000)
-        self.ram.put(0x81100300, struct.pack(">f", 112.5))
-        self.assertEqual(read(self.ram, "made.where", self.made_up), 112.5)
+        self.ram.pointer(0x8100001C, 0x81100000)
+        self.ram.put(0x81100240, struct.pack(">f", 7.75))
+        self.assertEqual(read(self.ram, "made.where", self.made_up), 7.75)
 
     def test_a_value_behind_a_null_pointer_is_none(self) -> None:
         self.assertIsNone(read(self.ram, "made.where", self.made_up))
@@ -181,20 +186,21 @@ class ReadTest(TableCase):
             read(self.ram, "made.nothing", self.made_up)
 
     def test_the_default_table_is_kar_ram_json(self) -> None:
-        self.ram.put(0x805361AC, b"\x06")
-        self.assertEqual(read(self.ram, "scene.major"), 6)
+        address = load()["scene.major"].address
+        self.ram.put(address, b"\x5a")
+        self.assertEqual(read(self.ram, "scene.major"), 0x5A)
 
 
 class LoadTest(TableCase):
     def test_an_entry_comes_back_as_an_entry(self) -> None:
         table = load(self.table({"made.flag": GOOD, "made.where": {
-            "address": "8055AA2C", "path": ["2C", "300"], "type": "f32", "means": "a position",
-            "route": "city-trial.txt", "frames": [3300, 3300]}}))
+            "address": "80012340", "path": ["1C", "240"], "type": "f32", "means": "a position",
+            "route": "menu.txt", "frames": [5, 5]}}))
         self.assertEqual(table["made.flag"], Entry("made.flag", 0x80001000, "u8", 1, "a made-up value",
                                                    {0: "off", 1: "on"}, "menu.txt", (10, 20), ()))
         where = table["made.where"]
         self.assertEqual((where.address, where.path, where.length, where.values),
-                         (0x8055AA2C, (0x2C, 0x300), 4, {}))
+                         (0x80012340, (0x1C, 0x240), 4, {}))
 
     def test_a_run_of_bytes_takes_its_length(self) -> None:
         fields = {**GOOD, "type": "bytes", "length": 256}
@@ -222,7 +228,7 @@ class LoadTest(TableCase):
         self.refused(["80001000", "u8"])
 
     def test_a_malformed_address(self) -> None:
-        for address in ("8000100", "80001000a", "8000100g", "8053abcd", 0x80001000):
+        for address in ("8000100", "80001000a", "8000100g", "8012abcd", 0x80001000):
             self.refused({**GOOD, "address": address})
 
     def test_an_address_outside_main_ram(self) -> None:
@@ -236,7 +242,7 @@ class LoadTest(TableCase):
         self.assertIn("817FFFFE to 81800001", self.refused(fields))
 
     def test_a_malformed_path(self) -> None:
-        for path in ([], ["2c"], ["12345"], [44], "2C", ["2C", ""]):
+        for path in ([], ["1c"], ["12345"], [44], "1C", ["1C", ""]):
             self.refused({**GOOD, "path": path})
 
     def test_a_malformed_type_or_length(self) -> None:
