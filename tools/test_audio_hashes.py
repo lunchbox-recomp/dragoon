@@ -1,5 +1,6 @@
 import contextlib
 import io
+import os
 import subprocess
 import tempfile
 import unittest
@@ -158,6 +159,13 @@ class HashRouteTest(unittest.TestCase):
         run = mock.Mock()
         self.hash_route(run)
         self.assertEqual(run.call_args.kwargs["env"]["SDL_AUDIO_DRIVER"], "dummy")
+
+    def test_runs_it_in_the_callers_environment(self):
+        # interp_bisect.py hands the game its GCN_INTERPRET list this way
+        run = mock.Mock()
+        with mock.patch.dict(os.environ, {"GCN_INTERPRET": "/lists/one.txt"}):
+            self.hash_route(run)
+        self.assertEqual(run.call_args.kwargs["env"]["GCN_INTERPRET"], "/lists/one.txt")
 
     def test_a_failed_probe_is_an_error_naming_the_route(self):
         run = mock.Mock(side_effect=subprocess.CalledProcessError(2, "probe"))

@@ -236,6 +236,19 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual((self.root / "build" / "probe" / NAME / "frametime.txt").read_text(), "1")
 
+    def test_an_exported_gcn_variable_reaches_the_game_environment_windowed_and_bench(self):
+        # interp_bisect.py hands the game its GCN_INTERPRET list this way
+        env = {**os.environ, "GCN_INTERPRET": "/lists/one.txt"}
+        for name, settings in (("dragoon", ()), ("dragoon_bench", ("--bench",))):
+            with self.subTest(name=name):
+                self.add_game(name, "printf '%s' \"$GCN_INTERPRET\" > interpret.txt\necho 'whole run'\n")
+                r = subprocess.run([str(self.script), NAME, "1", "", "60", *settings], capture_output=True,
+                                   text=True, timeout=10, env=env)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual((self.root / "build" / "probe" / NAME / "interpret.txt").read_text(),
+                                 "/lists/one.txt")
+                (self.root / "build" / "probe" / NAME / "interpret.txt").unlink()
+
     def test_setting_of_another_prefix_exits_2_naming_it(self):
         self.add_game("dragoon", "")
         r = probe(NAME, "1", "", "60", "FOO_BAR=1", script=self.script)

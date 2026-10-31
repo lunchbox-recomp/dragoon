@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -123,6 +124,23 @@ class HashRouteTest(unittest.TestCase):
             self.assertEqual(frame_hashes.hash_route(self.route), {60: A})
         self.assertFalse(out.exists())
         self.assertTrue(out.parent.is_dir())
+
+
+class EnvironmentTest(unittest.TestCase):
+    def test_probe_runs_in_the_callers_environment(self):
+        # interp_bisect.py hands the game its GCN_INTERPRET list this way
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        seen = root / "seen.txt"
+        probe = write_file(root, "probe.sh", f"#!/bin/sh\nprintf '%s' \"$GCN_INTERPRET\" > '{seen}'\n")
+        probe.chmod(0o755)
+        with (mock.patch.object(frame_hashes, "ROOT", root),
+              mock.patch.object(frame_hashes, "PROBE", probe),
+              mock.patch.object(frame_hashes, "hash_frames", return_value={60: A}),
+              mock.patch.dict(os.environ, {"GCN_INTERPRET": "/lists/one.txt"})):
+            frame_hashes.hash_route(frame_hashes.Route("title", 20, 60, [120], []))
+        self.assertEqual(seen.read_text(), "/lists/one.txt")
 
 
 class MainTest(unittest.TestCase):
