@@ -228,6 +228,8 @@ A function reached that way is checked alone before it's named. Once it finds a 
 
 If a function reached that way doesn't change ROUTE alone, the change needs several functions together, or a list ran too slowly to reach ROUTE's checkpoints. The bisect stops there and writes the shortest list it ran that changes ROUTE to `build/bisect/ROUTE-KIND-smallest.txt`, with any functions it found alone before that in the found file.
 
+A check that goes as expected prints one progress line. The hash tool's own output goes to stderr only when the first check changes ROUTE, when a check exits 2, or when the functions found leave ROUTE matching together.
+
 ```
 tools/interp_bisect.py title --slow=20
 tools/interp_bisect.py air-ride-race --slow=20 --audio

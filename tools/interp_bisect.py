@@ -25,6 +25,10 @@ functions together, or a list ran too slowly to reach ROUTE's checkpoints. The s
 known to change ROUTE goes to build/bisect/ROUTE-KIND-smallest.txt, and any functions found
 alone before that go to the found file.
 
+A run that goes as expected prints one progress line and none of the hash tool's output. The
+output goes to stderr when the first check changes ROUTE, when a check exits 2 and when the
+functions found leave ROUTE matching together.
+
 Exits 0 when interpreting every function leaves ROUTE matching, 1 when it names the functions
 that change it, 2 on a bad argument, a hash tool that couldn't run, a ROUTE that changes with
 nothing interpreted or a change that no single function reproduces.
@@ -120,16 +124,25 @@ def write_list(stem: str, name: str, addrs: list[int]) -> Path:
 
 
 class Checks:
-    """The hash tool's check of one route, run for each list of functions."""
+    """The hash tool's check of one route, run for each list of functions. OUTPUT is what the
+    latest run printed, kept for show_output."""
 
     def __init__(self, tool: Path, route: str, slow: int, stem: str) -> None:
         self.tool, self.route, self.slow, self.stem = tool, route, slow, stem
         self.count = 0
+        self.output = ""
         self.known: dict[tuple[int, ...], bool] = {}
+
+    def show_output(self) -> None:
+        """Print what the latest run's hash tool printed to stderr, to explain an error."""
+        if self.output:
+            print(f"{self.tool.name} printed this on run {self.count}:", file=sys.stderr)
+            print(self.output, end="", file=sys.stderr)
 
     def check(self, addrs: list[int] | None) -> bool:
         """Run the hash tool once with GCN_INTERPRET naming a new list of ADDRS, or not set for
-        None. True when the route changes. A run that isn't a pass or a fail is a ValueError."""
+        None. True when the route changes. A run that isn't a pass or a fail shows what the tool
+        printed and is a ValueError."""
         self.count += 1
         env = {k: v for k, v in os.environ.items() if k != "GCN_INTERPRET"}
         if addrs is None:
@@ -139,10 +152,13 @@ class Checks:
             env["GCN_INTERPRET"] = str(listing)
             what = f"{len(addrs)} functions in {listing.name}"
         began = time.monotonic()
-        slow = [] if addrs is None else [f"--slow={self.slow}"]  # nothing interpreted is as fast as the goldens
-        code = subprocess.run([sys.executable, str(self.tool), "check", self.route, *slow],
-                              env=env, stdout=subprocess.DEVNULL).returncode
+        # Nothing interpreted runs as fast as the build the goldens came from, so it gets no --slow.
+        slow = [] if addrs is None else [f"--slow={self.slow}"]
+        done = subprocess.run([sys.executable, str(self.tool), "check", self.route, *slow],
+                              env=env, stdout=subprocess.PIPE, text=True, errors="replace")
+        code, self.output = done.returncode, done.stdout
         if code not in (0, 1):
+            self.show_output()
             raise ValueError(f"{self.tool.name} exited {code} on run {self.count}, with {what}")
         print(f"run {self.count}, {what}: {'changes' if code else 'matches'} {self.route} "
               f"({time.monotonic() - began:.0f} s)", flush=True)
@@ -166,6 +182,7 @@ def bisect(route: str, slow: int, kind: str, starts: list[tuple[int, str]]) -> i
             old.unlink()  # an earlier bisect's lists
     checks = Checks(TOOLS[kind], route, slow, stem)
     if checks.check(None):
+        checks.show_output()
         raise ValueError(f"{route} changes with nothing interpreted, so there's nothing to bisect")
     if not checks.changes(addrs):
         print(f"Interpreting all {len(addrs)} functions leaves {route} matching, so none of them changes it.")
@@ -182,6 +199,7 @@ def bisect(route: str, slow: int, kind: str, starts: list[tuple[int, str]]) -> i
         raise ValueError(text) from None
     listing = write_list(stem, "found", found)
     if not checks.changes(found):
+        checks.show_output()
         raise ValueError(f"Interpreting the {len(found)} functions found together leaves {route} matching, "
                          f"though each changes it alone. They're listed in {listing}.")
     print(f"Functions that change {route} when interpreted alone ({len(found)}), listed in {listing}.")

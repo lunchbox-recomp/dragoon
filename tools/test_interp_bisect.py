@@ -187,6 +187,7 @@ if path is not None:
 with open(@RECORDS@, "a") as f:
     f.write(json.dumps({"tool": os.path.basename(sys.argv[0]), "args": sys.argv[1:],
                         "interpret": path, "listed": listed}) + "\n")
+print("fake report: " + ("nothing interpreted" if listed is None else f"{len(listed)} functions"))
 if listed is None:
     sys.exit(@NATIVE@)
 sys.exit(1 if (@FAILS@) else 0)
@@ -270,17 +271,33 @@ class MainTest(unittest.TestCase):
         code, out, err = self.main("title", "--slow=3")
         self.assertEqual(code, 2)
         self.assertIn("title changes with nothing interpreted", err)
+        self.assertIn("frame_hashes.py printed this on run 1:\nfake report: nothing interpreted\n", err)
         self.assertEqual(len(self.runs()), 1)
         self.assertEqual(out.count("run "), 1)
+        self.assertNotIn("fake report", out)
 
-    def test_a_hash_tool_that_cannot_run_exits_2_naming_it(self):
-        for native, fails in ((2, "False"), (0, "sys.exit(2) if len(listed) == 4 else True")):
+    def test_a_hash_tool_that_cannot_run_exits_2_naming_it_and_showing_what_it_printed(self):
+        for native, fails, report in ((2, "False", "nothing interpreted"),
+                                      (0, "sys.exit(2) if len(listed) == 4 else True", "4 functions")):
             with self.subTest(native=native):
                 self.install(fails, native=native)
                 code, out, err = self.main("title", "--slow=3")
                 self.assertEqual(code, 2)
                 self.assertIn("frame_hashes.py exited 2", err)
+                self.assertRegex(err, rf"frame_hashes.py printed this on run \d+:\nfake report: {report}\n")
+                self.assertNotIn("fake report", out)
                 self.assertEqual(self.found(out), [])
+
+    def test_runs_that_go_as_expected_print_a_progress_line_and_none_of_the_hash_tools_output(self):
+        self.install(fails_on(2, 5))
+        code, out, err = self.main("title", "--slow=3")
+        self.assertEqual(code, 1, err)
+        self.assertEqual(err, "")
+        self.assertNotIn("fake report", out)
+        progress = [line for line in out.splitlines() if line.startswith("run ")]
+        self.assertEqual(len(progress), len(self.runs()))
+        for line in progress:
+            self.assertRegex(line, r"^run \d+, .+: (changes|matches) title \(\d+ s\)$")
 
     def test_functions_that_change_the_route_only_together_exit_2_with_the_smallest_list(self):
         self.install(fails_together(1, 6))
@@ -325,6 +342,8 @@ class MainTest(unittest.TestCase):
         self.assertIn(f"Interpreting the 2 functions found together leaves title matching, though each changes "
                       f"it alone. They're listed in {found}.", err)
         self.assertNotIn("mix", err)
+        self.assertIn(f"frame_hashes.py printed this on run {len(self.runs())}:\nfake report: 2 functions\n", err)
+        self.assertNotIn("fake report", out)
 
     def test_audio_runs_the_audio_tool_and_frames_is_the_default(self):
         self.install(fails_on(2))
