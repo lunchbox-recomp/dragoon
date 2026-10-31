@@ -24,12 +24,12 @@ A bench takes no --exit-after, so a fast build spends all N times the seconds. N
 about a run changes.
 
 A bench that crashes prints no report, and probe.sh exits 1. That counts as a route that doesn't
-match, so check says the bench printed no report and fails the lists it didn't reach. Any other
-probe.sh failure is an error.
+match, so check says the bench printed no report and fails the lists it didn't reach. record
+and any other probe.sh failure are an error, and record writes no golden.
 
 Exits 0 when every route matches (or is recorded), 1 when a hash changed, a list count wasn't
-reached or the bench printed no report, 2 on a bad argument, a missing or malformed golden, or
-a probe.sh run that failed any other way.
+reached or a checked bench printed no report, 2 on a bad argument, a missing or malformed
+golden, or a probe.sh run that failed any other way.
 """
 from __future__ import annotations
 
@@ -104,7 +104,9 @@ def probe_args(route: Route, name: str, slow: int) -> list[str]:
             str(route.dump_every), "GCN_AXSTATS=1", "--bench", *route.extra]
 
 
-def hash_route(route: Route, slow: int = 1) -> dict[int, str]:
+def hash_route(route: Route, slow: int = 1, allow_crash: bool = False) -> dict[int, str]:
+    """The hashes ROUTE's bench printed. A bench that printed no report (probe.sh exits 1) is a
+    ProbeFailed, unless ALLOW_CRASH, which says so and returns the hashes it got to."""
     out = ROOT / "build" / "probe" / f"audio-{route.name}"
     if out.exists():
         remove_run(out)  # a blank memory card; the last run stays after this one, for its [ax] lines
@@ -112,7 +114,7 @@ def hash_route(route: Route, slow: int = 1) -> dict[int, str]:
     try:
         run_probe(probe_args(route, name, slow), ROOT, route.name, {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
     except ProbeFailed as e:
-        if e.returncode != 1:  # 1 is the bench printing no report, which a crash does
+        if e.returncode != 1 or not allow_crash:  # 1 is the bench printing no report, which a crash does
             raise
         print(f"{route.name}: the bench printed no report")
     return parse_hashes((out / "stdout.txt").read_text())
@@ -186,7 +188,7 @@ def main(argv: list[str]) -> int:
                   if args.mode == "record" else {})
         failed = 0
         for route in routes:
-            got = hash_route(route, slow)
+            got = hash_route(route, slow, allow_crash=args.mode == "check")
             if args.mode == "record":
                 ok = record_route(route, got, wanted[route.name], paths[route.name])
             else:

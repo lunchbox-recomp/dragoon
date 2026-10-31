@@ -214,7 +214,7 @@ A `check` of all twelve routes took 300 s while other copies of the game ran on 
 
 As in frame_hashes.py, `check --slow=N` gives each route N times its seconds, and `record` refuses it. The rows are list counts, not times, so a slower build is held to the same ones. A bench takes no `--exit-after`, so a fast build spends all of the seconds.
 
-A bench that crashes prints no report, and probe.sh exits 1. That counts as a route that doesn't match, so `check` says the bench printed no report and fails the lists it didn't reach. Any other probe.sh failure exits 2.
+A bench that crashes prints no report, and probe.sh exits 1. That counts as a route that doesn't match, so `check` says the bench printed no report and fails the lists it didn't reach. `record` exits 2 on it without writing a golden, as it does on any other probe.sh failure.
 
 ## interp_bisect.py
 
