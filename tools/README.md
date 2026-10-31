@@ -212,6 +212,21 @@ A `check` of all twelve routes took 300 s while other copies of the game ran on 
 
 `check --slow=N` gives each route N times its seconds, as in frame_hashes.py. The rows are list counts, not times, so a slower build is held to the same ones. `record` refuses it.
 
+## interp_bisect.py
+
+Which functions change a route when the interpreter runs them? It reads every function start from `analysis/symbols.txt` and checks ROUTE with frame_hashes.py, or with audio_hashes.py under `--audio`, passing `--slow=N` on. Each check sets `GCN_INTERPRET` to a list of starts, a file in `build/bisect/` with one hex address a line, named by absolute path.
+
+ROUTE has to match with nothing interpreted and change with every function listed. From there the bisect halves the list and follows a half that changes the route. Once it finds a function, it checks the halves it left alone in one run, and goes on in them only if they change the route too.
+
+```
+tools/interp_bisect.py title --slow=20
+tools/interp_bisect.py air-ride-race --slow=20 --audio
+```
+
+It prints each function that changes ROUTE on its own with its name, and writes them to `build/bisect/ROUTE-KIND-found.txt`, where KIND is `frames` or `audio`. Each check takes ROUTE's seconds times N. One function among the 20,003 starts in `symbols.txt` takes at most 19 checks, and each further one takes at most 16 more.
+
+It exits 0 when interpreting every function leaves ROUTE matching, 1 when it names functions and 2 when it can't run or can't narrow the change, such as a ROUTE that changes with nothing interpreted. A build that doesn't read `GCN_INTERPRET` runs every list natively, so it exits 0.
+
 ## audio_clicks.py
 
 Where does the sound click, drop out or clip? It reads a 16-bit PCM WAV, such as the one `GCN_WAV=<path>` records of exactly what went to the audio device, and prints how many of each it found and when. A click is a sample whose second difference is over 8 times the RMS second difference of the 5 ms either side, and at least 128. A splice, such as the audio ring skipping ahead, shows as one. Each click comes with its size, its largest second difference in dB from full scale, so a quiet tick can be told from a loud one. A gap is 5 ms or more of digital silence on every channel straight after sound. A clipped run is two or more samples at full scale on one channel.
@@ -386,7 +401,7 @@ What does a source snapshot hold? Its `source-info.json` names the Dragoon and g
 
 What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into an error. `slow_factor` reads the N of a `--slow=N` and refuses anything but a whole number from 1.
 
-`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py, replay_session.py and the scorecard use `remove_run` and `run_probe`, and the two hash tools use `slow_factor`. It has no command line.
+`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py, replay_session.py and the scorecard use `remove_run` and `run_probe`, and the two hash tools and interp_bisect.py use `slow_factor`. It has no command line.
 
 ## aid_blocks.py
 
