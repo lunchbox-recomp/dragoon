@@ -60,30 +60,36 @@ Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, h
 
 `run` owns the deadline. It gives probe.sh a few seconds more than SECONDS and ends the game itself at SECONDS, or at a hang, with the link open until the game has exited. The engine then doesn't log that the bot hung up, and its input log is whole.
 
-`run` returns an `Outcome` with `frames`, `last_frame`, `reason`, `detail`, `run_dir`, `input_log` and `error`. `input_log` is the directory `tools/probe.sh NAME SECONDS "" 60 --replay=DIR` takes, the last process's after a console reset. The reason comes from the link's own end, what the game wrote to `build/probe/NAME/` and that input log, never from probe.sh's exit status, which is 0 whatever the game did.
+`hang` also counts the wait for the game to connect again after it resets the console. It doesn't count the first connection, so a game that hasn't connected when SECONDS are up is `never_linked`.
+
+`run` returns an `Outcome` with `frames`, `last_frame`, `reason`, `detail`, `run_dir`, `input_log` and `error`. `input_log` is the directory `tools/probe.sh NAME SECONDS "" 60 --replay=DIR` takes. It comes from the last `[session]` line in `stdout.txt`, so after a console reset it's the last process's. The reason comes from the link's own end, what the game wrote to `build/probe/NAME/` and that input log, never from probe.sh's exit status, which is 0 whatever the game did.
 
 | Reason | Means | Detail |
 |---|---|---|
 | `time_limit` | SECONDS were up | The seconds |
 | `exit_after` | The `--exit-after` frames were shown | The setting |
 | `shutdown` | The game shut the console down by itself | Its `[reset]` line |
-| `game_exited` | The game ended cleanly some other way | The frame it ended at |
-| `game_died` | The game ended and its input log has no `# end` line | The last line of `stdout.txt` |
-| `hang` | No frame for `hang` seconds | How long, and after which frame |
+| `game_exited` | The game ended some other way and left its input log whole | The frame it ended at |
+| `game_died` | The game ended and its input log has no `# end` line, or it reset the console and the new process began no session | The last line of `stdout.txt`, or the `[reset]` line |
+| `hang` | No frame for `hang` seconds, or no new connection that long after a reset | How long, and after which frame |
 | `engine_stop` | The engine stopped the game | Its `[bot] frame N: ...` line from `stdout.txt` |
 | `connect_failed` | The engine couldn't connect | Its `--bot PATH: ...` line |
 | `panic` | The game crashed | The first line of `panic.txt`, or the `FATAL` or `FAULT` line |
 | `bot_raised` | The bot raised | The exception, which `error` holds too |
-| `never_linked` | The game ended without connecting or saying why | What probe.sh printed, or the last line of `stdout.txt` |
+| `never_linked` | The game ended without connecting or saying why, or hadn't connected when SECONDS were up | What probe.sh printed, or the last line of `stdout.txt` |
 | `bad_link` | The engine sent what isn't the protocol | The line |
 
-The engine writes `# end` in its input log on every way out it chooses, so a game that ends without one was aborted or killed from outside. An `exit_after` needs the end line's frame to reach the `--exit-after` count, and a `shutdown` wins over it.
+The engine writes `# end` in its input log on the ways out it chooses, and that includes the signals that ask it to quit, such as a SIGTERM from outside. A game that left none was killed with SIGKILL or hit a signal the engine doesn't catch, such as SIGABRT. Its 2 second watchdog leaves none either, when the engine's own exit hangs.
 
-The command exits 0 for `time_limit`, `exit_after`, `shutdown` and `game_exited`. It exits 1 for the other reasons, apart from `never_linked`, which is a run that couldn't start. That exits 2, like a bad argument, a socket another bot is listening on or a probe.sh that won't run.
+A game that left no `# end` is `game_died`, and so is one that resets the console and starts again but never begins a session. The input log is then the first process's, which ends with the reset, so a `[session]` line has to follow the `[reset]` line in `stdout.txt`. An `exit_after` needs the end line's frame to reach the `--exit-after` count, and a `shutdown` wins over it.
+
+The command exits 0 for `time_limit`, `exit_after` and `shutdown`. It exits 1 for every other reason except `never_linked`, `game_exited` included, since nothing in a bot run asks for the game to end some other way (a SIGTERM from outside does it). `never_linked` is a run that couldn't start, so it exits 2, like a bad argument, a socket another bot is listening on or a probe.sh that won't run.
 
 The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when that would pass the 103 bytes a Unix socket takes. Its lock is the same path with `.lock` on the end, and a second run on the same socket is refused while the first holds it. A socket file an earlier run left is replaced.
 
-A `stdout.txt`, a `panic.txt` or a `session/` that an earlier run of NAME left is deleted first, but its frames stay, so give each run a new NAME. A `GCN_SESSION` in `settings` is used in place of `session/`, and a relative one is taken from `build/probe/NAME/`. A session also records the sound beside the log, about 10 MB for each minute of game time.
+A `stdout.txt`, a `panic.txt` or a `session/` that an earlier run of NAME left is deleted first, but its frames stay, so give each run a new NAME. A `GCN_SESSION` in `settings` is used in place of `session/`, and a relative one is taken from `build/probe/NAME/`.
+
+The session `run` makes keeps the input log and records no audio, because the run passes `GCN_WAV=` and `GCN_AIDWAV=` empty and the engine can't open a file with no name. An empty `GCN_AIDWAV` still leaves an empty file named `.txt` in the run's directory. A `GCN_WAV` or `GCN_AIDWAV` in `settings` is used as given, and a session of your own records what the engine records by default.
 
 A game that resets the console connects again and the bot goes on with it, with `Link.starts` counting the connections. The tests stand a fake probe.sh in for the game, so they need no disc.
 
