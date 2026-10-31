@@ -4,20 +4,21 @@
 Usage: interp_bisect.py ROUTE --slow=N [--frames|--audio]
 
 Reads every function start from analysis/symbols.txt and checks ROUTE with
-tools/frame_hashes.py, or with tools/audio_hashes.py under --audio, passing --slow=N on. Each
-check sets GCN_INTERPRET to a list of starts, a file in build/bisect/ with one hex address a
-line, named by its absolute path. ROUTE has to match with nothing interpreted, and the bisect
-starts from the list of every function.
+tools/frame_hashes.py, or with tools/audio_hashes.py under --audio. Each check sets
+GCN_INTERPRET to a list of starts, a file in build/bisect/ with one hex address a line, named by
+its absolute path, and passes --slow=N on. The first check sets nothing and runs at ROUTE's own
+seconds, since ROUTE has to match with nothing interpreted.
 
-The list is halved and a half that changes the route is followed. When the left half doesn't
-change it, the change is taken to be in the right half without a run, and a function reached
-that way is checked alone before it's accepted. Once one is found, the functions not yet
-cleared are checked together and searched again if they change ROUTE too.
+The bisect starts from the list of every function and halves it, following a half that changes
+the route. When the left half doesn't change it, the change is taken to be in the right half
+without a run, and a function reached that way is checked alone before it's accepted. Once one
+is found, the functions not yet cleared are checked together and searched again if they change
+ROUTE too.
 
 It prints each function that changes ROUTE on its own with its name, and writes them to
-build/bisect/ROUTE-KIND-found.txt, where KIND is frames or audio. Each check takes ROUTE's
-seconds times N. One function among the 20,003 starts in symbols.txt takes at most 19 checks,
-and each further one takes at most 18 more.
+build/bisect/ROUTE-KIND-found.txt, where KIND is frames or audio. Each check but the first takes
+ROUTE's seconds times N. One function among the 20,003 starts in symbols.txt takes at most 19
+checks, and each further one takes at most 18 more.
 
 When the search ends on a function that doesn't change ROUTE alone, the change needs several
 functions together, or a list ran too slowly to reach ROUTE's checkpoints. The shortest list
@@ -138,7 +139,8 @@ class Checks:
             env["GCN_INTERPRET"] = str(listing)
             what = f"{len(addrs)} functions in {listing.name}"
         began = time.monotonic()
-        code = subprocess.run([sys.executable, str(self.tool), "check", self.route, f"--slow={self.slow}"],
+        slow = [] if addrs is None else [f"--slow={self.slow}"]  # nothing interpreted is as fast as the goldens
+        code = subprocess.run([sys.executable, str(self.tool), "check", self.route, *slow],
                               env=env, stdout=subprocess.DEVNULL).returncode
         if code not in (0, 1):
             raise ValueError(f"{self.tool.name} exited {code} on run {self.count}, with {what}")

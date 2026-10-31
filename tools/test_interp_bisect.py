@@ -337,12 +337,13 @@ class MainTest(unittest.TestCase):
                 self.assertEqual({r["tool"] for r in self.runs()}, {tool})
                 self.assertTrue((self.bisect / f"title-{kind}-02.txt").exists())
 
-    def test_every_run_is_a_check_of_the_route_at_the_given_slow(self):
+    def test_every_run_is_a_check_of_the_route_at_the_given_slow_but_the_native_one(self):
         self.install(fails_on(2))
         self.main("menu", "--slow=7")
         runs = self.runs()
         self.assertGreater(len(runs), 2)
-        self.assertEqual({tuple(r["args"]) for r in runs}, {("check", "menu", "--slow=7")})
+        self.assertEqual(runs[0]["args"], ["check", "menu"])
+        self.assertEqual({tuple(r["args"]) for r in runs[1:]}, {("check", "menu", "--slow=7")})
 
     def test_the_first_run_is_native_even_when_the_environment_forces_the_interpreter(self):
         self.install(fails_on(2))
