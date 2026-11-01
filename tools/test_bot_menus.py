@@ -534,8 +534,12 @@ class StuckTest(unittest.TestCase):
     def test_the_time_without_a_race_starts_over_with_a_new_connection(self) -> None:
         menus, link, _ = make(stuck_seconds=30)
         run(menus, link, 140 * 60, changes=self.go_round(link, 140 * 60))
-        link.starts = 2
-        run(menus, link, 140 * 60, first=0, changes=self.go_round(link, 140 * 60))
+        link.starts = 2  # and the frame numbers go on, so only the new connection says it's a new game
+        run(menus, link, 140 * 60, first=140 * 60, changes=self.go_round(link, 140 * 60, first=140 * 60))
+        # 280 s from the first look but 140 from the new connection's, so the cap is still ahead
+        with self.assertRaisesRegex(Stuck, r"^no race or city for 15\d s of game time"):
+            run(menus, link, 2000, first=280 * 60, changes=self.go_round(link, 2000, first=280 * 60))
+        self.assertGreater(link.frame, 290 * 60)  # 150 s after the new connection and not before
 
 
 class RestartTest(unittest.TestCase):
