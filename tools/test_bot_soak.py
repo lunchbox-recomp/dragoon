@@ -393,8 +393,8 @@ class ResetTest(SoakCase):
         log = Path(data["input_log"])
         self.assertEqual(log.parent.name, "run-2")
         self.assertEqual(self.bot_json_path(out), log.parent / "bot.json")
-        self.assertIn("  after 1 console reset; a replay plays only the process after the last one, from a blank card",
-                      out)
+        self.assertIn("  after 1 console reset; a replay starts from the card as it stood at the last reset", out)
+        self.assertNotIn("blank card", out)
 
     def bot_json_path(self, out: str) -> Path:
         return list(self.run_dir(out).rglob("bot.json"))[0]

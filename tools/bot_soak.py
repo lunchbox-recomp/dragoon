@@ -25,11 +25,11 @@ It stops at the first of these:
 The engine gives a bot no hash of the picture yet, so the frozen-picture check sees none and
 says so. A stop keeps the run's input log, writes bot.json beside it with the seed, the
 arguments, the Dragoon and engine commits and how the run stopped, and prints the probe.sh line
-that plays the input log back. bot.json says when the stop came after
-a console reset, since a replay plays only the process after the last reset. A restart rebuilds
-the shader cache before the bot connects again, and that counts against the hang limit. The
-first reset's `[shaders] ... in Z ms` line is kept, a Z near the limit is warned about when it
-comes, and --hang raises the limit for the next run.
+that plays the input log back. bot.json says when the stop came after a console reset, since a
+replay plays only the process after the last reset, from the card as it stood then. A restart
+rebuilds the shader cache before the bot connects again, and that counts against the hang limit.
+The first reset's `[shaders] ... in Z ms` line is kept, a Z near the limit is warned about when
+it comes, and --hang raises the limit for the next run.
 
 Exits 0 when the run ended with no stop, at its time limit or at an --exit-after given after
 `--`, 1 when it stopped, and 2 on a bad argument or when it couldn't run or be judged: the game
@@ -191,8 +191,8 @@ def report(stop: Stop, outcome: bot_link.Outcome, *, probe: Path, name: str, arg
     else:
         out(f"  {wall:.0f} s of wall time")
     if stop.after_reset:
-        out(f"  after {count(stop.resets_before, 'console reset')}; a replay plays only the process after the last "
-            "one, from a blank card")
+        out(f"  after {count(stop.resets_before, 'console reset')}; a replay starts from the card as it stood at "
+            "the last reset")
     if stop.before_reset:
         out("  a console reset came after it, so the last process's replay can't show it; "
             + ("the input log and replay below are for the process it happened in" if log is not None

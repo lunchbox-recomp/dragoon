@@ -183,7 +183,7 @@ A console reset rebuilds the shader cache before the bot connects again, and tha
 
 The engine gives a bot no hash of the picture yet. The frames it shows are copied on the GPU and never written to guest RAM, and the link sends only `frame N`. The frozen-picture check takes its hash from `link.picture`, which no Link has, so it says it saw none and never fires. It needs the engine to send a hash with each frame.
 
-A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the last process. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from a blank card.
+A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the last process. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from the card as it stood at the last reset.
 
 A music cut is read from the log, and the log can hold a console reset after it. The last process's replay can't show that cut, so the stop and `bot.json` say so (`before_reset`) and name the input log and replay line of the process it happened in, with no frame to give.
 

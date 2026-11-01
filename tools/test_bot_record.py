@@ -98,7 +98,7 @@ class ReplayLineTest(unittest.TestCase):
         self.assertEqual(shlex.split(line), ["/r/tools/probe.sh", "replay-soak-s1-x", "127", "", "60",
                                              "--replay=/r/build/probe/soak-s1-x/session/inputs", "--exit-after=4000"])
 
-    def test_the_replay_has_its_own_name_so_it_starts_from_a_blank_card(self) -> None:
+    def test_the_replay_runs_under_the_runs_name_with_replay_before_it(self) -> None:
         line = bot_record.replay_line(Path("/r/tools/probe.sh"), "n", Path("/i"), 10)
         self.assertEqual(shlex.split(line)[1], "replay-n")
 
