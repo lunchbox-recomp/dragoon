@@ -173,7 +173,7 @@ The seed is a whole number from 0. It's printed, and it defaults to one made fro
 
 It stops at the first of these.
 
-- The game exits, panics or is stopped by the engine.
+- The game exits, shuts itself down, panics or is stopped by the engine.
 - The game sends no frame for `--hang` seconds of wall time, 30 by default.
 - The picture's hash stays the same for 10 s of game time while the race bots' input changes.
 - A music stream ends early, by stream_voices.py's rule on the run's `[axv]` lines.
@@ -185,7 +185,7 @@ The engine gives a bot no hash of the picture yet. The frames it shows are copie
 
 A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the last process. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from a blank card.
 
-The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The soak exits 0 when the run ended with no stop and 1 when it stopped. A bad argument, a game that never connected or a bot that raised an error exits 2 and writes no `bot.json`.
+The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The soak exits 0 when the run ended with no stop, at its time limit or at an `--exit-after` given after `--`, and 1 when it stopped. A bad argument, a game that never connected or a bot that raised an error exits 2 and writes no `bot.json`.
 
 The tests stand a fake probe.sh in for the game, so they need no disc.
 
@@ -197,7 +197,7 @@ What does the soak watch for while the bots play? `Frozen` watches the picture a
 
 ## bot_stop.py
 
-How did the run end, and was that a fault? `classify` turns a `bot_link.run` result into a `Stop` whose kind is `game_exit`, `panic`, `engine_stop`, `hang`, `frozen_picture`, `music_cut` or `menus_stuck`. It returns None for a run that ended as a bot run is meant to. A game that never connected, a bad link or a bot that raised an error says nothing about the game, so those are a `SoakError`.
+How did the run end, and was that a fault? `classify` turns a `bot_link.run` result into a `Stop` whose kind is `game_exit`, `panic`, `engine_stop`, `hang`, `frozen_picture`, `music_cut` or `menus_stuck`. It returns None for a run that reached its time limit, or an `--exit-after` it was given. A game that never connected, a bad link or a bot that raised an error says nothing about the game, so those are a `SoakError`.
 
 A hang after a reset whose shader rebuild took two thirds of the hang limit or more says so in its detail. It has no command line.
 

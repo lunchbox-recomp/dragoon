@@ -50,14 +50,14 @@ class SoakCase(unittest.TestCase):
             args += ["--", *settings]
         return run_main(bot_soak.main, *args)
 
-    def direct(self, *argv: str, picture=engine_picture) -> tuple[int, str, str]:
+    def direct(self, *argv: str, picture=engine_picture, settings: tuple[str, ...] = ()) -> tuple[int, str, str]:
         """The same through `soak`, which takes the function the picture's hash comes from."""
         ap = bot_soak.parser()
         args = ap.parse_args(["--probe", str(self.probe), *argv])
         bot_soak.checked(ap, args, time.time)
         out: list[str] = []
         err: list[str] = []
-        code = bot_soak.soak(args, [], picture=picture, out=out.append, err=err.append)
+        code = bot_soak.soak(args, list(settings), picture=picture, out=out.append, err=err.append)
         return code, "\n".join(out), "\n".join(err)
 
     def name(self, out: str) -> str:
@@ -86,15 +86,18 @@ class CleanRunTest(SoakCase):
         name = self.name(out)
         self.assertEqual(out.splitlines()[0], f"{name}: seed 3, 0.05 min, modes air-ride,top-ride, "
                                               "1 port, round 5 s, stuck 120 s, hang 30 s")
-        self.assertRegex(out, rf"(?m)^{name}: no stop in \d+\.\d min \(\d+ frames, \d+ rounds?, 0 console resets\)$")
+        self.assertRegex(out, rf"(?m)^{name}: no stop in \d+\.\d min \(\d+ frames, \d+ rounds?, 0 console resets\), "
+                              "ended on time_limit$")
         self.assertFalse(list(self.run_dir(out).rglob("bot.json")))
         self.assertEqual(self.record(out)["visited"][0], bot_menus.BOOT)
 
     def test_the_game_is_played_through_the_menus_into_rounds_and_back(self) -> None:
-        self.plan(race=100000, events=[at([["shutdown"]], frame=9000)])
-        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride", "--round", "5")
+        self.plan(race=100000)
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride", "--round", "5",
+                                   settings=("--exit-after=9000",))
         self.assertEqual((code, err), (0, ""), out)
-        self.assertRegex(out, r"(?m)no stop in \d+\.\d min \(9000 frames, \d+ rounds, 0 console resets\)$")
+        self.assertRegex(out, r"(?m)no stop in \d+\.\d min \(9000 frames, \d+ rounds, 0 console resets\), "
+                              "ended on exit_after$")
         record = self.record(out)
         self.assertGreaterEqual(len(record["started"]), 2)
         self.assertEqual({mode for mode, _ in record["started"]}, {"air"})
@@ -106,8 +109,9 @@ class CleanRunTest(SoakCase):
         self.assertTrue(self.lines(out, "frame 300: round 1: air-ride"))
 
     def test_four_ports_play_a_four_player_city_trial(self) -> None:
-        self.plan(race=100000, events=[at([["shutdown"]], frame=5000)])
-        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "city-trial", "--ports", "4")
+        self.plan(race=100000)
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "city-trial", "--ports", "4",
+                                   settings=("--exit-after=5000",))
         self.assertEqual((code, err), (0, ""), out)
         self.assertIn("4 ports", out.splitlines()[0])
         record = self.record(out)
@@ -115,24 +119,22 @@ class CleanRunTest(SoakCase):
         self.assertIn("--pads=4", record["settings"])
 
     def test_the_game_gets_axvoices_the_users_settings_and_no_dumps(self) -> None:
-        self.plan(events=[at([["shutdown"]], frame=50)])
-        code, out, err = self.soak("--seed", SEED, "--minutes", "1", settings=("DRAGOON_CENSUS=1", "--real-time"))
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1",
+                                   settings=("DRAGOON_CENSUS=1", "--real-time", "--exit-after=50"))
         self.assertEqual((code, err), (0, ""), out)
         record = self.record(out)
         self.assertEqual(record["argv"][3], str(bot_link.NO_DUMPS))
         self.assertEqual(record["settings"][:3], ["GCN_AXVOICES=1", "DRAGOON_CENSUS=1", "--real-time"])
 
     def test_two_runs_of_a_seed_in_one_second_get_different_names(self) -> None:
-        self.plan(events=[at([["shutdown"]], frame=20)])
         names = []
         for _ in range(3):
-            code, out, err = self.direct("--seed", "1", "--minutes", "1")
+            code, out, err = self.direct("--seed", "1", "--minutes", "1", settings=("--exit-after=20",))
             self.assertEqual((code, err), (0, ""), out)
             names.append(self.name(out))
         self.assertEqual(len(set(names)), 3)
 
     def test_a_name_with_a_directory_already_is_not_used(self) -> None:
-        self.plan(events=[at([["shutdown"]], frame=20)])
         ap = bot_soak.parser()
         args = ap.parse_args(["--probe", str(self.probe), "--seed", "9", "--minutes", "1"])
         lines: list[str] = []
@@ -140,19 +142,19 @@ class CleanRunTest(SoakCase):
         old = self.root / "build" / "probe" / bot_record.new_name(9, clock(), lambda n: False)
         old.mkdir(parents=True)
         (old / "memory-card.raw").write_text("a card an earlier run left")
-        self.assertEqual(bot_soak.soak(args, [], out=lines.append, err=lines.append, clock=clock), 0)
+        self.assertEqual(bot_soak.soak(args, ["--exit-after=20"], out=lines.append, err=lines.append, clock=clock), 0)
         self.assertEqual(lines[0].split(":")[0], old.name + "-2")
         self.assertEqual((old / "memory-card.raw").read_text(), "a card an earlier run left")
 
     def test_it_says_when_a_detector_had_nothing_to_read(self) -> None:
-        self.plan(events=[at([["shutdown"]], frame=30)])
-        _, out, _ = self.soak("--seed", SEED, "--minutes", "1")
+        _, out, _ = self.soak("--seed", SEED, "--minutes", "1", settings=("--exit-after=30",))
         self.assertIn("the frozen-picture check saw no frame hash, so it did not run", out)
         self.assertIn("the music check saw no [axv] lines, so it did not run", out)
 
     def test_it_is_quiet_about_a_detector_that_had_input(self) -> None:
-        self.plan(race=100000, events=[at([["say", axv(1, "run")], ["shutdown"]], race=800)])
-        code, out, _ = self.direct("--seed", SEED, "--minutes", "1", picture=lambda link: link.read(PICTURE_ADDR, 4))
+        self.plan(race=100000, events=[at([["say", axv(1, "run")]], race=800)])
+        code, out, _ = self.direct("--seed", SEED, "--minutes", "1", picture=lambda link: link.read(PICTURE_ADDR, 4),
+                                   settings=("--exit-after=6000",))
         self.assertEqual(code, 0)
         self.assertNotIn("did not run", out)
 
@@ -170,10 +172,10 @@ class CleanRunTest(SoakCase):
 
 
 class StopTest(SoakCase):
-    def stop(self, events: list, *argv: str, **plan: object) -> tuple[str, dict]:
+    def stop(self, events: list, *argv: str, settings: tuple[str, ...] = (), **plan: object) -> tuple[str, dict]:
         """Runs the soak to a stop. Returns its output and bot.json."""
         self.plan(race=100000, events=events, **plan)
-        code, out, err = self.soak("--seed", SEED, "--minutes", "1", *argv)
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", *argv, settings=settings)
         self.assertEqual((code, err), (1, ""), out)
         return out, self.bot_json(out)
 
@@ -215,7 +217,8 @@ class StopTest(SoakCase):
         self.assertTrue(2000 <= data["stop"]["frame"] < 2000 + 60 + 1, data["stop"]["frame"])
 
     def test_a_cut_in_the_last_second_is_found_after_the_run_ends(self) -> None:
-        out, data = self.stop([at([["say", axv(100, "run")], ["say", axv(120, "end")], ["shutdown"]], frame=2010)])
+        out, data = self.stop([at([["say", axv(100, "run")], ["say", axv(120, "end")]], frame=2010)],
+                              settings=("--exit-after=2030",))
         self.assertEqual(data["stop"]["kind"], "music_cut")
 
     def test_a_menu_screen_that_stays_up_stops_the_run(self) -> None:
@@ -238,14 +241,15 @@ class StopTest(SoakCase):
         self.assertNotIn("saw no frame hash", out)
 
     def test_a_picture_that_keeps_changing_does_not_stop_the_run(self) -> None:
-        self.plan(race=100000, events=[at([["shutdown"]], frame=4000)])
-        code, out, err = self.direct("--seed", SEED, "--minutes", "1", picture=lambda link: link.read(PICTURE_ADDR, 4))
+        self.plan(race=100000)
+        code, out, err = self.direct("--seed", SEED, "--minutes", "1", picture=lambda link: link.read(PICTURE_ADDR, 4),
+                                     settings=("--exit-after=4000",))
         self.assertEqual((code, err), (0, ""), out)
 
     def test_a_frozen_picture_in_a_menu_is_not_a_stop(self) -> None:
-        self.plan(race=100000, events=[at([["freeze_picture"]], frame=0), at([["shutdown"]], frame=1000)])
+        self.plan(race=100000, events=[at([["freeze_picture"]], frame=0)])
         code, out, err = self.direct("--seed", SEED, "--minutes", "1", "--modes", "air-ride",
-                                     picture=lambda link: link.read(PICTURE_ADDR, 4))
+                                     picture=lambda link: link.read(PICTURE_ADDR, 4), settings=("--exit-after=1000",))
         self.assertEqual((code, err), (0, ""), out)
         # The menus had the pads for most of the 1000 frames, pressing, under a picture that never changed.
         self.assertEqual(self.record(out)["frame"], 1000)
@@ -293,20 +297,41 @@ class StopTest(SoakCase):
         self.assertRegex(out, rf"(?m)^  input log {data['input_log']}$")
         self.assertNotIn("console reset", "\n".join(self.lines(out, "  after")))
 
+    def test_a_game_that_shuts_itself_down_stops_the_run(self) -> None:
+        out, data = self.stop([at([["shutdown"]], frame=400)])
+        self.assertEqual(data["stop"]["kind"], "game_exit")
+        self.assertEqual(data["stop"]["detail"], "[reset] the game reset the console (shutdown, code 0)")
+        self.assertEqual(data["stop"]["frame"], 399)
+        self.assertIn("STOP game_exit: [reset] the game reset the console (shutdown, code 0)", out)
+        self.assertEqual(data["resets"]["count"], 0)
+        self.assertIs(data["after_reset"], False)
+
+    def test_a_game_that_runs_to_the_frame_the_user_gave_is_not_a_stop(self) -> None:
+        self.plan(race=100000)
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", settings=("--exit-after=400",))
+        self.assertEqual((code, err), (0, ""), out)
+        self.assertIn("ended on exit_after", out)
+        self.assertFalse(list(self.run_dir(out).rglob("bot.json")))
+
+    def test_a_game_that_exits_before_the_frame_the_user_gave_stops_the_run(self) -> None:
+        out, data = self.stop([at([["exit"]], frame=300)], settings=("--exit-after=400",))
+        self.assertEqual((data["stop"]["kind"], data["stop"]["detail"]), ("game_exit", "the game ended at frame 300"))
+
     def test_a_stop_exits_1_and_a_clean_end_0(self) -> None:
         self.plan(events=[at([["panic"]], frame=100)])
         self.assertEqual(self.soak("--seed", SEED, "--minutes", "1")[0], 1)
-        self.plan(events=[at([["shutdown"]], frame=100)])
-        self.assertEqual(self.soak("--seed", SEED, "--minutes", "1")[0], 0)
+        self.plan()
+        self.assertEqual(self.soak("--seed", SEED, "--minutes", "1", settings=("--exit-after=100",))[0], 0)
 
 
 class ResetTest(SoakCase):
     def test_a_reset_is_counted_and_the_walker_starts_over_from_the_boot(self) -> None:
-        self.plan(race=100000, events=[at([["reset", {"shaders_ms": 2107}]], race=40),
-                                       at([["shutdown"]], frame=2500, process=2)])
-        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride")
+        self.plan(race=100000, events=[at([["reset", {"shaders_ms": 2107}]], race=40)])
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride",
+                                   settings=("--exit-after=4500",))
         self.assertEqual((code, err), (0, ""), out)
-        self.assertRegex(out, r"(?m)no stop in \d+\.\d min \(\d+ frames, \d+ rounds?, 1 console reset\)$")
+        self.assertRegex(out, r"(?m)no stop in \d+\.\d min \(\d+ frames, \d+ rounds?, 1 console reset\), "
+                              "ended on exit_after$")
         self.assertIn("the first reset: [shaders] 70 programs from cache (0 from binaries, 70 compiled, "
                       "0 of them from the game's key list) in 2107 ms", out)
         self.assertNotIn("hang limit", out)
@@ -335,9 +360,9 @@ class ResetTest(SoakCase):
 
     def test_a_slow_restart_is_warned_about_as_it_happens(self) -> None:
         self.plan(race=100000, events=[at([["reset", {"shaders_ms": 25000}]], race=40),
-                                       at([["shutdown"]], frame=500, process=2)])
+                                       at([["panic"]], frame=500, process=2)])
         code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride")
-        self.assertEqual((code, err), (0, ""), out)
+        self.assertEqual((code, err), (1, ""), out)
         self.assertIn("that is a good part of the 30 s hang limit, and a hang after it may be only that rebuild; "
                       "run again with a higher --hang", out)
         self.assertLess(out.index("in 25000 ms"), out.index("hang limit"))
@@ -352,10 +377,15 @@ class ResetTest(SoakCase):
         self.assertIn("The first reset's shader rebuild took 1.5 s of the 2 s hang limit", data["stop"]["detail"])
         self.assertIs(data["after_reset"], True)
 
-    def test_a_shutdown_is_not_a_reset(self) -> None:
-        self.plan(race=100000, events=[at([["shutdown"]], frame=100)])
-        _, out, _ = self.soak("--seed", SEED, "--minutes", "1")
-        self.assertIn("0 console resets", out)
+    def test_a_shutdown_after_a_reset_is_an_exit_and_does_not_count_as_a_second_reset(self) -> None:
+        self.plan(race=100000, events=[at([["reset", {"shaders_ms": 100}]], race=40),
+                                       at([["shutdown"]], frame=500, process=2)])
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride")
+        self.assertEqual((code, err), (1, ""), out)
+        data = self.bot_json(out)
+        self.assertEqual(data["stop"]["kind"], "game_exit")
+        self.assertEqual(data["resets"]["count"], 1)
+        self.assertIs(data["after_reset"], True)
 
 
 class RefusalTest(SoakCase):
@@ -419,11 +449,11 @@ class ArgumentTest(SoakCase):
         self.refused("--ports", "5")
         self.assertFalse((self.root / "build").exists())
 
-    def test_help_prints_the_usage_and_the_four_things_it_stops_on(self) -> None:
+    def test_help_prints_the_usage_and_what_it_stops_on(self) -> None:
         code, out, _ = self.soak("--help")
         self.assertEqual(code, 0)
         self.assertIn("Usage: bot_soak.py", out)
-        for text in ("the game exits, panics", "no frame for --hang", "the picture's hash stays the same",
+        for text in ("the game exits, shuts itself down, panics", "no frame for --hang", "the picture's hash stays the same",
                      "a music stream ends early"):
             self.assertIn(text, out)
 

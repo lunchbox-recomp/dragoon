@@ -17,7 +17,7 @@ import bot_link
 from bot_menus import Stuck
 from bot_watch import FROZEN, MUSIC, Detected, Resets
 
-EXIT = "game_exit"  # the game ended on its own, or without its input log's end
+EXIT = "game_exit"  # the game ended on its own: it exited, shut down or died
 PANIC = "panic"  # panic.txt, or the engine's FATAL or FAULT line
 ENGINE_STOP = "engine_stop"  # the engine stopped the game with its own `[bot] frame N: ...` line
 HANG = "hang"  # no frame for the hang limit
@@ -27,8 +27,8 @@ KINDS = (EXIT, PANIC, ENGINE_STOP, HANG, FROZEN, MUSIC, MENUS_STUCK)
 NEAR_HANG = 2 / 3
 
 _REASONS = {
-    bot_link.GAME_EXITED: EXIT, bot_link.GAME_DIED: EXIT, bot_link.PANIC: PANIC,
-    bot_link.ENGINE_STOP: ENGINE_STOP, bot_link.HANG: HANG,
+    bot_link.GAME_EXITED: EXIT, bot_link.GAME_DIED: EXIT, bot_link.SHUTDOWN: EXIT, bot_link.EXIT_AFTER: EXIT,
+    bot_link.PANIC: PANIC, bot_link.ENGINE_STOP: ENGINE_STOP, bot_link.HANG: HANG,
 }
 
 
@@ -51,13 +51,15 @@ def near_hang(shaders_ms: int, hang: Optional[float]) -> bool:
     return hang is not None and shaders_ms / 1000 >= hang * NEAR_HANG
 
 
-def classify(outcome: bot_link.Outcome, resets: Optional[Resets] = None,
-             hang: Optional[float] = None) -> Optional[Stop]:
-    """The stop OUTCOME is, or None for a run that ended as it should. RESETS is what the log
-    showed of console resets, and HANG the limit the run had, for a hang that follows a slow
-    restart. Raises SoakError for a run that says nothing about the game."""
+def classify(outcome: bot_link.Outcome, resets: Optional[Resets] = None, hang: Optional[float] = None,
+             *, asked_exit_after: bool = False) -> Optional[Stop]:
+    """The stop OUTCOME is, or None for a run that ended as it should: at its time limit, or at
+    an --exit-after the run was given (ASKED_EXIT_AFTER). A game that shuts itself down, or ends
+    at an --exit-after nobody asked for, has exited. RESETS is what the log showed of console
+    resets, and HANG the limit the run had, for a hang that follows a slow restart. Raises
+    SoakError for a run that says nothing about the game."""
     reason, error = outcome.reason, outcome.error
-    if reason in bot_link.CLEAN:
+    if reason == bot_link.TIME_LIMIT or (reason == bot_link.EXIT_AFTER and asked_exit_after):
         return None
     if reason == bot_link.BOT_RAISED:
         if isinstance(error, Detected):

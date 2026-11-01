@@ -26,10 +26,27 @@ def resets(*lines: str) -> Resets:
 
 
 class ClassifyTest(unittest.TestCase):
-    def test_a_run_that_ended_as_a_bot_run_should_is_no_stop(self) -> None:
-        for reason in bot_link.CLEAN:
-            with self.subTest(reason=reason):
-                self.assertIsNone(classify(outcome(reason)))
+    def test_a_run_that_reached_its_time_limit_is_no_stop(self) -> None:
+        self.assertIsNone(classify(outcome(bot_link.TIME_LIMIT)))
+
+    def test_a_run_that_reached_the_exit_after_it_was_given_is_no_stop(self) -> None:
+        self.assertIsNone(classify(outcome(bot_link.EXIT_AFTER, "--exit-after=500"), asked_exit_after=True))
+
+    def test_an_exit_after_nobody_asked_for_is_an_exit(self) -> None:
+        self.assertEqual(classify(outcome(bot_link.EXIT_AFTER, "--exit-after=500")),
+                         Stop(bot_stop.EXIT, "--exit-after=500", 4000))
+
+    def test_the_game_shutting_itself_down_is_an_exit_whatever_the_run_asked_for(self) -> None:
+        line = "[reset] the game reset the console (shutdown, code 0)"
+        for asked in (False, True):
+            with self.subTest(asked_exit_after=asked):
+                self.assertEqual(classify(outcome(bot_link.SHUTDOWN, line), asked_exit_after=asked),
+                                 Stop(bot_stop.EXIT, line, 4000))
+
+    def test_a_shutdown_after_a_reset_says_so(self) -> None:
+        stop = classify(outcome(bot_link.SHUTDOWN, "x"), resets(RESET))
+        assert stop is not None
+        self.assertTrue(stop.after_reset)
 
     def test_the_game_exiting_or_dying_is_an_exit(self) -> None:
         for reason in (bot_link.GAME_EXITED, bot_link.GAME_DIED):

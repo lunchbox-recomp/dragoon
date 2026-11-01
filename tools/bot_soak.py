@@ -15,7 +15,7 @@ is a whole number from 0, which is printed and defaults to one made from the clo
 
 It stops at the first of these:
 
-  the game exits, panics or is stopped by the engine
+  the game exits, shuts itself down, panics or is stopped by the engine
   the game sends no frame for --hang seconds of wall time (30 by default)
   the picture's hash stays the same for 10 s of game time while the race bots' input changes
   a music stream ends early (stream_voices.py's rule, on the run's [axv] lines)
@@ -31,8 +31,9 @@ the shader cache before the bot connects again, and that counts against the hang
 first reset's `[shaders] ... in Z ms` line is kept, a Z near the limit is warned about when it
 comes, and --hang raises the limit for the next run.
 
-Exits 0 when the run ended with no stop, 1 when it stopped, and 2 on a bad argument or when it
-couldn't run or be judged: the game never connected, or a bot raised an error.
+Exits 0 when the run ended with no stop, at its time limit or at an --exit-after given after
+`--`, 1 when it stopped, and 2 on a bad argument or when it couldn't run or be judged: the game
+never connected, or a bot raised an error.
 """
 from __future__ import annotations
 
@@ -138,7 +139,8 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
     except Detected as e:
         late = e
     try:
-        stop = classify(outcome, log.resets, args.hang)
+        stop = classify(outcome, log.resets, args.hang,
+                        asked_exit_after=bot_link.EXIT_AFTER_ARG.search(" ".join(settings)) is not None)
     except SoakError as e:
         err(f"bot_soak.py: {e}")
         if outcome.error is not None:
@@ -153,7 +155,8 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
         out("the music check saw no [axv] lines, so it did not run; was GCN_AXVOICES=1 turned off?")
     if stop is None:
         out(f"{name}: no stop in {wall / 60:.1f} min ({count(outcome.frames, 'frame')}, "
-            f"{count(player.menus.rounds, 'round')}, {count(log.resets.count, 'console reset')})")
+            f"{count(player.menus.rounds, 'round')}, {count(log.resets.count, 'console reset')}), "
+            f"ended on {outcome.reason}")
         return 0
     report(stop, outcome, probe=probe, name=name, args=args, settings=settings, resets=log.resets,
            watched=watched, wall=wall, out=out)

@@ -5,17 +5,18 @@ link over testgame.FakeGame's menus, as `bot_link.run(probe=...)` runs it. It wo
 build/probe/NAME/ the real probe.sh does, keeps a session whose input log ends in `# end 0 FRAME`
 on every way out, says its `[session]`, `[reset]` and `[shaders]` lines in stdout.txt and puts a
 counter at PICTURE_ADDR that stands in for the picture's hash. On SIGTERM it saves and exits at
-once. It records what it saw in record.json. What it does besides play is in plan.json, which
-`set_plan` writes beside tools/:
+once. It records what it saw in record.json. A `--exit-after=N` setting ends the game once a
+process has shown N frames, as the engine's does. What it does besides play is in plan.json,
+which `set_plan` writes beside tools/:
 
-  "race"      frames a race lasts before the game ends it, 3000 by default
+  "race"     frames a race lasts before the game ends it, 3000 by default
   "events"    a list of {"frame": N or "race": N, "process": P, "do": [ACTION, ...]}. It happens
               at frame N of process P (1 before a reset), or at the Nth frame of the first race
               the process plays, once. An ACTION is one of
                 ["say", TEXT]            a line in stdout.txt
                 ["panic"]                panic.txt, and the game ends
                 ["exit"]                 the game ends on its own
-                ["shutdown"]             the console shuts down, which is a clean end
+                ["shutdown"]             the console shuts down and the game ends
                 ["hang", SECONDS]        no frame for that long, with the link open
                 ["reset", {"kind": "restart", "shaders_ms": 100, "connect_after": 0}]
                                          a console reset: the game starts again as the next
@@ -63,6 +64,7 @@ def setting(prefix, default=""):
 path = setting("GCN_BOT=")
 ports = int(setting("--pads=", "1"))
 session = setting("GCN_SESSION=")
+exit_after = int(setting("--exit-after=", "0"))  # frames before the game ends, as the engine's flag does
 process, frame, picture, picture_frozen, game_frozen = 1, 0, 0, False, False
 conn = lines = log = None
 fired = set()
@@ -224,6 +226,8 @@ if plan.get("connect_fails"):
     stop_game(1)
 connect()
 while True:
+    if exit_after and frame >= exit_after:
+        stop_game(0)
     if events():
         continue
     link.frame = frame
