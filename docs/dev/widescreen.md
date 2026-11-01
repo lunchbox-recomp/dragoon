@@ -383,7 +383,8 @@ tools/drawlog.py hud build/probe/hud/stdout.txt build/probe/hud-wide/stdout.txt 
 
 `drawlog.py hud` pairs the two runs' HUD draws and checks each anchored one's box against its
 4:3 box, as `tools/README.md` says. On Dragoon `e52dce1` at gcn-recomp `5e49451`, one run at a
-time at loads of 1.5 to 3.1, every checkpoint passed.
+time at loads of 1.5 to 3.1, every checkpoint passed. `e52dce1`, here and below, is #46's commit
+that became `fe88e8a`.
 
 | Checkpoint | Anchored | Failed | Stretched |
 |---|---|---|---|

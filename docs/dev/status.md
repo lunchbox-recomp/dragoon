@@ -586,6 +586,7 @@ route.
 ## Player targets
 
 What a player's first session looks like after the warm-up, against the bars set for it.
+Dragoon `e52dce1`, here and below, is #46's commit that became `fe88e8a`.
 
 | Target | Bar | Measured | Result |
 |---|---|---|---|
