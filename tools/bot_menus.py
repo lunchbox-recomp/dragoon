@@ -66,6 +66,7 @@ LEAVE_SECONDS = 60  # game seconds past a round's end the walker has to leave it
 CYCLE_STUCKS = 5  # and the menus together may go on without a race or the city, this many screen limits
 TRAIL = 8  # screens a stop for that names, the ones before the screen it stopped on
 CLIMB_UPS = 3  # presses of UP on a mode's menu that leave menu.item alone before the walker presses A
+BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to its menu, which took 47 in the game
 
 UNCONFIRMED = {
     "boot": "A while the game boots (minor 38). The routes press A at frames 120 and 300 only.",
@@ -374,6 +375,10 @@ class Menus:
         return Tap(BUTTONS["START"], settle=START_WAIT)
 
     def _city_players(self, link: Link) -> Tap:
+        """A stadium's results come back here, and no menu has drawn a goal since the round
+        began, so B is held to go back to City Trial's own menu, where the next round is drawn."""
+        if self.goal is None and self.mode == CITY_TRIAL:
+            return Tap(BUTTONS["B"], hold=BACK_HOLD)
         states = {port: self._read(link, f"player_select.port{port}") for port in range(1, self.ports + 1)}
         out = tuple(port for port, state in states.items() if state == 0)
         if out:

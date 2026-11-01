@@ -17,7 +17,13 @@ class FakeGame:
 
     A mode's own menu has four rows. Its cursor is on row `item` when the menu first opens, and
     stays where the player left it after that, as city-trial-stadium.txt shows: B out of Game
-    Settings (row 3 of City Trial's) leaves it there."""
+    Settings (row 3 of City Trial's) leaves it there.
+
+    A stadium's results go back to City Trial's player entry with every port out, through the
+    checklist the first time, as a soak showed. B held there for BACK_HELD frames goes back to
+    City Trial's own menu, as a hold from city-trial.txt's player entry did."""
+
+    BACK_HELD = 47  # frames of B the game took to leave the player entry
 
     def __init__(self, link: FakeLink, players: int = 1, race: int = 3000, item: int = 0) -> None:
         self.link, self.players, self.race_length = link, players, race
@@ -32,6 +38,8 @@ class FakeGame:
         self.paused = False
         self.pause_row = 0
         self.stage = 0  # City Trial: 0 the city, 1 the stadium
+        self.checked = False  # whether the checklist has shown
+        self.held_b = 0  # frames port 1 has held B
         self.movies_seen: set[int] = set()
         self.visited: list[int] = [self.minor]
         self.started: list[tuple[str, int]] = []  # (mode, course) of each race that began
@@ -66,6 +74,7 @@ class FakeGame:
         now = {port: pads[port].buttons if pads and port in pads else 0 for port in range(1, 5)}
         down = {port: now[port] & ~self.last.get(port, 0) for port in now}
         self.last = now
+        self.held_b = self.held_b + 1 if now[1] & BUTTONS["B"] else 0
 
         def pressed(button: str, port: int = 1) -> bool:
             return bool(down[port] & BUTTONS[button])
@@ -132,6 +141,9 @@ class FakeGame:
             elif pressed("START") and self.joined:
                 self.started.append(("top", 0))
                 self.go(bot_menus.TOP_RACE)
+        elif m == bot_menus.CITY_PLAYERS and self.held_b >= self.BACK_HELD:
+            self.go(bot_menus.MAIN_MENU)  # City Trial's own menu, the cursor where it was
+            self.page = 1
         elif m == bot_menus.CITY_PLAYERS:
             for port in range(1, 5):
                 if pressed("A", port):
@@ -153,9 +165,14 @@ class FakeGame:
                 self.stage = 1
                 self.go(bot_menus.RACE)
         elif m == bot_menus.STADIUM_RESULTS:
-            if pressed("START"):
-                self.go(bot_menus.MAIN_MENU)
-                self.page = 0
+            if pressed("START") and not self.checked:
+                self.checked = True
+                self.go(bot_menus.CHECKLIST)
+            elif pressed("START"):
+                self.enter()
+        elif m == bot_menus.CHECKLIST:
+            if pressed("A"):
+                self.enter()
         self.sync()
 
     def play(self, pressed: Callable[[str], bool]) -> None:

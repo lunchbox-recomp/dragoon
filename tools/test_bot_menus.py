@@ -373,6 +373,18 @@ class MachineTest(unittest.TestCase):
         screen(link, bot_menus.CITY_PLAYERS, player_select__port1=3, player_select__port2=1)
         self.assertEqual(presses(run(menus, link, 300)), [])
 
+    def test_city_trials_player_select_after_its_round_is_left_for_the_menus_by_holding_b(self) -> None:
+        menus, link, _ = make(ports=4, modes=(CITY_TRIAL,))
+        screen(link, bot_menus.CITY_PLAYERS)
+        run(menus, link, 1)
+        screen(link, bot_menus.RACE)
+        run(menus, link, 100, first=1)  # the round began
+        screen(link, bot_menus.CITY_PLAYERS)  # and its stadium's results came back here
+        steps = run(menus, link, 140, first=101)  # the first look, at 110, and the hold
+        held = [frame for frame, buttons in steps if buttons and buttons[1] == B]
+        self.assertEqual(held, list(range(held[0], held[0] + bot_menus.BACK_HOLD)) if held else "no B")
+        self.assertEqual({buttons[port] for _, buttons in steps if buttons for port in (2, 3, 4)}, {0})
+
     def test_ports_past_the_players_are_not_asked_about(self) -> None:
         menus, link, _ = make(ports=2)
         screen(link, bot_menus.CITY_PLAYERS, player_select__port1=3, player_select__port2=3)
@@ -706,14 +718,16 @@ class PathTest(unittest.TestCase):
         game, _ = self.path(TOP_RIDE, frames=12000, race=100000, round_seconds=60)
         self.assertEqual(game.visited[:9], [38, 0, 2, 24, 7, 9, 19, 2, 7])
 
-    def test_a_city_trial_goes_through_the_stats_the_card_the_stadium_and_the_results(self) -> None:
-        game, _ = self.path(CITY_TRIAL, frames=9000, race=2000)
-        self.assertEqual(game.visited[:11], [38, 0, 2, 25, 10, 18, 16, 17, 18, 13, 2])
+    def test_a_city_trial_goes_through_the_stats_the_card_the_stadium_and_the_results_to_the_menus(self) -> None:
+        game, menus = self.path(CITY_TRIAL, frames=9000, race=2000)
+        self.assertEqual(game.visited[:13], [38, 0, 2, 25, 10, 18, 16, 17, 18, 13, 34, 10, 2])
+        self.assertEqual(menus.rounds, 2)
 
     def test_a_four_player_city_trial_comes_back_to_the_menus_and_plays_again(self) -> None:
-        game, _ = self.path(CITY_TRIAL, players=4, frames=16000, race=2000)
-        self.assertEqual(game.visited[:12], [38, 0, 2, 25, 10, 18, 16, 17, 18, 13, 2, 10])
+        game, menus = self.path(CITY_TRIAL, players=4, frames=16000, race=2000)
+        self.assertEqual(game.visited[:14], [38, 0, 2, 25, 10, 18, 16, 17, 18, 13, 34, 10, 2, 10])
         self.assertGreaterEqual(len(game.started), 2)
+        self.assertIn(menus.rounds, (len(game.started), len(game.started) + 1))
 
     def test_the_modes_take_turns(self) -> None:
         game = FakeGame(FakeLink(), race=100000)
