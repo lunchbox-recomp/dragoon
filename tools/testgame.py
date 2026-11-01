@@ -12,8 +12,9 @@ from testutil import FakeLink
 class FakeGame:
     """The screens the routes pass through, and what a press does on each, as the routes and
     kar_ram.json show them. It is a model of those, which lets the walker's paths be played end
-    to end with no game. A press counts when the button goes down. A race ends after `race`
-    frames of play, not counting a pause. It keeps the screen's values in LINK.
+    to end with no game. A press counts when the button goes down. A race and the city end after
+    `race` frames of play, not counting a pause, and a stadium after `stadium`, `race` by
+    default. It keeps the screen's values in LINK.
 
     A mode's own menu has four rows. Its cursor is on row `item` when the menu first opens, and
     stays where the player left it after that, as city-trial-stadium.txt shows: B out of Game
@@ -21,12 +22,16 @@ class FakeGame:
 
     A stadium's results go back to City Trial's player entry with every port out, through the
     checklist the first time, as a soak showed. B held there for BACK_HELD frames goes back to
-    City Trial's own menu, as a hold from city-trial.txt's player entry did."""
+    City Trial's own menu, as a hold from city-trial.txt's player entry did. The city can't be
+    paused here. A stadium's pause menu has two rows, Return to Game and End Game, and DOWN
+    wraps, as Drag Race 3's did. Its End Game goes to City Trial's own menu."""
 
     BACK_HELD = 47  # frames of B the game took to leave the player entry
 
-    def __init__(self, link: FakeLink, players: int = 1, race: int = 3000, item: int = 0) -> None:
+    def __init__(self, link: FakeLink, players: int = 1, race: int = 3000, item: int = 0,
+                 stadium: int | None = None) -> None:
         self.link, self.players, self.race_length = link, players, race
+        self.stadium_length = race if stadium is None else stadium
         self.opening_item = item
         self.item = 0
         self.minor, self.page, self.mode, self.cursor = bot_menus.BOOT, 0, 0, 0
@@ -177,21 +182,22 @@ class FakeGame:
 
     def play(self, pressed: Callable[[str], bool]) -> None:
         in_city = self.started[-1][0] == "city"
+        stadium = in_city and self.stage == 1
         if self.paused:
-            if pressed("DOWN"):
-                self.pause_row = min(2, self.pause_row + 1)
+            if pressed("DOWN"):  # a stadium's two rows wrap, as Drag Race 3's did
+                self.pause_row = (self.pause_row + 1) % 2 if stadium else min(2, self.pause_row + 1)
             if pressed("A"):
-                if self.pause_row == 2:  # End Game: back to the mode's own menu
+                if self.pause_row == (1 if stadium else 2):  # End Game: back to the mode's own menu
                     self.go(bot_menus.MAIN_MENU)
                     self.page = 1
                 else:
                     self.paused = False
             return
-        if pressed("START") and not in_city:
+        if pressed("START") and (stadium or not in_city):
             self.paused, self.pause_row = True, 0
             return
         self.raced += 1
-        if self.raced < self.race_length:
+        if self.raced < (self.stadium_length if stadium else self.race_length):
             return
         if in_city:
             self.go(bot_menus.CITY_STATS if self.stage == 0 else bot_menus.STADIUM_RESULTS)

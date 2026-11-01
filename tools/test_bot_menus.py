@@ -380,7 +380,7 @@ class MachineTest(unittest.TestCase):
         screen(link, bot_menus.RACE)
         run(menus, link, 100, first=1)  # the round began
         screen(link, bot_menus.CITY_PLAYERS)  # and its stadium's results came back here
-        steps = run(menus, link, 140, first=101)  # the first look, at 110, and the hold
+        steps = run(menus, link, 130, first=101)  # the hold from the first look and its settling
         held = [frame for frame, buttons in steps if buttons and buttons[1] == B]
         self.assertEqual(held, list(range(held[0], held[0] + bot_menus.BACK_HOLD)) if held else "no B")
         self.assertEqual({buttons[port] for _, buttons in steps if buttons for port in (2, 3, 4)}, {0})
@@ -393,12 +393,20 @@ class MachineTest(unittest.TestCase):
 
 
 class PlayTest(unittest.TestCase):
-    def test_a_race_is_the_race_bots_and_the_walker_looks_now_and_then(self) -> None:
+    def test_a_race_is_the_race_bots_and_the_walker_looks_at_every_frame(self) -> None:
         menus, link, _ = make()
         screen(link, bot_menus.RACE)
         steps = run(menus, link, 601)
         self.assertTrue(all(buttons is None for _, buttons in steps))
-        self.assertEqual(len(link.reads), 11)  # frames 0, 60, ... 600
+        self.assertEqual(len(link.reads), 601)
+
+    def test_the_screen_after_play_is_the_walkers_from_its_first_frame(self) -> None:
+        # So the race bots' A can't pass City Trial's stats or the card unseen.
+        menus, link, _ = make(modes=(CITY_TRIAL,))
+        screen(link, bot_menus.RACE)
+        steps = run(menus, link, 200, changes={137: lambda: screen(link, bot_menus.CITY_STATS)})
+        self.assertTrue(all(buttons is None for _, buttons in steps[:137]))
+        self.assertEqual(steps[137], (137, {1: A}))
 
     def test_top_rides_race_is_too(self) -> None:
         menus, link, _ = make()
@@ -416,7 +424,7 @@ class PlayTest(unittest.TestCase):
         menus, _, said, steps = self.race(bot_menus.AIR_MACHINES, 900)
         found = presses(steps)[1:]  # the first is the A that joined
         s = found[0][0]
-        self.assertTrue(650 <= s < 710, s)  # a look every 60 frames after the race began at 50
+        self.assertEqual(s, 650)  # 10 s after the race began at the walker's first look, at 50
         self.assertEqual(found, [(s, {1: START}), (s + 100, {1: DOWN}), (s + 150, {1: DOWN}), (s + 200, {1: A})])
         self.assertEqual(menus.mode, AIR_RIDE)
         self.assertTrue(any(line.startswith("leaving air-ride after 10 s") for line in said))
@@ -464,20 +472,23 @@ class PlayTest(unittest.TestCase):
         _, _, _, steps = self.race(bot_menus.CITY_PLAYERS, 3000)
         self.assertTrue(all(buttons is None for frame, buttons in steps if frame >= 60))
 
-    def test_the_city_through_its_stats_and_card_to_the_stadium_is_the_same_mode(self) -> None:
-        menus, link, _ = make(round_seconds=10)
-        screen(link, bot_menus.CITY_PLAYERS)
-        run(menus, link, 1)
-        screen(link, bot_menus.RACE)
-        run(menus, link, 100, first=1)
-        screen(link, bot_menus.CITY_STATS)
-        run(menus, link, 100, first=101)
-        screen(link, bot_menus.STADIUM_CARD)
-        run(menus, link, 100, first=201)
-        screen(link, bot_menus.RACE)
-        steps = run(menus, link, 3000, first=301)
-        self.assertEqual(menus.mode, CITY_TRIAL)
-        self.assertTrue(all(buttons is None for frame, buttons in steps if frame >= 400))
+    def test_the_stadium_after_the_stats_and_card_is_left_from_its_pause_menu_after_the_round(self) -> None:
+        for before in (bot_menus.CITY_STATS, bot_menus.STADIUM_CARD):
+            with self.subTest(before=before):
+                menus, link, said = make(round_seconds=10)
+                screen(link, bot_menus.CITY_PLAYERS)
+                run(menus, link, 1)
+                screen(link, bot_menus.RACE)
+                run(menus, link, 100, first=1)
+                screen(link, before)
+                run(menus, link, 100, first=101)
+                screen(link, bot_menus.RACE)
+                steps = run(menus, link, 1200, first=201)
+                self.assertEqual(menus.mode, CITY_TRIAL)
+                # The stadium begins at 201, when the walker's A on the screen before has settled.
+                self.assertEqual(presses(steps), [(801, {1: START}), (901, {1: DOWN}), (951, {1: A})])
+                self.assertEqual(len([line for line in said if line.startswith("leaving the stadium after 10 s")]), 1)
+                self.assertEqual(len([line for line in said if "stadium pause" in line]), 1)
 
     def test_a_race_that_began_where_the_walker_did_not_see_is_not_left_early(self) -> None:
         menus, link, _ = make(round_seconds=10)
@@ -645,7 +656,7 @@ class UnconfirmedTest(unittest.TestCase):
         self.assertEqual(len([line for line in said if "course cursor" in line]), 1)
 
     def test_every_unconfirmed_step_is_tested_here(self) -> None:
-        self.assertEqual(set(bot_menus.UNCONFIRMED), {*self.CASES, "course cursor"})
+        self.assertEqual(set(bot_menus.UNCONFIRMED), {*self.CASES, "course cursor", "stadium pause"})
 
     def test_the_press_cadence_is_said_with_the_first_press_and_not_with_a_wait(self) -> None:
         cadence = f"unconfirmed step, press cadence: {bot_menus.UNCONFIRMED['press cadence']}"
@@ -673,8 +684,9 @@ class UnconfirmedTest(unittest.TestCase):
 class PathTest(unittest.TestCase):
     """The paths, played against a model of the screens the routes show."""
 
-    def path(self, mode: str, players: int = 1, frames: int = 4000, race: int = 3000, seed: int = 0, **kw):
-        game = FakeGame(FakeLink(), players=players, race=race)
+    def path(self, mode: str, players: int = 1, frames: int = 4000, race: int = 3000, seed: int = 0,
+             stadium: int | None = None, **kw):
+        game = FakeGame(FakeLink(), players=players, race=race, stadium=stadium)
         menus = Menus(players, Schedule(seed, (mode,)), **kw)
         play_through(game, menus, frames)
         return game, menus
@@ -728,6 +740,11 @@ class PathTest(unittest.TestCase):
         self.assertEqual(game.visited[:14], [38, 0, 2, 25, 10, 18, 16, 17, 18, 13, 34, 10, 2, 10])
         self.assertGreaterEqual(len(game.started), 2)
         self.assertIn(menus.rounds, (len(game.started), len(game.started) + 1))
+
+    def test_a_stadium_that_goes_on_is_ended_from_its_pause_menu_and_the_next_round_starts(self) -> None:
+        game, menus = self.path(CITY_TRIAL, frames=12000, race=2000, stadium=10 ** 9, round_seconds=30)
+        self.assertEqual(game.visited[:11], [38, 0, 2, 25, 10, 18, 16, 17, 18, 2, 10])
+        self.assertGreaterEqual(len(game.started), 2)
 
     def test_the_modes_take_turns(self) -> None:
         game = FakeGame(FakeLink(), race=100000)

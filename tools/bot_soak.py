@@ -10,9 +10,10 @@ dumps. The bots walk the menus (bot_menus.py) and play the rounds LIST names, a 
 list of air-ride, top-ride and city-trial (all three by default), with PORTS controllers (1 by
 default). In a race or the city each bot holds the stick toward wherever a walk from SEED says
 and taps A at random, and never presses START (bot_walk.py). The walker leaves an Air Ride or
-Top Ride race through the pause menu after SECONDS of game time (--round, 120 by default). SEED
-is a whole number from 0, which is printed and defaults to one made from the clock. --minutes
-is at most a week, and --round, --stuck and --hang are at most a day.
+Top Ride race, or a City Trial stadium, through the pause menu after SECONDS of game time
+(--round, 120 by default). SEED is a whole number from 0, which is printed and defaults to one
+made from the clock. --minutes is at most a week, and --round, --stuck and --hang are at most a
+day.
 
 It stops at the first of these:
 

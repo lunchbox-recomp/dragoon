@@ -57,7 +57,6 @@ HOLD = 5  # frames a button is down, as the routes press
 SETTLE = 45  # frames a screen gets to answer a press; the routes space cursor presses 40 to 50
 SLOW = 95  # the wait after a press that changes the screen, such as the title's
 START_WAIT = 300  # and after the START that begins a race, which loads before its first frame
-PLAY_CHECK = 60  # frames between looks at the screen while a race plays
 RETRY = 600  # frames a try at leaving a race gets before the walker tries again
 ROUND_SECONDS = 120  # game seconds a race lasts before the walker leaves it
 STUCK_SECONDS = 120  # game seconds a menu screen may stay up
@@ -82,6 +81,8 @@ UNCONFIRMED = {
     "Top Ride machines": "A and START in turn on Top Ride's machine select (minor 9), which has no "
                          "RAM slot to read.",
     "stadium results": "START on a stadium's results (minor 13). The screen after it was never watched.",
+    "stadium pause": "START, DOWN and A on a stadium's pause menu, for End Game. Only Drag Race 3's has been "
+                     "watched.",
     "other screen": "A on a screen scene.minor has no name for here.",
     "press cadence": "Looks come 50 frames after most presses, even one that changes the screen. The title, a "
                      "race's START and the pause menu wait longer. The routes usually wait about 300 frames "
@@ -92,6 +93,9 @@ UNCONFIRMED = {
 LEAVE = (  # the pause menu to End Game, as the courses routes press it
     ("START", SLOW), ("DOWN", SETTLE), ("DOWN", SETTLE), ("A", START_WAIT),
 )
+# A stadium's pause menu has two rows, Return to Game and End Game, and DOWN wraps, as Drag Race 3's
+# did. End Game went to City Trial's own menu.
+STADIUM_LEAVE = (("START", SLOW), ("DOWN", SETTLE), ("A", START_WAIT))
 
 
 class Stuck(Exception):
@@ -135,11 +139,12 @@ class Schedule:
 
 class Menus:
     """Walks the menus for PORTS controllers, playing the rounds SCHEDULE says, and says what
-    it's doing to SAY. A race is left after ROUND_SECONDS of game time through the pause menu,
-    or never when `round_seconds` is None. Raises Stuck from `step` when a screen stays up for
-    STUCK_SECONDS, a race for PLAY_SECONDS, or the menus go on for CYCLE_STUCKS times
-    STUCK_SECONDS with no race or city, as when the screens take turns. TABLE is the kar_ram
-    table to read by."""
+    it's doing to SAY. A race or a City Trial stadium is left after ROUND_SECONDS of game time
+    through the pause menu, or never when `round_seconds` is None. The screen is read on every
+    frame, so the race bots never press on one that isn't a race's. Raises Stuck from `step`
+    when a screen stays up for STUCK_SECONDS, a race for PLAY_SECONDS, or the menus go on for
+    CYCLE_STUCKS times STUCK_SECONDS with no race or city, as when the screens take turns.
+    TABLE is the kar_ram table to read by."""
 
     def __init__(self, ports: int, schedule: Schedule, *, round_seconds: float | None = ROUND_SECONDS,
                  stuck_seconds: float = STUCK_SECONDS, play_seconds: float = PLAY_SECONDS,
@@ -178,11 +183,11 @@ class Menus:
         self._tap: Tap | None = None
         self._held = 0  # frames of the press left
         self._wake = 0  # the frame the next look may be at
-        self._look = 0  # and while a race plays, the next look
         self._script: deque[Tap] = deque()
         self._left: int | None = None  # the frame the last try at leaving began
         self._since = frame  # the frame the screen last changed
         self._began = frame  # the frame the race began
+        self._stadium = False  # whether it's a City Trial stadium, which comes after the stats or the card
         self._visits = 0  # looks at this screen
         self._played: int | None = None  # the frame a race or the city was last on, or the first look
         self._trail: deque[int] = deque(maxlen=TRAIL)  # the screens before this one
@@ -202,11 +207,8 @@ class Menus:
             return self._pads(self._tap)
         if frame < self._wake:
             return self._pads(None)
-        if frame < self._look:
-            return None
         tap = self._decide(link, frame)
         if tap is None:
-            self._look = frame + PLAY_CHECK
             return None
         if tap.buttons:
             self._unconfirmed("press cadence")
@@ -234,6 +236,7 @@ class Menus:
         if minor != self.minor:
             if minor in PLAYING and self.minor not in PLAYING:
                 self._began = frame
+                self._stadium = self.minor in (CITY_STATS, STADIUM_CARD)
                 if self.minor in STARTS:  # a round begins, and the next gets its own mode and course
                     self.mode = STARTS[self.minor]
                     self.goal = self.course = None
@@ -266,18 +269,24 @@ class Menus:
             self.say(f"unconfirmed step, {key}: {UNCONFIRMED[key]}")
 
     def _play(self, frame: int) -> Tap | None:
-        """A race, the city or a stadium is on. The walker presses only to leave one that's
-        run its round, from the pause menu."""
+        """A race, the city or a stadium is on. The walker presses only to leave a race or a
+        stadium that's run its round, from the pause menu. The city ends on its own clock."""
         if self._script:
             return self._script.popleft()
-        if (self.round_frames is not None and self.mode in (AIR_RIDE, TOP_RIDE)
-                and frame - self._began >= self.round_frames
-                and (self._left is None or frame - self._left >= RETRY)):
-            self._left = frame
-            self.say(f"leaving {self.mode} after {(frame - self._began) / FPS:.0f} s of game time")
-            self._script.extend(Tap(BUTTONS[name], settle=wait) for name, wait in LEAVE)
-            return self._script.popleft()
-        return None
+        if (self.round_frames is None or frame - self._began < self.round_frames
+                or (self._left is not None and frame - self._left < RETRY)):
+            return None
+        if self.mode in (AIR_RIDE, TOP_RIDE):
+            what, way = self.mode, LEAVE
+        elif self._stadium:
+            what, way = "the stadium", STADIUM_LEAVE
+            self._unconfirmed("stadium pause")
+        else:
+            return None
+        self._left = frame
+        self.say(f"leaving {what} after {(frame - self._began) / FPS:.0f} s of game time")
+        self._script.extend(Tap(BUTTONS[name], settle=wait) for name, wait in way)
+        return self._script.popleft()
 
     def _goal(self) -> str:
         if self.goal is None:
