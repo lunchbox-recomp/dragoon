@@ -67,9 +67,9 @@ final class EffectRunner {
             NSPasteboard.general.setString(text, forType: .string)
         case .showLog(let log):
             NSWorkspace.shared.open(URL(fileURLWithPath: log))
-        case .play:
+        case .play(_, let launch):
             // Launching the game isn't wired up, so Play says so and Library's buttons come back.
-            Task { send(.gameCouldNotStart(reason: Strings.playNotWiredUp)) }
+            Task { send(.gameCouldNotStart(launch: launch, reason: Strings.playNotWiredUp)) }
         case .showSaves:
             let folder = fs.isDirectory(at: places.saves) ? places.saves : places.data
             NSWorkspace.shared.open(URL(fileURLWithPath: folder))

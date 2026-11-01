@@ -169,7 +169,11 @@ enum Strings {
 
     static func gameFailed(_ problem: GameProblem) -> String {
         switch problem {
-        case .exited(let status, _): return "The game quit with exit code \(status)."
+        case .exited(.status(let status), _): return "The game quit with exit code \(status)."
+        case .exited(.signal(let number), _):
+            // A number macOS has no name for is shown alone.
+            let name = GameExit.signal(number).signalName.map { " (\($0))" } ?? ""
+            return "The game was stopped by signal \(number)\(name)."
         case .couldNotStart(let reason): return "The game couldn't start. \(reason)"
         }
     }

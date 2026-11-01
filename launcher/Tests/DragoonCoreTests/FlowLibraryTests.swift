@@ -238,7 +238,29 @@ private let oldCommits = Commits(
         run.send(.playPressed)
         run.send(.bookmarkResolved(.found(flowDisc)))
         #expect(run.send(.discChecked(path: "/elsewhere.iso", check: .ok)) == [])
-        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc)])
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc, launch: 1)])
+    }
+
+    /// Each `play` carries the next launch number, and its result echoes it. A result for any
+    /// other launch, such as a late one from the launch before, changes nothing.
+    @Test func aLateResultFromAnEarlierLaunchChangesNothing() {
+        var run = launched()
+        #expect(run.send(playToStarting).last == [.play(disc: flowDisc, launch: 1)])
+        run.send(.gameCouldNotStart(launch: 1, reason: "no game"))
+        #expect(run.send(playToStarting).last == [.play(disc: flowDisc, launch: 2)])
+        let running = run.state
+        let others: [Flow.Event] = [
+            .gameExited(launch: 1, exit: .status(3), panic: "late"),
+            .gameCouldNotStart(launch: 1, reason: "late"),
+            .gameExited(launch: 3, exit: .status(0), panic: nil),
+        ]
+        for event in others {
+            #expect(run.send(event) == [], "\(event)")
+        }
+        #expect(run.state == running)
+        #expect(run.state.gameRunning)
+        #expect(run.send(.gameExited(launch: 2, exit: .status(0), panic: nil)) == [.deleteOldBuilds])
+        #expect(!run.state.gameRunning)
     }
 
     @Test func showSavesIsAnEffect() {
@@ -249,7 +271,7 @@ private let oldCommits = Commits(
     @Test func oldBuildsWaitUntilTheGameHasExited() {
         var run = launched()
         #expect(!run.send(playToStarting).joined().contains(.deleteOldBuilds))
-        #expect(run.send(.gameExited(status: 0, panic: nil)) == [.deleteOldBuilds])
+        #expect(run.send(.gameExited(launch: 1, exit: .status(0), panic: nil)) == [.deleteOldBuilds])
     }
 
     /// Nothing the player can press leaves Library while the game runs, so the state is set by
@@ -260,21 +282,27 @@ private let oldCommits = Commits(
         run.send(.discChosen(path: flowDisc, bookmark: flowBookmark))
         var state = run.state
         state.gameRunning = true
+        state.launchNumber = 1
         let (next, effects) = Flow.reduce(state, .discChecked(path: flowDisc, check: .ok))
         #expect(next.screen == .library)
         #expect(!effects.contains(.deleteOldBuilds))
-        #expect(Flow.reduce(next, .gameExited(status: 0, panic: nil)).1 == [.deleteOldBuilds])
+        #expect(Flow.reduce(next, .gameExited(launch: 1, exit: .status(0), panic: nil)).1
+            == [.deleteOldBuilds])
     }
 
+    /// A result for the flow's launch number that arrives during a build, however it got there,
+    /// leaves old builds alone.
     @Test func oldBuildsWaitUntilTheBuildHasEnded() {
         var run = launched()
         for (event, _) in rebuildToRunning { run.send(event) }
-        #expect(run.send(.gameExited(status: 0, panic: nil)) == [])
+        let launch = run.state.launchNumber
+        #expect(run.send(.gameExited(launch: launch, exit: .status(0), panic: nil)) == [])
         #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
     }
 
     @Test func noGameMeansNoOldBuildsToDelete() {
         var run = launched(settings: LauncherSettings(welcomeSeen: true), installed: nil)
-        #expect(run.send(.gameExited(status: 0, panic: nil)) == [])
+        let launch = run.state.launchNumber
+        #expect(run.send(.gameExited(launch: launch, exit: .status(0), panic: nil)) == [])
     }
 }
