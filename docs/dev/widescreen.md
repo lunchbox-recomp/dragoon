@@ -408,6 +408,17 @@ On Dragoon `701a2dd` at gcn-recomp `b11ebc6`, with `drawlog.py hud` also failing
 to the edge across its rect, the race at 4200 and 4P at 3480 gave the same counts, one run at a
 time.
 
+On Dragoon `8e6bc30` at gcn-recomp `b11ebc6`, with `drawlog.py hud` also failing a centered draw
+past the band at a side, all four checkpoints gave the same counts, one run at a time. These
+four callbacks' trees took these anchors there.
+
+| Callback | Race, 4200 | City Trial, 3300 | 2P, 3480 | 4P, 3480 |
+|---|---|---|---|---|
+| `fn_80114F1C` | L for the position. R for the lap count, the speedometer and its frame | R for the speedometer and its frame | In each view, L for the name and R for the speedometer and its frame | As in 2P |
+| `8011DCF8`, the minimap's karts | R | L | L | None drawn |
+| `8011E404`, the minimap's start | R | None drawn | None drawn | None drawn |
+| `fn_8011F114` | None drawn | R | R in each view | R in each view |
+
 In the output dumps at 16:9 the race's position sits at the left and the timer in the middle.
 The minimap, the lap count and the speedometer sit at the right, and the CPU marker sits over
 its kart. In 2P and 4P each player's name sits at the left of their view and the speedometer at
