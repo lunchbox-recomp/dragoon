@@ -550,9 +550,10 @@ With four players a stadium's results wait for START from every player. Frame 32
 512035's replay shows Destruction Derby's results with P1 alone ready, since the walker pressed
 START on port 1 only. It has pressed START on every port since `ee88df6`. With four players a
 stadium's pause menu has Return to Game and End Game side by side, so the walker's DOWN left the
-cursor on Return to Game and its A went back to a Single Race, 49 times over. Frames 130,550 to
-130,650 of 513333's replay show it once. Since `457b37b` it presses RIGHT there instead, which took a
-run of `city-trial-stadium-4p.txt` to End Game on Drag Race 3.
+cursor on Return to Game and its A went back to a Single Race, 48 times over. Frames 130,550 to
+130,650 of 513333's replay show it once. Since `457b37b` it presses RIGHT there instead. A scratch
+copy of `city-trial-stadium-4p.txt` with START, RIGHT and A added at frames 18,000, 18,100 and
+18,150 went to End Game on Drag Race 3.
 
 The last two stops came from `tools/stream_voices.py`'s rule. In each, the music's two voices
 changed in the same command list, in a City Trial round's city. The game stopped one with a
