@@ -3,8 +3,9 @@ import Foundation
 import Testing
 
 /// Each of these runs a shell script as the game under `Process`, in a scratch directory whose
-/// name has spaces. The scripts are in the tests that use them.
-@Suite struct GameLauncherTests {
+/// name has spaces. The scripts are in the tests that use them. A launch that never gives its
+/// result fails its test when the limit is up, rather than stopping the run.
+@Suite(.timeLimit(.minutes(1))) struct GameLauncherTests {
     @Test func theGameRunsInTheDataDirectoryWithTheDiscAsItsOneArgument() async throws {
         let fixture = try GameFixture()
         try fixture.install("exit 0")
