@@ -851,6 +851,22 @@ class OutcomeTest(FakeProbeCase):
         self.assertFalse(os.path.exists(sock + ".lock"))
         self.assertEqual(os.listdir(self.run_dir()).count("bot.sock.lock"), 0)
 
+    def test_the_socket_file_is_gone_before_the_lock_is_let_go(self):
+        # Or a second run of the NAME could take the lock, replace the stale socket with its
+        # own and have this one remove it.
+        self.plan([0])
+        sock = socket_path(self.run_dir())
+        seen: list[bool] = []
+        real = bot_link._unlock
+
+        def unlock(lock: int, path: str) -> None:
+            seen.append(os.path.exists(sock))
+            real(lock, path)
+
+        with mock.patch.object(bot_link, "_unlock", side_effect=unlock):
+            self.go(neutral)
+        self.assertEqual(seen, [False])
+
     def test_ctrl_c_in_the_bot_ends_the_game_too(self):
         self.plan(list(range(10)), ignore_hangup=True)
 
