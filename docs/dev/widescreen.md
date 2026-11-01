@@ -347,6 +347,11 @@ frames in a row, it takes its nearest edge. Without that, an element that stoppe
 band would keep the edge it came from, then show at the other once it missed a frame. So one
 that stops there jumps once, 30 frames after it stops.
 
+A tie in a tree's vote goes to the edge it held while it moves, and to the first of those tied
+once it has rested. On Dragoon `fb8cf35`, which gave a rested tree's tie to its held edge too,
+the speedometer's frame held the middle it first showed in, in the race at 4200 and City Trial
+at 3300. Its joints split evenly between the middle and the right.
+
 Keeping each tree's first mark for as long as it showed doesn't work for this game's HUD. On
 Dragoon `34a24f5`, which did, every tree `fn_80114F1C` draws held C(0..640) in the race at 4200
 and the minimap's karts held L(0..640), away from their edges at 16:9. Chosen afresh each frame,

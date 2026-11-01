@@ -140,11 +140,13 @@ constexpr uint32_t kRestFrames = 30;
 // calling for (edge_mark). Without them an element moving 2 pixels across a line would jump to
 // another edge, as would a tree whose joints straddle a line in near-equal numbers when one of
 // them hides. Once a tree has rested, its joints' mean place the same for kRestFrames frames in
-// a row, they call for their nearest edges, so one that stopped inside the band moves to its
-// edge then rather than when it next misses a frame. A tree that misses a frame chooses afresh
-// when it shows. A tree whose joints have no place yet has nothing to keep, so it chooses from
-// them once they have one. Trees are told apart by their root, and a root shown more than once
-// in a frame by which time it is.
+// a row, it holds nothing: its joints call for their nearest edges and a tie goes to the first
+// of those tied. So one that stopped inside the band moves to its edge then rather than when it
+// next misses a frame, and one that first showed in the middle doesn't keep the middle through
+// a tie at a side, as the race's speedometer frame would at 4200. A tree that misses a frame
+// chooses afresh when it shows. A tree whose joints have no place yet has nothing to keep, so it
+// chooses from them once they have one. Trees are told apart by their root, and a root shown
+// more than once in a frame by which time it is.
 class KeptMarks {
 public:
     // The mark of the tree at `root`, shown in `frame` with its joints at `joints` on screen
@@ -173,10 +175,10 @@ public:
                 k.at.y += p.y / joints.size();
             }
             k.still = before && before->at == k.at ? before->still + 1 : 1;
-            const Mark held = k.still < kRestFrames ? k.mark.value_or(Mark{}) : Mark{};
+            const std::optional<Mark> held = k.still < kRestFrames ? k.mark : std::nullopt;
             marks_.clear();
-            for (const Point& p : joints) marks_.push_back(edge_mark(p.x, p.y, views, held));
-            k.mark = most_called(marks_, k.mark);
+            for (const Point& p : joints) marks_.push_back(edge_mark(p.x, p.y, views, held.value_or(Mark{})));
+            k.mark = most_called(marks_, held);
         }
         now_.push_back(k);
         return k.mark;

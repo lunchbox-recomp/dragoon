@@ -212,11 +212,16 @@ TEST(KeptMarks, ATreeRestsOnlyWhenAllItsJointsDo) {
         EXPECT_EQ(k.place(f, kRoot, {{470, 400}, {470.0f + f % 2, 400}}, {}), kMiddle) << f;
 }
 
-TEST(KeptMarks, ARestedTreesTieStillGoesToItsHeldEdge) {
+TEST(KeptMarks, ARestedTreesTieGoesToTheFirstOfThoseTied) {
+    // The race's speedometer frame at 4200: first shown in the middle, it comes to rest with its
+    // joints split between the right and the middle, the right's first. It holds the middle
+    // while it moves and takes the right once it has rested.
     dragoon::KeptMarks k;
-    EXPECT_EQ(k.place(10, kRoot, {{500, 400}}, {}), kRight);
-    for (uint32_t f = 11; f < 50; f++)
-        EXPECT_EQ(k.place(f, kRoot, {{300, 400}, {300, 400}, {500, 400}, {500, 400}}, {}), kRight) << f;
+    EXPECT_EQ(k.place(10, kRoot, {{320, 400}, {320, 400}}, {}), kMiddle);
+    for (uint32_t f = 11; f < 40; f++)
+        EXPECT_EQ(k.place(f, kRoot, {{500, 400}, {300, 400}}, {}), kMiddle) << f;
+    EXPECT_EQ(k.place(40, kRoot, {{500, 400}, {300, 400}}, {}), kRight);
+    EXPECT_EQ(k.place(41, kRoot, {{500, 400}, {300, 400}}, {}), kRight);
 }
 
 TEST(KeptMarks, AJointThatHidesDoesntTurnTheVote) {
