@@ -33,9 +33,10 @@ CLONEFILE = _clonefile()
 
 def clone(src: Path, dst: Path) -> bool:
     """Make DST, which mustn't exist yet, hold SRC's bytes. True when DST is a clone and False
-    when the bytes were copied. A DST that exists is a FileExistsError and stays as it was."""
+    when the bytes were copied. A DST that exists is a FileExistsError and stays as it was.
+    Neither way follows a link: a clone of one is a link, and a copy of one is an OSError."""
     if CLONEFILE is not None and CLONEFILE(os.fsencode(src), os.fsencode(dst), CLONE_NOFOLLOW) == 0:
         return True
-    with open(src, "rb") as f, open(dst, "xb") as g:
+    with open(os.open(src, os.O_RDONLY | os.O_NOFOLLOW), "rb") as f, open(dst, "xb") as g:
         shutil.copyfileobj(f, g, CHUNK)
     return False

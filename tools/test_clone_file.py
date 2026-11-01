@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import errno
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -56,6 +58,32 @@ class CloneTest(unittest.TestCase):
                 with self.assertRaises(FileExistsError):
                     clone_file.clone(self.src, self.dst)
                 self.assertEqual(self.dst.read_bytes(), b"old")
+
+    def test_a_clone_asks_clonefile_not_to_follow_a_link(self) -> None:
+        flags = []
+
+        def recording_clonefile(src: bytes, dst: bytes, flag: int) -> int:
+            flags.append(flag)
+            return -1
+
+        with mock.patch.object(clone_file, "CLONEFILE", recording_clonefile):
+            clone_file.clone(self.src, self.dst)
+        self.assertEqual(flags, [1])  # CLONE_NOFOLLOW in sys/clonefile.h
+
+    def test_a_clone_of_a_link_is_a_link_and_not_its_target(self) -> None:
+        link = self.tmp / "a link.bin"
+        os.symlink(self.src, link)
+        self.assertTrue(clone_file.clone(link, self.dst))
+        self.assertTrue(self.dst.is_symlink())
+
+    def test_a_copy_never_follows_a_link(self) -> None:
+        link = self.tmp / "a link.bin"
+        os.symlink(self.src, link)
+        with mock.patch.object(clone_file, "CLONEFILE", failing_clonefile):
+            with self.assertRaises(OSError) as cm:
+                clone_file.clone(link, self.dst)
+        self.assertEqual(cm.exception.errno, errno.ELOOP)
+        self.assertFalse(self.dst.exists())
 
     def test_a_missing_source_is_an_error(self) -> None:
         with self.assertRaises(FileNotFoundError):

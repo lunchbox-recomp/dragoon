@@ -547,6 +547,19 @@ class PrepareTest(ModsCase):
         self.assertIn(f"{gone} can't be copied", str(cm.exception))
         self.assertEqual(self.calls(), [])
 
+    def test_a_link_swapped_in_after_the_scan_is_never_copied(self) -> None:
+        target = self.put("elsewhere.bin", b"not the mod's", self.tmp)
+        swapped = self.put("Mod/files/a.bin", b"abc")
+        found = self.scan()
+        swapped.unlink()
+        os.symlink(target, swapped)
+        with mock.patch.object(clone_file, "CLONEFILE", lambda src, dst, flags: -1):
+            with self.assertRaises(mods.PrepareError) as cm:
+                mods.prepare(found, self.disc, self.dol, self.out, Path(sys.executable),
+                             self.recomp)
+        self.assertIn(f"{swapped} can't be copied", str(cm.exception))
+        self.assertFalse((self.out / "files" / "a.bin").exists())
+
     def test_the_digest_is_the_clones_and_not_what_the_mods_folder_holds_later(self) -> None:
         edited = self.put("Mod/files/a.bin", b"abc")
         before = mods.digest(self.scan())
