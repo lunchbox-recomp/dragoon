@@ -555,10 +555,12 @@ run of `city-trial-stadium-4p.txt` to End Game on Drag Race 3.
 The last two stops came from `tools/stream_voices.py`'s rule. In each, the music's two voices
 changed in the same command list, in a City Trial round's city. The game stopped one with a
 `stop` line and gave the other a sound effect's sample with a `set` line, and the mixer ended
-that sample when it ran out. The rule follows a parameter block across a `set`, so the block's
+that sample when it ran out. The rule followed a parameter block across a `set`, so the block's
 earlier stream address made that end an early one. In 544282 it was list 608,157, about 7,100
-frames into the round, and in 545590 list 1,691,796, about 7,400 frames in. Whether a console's
-game stops its music there wasn't checked.
+frames into the round, and in 545590 list 1,691,796, about 7,400 frames in. Neither point was
+compared with a console. Since `c82a688` a `set` that gives a block a new sample ends the voice
+that ran there as the game's doing, and an end the mixer makes on a stream the game didn't stop
+or give a new sample is still an early one.
 
 Each stop's replay line ran with `GCN_SESSION` and `GCN_AXVOICES=1` added, so the replay kept
 its own input log and voice lines. Each replay's input log matched the soak's up to the stop
