@@ -18,6 +18,7 @@ from unittest import mock
 
 import clone_file
 import mods
+import tool_env
 from testutil import run_main
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -454,7 +455,7 @@ class PrepareTest(ModsCase):
         self.assertEqual([c["tool"] for c in calls], ["dol_patch.py", "disc_overlay.py"])
         for call in calls:  # macOS gives every process __CF_USER_TEXT_ENCODING
             self.assertEqual([k for k in call["env"] if k != "__CF_USER_TEXT_ENCODING"],
-                             sorted(mods.TOOL_ENV))
+                             sorted(tool_env.tool_env()))
 
     def test_without_a_patch_list_the_dol_given_is_the_one_to_recompile(self) -> None:
         self.put("Mod/files/a.bin")
