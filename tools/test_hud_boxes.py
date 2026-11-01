@@ -280,6 +280,42 @@ class HudCommandTest(unittest.TestCase):
         code, out, _ = self.hud(old, new)
         self.assertEqual(code, 0, out)
 
+    def test_centered_box_past_the_band_in_the_right_third_fails(self):
+        # The review's input: an element held in the middle that keeps its distance to it.
+        code, line = self.one_draw(draw(1, "560.0..620.0,30.0..60.0", "C(0..640)"),
+                                   draw(1, "500.0..545.0,30.0..60.0", "C(0..640)"))
+        self.assertEqual(code, 1)
+        self.assertTrue(line.endswith("16:9 666.7..726.7,30.0..60.0  FAIL middle from the right third"), line)
+
+    def test_centered_box_past_the_band_in_the_left_third_fails(self):
+        code, line = self.one_draw(draw(1, "20.0..100.0,30.0..60.0", "C(0..640)"),
+                                   draw(1, "95.0..155.0,30.0..60.0", "C(0..640)"))
+        self.assertEqual(code, 1)
+        self.assertTrue(line.endswith("16:9 126.7..206.7,30.0..60.0  FAIL middle from the left third"), line)
+
+    def test_centered_box_reaching_into_the_band_passes(self):
+        # A held middle reaches a quarter of a third past each line, to 160 and 480.
+        old = [*world(0, WORLD), draw(1, "470.0..500.0,30.0..60.0", "C(0..640)"),
+               draw(2, "140.0..170.0,30.0..60.0", "C(0..640)", tex=OTHER_TEX)]
+        new = [*world(0, WIDE_WORLD), draw(1, "432.5..455.0,30.0..60.0", "C(0..640)"),
+               draw(2, "185.0..207.5,30.0..60.0", "C(0..640)", tex=OTHER_TEX)]
+        code, out, _ = self.hud(old, new)
+        self.assertEqual(code, 0, out)
+
+    def test_centered_box_in_its_views_middle_passes(self):
+        # Past the screen's band but in the middle of its view, which reaches 401 to 555.
+        old = [*world_4p(WORLD), draw(4, "490.0..520.0,50.0..70.0", "C(324..632)")]
+        new = [*world_4p(WIDE_WORLD), draw(4, "487.0..509.5,50.0..70.0", "C(324..632)")]
+        code, out, _ = self.hud(old, new)
+        self.assertEqual(code, 0, out)
+
+    def test_centered_box_past_its_views_band_fails(self):
+        old = [*world_4p(WORLD), draw(4, "560.0..600.0,50.0..70.0", "C(324..632)")]
+        new = [*world_4p(WIDE_WORLD), draw(4, "539.5..569.5,50.0..70.0", "C(324..632)")]
+        code, out, _ = self.hud(old, new)
+        self.assertEqual(code, 1)
+        self.assertTrue(out.splitlines()[0].endswith("FAIL middle from the right third"), out)
+
     def test_marker_centered_on_its_own_point_may_follow_the_world(self):
         code, line = self.one_draw(draw(1, "320.0..360.0,100.0..140.0", "C(340..340)"),
                                    draw(1, "285.0..315.0,100.0..140.0", "C(300..300)"))

@@ -419,9 +419,10 @@ loads of 4.2 to 5.0.
 
 - After the finish `fn_8011500C` draws the replay's banner and buttons, and they keep their 4:3
   shape in the middle of the screen. `drawlog.py hud` passed all 11 of their draws at 8400, as
-  it did again on Dragoon `701a2dd`. The banner's dark stripe spans the screen at 4:3, though,
-  and it's drawn within one of the callback's joint trees, so at 16:9 it takes the tree's middle
-  anchor and stops short of both sides.
+  it did again on Dragoon `701a2dd`. Its check of a centered draw past the band, added since,
+  fails three of them, the banner's pieces at the sides. The banner's dark stripe spans the
+  screen at 4:3, though. It's drawn within one of the callback's joint trees, so at 16:9 it takes
+  the tree's middle anchor and stops short of both sides.
 - In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide. At
   3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
   table draws them. Top Ride's census on Dragoon `701a2dd` has all 38 drawn by

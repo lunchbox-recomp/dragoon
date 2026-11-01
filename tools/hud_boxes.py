@@ -19,7 +19,9 @@ the wider world.
 
 A draw anchored to the left or right edge fails, too, when the middle of its 4:3 box sits in the
 rect's third at the other side. That's an element anchored to the wrong edge, which keeps its size
-and its distance to that edge as well as one anchored to the right one.
+and its distance to that edge as well as one anchored to the right one. A centered draw fails when
+its whole 4:3 box sits in a side third, past the quarter of a third a held middle reaches into it.
+A wide centered element's pieces at its sides fail that too, as three of the replay banner's do.
 
 No side of the box may stick out of its view by more than 1 pixel more than at 4:3 either. Its
 view is the smallest world view its whole 4:3 box sits in, or else the screen. The world views
@@ -61,6 +63,8 @@ EFB_WIDTH = 640.0
 SCREEN = (0.0, 0.0, EFB_WIDTH, 480.0)  # x, y, width and height in EFB pixels
 TOLERANCE = 1.0                        # display pixels at 480 high
 EDGES = {"L": "left edge", "R": "right edge", "C": "middle"}
+# How far past its lines a held middle reaches, in thirds of the rect: kHeldBand in src/hud_anchors.h.
+HELD_BAND = 0.25
 
 Box = tuple[float, float, float, float]   # x0, x1, y0, y1
 Rect = tuple[float, float, float, float]  # x, y, width, height
@@ -199,6 +203,17 @@ def opposite_third(anchor: str, rect: tuple[float, float], box: Box) -> str | No
     return None
 
 
+def side_third(rect: tuple[float, float], box: Box) -> str | None:
+    """The side third of the rect a centered box sits wholly in, past where a held middle reaches."""
+    third = (rect[1] - rect[0]) / 3
+    band = HELD_BAND * third
+    if box[1] < rect[0] + third - band:
+        return "left"
+    if box[0] > rect[1] - third + band:
+        return "right"
+    return None
+
+
 def follows(d: HudDraw) -> bool:
     """Centered on a rect of no width: a marker centered on its own place, which moves with the
     wider world."""
@@ -216,6 +231,8 @@ def faults(old: HudDraw, new: HudDraw, scale: float, label: str, views: list[Rec
     out = []
     if third := opposite_third(old.anchor, old.rect, a):
         out.append(f"{EDGES[old.anchor]} from the {third} third")
+    if old.anchor == "C" and (third := side_third(old.rect, a)):
+        out.append(f"middle from the {third} third")
     if abs((b[1] - b[0]) - (a[1] - a[0])) > TOLERANCE:
         out.append(f"width {a[1] - a[0]:.1f} to {b[1] - b[0]:.1f}")
     if abs((b[3] - b[2]) - (a[3] - a[2])) > TOLERANCE:
