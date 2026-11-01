@@ -28,10 +28,6 @@ frames and audio matched the goldens recorded at `f11c013` (under gcn-recomp `ba
 It's now `b5ec329`, which reads the disc fast by default and where the goldens were recorded
 again at fast reads (under gcn-recomp `b5ec329` below).
 
-It's now `013d907`, and on the tree that became Dragoon `1576ae4`, built at `8202011` and again
-at `91e318d`, all twenty-four routes' frames and audio still match with the pin moved (under
-gcn-recomp `013d907` below).
-
 | Feature | Status | Note |
 |---|---|---|
 | Boot and memory card | Works | A blank card gets the game's prompt by frame 60, and the save file is made. The game writes the card again after each title screen and when its Sound screen closes, and what it wrote comes back on the next launch. In one pair of runs the Sound screen's Mono and the music and effects balance both sat where the first run left them. Mono is kept in the console's SRAM, which gcn-recomp has saved in `saves/sram.raw` since `2bf7308`. At `b848158` it started afresh at every launch and Mono didn't come back (table under Memory card) |
