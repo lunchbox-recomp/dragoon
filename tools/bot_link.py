@@ -10,7 +10,7 @@ every SETTING is one of probe.sh's, such as --exit-after=1500 or GCN_SESSION=DIR
 the LEN bytes at ADDR (hex address, decimal length) at every frame they change. --send N makes
 the bot send pads for ports 1 to N, which is only different from --pads when you want to see the
 engine refuse a port it doesn't drive or one the bot leaves out. --hang stops the run when the
-game sends no frame for SECONDS (30 by default, 0 for never).
+game sends no frame, or answers no read, for SECONDS (30 by default, 0 for never).
 
 The run is a session (GCN_SESSION) that keeps an input log, which replays with no bot, and
 records no audio. The result names the log. Exits 0 when the run ended as a bot run is meant to
@@ -149,7 +149,12 @@ class _Ended(BaseException):
 
 
 class _TimedOut(BaseException):
-    """A wait for the engine ran out of time."""
+    """A wait for the engine ran out of time. For a read's wait, `why` is the run's end it is,
+    TIME_LIMIT or HANG."""
+
+    def __init__(self, why: str | None = None) -> None:
+        super().__init__(why)
+        self.why = why
 
 
 class _TimeUp(Exception):
@@ -168,12 +173,24 @@ class Link:
         self.starts = 0  # how many times the game has connected; a console reset connects again
         self._conn: socket.socket | None = None
         self._lines = None
+        self._clocks: tuple[float, float | None] | None = None  # a run's deadline and hang
 
     def read(self, addr: int, length: int) -> bytes:
         """`length` bytes at the guest address `addr` (0x80000000 to 0x817FFFFF, 1 to 256 bytes).
-        A read the engine refuses stops the game, and the run ends as an engine stop."""
+        A read the engine refuses stops the game, and the run ends as an engine stop. In a run,
+        a read the game doesn't answer within `hang` seconds ends it as a hang, or as the time
+        limit when the deadline comes first. Outside a run it waits for ever."""
+        wait, why = None, None
+        if self._clocks is not None:
+            deadline, hang = self._clocks
+            wait, why = deadline - time.monotonic(), TIME_LIMIT
+            if hang is not None and hang < wait:
+                wait, why = hang, HANG
         self._send(f"read {addr:X} {length}\n".encode())
-        line = self._line()
+        try:
+            line = self._line(None if wait is None else max(wait, 0.001))
+        except _TimedOut:
+            raise _TimedOut(why) from None
         m = DATA_LINE.fullmatch(line)
         if not m:
             raise _Ended(line)
@@ -223,6 +240,7 @@ class _State:
     bad_line: bytes | None = None
     ended: str | None = None  # TIME_LIMIT or HANG, the run's own ends
     unconnected: bool = False  # the hang was the wait for the game to connect again
+    unanswered: bool = False  # the hang was a read's wait
 
 
 def encode_pads(pads: Mapping[int, Pad]) -> bytes:
@@ -330,10 +348,11 @@ def _accept(listener: socket.socket, proc: subprocess.Popen, deadline: float,
 
 def _step(link: Link, bot: Callable[[Link], dict[int, Pad]], state: _State, hang: float | None) -> None:
     """Answers the engine's frames until it closes the link, the bot raises, the engine sends
-    what isn't the protocol, the deadline passes or `hang` seconds go by with no frame. The hang
-    clock starts at the connect and again at each answer, so the time the bot takes isn't the
-    game's."""
+    what isn't the protocol, the deadline passes or `hang` seconds go by with no frame or with a
+    read unanswered. The hang clock starts at the connect, again at each answer and at each read,
+    so the time the bot takes isn't the game's."""
     waiting = time.monotonic()
+    link._clocks = (state.deadline, hang)
     try:
         while True:
             now = time.monotonic()
@@ -360,6 +379,8 @@ def _step(link: Link, bot: Callable[[Link], dict[int, Pad]], state: _State, hang
             link._send(data)
             state.frames += 1
             waiting = time.monotonic()
+    except _TimedOut as e:  # a read's
+        state.ended, state.unanswered = e.why, e.why == HANG
     except _Ended as e:
         state.bad_line = e.bad
 
@@ -517,7 +538,8 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
     each frame the engine steps it at. `bot` may read RAM through the Link and returns the pad
     for each port it drives, ports 1 to `pads`. `script` is probe.sh's INPUT_SCRIPT, `every`
     its DUMP_EVERY (None for no dumps) and `settings` more of its settings. `hang` is the wall
-    seconds without a frame before the run stops as a hang, None for never. `probe` is a
+    seconds without a frame, or without an answer to a read, before the run stops as a hang,
+    None for never. `probe` is a
     probe.sh-compatible program for a fake in a test; its run directory is where probe.sh's
     would be.
 
@@ -635,6 +657,8 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
             last = _last_line(run_dir / "stdout.txt")
             detail = f"no new connection for {hang:g} s after the link closed" + (
                 f", and its last line is {last!r}" if last else "")
+        elif state.unanswered:
+            detail = f"no answer to a read for {hang:g} s at frame {state.last_frame}"
         else:
             after = "it connected" if state.last_frame is None else f"frame {state.last_frame}"
             detail = f"no frame for {hang:g} s after {after}"

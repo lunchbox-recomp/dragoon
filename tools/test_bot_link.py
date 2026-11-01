@@ -48,6 +48,7 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #   "die_at"         exits just after sending that frame, without waiting for the answer
 #   "partial_data"   answers the first read with half a line and exits
 #   "bad_data"       answers a read with what isn't a data line
+#   "mute_reads"     never answers a read, and waits on for the bot's next line
 #   "ignore_hangup"  waits instead of exiting when the bot hangs up
 #   "moving"         makes RAM change from frame to frame
 #   "kind"           what a reset says it is: "restart" (the default), "hot reset" or "shutdown"
@@ -181,6 +182,8 @@ def step(frame):
             if plan.get("bad_data"):
                 conn.sendall(b"nope\n")
                 continue
+            if plan.get("mute_reads"):
+                continue
             conn.sendall(b"data " + ram(addr, length, frame).hex().encode() + b"\n")
         elif words[0] == "pad":
             port = int(words[1])
@@ -293,6 +296,11 @@ with open("record.json", "w") as f:
 
 
 def neutral(link: Link) -> dict[int, Pad]:
+    return {1: Pad()}
+
+
+def read_one(link: Link) -> dict[int, Pad]:
+    link.read(0x80000000, 4)
     return {1: Pad()}
 
 
@@ -773,6 +781,43 @@ class OutcomeTest(FakeProbeCase):
         outcome = self.go(slow, hang=0.3)
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 3))
 
+    def test_a_read_the_game_does_not_answer_is_a_hang_with_the_link_open(self):
+        self.plan([0, 1], mute_reads=True)
+        began = time.monotonic()
+        outcome = self.go(read_one, hang=0.5)
+        self.assertLess(time.monotonic() - began, 5)  # not the 30 s of the run
+        self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 0, 0))
+        self.assertEqual(outcome.detail, "no answer to a read for 0.5 s at frame 0")
+        self.assertEqual(self.record()["link_at_term"], "open")
+
+    def test_a_read_the_game_does_not_answer_ends_at_the_time_limit_when_that_comes_first(self):
+        self.plan([0], mute_reads=True)
+        for hang in (None, 5):
+            with self.subTest(hang=hang):
+                outcome = self.go(read_one, name=f"hang-{hang}", seconds=1, hang=hang)
+                self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame, outcome.detail),
+                                 (bot_link.TIME_LIMIT, 0, 0, "the time limit, 1 s"))
+
+    def test_a_read_made_after_the_deadline_ends_at_the_time_limit(self):
+        self.plan([0], mute_reads=True)
+
+        def late(link: Link) -> dict[int, Pad]:
+            time.sleep(1.2)
+            return read_one(link)
+
+        outcome = self.go(late, seconds=1)
+        self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.TIME_LIMIT, 0, 0))
+
+    def test_the_time_the_bot_takes_before_a_read_is_not_the_games_hang(self):
+        self.plan([0, 1, 2])
+
+        def slow(link: Link) -> dict[int, Pad]:
+            time.sleep(0.4)
+            return read_one(link)
+
+        outcome = self.go(slow, hang=0.3)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 3))
+
     def test_a_game_that_never_connects_says_what_probe_said_and_a_hang_is_not_asked_of_it(self):
         self.plan([], refuse="no /x/build/dragoon; build the game first")
         outcome = self.go(neutral, hang=0.5)
@@ -911,6 +956,18 @@ class WaitClosedTest(unittest.TestCase):
         with mock.patch.object(bot_link, "CLOSE_WAIT", 0.3):
             bot_link._wait_closed(link)
         self.assertLess(time.monotonic() - began, 2)
+
+
+class ReadTest(unittest.TestCase):
+    def test_a_link_outside_a_run_waits_for_a_late_answer(self):
+        ours, game = socket.socketpair()
+        link = Link()
+        link._attach(ours)
+        self.addCleanup(link._detach)
+        self.addCleanup(game.close)
+        threading.Timer(0.3, game.sendall, [b"data 01020304\n"]).start()
+        self.assertEqual(link.read(0x80000000, 4), b"\x01\x02\x03\x04")
+        self.assertEqual(game.recv(64), b"read 80000000 4\n")
 
 
 class SetupTest(FakeProbeCase):

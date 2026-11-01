@@ -52,9 +52,9 @@ tools/bot_link.py --script tests/routes/menu.txt --watch 80000000:4 menu-bot 60 
 
 That plays the menu route with a bot that presses nothing. It prints the four bytes at `80000000` when they change and says how the link ended. `--pads N` sets how many ports the bot drives (1 by default).
 
-`--every N` sets the dump interval, and everything after `--` is more probe.sh settings. `--hang SECONDS` ends the run when the game sends no frame for that long (30 by default, 0 for never). `--send N` makes the bot send ports 1 to N whatever `--pads` says, to see the engine refuse a port the game doesn't have or one the bot left out.
+`--every N` sets the dump interval, and everything after `--` is more probe.sh settings. `--hang SECONDS` ends the run when the game sends no frame, or answers no read, for that long (30 by default, 0 for never). `--send N` makes the bot send ports 1 to N whatever `--pads` says, to see the engine refuse a port the game doesn't have or one the bot left out.
 
-Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, hang=)`. `bot(link)` gets a `Link` whose `frame` is the last frame number and whose `read(addr, length)` returns 1 to 256 bytes of RAM. It returns `{port: Pad(...)}`, and a port it leaves out stays out, so the engine stops the game and names the port.
+Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, hang=)`. `bot(link)` gets a `Link` whose `frame` is the last frame number and whose `read(addr, length)` returns 1 to 256 bytes of RAM. A read the game doesn't answer within `hang` seconds ends the run as a hang, or at SECONDS as the time limit when that comes first, and outside a run a read waits for ever. The bot returns `{port: Pad(...)}`, and a port it leaves out stays out, so the engine stops the game and names the port.
 
 `every=None` dumps no frames, since probe.sh then gets an interval no run reaches. `split_settings`, `add_play_arguments`, `add_run_arguments`, `run_options` and `print_outcome` give another tool this command's `--` split, its run arguments and its outcome lines, as ram_peek.py does. `run_directory(name)` is the `build/probe/NAME/` a run of NAME keeps its output in, and `is_reset(line)` says whether a `[reset]` line is a restart or a hot reset, which a shutdown isn't.
 
@@ -73,7 +73,7 @@ Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, h
 | `shutdown` | The game shut the console down by itself | Its `[reset]` line |
 | `game_exited` | The game ended some other way and left its input log whole | The frame it ended at |
 | `game_died` | The game ended and its input log has no `# end` line, or it reset the console and the new process began no session | The last line of `stdout.txt`, or the `[reset]` line |
-| `hang` | No frame for `hang` seconds, or no new connection that long after a reset | How long, and after which frame, or after a reset the game's last line |
+| `hang` | No frame or no answer to a read for `hang` seconds, or no new connection that long after a reset | How long, and after which frame or at which frame the read was, or after a reset the game's last line |
 | `engine_stop` | The engine stopped the game | Its `[bot] frame N: ...` line from `stdout.txt` |
 | `connect_failed` | The engine couldn't connect | Its `--bot PATH: ...` line |
 | `panic` | The game crashed | The first line of `panic.txt`, or the `FATAL` or `FAULT` line |
