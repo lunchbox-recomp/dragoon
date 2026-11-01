@@ -331,9 +331,10 @@ itself after it, such as a stripe straight through GX, stretches as a callback o
 does.
 
 A tree in a rect's left third anchors to its left edge, one in its right third to its right
-edge and one between to its middle. A tree no joint has drawn yet goes by its root. That
-happens the frame it first shows, and again when an element scaled to nothing reappears, since
-a joint scaled to zero has an all-zero matrix.
+edge and one between to its middle. A tree goes by its root when none of its joints has drawn
+and it had no mark the frame before. A new joint's matrix is all zero until the game first draws
+it, as is one scaled to zero. So that's the frame a tree first shows, each frame after while it
+stays scaled to nothing, and a frame it shows scaled to nothing after missing one.
 
 A tree holds the edge it had the frame before for a quarter of a third past each of that edge's
 lines. Without that, an element moving 2 pixels across a line would jump about 109 display
@@ -428,7 +429,7 @@ loads of 4.2 to 5.0.
   3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
   table draws them. Top Ride's census on Dragoon `701a2dd` has all 38 drawn by
   `HSD_GObjJObjDisp`, the render callback of every model object, so the table can't name them.
-- A HUD element that first shows, or reappears after being scaled to nothing, goes by its
+- A HUD element that first shows, or shows scaled to nothing after missing a frame, goes by its
   root's place until its joints have drawn, which can anchor it to the wrong edge. No dump caught
   one.
 - An element that slides across a third's line jumps to the other edge once it's a quarter of a
