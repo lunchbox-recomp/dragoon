@@ -14,6 +14,25 @@ import Testing
         #expect(fixture.lines(fixture.directoryFile) == [fixture.data])
     }
 
+    /// The game gets every variable but the launcher's bundle identifier, so nothing in its
+    /// environment ties it to the launcher's bundle.
+    @Test func theGameGetsTheLaunchersEnvironmentWithoutItsBundleIdentifier() async throws {
+        let fixture = try GameFixture()
+        try fixture.install(
+            """
+            printf '%s\\n' "${DRAGOON_TEST_VALUE-unset}" > \(shellWord(fixture.noteFile))
+            printf '%s\\n' "${__CFBundleIdentifier-unset}" >> \(shellWord(fixture.noteFile))
+            """)
+        let environment = [
+            "DRAGOON_TEST_VALUE": "passed on",
+            "__CFBundleIdentifier": "io.github.lunchbox-recomp.dragoon",
+        ]
+        #expect(
+            await results(of: fixture.play(environment: environment))
+                == [.exited(.status(0), panic: nil)])
+        #expect(fixture.lines(fixture.noteFile) == ["passed on", "unset"])
+    }
+
     @Test func whatTheGamePrintsGoesToItsLogInTheLogsFolder() async throws {
         let fixture = try GameFixture()
         try fixture.install(

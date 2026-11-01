@@ -48,14 +48,19 @@ public final class GameLauncher: Sendable {
 
     private let fs: any FileSystem
     private let logFolder: String
+    private let environment: [String: String]
     private let now: @Sendable () -> Date
 
+    /// `environment` is the launcher's own, which the game gets without the launcher's bundle
+    /// identifier.
     public init(
         fs: any FileSystem = SystemFileSystem(), logFolder: String = LogFolder.defaultPath,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.fs = fs
         self.logFolder = logFolder
+        self.environment = environment
         self.now = now
     }
 
@@ -92,6 +97,9 @@ public final class GameLauncher: Sendable {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = [disc]
         process.currentDirectoryURL = URL(fileURLWithPath: data, isDirectory: true)
+        var environment = environment
+        environment["__CFBundleIdentifier"] = nil
+        process.environment = environment
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = log ?? FileHandle.nullDevice
         process.standardError = log ?? FileHandle.nullDevice

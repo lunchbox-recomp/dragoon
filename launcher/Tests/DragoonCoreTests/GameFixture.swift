@@ -55,8 +55,8 @@ final class GameFixture: @unchecked Sendable {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable)
     }
 
-    func play() -> GameSession {
-        GameLauncher(logFolder: logs, now: { GameFixture.clock })
+    func play(environment: [String: String] = ProcessInfo.processInfo.environment) -> GameSession {
+        GameLauncher(logFolder: logs, environment: environment, now: { GameFixture.clock })
             .play(game: game, disc: disc, data: data)
     }
 
