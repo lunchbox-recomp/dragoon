@@ -60,7 +60,7 @@ The recipe gets an environment of its own with a fixed `PATH`, `HOME`, `TMPDIR`,
 
 It starts as the leader of a new process group, so the recipe, make, clang and the warm-up's game stop together. `BuildRunner.cancel()` or dropping the stream sends that group SIGTERM, and SIGKILL 10 seconds later if anything is left. Every `SystemProcessRunner` call starts its process this way too, so canceling a task that waits on `Toolchain.detect` stops its command the same way.
 
-A stdout line that isn't an event is logged and never counted as an error. Everything the recipe prints on stderr is logged too. Both go into `~/Library/Logs/Dragoon/build-<time>.log` beside what the recipe writes there, and the newest 10 logs stay.
+A stdout line that isn't an event is logged and never counted as an error. Everything the recipe prints on stderr is logged too. Both go into `~/Library/Logs/Dragoon/build-<time>.log` beside what the recipe writes there, and the newest 10 build logs stay.
 
 The recipe's exit code decides how the stream ends.
 
@@ -83,13 +83,23 @@ The first run walks the steps in order from Welcome down to Library, and every l
 
 Play resolves the bookmark and checks the disc too. A stale bookmark or a disc that's gone goes back to the Disc step, and the game stays where it was. Look Again tries the bookmark again only for a disc that's gone, such as one on an unplugged drive.
 
-From the `play` effect until the game exits or can't start, Library counts the game as running and keeps Play, Rebuild and Change Disc off. In this version `play` doesn't start the game, so it reports at once that the game couldn't start.
+From the `play` effect until its result comes back, Library counts the game as running and keeps Play, Rebuild and Change Disc off.
 
 A launcher whose path holds `/AppTranslocation/`, or that's on a read-only volume, asks to be moved to Applications and does nothing else. So does one whose path holds a character the kit's Makefile refuses, which is `$`, `"`, a backtick, `:` or `;`. Finder shows a `:` in a folder's name as `/`, so that's how the window names it.
 
 Library offers a rebuild when `game/current/stamp.json` names other commits than the app's `source-info.json` or can't be read, and the old game plays until a rebuild starts. A rebuild that fails or is canceled leaves the old game current. Builds other than the current one are deleted while no game or build is running.
 
 `launcher.json` in `~/Library/Application Support/Dragoon` keeps the disc's bookmark and whether Welcome was seen. Every string the window shows is in `Sources/Dragoon/Strings.swift`.
+
+## Launching the game
+
+`GameLauncher.play(game:disc:data:)` starts `game/current/Dragoon.app/Contents/MacOS/dragoon` with `Process`. The disc image's path is its one argument and `<data>` is its working directory, since the runtime finds `saves/` and writes `panic.txt` relative to that. What the game prints on stdout and stderr goes to `~/Library/Logs/Dragoon/game-<time>.log`, and the newest 10 game logs stay, pruned by the same code as the build logs.
+
+Each launch ends in one result, which says how the game ended or why it couldn't start. After a nonzero exit or a signal, Library shows the code or the signal's number and name with the text of `panic.txt` when the runtime wrote one. A zero exit shows nothing.
+
+That `panic.txt` then moves into the logs folder as `panic-<time>.txt`, under a name no other file has, so it never replaces one. A `panic.txt` that's there before the game starts is from an earlier run, so it moves there first and is never shown.
+
+The window hides while the game runs and comes back when it exits or can't start. Each `play` effect carries a launch number that its result echoes, and `Flow` ignores a result for any other launch. A late result can't end a game that's running.
 
 ## Why a wrapper runs the tests
 
