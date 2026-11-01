@@ -231,6 +231,23 @@ class MainMenuTest(unittest.TestCase):
                 screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=2, menu__item=item)
                 self.assertEqual(first_press(menus, link), {1: UP})
 
+    def test_the_climb_gives_up_after_three_ups_that_leave_the_row_alone(self) -> None:
+        for goal, mode in ((AIR_RIDE, 0), (TOP_RIDE, 1), (CITY_TRIAL, 2)):
+            with self.subTest(goal=goal):
+                menus, link, _ = make(modes=(goal,))
+                screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=mode, menu__item=2)
+                self.assertEqual([buttons[1] for _, buttons in presses(run(menus, link, 400))][:6],
+                                 [UP, UP, UP, A, A, A])
+
+    def test_a_row_that_moves_is_climbed_however_many_ups_it_takes(self) -> None:
+        menus, link, _ = make(modes=(TOP_RIDE,))
+        screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=1, menu__item=3)
+        # The looks come every 50 frames, and each row is seen twice, as when a press is missed.
+        changes = {99: lambda: link.set("menu.item", 2), 199: lambda: link.set("menu.item", 1),
+                   299: lambda: link.set("menu.item", 0)}
+        self.assertEqual([buttons[1] for _, buttons in presses(run(menus, link, 400, changes=changes))][:8],
+                         [UP, UP, UP, UP, UP, UP, A, A])
+
     def test_the_row_is_read_only_on_the_goals_own_menu(self) -> None:
         item = TABLE["menu.item"].address
         menus, link, _ = make(modes=(TOP_RIDE,))
@@ -558,6 +575,7 @@ class UnconfirmedTest(unittest.TestCase):
         "boot": (bot_menus.BOOT, {}),
         "title": (bot_menus.TITLE, {}),
         "back to the mode select": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 2}),
+        "menu.item": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 0}),
         "Top Ride machines": (bot_menus.TOP_MACHINES, {}),
         "stadium results": (bot_menus.STADIUM_RESULTS, {}),
         "other screen": (12, {}),
@@ -572,6 +590,20 @@ class UnconfirmedTest(unittest.TestCase):
                 run(menus, link, 1000)
                 self.assertEqual([line for line in said if line.startswith(f"unconfirmed step, {key}: ")],
                                  [f"unconfirmed step, {key}: {bot_menus.UNCONFIRMED[key]}"])
+
+    def test_the_row_is_unconfirmed_on_air_and_top_rides_menus_and_not_on_city_trials(self) -> None:
+        for goal, mode, told in ((AIR_RIDE, 0, 1), (TOP_RIDE, 1, 1), (CITY_TRIAL, 2, 0)):
+            with self.subTest(goal=goal):
+                menus, link, said = make(modes=(goal,))
+                screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=mode, menu__item=1)
+                run(menus, link, 1000)
+                self.assertEqual(len([line for line in said if line.startswith("unconfirmed step, menu.item: ")]), told)
+
+    def test_the_row_is_not_said_before_the_walker_reads_it(self) -> None:
+        menus, link, said = make(modes=(TOP_RIDE,))
+        screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=0)  # another mode's menu
+        run(menus, link, 1000)
+        self.assertEqual([line for line in said if "menu.item" in line], [])
 
     def test_a_course_the_game_never_showed_is_one_too(self) -> None:
         menus, link, said = make()
@@ -690,6 +722,20 @@ class PathTest(unittest.TestCase):
                 play_through(game, Menus(1, Schedule(0, (mode,))), 5000)
                 self.assertEqual(len(game.started), 1)
                 self.assertNotIn(bot_menus.CITY_SETTINGS, game.visited)
+
+    def test_a_row_that_never_moves_does_not_keep_the_walker_off_the_game(self) -> None:
+        class Stale(FakeGame):
+            """A game whose menu.item reads a row the cursor isn't on, as if the byte were stale."""
+
+            def sync(self) -> None:
+                super().sync()
+                self.link.set("menu.item", 2)
+
+        for mode in (AIR_RIDE, TOP_RIDE, CITY_TRIAL):
+            with self.subTest(mode=mode):
+                game = Stale(FakeLink(), race=100000)
+                play_through(game, Menus(1, Schedule(0, (mode,))), 5000)
+                self.assertEqual(len(game.started), 1)
 
     def test_menus_that_go_round_in_a_circle_end_as_stuck(self) -> None:
         class Bouncing(FakeGame):

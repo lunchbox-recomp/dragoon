@@ -63,12 +63,16 @@ STUCK_SECONDS = 120  # game seconds a menu screen may stay up
 PLAY_SECONDS = 600  # and a race, the city or a stadium
 CYCLE_STUCKS = 5  # and the menus together may go on without a race or the city, this many screen limits
 TRAIL = 8  # screens a stop for that names, the ones before the screen it stopped on
+CLIMB_UPS = 3  # presses of UP on a mode's menu that leave menu.item alone before the walker presses A
 
 UNCONFIRMED = {
     "boot": "A while the game boots (minor 38). The routes press A at frames 120 and 300 only.",
     "title": "A and START in turn on the opening movie and the title (minor 0). The routes press A "
              "at 900 and START at 1000.",
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
+    "menu.item": "The climb to Start Game on Air Ride's and Top Ride's own menus (minor 2, menu.page 1), by "
+                 "menu.item. Only City Trial's menu has been read there, so UP gives up after "
+                 f"{CLIMB_UPS} presses that leave the row alone and A is pressed.",
     "course cursor": "Air Ride course cursors 3, 4, 5 and 7 (Frozen Hillside, Magma Flows, Beanstalk "
                      "Park and Checker Knights). They follow the routes' grid, and only 0, 1, 2 and 6 "
                      "have been read in the game.",
@@ -177,6 +181,7 @@ class Menus:
         self._visits = 0  # looks at this screen
         self._played: int | None = None  # the frame a race or the city was last on, or the first look
         self._trail: deque[int] = deque(maxlen=TRAIL)  # the screens before this one
+        self._climb: tuple[int | None, int] = (None, 0)  # the row last seen on a mode's menu, and the UPs pressed on it
         self.minor = None
         self.mode = None
 
@@ -233,6 +238,7 @@ class Menus:
             if self.minor is not None:
                 self._trail.append(self.minor)
             self.minor, self._since, self._visits = minor, frame, 0
+            self._climb = (None, 0)
         else:
             self._visits += 1
         if minor in PLAYING or self._played is None:
@@ -317,11 +323,26 @@ class Menus:
             if mode != want:
                 self._unconfirmed("back to the mode select")
                 return Tap(BUTTONS["B"])
-            # The cursor stays where the player left it, as after B out of Game Settings.
-            return Tap(BUTTONS["A" if self._read(link, "menu.item") == 0 else "UP"])
+            return self._start_game(link)
         if mode == want:
             return Tap(BUTTONS["A"])
         return Tap(BUTTONS["DOWN" if mode < want else "UP"])
+
+    def _start_game(self, link: Link) -> Tap:
+        """A on row 0 of the goal's own menu, which is Start Game, and UP to it from any other row.
+        The cursor stays where the player left it, as after B out of City Trial's Game Settings.
+        A row that stays put through CLIMB_UPS presses of UP is pressed A on."""
+        if self.goal != CITY_TRIAL:
+            self._unconfirmed("menu.item")
+        item = self._read(link, "menu.item")
+        row, ups = self._climb
+        if item != row:
+            ups = 0
+        if item == 0 or ups >= CLIMB_UPS:
+            self._climb = (item, ups)
+            return Tap(BUTTONS["A"])
+        self._climb = (item, ups + 1)
+        return Tap(BUTTONS["UP"])
 
     def _air_courses(self, link: Link) -> Tap:
         if self.course is None:
