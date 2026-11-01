@@ -187,6 +187,8 @@ The frozen-picture check needs a picture hash that the link doesn't give yet, so
 
 A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the process the stop was in, which is the last process's unless a console reset came after the stop (`before_reset`) and then the earlier one's. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from the card as it stood at the last reset.
 
+When the stop's process kept no input log, `bot.json` goes to `build/probe/NAME/` instead and the stop says it has no input log to replay.
+
 The commits are the checkout's HEAD, which may not be what was built. `engine_built` is the engine commit the game's `session.json` says it was built from, with `-dirty` for a tree with changes.
 
 A music cut is read from the log, and the log can hold a console reset after it. The last process's replay can't show that cut, so the stop and `bot.json` say so (`before_reset`) and name the input log and replay line of the process it happened in. That replay ends with `--exit-after` at the frame of the `# end` line closing the log, and has none when the line is missing.
