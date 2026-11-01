@@ -169,6 +169,30 @@ import Testing
             fixture.logNames == (builds + games.suffix(9) + [GameFixture.logName] + others).sorted())
     }
 
+    /// A clock that ran ahead left ten game logs that sort after this launch's. This launch's own
+    /// log stays all the same, since the game writes to it.
+    @Test func theGamesOwnLogStaysWhenLogsFromAClockThatRanAheadSortAfterIt() async throws {
+        let fixture = try GameFixture()
+        let ahead = (0..<10).map { String(format: "game-2030-01-01T00-00-%02d.000Z.log", $0) }
+        for name in ahead {
+            try fixture.write(fixture.logs + "/" + name, "")
+        }
+        try fixture.install("echo 'this launch'")
+        _ = await results(of: fixture.play())
+        #expect(fixture.logNames == ([GameFixture.logName] + ahead.suffix(9)).sorted())
+        #expect(fixture.lines(fixture.logPath) == ["this launch"])
+    }
+
+    /// A file where the logs folder should be means there's no log, and the game runs anyway.
+    @Test func aLogThatCantBeOpenedLeavesTheGameToRunWithoutOne() async throws {
+        let fixture = try GameFixture()
+        try fixture.write(fixture.logs, "not a folder\n")
+        try fixture.install("echo 'nowhere to go'")
+        #expect(await results(of: fixture.play()) == [.exited(.status(0), panic: nil)])
+        #expect(fixture.lines(fixture.argumentsFile) == [fixture.disc])
+        #expect(fixture.text(fixture.logs) == "not a folder\n")
+    }
+
     @Test func aSignalIsNamedAsMacOSSpellsIt() {
         #expect(GameExit.signal(SIGSEGV).signalName == "SIGSEGV")
         #expect(GameExit.signal(SIGABRT).signalName == "SIGABRT")
