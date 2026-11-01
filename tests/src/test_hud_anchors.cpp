@@ -224,6 +224,47 @@ TEST(KeptMarks, ARestedTreesTieGoesToTheFirstOfThoseTied) {
     EXPECT_EQ(k.place(41, kRoot, {{500, 400}, {300, 400}}, {}), kRight);
 }
 
+TEST(KeptMarks, ARestedTreesTieFollowsTheOrderItDrawsItsJoints) {
+    // The middle's joint draws first, so the middle wins the tie once the tree has rested.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {{320, 400}, {320, 400}}, {}), kMiddle);
+    for (uint32_t f = 11; f < 60; f++)
+        EXPECT_EQ(k.place(f, kRoot, {{300, 400}, {500, 400}}, {}), kMiddle) << f;
+}
+
+TEST(KeptMarks, JointsThatPulseAboutTheirMeanHaventRested) {
+    // The review's pulse: the joints move out and back while their mean stays at 320.
+    dragoon::KeptMarks k;
+    for (uint32_t f = 10; f < 80; f++) {
+        const std::vector<dragoon::Point> joints =
+            f % 2 ? std::vector<dragoon::Point>{{212, 100}, {428, 100}} : std::vector<dragoon::Point>{{215, 100}, {425, 100}};
+        EXPECT_EQ(k.place(f, kRoot, joints, {}), kMiddle) << f;
+    }
+}
+
+TEST(KeptMarks, JointsThatSwapPlacesHaventRested) {
+    // The review's swap: rested at the right, its two joints then trade places every frame.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {{320, 400}, {320, 400}}, {}), kMiddle);
+    for (uint32_t f = 11; f < 41; f++) k.place(f, kRoot, {{500, 400}, {300, 400}}, {});
+    for (uint32_t f = 41; f < 80; f++) {
+        const std::vector<dragoon::Point> joints =
+            f % 2 ? std::vector<dragoon::Point>{{300, 400}, {500, 400}} : std::vector<dragoon::Point>{{500, 400}, {300, 400}};
+        EXPECT_EQ(k.place(f, kRoot, joints, {}), kRight) << f;
+    }
+}
+
+TEST(KeptMarks, AStillElementWithAJointThatBlinksNeverRests) {
+    // Which joints are placed changes every frame, so it keeps the edge it came with.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {{320, 400}}, {}), kMiddle);
+    for (uint32_t f = 11; f < 200; f++) {
+        const std::vector<dragoon::Point> joints =
+            f % 2 ? std::vector<dragoon::Point>{{470, 400}, {470, 420}} : std::vector<dragoon::Point>{{470, 400}};
+        EXPECT_EQ(k.place(f, kRoot, joints, {}), kMiddle) << f;
+    }
+}
+
 TEST(KeptMarks, AJointThatHidesDoesntTurnTheVote) {
     // Two joints just left of the right third's line and three just right of it, then one of
     // the three hidden: a tie, which would go to the first, in the middle.

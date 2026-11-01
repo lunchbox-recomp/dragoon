@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace dragoon {
@@ -133,20 +134,21 @@ struct Point {
     bool operator==(const Point& o) const { return x == o.x && y == o.y; }
 };
 
-// How many frames in a row a tree's joints sit in the same place before it has rested there.
+// How many frames in a row a tree's joints sit in the same places before it has rested there.
 constexpr uint32_t kRestFrames = 30;
 
 // The marks Edge trees had the frame before, which their joints near a third's line keep
 // calling for (edge_mark). Without them an element moving 2 pixels across a line would jump to
 // another edge, as would a tree whose joints straddle a line in near-equal numbers when one of
-// them hides. Once a tree has rested, its joints' mean place the same for kRestFrames frames in
-// a row, it holds nothing: its joints call for their nearest edges and a tie goes to the first
-// of those tied. So one that stopped inside the band moves to its edge then rather than when it
-// next misses a frame, and one that first showed in the middle doesn't keep the middle through
-// a tie at a side, as the race's speedometer frame would at 4200. A tree that misses a frame
-// chooses afresh when it shows. A tree whose joints have no place yet has nothing to keep, so it
-// chooses from them once they have one. Trees are told apart by their root, and a root shown
-// more than once in a frame by which time it is.
+// them hides. Once a tree has rested, the same joints placed where they were the frame before for
+// kRestFrames frames in a row, it holds nothing: its joints call for their nearest edges and a
+// tie goes to the first of those tied in the order the tree draws its joints. A joint that
+// moves, shows or hides starts the rest again. So one that stopped inside the band moves to its
+// edge then rather than when it next misses a frame, and one that first showed in the middle
+// doesn't keep the middle through a tie at a side, as the race's speedometer frame would at
+// 4200. A tree that misses a frame chooses afresh when it shows. A tree whose joints have no
+// place yet has nothing to keep, so it chooses from them once they have one. Trees are told
+// apart by their root, and a root shown more than once in a frame by which time it is.
 class KeptMarks {
 public:
     // The mark of the tree at `root`, shown in `frame` with its joints at `joints` on screen
@@ -170,18 +172,15 @@ public:
             if (l.root == root && l.time == k.time) before = &l;
         if (before) k.mark = before->mark;
         if (!joints.empty()) {
-            for (const Point& p : joints) {
-                k.at.x += p.x / joints.size();
-                k.at.y += p.y / joints.size();
-            }
+            k.at = joints;
             k.still = before && before->at == k.at ? before->still + 1 : 1;
             const std::optional<Mark> held = k.still < kRestFrames ? k.mark : std::nullopt;
             marks_.clear();
             for (const Point& p : joints) marks_.push_back(edge_mark(p.x, p.y, views, held.value_or(Mark{})));
             k.mark = most_called(marks_, held);
         }
-        now_.push_back(k);
-        return k.mark;
+        now_.push_back(std::move(k));
+        return now_.back().mark;
     }
 
 private:
@@ -189,8 +188,8 @@ private:
         uint32_t root;
         uint32_t time;  // which time in its frame the root showed, from 0
         std::optional<Mark> mark;
-        Point at;        // its joints' mean place, when it had any
-        uint32_t still;  // how many frames in a row, to this one, its joints were at `at`, or 0
+        std::vector<Point> at;  // where its joints were placed, in the order it draws them
+        uint32_t still;         // how many frames in a row, to this one, its joints were at `at`, or 0
     };
     uint32_t frame_ = 0;
     std::vector<Kept> last_, now_;  // the trees shown in the frame before and in this one

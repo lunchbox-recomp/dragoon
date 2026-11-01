@@ -342,13 +342,14 @@ pixels at 16:9, and a tree whose joints straddle a line in near-equal numbers wo
 time one of them hid. Further past a line it takes the other edge, so an element that slides
 across one jumps there once.
 
-The edge holds only while the tree moves. Once its joints' mean place has been the same for 30
-frames in a row, it takes its nearest edge. Without that, an element that stopped inside the
-band would keep the edge it came from, then show at the other once it missed a frame. So one
-that stops there jumps once, 30 frames after it stops.
+The edge holds only while the tree moves. Once the same joints have drawn in the same places
+for 30 frames in a row, it takes its nearest edge. A joint that moves, shows or hides starts the
+count again. Without that, an element that stopped inside the band would keep the edge it came
+from, then show at the other once it missed a frame. So one that stops there shows the edge it
+came from for 29 frames from the one it stops in. It takes its nearest edge on the 30th.
 
-A tie in a tree's vote goes to the edge it held while it moves, and to the first of those tied
-once it has rested. On Dragoon `fb8cf35`, which gave a rested tree's tie to its held edge too,
+A tie in a tree's vote goes to the edge it held while it moves. Once it has rested, the tie goes
+to the first of those tied in the order the tree draws its joints. On Dragoon `fb8cf35`, which gave a rested tree's tie to its held edge too,
 the speedometer's frame held the middle it first showed in, in the race at 4200 and City Trial
 at 3300. Its joints split evenly between the middle and the right.
 
@@ -451,7 +452,9 @@ loads of 4.2 to 5.0.
 - An element that slides across a third's line jumps to the other edge once it's a quarter of a
   third past the line. No dump caught one.
 - An element that moves across a line and stops less than a quarter of a third past it shows at
-  the edge it came from for 30 frames, then jumps to its nearest edge. No dump caught one.
+  the edge it came from for 29 frames, then jumps to its nearest edge on the 30th. A still
+  element with a joint that blinks never rests, so it keeps the edge it came with for as long as
+  it shows. No dump caught either.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - No object is cut off at a side edge in these dumps, and the world drew at least as much at
