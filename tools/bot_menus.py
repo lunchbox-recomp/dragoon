@@ -68,8 +68,6 @@ CLIMB_UPS = 3  # presses of UP on a mode's menu that leave menu.item alone befor
 BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to its menu, which took 47 in the game
 
 UNCONFIRMED = {
-    "title": "A and START in turn on the opening movie and the title (minor 0). The routes press A "
-             "at 900 and START at 1000.",
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
     "menu.item": "The climb to Start Game on Air Ride's and Top Ride's own menus (minor 2, menu.page 1), by "
                  "menu.item. Only City Trial's menu has been read there, so UP gives up after "
@@ -301,7 +299,6 @@ class Menus:
         return Tap(BUTTONS["A"])
 
     def _title(self, link: Link) -> Tap:
-        self._unconfirmed("title")
         return Tap(BUTTONS["A" if self._visits % 2 == 0 else "START"], settle=SLOW)
 
     def _movie(self, link: Link) -> Tap:

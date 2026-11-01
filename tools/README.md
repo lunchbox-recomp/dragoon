@@ -151,7 +151,7 @@ The paths come from the routes in `tests/routes/` and the values in kar_ram.json
 
 | Path | What it presses | Still to confirm in the game |
 |---|---|---|
-| Boot to the mode select | A while the game boots, then A and START in turn on the opening movie and title, 100 frames apart | The routes press A at 900 and START at 1000, so the title presses are new |
+| Boot to the mode select | A while the game boots, then A and START in turn on the opening movie and title, 100 frames apart | |
 | Mode select | DOWN or UP to the mode, A, then UP until `menu.item` reads 0 and A on the mode's own menu for Start Game, then A to skip its movie | Pressing B on another mode's own menu to change mode. No route does. Reading `menu.item` on Air Ride's and Top Ride's menus, which only City Trial's has shown, so UP gives up after 3 presses that leave the row alone |
 | Air Ride | The cursor along its row and then down or up to the course, A, then A to join, A for OK and START | Courses with cursor 3, 4, 5 and 7. Only 0, 1, 2 and 6 have been read |
 | Top Ride | A on the course select, then A and START in turn on the machine select | The machine select, which has no RAM slot to read |

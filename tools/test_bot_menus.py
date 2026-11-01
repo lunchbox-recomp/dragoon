@@ -615,7 +615,6 @@ class RestartTest(unittest.TestCase):
 
 class UnconfirmedTest(unittest.TestCase):
     CASES = {
-        "title": (bot_menus.TITLE, {}),
         "back to the mode select": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 2}),
         "menu.item": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 0}),
         "Top Ride machines": (bot_menus.TOP_MACHINES, {}),
