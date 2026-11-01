@@ -177,11 +177,21 @@ TEST(KeptMarks, AnElementThatFirstShowsInTheMiddleSettlesAtItsEdge) {
 TEST(KeptMarks, ATreeHoldsNothingFromItsFirstShowing) {
     // The race's speedometer frame from its first drawn frame, 3241, when its joints sat where
     // the game made them, at the screen's middle. From 3242 it draws at its place, one joint in
-    // the right third and its root at the middle, a tie, so the middle it held from 3241 kept it
+    // the right third and a joint at the middle, a tie, so the middle it held from 3241 kept it
     // there until it had rested 29 frames later.
     dragoon::KeptMarks k;
     EXPECT_EQ(k.place(3241, kRoot, {{320, 240}, {320, 240}}, {}), kMiddle);
     for (uint32_t f = 3242; f < 3290; f++)
+        EXPECT_EQ(k.place(f, kRoot, {{578.4f, 408.8f}, {320, 240}}, {}), kRight) << f;
+}
+
+TEST(KeptMarks, AFrameWithNoJointPlacedDoesntLetAFirstShowingsMarkHold) {
+    // The review's input: first shown with its joints at the middle, then scaled to nothing for
+    // a frame, it takes its edge as soon as its joints draw at its place.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(9, kRoot, {{320, 240}, {320, 240}}, {}), kMiddle);
+    EXPECT_EQ(k.place(10, kRoot, {}, {}), kMiddle);
+    for (uint32_t f = 11; f < 41; f++)
         EXPECT_EQ(k.place(f, kRoot, {{578.4f, 408.8f}, {320, 240}}, {}), kRight) << f;
 }
 
@@ -322,6 +332,15 @@ TEST(KeptMarks, ATreeWithNoJointPlacedYetKeepsNothing) {
     dragoon::KeptMarks k;
     EXPECT_EQ(k.place(10, kRoot, {}, {}), std::nullopt);
     EXPECT_EQ(k.place(11, kRoot, {{230, 100}}, {}), kMiddle);
+}
+
+TEST(KeptMarks, ATreeHoldsTheMarkFromItsFirstFrameWithAJointPlaced) {
+    // The review's input: its joints drew in the frame it showed with none placed, so the mark
+    // they give in the frame after holds.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {}, {}), std::nullopt);
+    EXPECT_EQ(k.place(11, kRoot, {{425, 100}}, {}), kMiddle);
+    EXPECT_EQ(k.place(12, kRoot, {{427, 100}}, {}), kMiddle);
 }
 
 TEST(KeptMarks, ATreesMarkHoldsWhileNoJointHasAPlace) {
