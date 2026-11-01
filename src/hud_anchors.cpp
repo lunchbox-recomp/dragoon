@@ -69,8 +69,7 @@ constexpr uint32_t kJObjMtx = 0x44;            // its place in the world, three 
 
 dragoon::HudCallbacks g_hud;
 dragoon::WorldViews g_views;
-dragoon::Mark g_sent;   // the mark last put in the command stream
-uint32_t g_displaying;  // HSD_JObjDispAll calls under way, the joint tree's own among them
+dragoon::Mark g_sent;  // the mark last put in the command stream
 
 // The frame being drawn, one more than the frames the game had submitted.
 uint32_t this_frame() { return gx::g_frames_submitted.load(std::memory_order_relaxed) + 1; }
@@ -174,12 +173,13 @@ extern "C" void dragoon_hud_leave(void) {
 }
 
 // HSD_JObjDispAll(jobj in r3, ...) displays a joint and its children, calling itself for each
-// child. The outermost call within a HUD callback places the tree.
+// child. The outermost call within a HUD callback places the tree, and once it returns, what the
+// callback draws itself stretches again.
 extern "C" void hle_HSD_JObjDispAll(CPU* c) {
-    if (g_displaying == 0 && g_hud.placement() != Placement::Stretch) place_tree(c->r[3]);
-    g_displaying++;
+    if (g_hud.tree_begin()) place_tree(c->r[3]);
     orig_HSD_JObjDispAll(c);
-    g_displaying--;
+    g_hud.tree_end();
+    send(g_hud.mark());
 }
 
 // HSD_CObjSetAspect for a world camera, from src/cameras.cpp: its viewport is one of the

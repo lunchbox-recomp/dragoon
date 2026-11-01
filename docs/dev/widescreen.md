@@ -326,6 +326,10 @@ it sits on screen. A tree's root, and some of its joints, sit at the middle of t
 its shapes are drawn at a side. So a tree goes by where most of its joints drew their shapes last
 frame, each joint's matrix put through the current camera.
 
+A tree's mark ends when its outermost `HSD_JObjDispAll` call returns. What the callback draws
+itself after it, such as a stripe straight through GX, stretches as a callback outside the table
+does.
+
 A tree in a rect's left third anchors to its left edge, one in its right third to its right
 edge and one between to its middle. A tree no joint has drawn yet goes by its root, which only
 happens the frame it first shows.

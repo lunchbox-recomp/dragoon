@@ -205,6 +205,14 @@ public:
     Placement placement() const { return top_.placement; }
     const Mark& mark() const { return top_.mark; }
     void set_mark(const Mark& m) { top_.mark = m; }
+    // HSD_JObjDispAll is called, as it is again for each child. True for the outermost call in
+    // a placed callback, whose joint tree the hook places.
+    bool tree_begin() { return trees_++ == 0 && top_.placement != Placement::Stretch; }
+    // It returns. After the outermost call the callback's own mark, Stretch, is back for what
+    // it draws itself, as a callback outside the table draws.
+    void tree_end() {
+        if (--trees_ == 0) top_.mark = {};
+    }
 
 private:
     struct Level {
@@ -213,6 +221,7 @@ private:
     };
     std::vector<Level> outer_;
     Level top_;
+    uint32_t trees_ = 0;  // HSD_JObjDispAll calls under way
 };
 
 // Notes a world camera the game has set the aspect of, whose viewport is one of the frame's

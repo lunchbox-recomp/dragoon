@@ -263,4 +263,35 @@ TEST(HudCallbacks, ANestedCallbackGivesItsCallerBack) {
     EXPECT_EQ(h.mark(), Mark{});
 }
 
+TEST(HudCallbacks, OnlyAPlacedCallbacksOutermostTreeIsPlaced) {
+    dragoon::HudCallbacks h;
+    EXPECT_FALSE(h.tree_begin());
+    h.tree_end();
+    h.enter(dragoon::Placement::Stretch);
+    EXPECT_FALSE(h.tree_begin());
+    h.tree_end();
+    h.leave();
+    h.enter(dragoon::Placement::Edge);
+    EXPECT_TRUE(h.tree_begin());
+    EXPECT_FALSE(h.tree_begin());
+    h.tree_end();
+    h.tree_end();
+    EXPECT_TRUE(h.tree_begin());
+}
+
+TEST(HudCallbacks, WhatACallbackDrawsAfterATreeIsStretched) {
+    // A centered text tree, then a full-width stripe the callback draws itself, which stretches
+    // as a draw outside every callback does.
+    dragoon::HudCallbacks h;
+    const Mark centered{Anchor::Center, 0, 640};
+    h.enter(dragoon::Placement::Edge);
+    ASSERT_TRUE(h.tree_begin());
+    h.set_mark(centered);
+    h.tree_begin();
+    h.tree_end();
+    EXPECT_EQ(h.mark(), centered);
+    h.tree_end();
+    EXPECT_EQ(h.mark(), Mark{});
+}
+
 }  // namespace
