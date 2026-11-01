@@ -109,16 +109,17 @@ inline Mark mark_for(Placement p, float x, float y, const std::vector<Rect>& vie
     return {};
 }
 
-// The mark most of an element's joints call for, the first of those tied, or Stretch for none.
-// A joint's own place can sit at the middle of the screen while its shapes are drawn at a side,
-// so an element goes by its joints together.
-inline Mark most_called(const std::vector<Mark>& marks) {
+// The mark most of an element's joints call for, or Stretch for none. A tie goes to `held`, the
+// element's mark from the frame before, when it's one of those tied, and else to the first. A
+// joint's own place can sit at the middle of the screen while its shapes are drawn at a side, so
+// an element goes by its joints together.
+inline Mark most_called(const std::vector<Mark>& marks, const std::optional<Mark>& held = std::nullopt) {
     Mark best;
     size_t best_n = 0;
     for (size_t i = 0; i < marks.size(); i++) {
         size_t n = 0;
         for (const Mark& m : marks) n += m == marks[i];
-        if (n > best_n) {
+        if (n > best_n || (n == best_n && marks[i] == held)) {
             best = marks[i];
             best_n = n;
         }
@@ -160,7 +161,7 @@ public:
         if (!joints.empty()) {
             marks_.clear();
             for (const Point& p : joints) marks_.push_back(edge_mark(p.x, p.y, views, m.value_or(Mark{})));
-            m = most_called(marks_);
+            m = most_called(marks_, m);
         }
         now_.push_back({root, time, m});
         return m;

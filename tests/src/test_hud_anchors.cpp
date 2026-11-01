@@ -133,6 +133,22 @@ TEST(MostCalled, ATieGoesToTheFirst) {
 
 TEST(MostCalled, NoneIsStretch) { EXPECT_EQ(dragoon::most_called({}), Mark{}); }
 
+TEST(MostCalled, ATieGoesToTheHeldMark) {
+    const Mark left{Anchor::Left, 0, 640}, right{Anchor::Right, 0, 640};
+    EXPECT_EQ(dragoon::most_called({right, left, right, left}, left), left);
+    EXPECT_EQ(dragoon::most_called({left, right, left, right}, right), right);
+}
+
+TEST(MostCalled, AHeldMarkWithFewerCallsLoses) {
+    const Mark left{Anchor::Left, 0, 640}, right{Anchor::Right, 0, 640};
+    EXPECT_EQ(dragoon::most_called({right, left, right}, left), right);
+}
+
+TEST(MostCalled, AHeldMarkNoJointCallsForDoesntWin) {
+    const Mark left{Anchor::Left, 0, 640}, right{Anchor::Right, 0, 640}, middle{Anchor::Center, 0, 640};
+    EXPECT_EQ(dragoon::most_called({right, left}, middle), right);
+}
+
 constexpr uint32_t kRoot = 0x81200000, kOtherRoot = 0x81200400;
 const Mark kLeft{Anchor::Left, 0, 640}, kMiddle{Anchor::Center, 0, 640}, kRight{Anchor::Right, 0, 640};
 
@@ -162,6 +178,16 @@ TEST(KeptMarks, AJointThatHidesDoesntTurnTheVote) {
     dragoon::KeptMarks k;
     EXPECT_EQ(k.place(10, kRoot, {{415, 100}, {420, 100}, {430, 100}, {435, 100}, {440, 100}}, {}), kRight);
     EXPECT_EQ(k.place(11, kRoot, {{415, 100}, {420, 100}, {435, 100}, {440, 100}}, {}), kRight);
+}
+
+TEST(KeptMarks, ATieGoesToTheHeldEdge) {
+    // Two joints at 300 and three at 500 call for R, and with the three at 400 they still do,
+    // as R holds there. With one of those hidden it's a tie, which the first would take to C.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {{300, 100}, {300, 100}, {500, 100}, {500, 100}, {500, 100}}, {}), kRight);
+    EXPECT_EQ(k.place(11, kRoot, {{300, 100}, {300, 100}, {400, 100}, {400, 100}, {400, 100}}, {}), kRight);
+    EXPECT_EQ(k.place(12, kRoot, {{300, 100}, {300, 100}, {400, 100}, {400, 100}}, {}), kRight);
+    EXPECT_EQ(k.place(13, kRoot, {{300, 100}, {300, 100}, {400, 100}, {400, 100}, {400, 100}}, {}), kRight);
 }
 
 TEST(KeptMarks, ATreeThatMissesAFrameChoosesAgain) {
