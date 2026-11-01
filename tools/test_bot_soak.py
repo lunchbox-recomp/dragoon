@@ -718,7 +718,8 @@ class ArgumentTest(SoakCase):
         code, out, _ = self.soak("--help")
         self.assertEqual(code, 0)
         self.assertIn("Usage: bot_soak.py", out)
-        for text in ("the game exits, shuts itself down, panics", "no frame for --hang", "the picture's hash stays the same",
+        for text in ("the game exits, shuts itself down, panics", "no frame, or no answer to a read, for --hang",
+                     "the picture's hash stays the same",
                      "a music stream ends early"):
             self.assertIn(text, out)
 

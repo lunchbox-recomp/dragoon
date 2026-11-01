@@ -3,8 +3,8 @@
 `Frozen` watches the picture, and `LogWatch` follows the game's stdout.txt for a music stream
 that ends early (stream_voices.py's rule, on the `[axv]` lines) and for console resets. Each
 raises `Detected` from the bot callback, which ends the run at that frame with its input log
-whole. The game exiting or panicking and the game sending no frame are `bot_link.run`'s to
-tell (bot_stop.py names them). It has no command line.
+whole. The game exiting or panicking and the game sending no frame, or no answer to a read,
+are `bot_link.run`'s to tell (bot_stop.py names them). It has no command line.
 
 The engine gives a bot no hash of the picture yet: the frames a game shows are copied on the GPU
 and never written to guest RAM, and the link sends only `frame N`. `Frozen` takes its hash from a

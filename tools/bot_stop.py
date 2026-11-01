@@ -20,7 +20,7 @@ from bot_watch import FROZEN, MUSIC, Detected, Resets
 EXIT = "game_exit"  # the game ended on its own: it exited, shut down or died
 PANIC = "panic"  # panic.txt, or the engine's FATAL or FAULT line
 ENGINE_STOP = "engine_stop"  # the engine stopped the game with its own `[bot] frame N: ...` line
-HANG = "hang"  # no frame for the hang limit
+HANG = "hang"  # no frame, or no answer to a read, for the hang limit
 MENUS_STUCK = "menus_stuck"  # a menu screen stayed up past the walker's limit
 KINDS = (EXIT, PANIC, ENGINE_STOP, HANG, FROZEN, MUSIC, MENUS_STUCK)
 # A first reset whose shader rebuild took this share of the hang limit may be what a later hang is.

@@ -18,7 +18,7 @@ day.
 It stops at the first of these:
 
   the game exits, shuts itself down, panics or is stopped by the engine
-  the game sends no frame for --hang seconds of wall time (30 by default)
+  the game sends no frame, or no answer to a read, for --hang seconds of wall time (30 by default)
   the picture's hash stays the same for 10 s of game time while the race bots' input changes
   a music stream ends early (stream_voices.py's rule, on the run's [axv] lines)
   a menu screen stays up for --stuck seconds of game time (120 by default, 30 at least), or a race or the

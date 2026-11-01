@@ -176,7 +176,7 @@ The seed is a whole number from 0. It's printed, and it defaults to one made fro
 It stops at the first of these.
 
 - The game exits, shuts itself down, panics or is stopped by the engine.
-- The game sends no frame for `--hang` seconds of wall time, 30 by default.
+- The game sends no frame, or no answer to a read, for `--hang` seconds of wall time, 30 by default.
 - The picture's hash stays the same for 10 s of game time while the race bots' input changes.
 - A music stream ends early, by stream_voices.py's rule on the run's `[axv]` lines.
 - A menu screen stays up for `--stuck` seconds of game time, 120 by default and 30 at least, or a race or the city for 600 (or `--round` and 60 when that's more), or the menus go on for five times `--stuck` with no race or city.
