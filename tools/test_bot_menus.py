@@ -224,6 +224,28 @@ class MainMenuTest(unittest.TestCase):
             with self.subTest(goal=goal):
                 self.assertEqual(self.press(goal, 1, mode), {1: A})
 
+    def test_a_modes_own_menu_moves_the_cursor_up_to_start_game_before_it_presses_a(self) -> None:
+        for item in (1, 2, 3):
+            with self.subTest(item=item):
+                menus, link, _ = make(modes=(CITY_TRIAL,))
+                screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=2, menu__item=item)
+                self.assertEqual(first_press(menus, link), {1: UP})
+
+    def test_the_row_is_read_only_on_the_goals_own_menu(self) -> None:
+        item = TABLE["menu.item"].address
+        menus, link, _ = make(modes=(TOP_RIDE,))
+        screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=0, menu__item=3)  # another mode's
+        first_press(menus, link)
+        self.assertNotIn(item, [addr for addr, _ in link.reads])
+        menus, link, _ = make(modes=(TOP_RIDE,))
+        screen(link, bot_menus.MAIN_MENU, menu__page=0, menu__mode=1, menu__item=3)  # the mode select
+        first_press(menus, link)
+        self.assertNotIn(item, [addr for addr, _ in link.reads])
+        menus, link, _ = make(modes=(TOP_RIDE,))
+        screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=1)
+        first_press(menus, link)
+        self.assertEqual([addr for addr, _ in link.reads][-1], item)
+
     def test_another_modes_own_menu_is_left_by_b_and_that_step_is_said_to_be_unconfirmed(self) -> None:
         menus, link, said = make(modes=(TOP_RIDE,))
         screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=0)
@@ -468,6 +490,36 @@ class StuckTest(unittest.TestCase):
         with self.assertRaises(Stuck):
             menus.step(link)
 
+    def go_round(self, link: FakeLink, frames: int, first: int = 0, every: int = 200) -> dict[int, Callable[[], None]]:
+        """The game changing screen every EVERY frames between two menu screens, none of them stuck."""
+        screens = (bot_menus.AIR_RESULTS, bot_menus.AIR_COURSES)
+        return {f: (lambda minor=screens[i % 2]: screen(link, minor, course_select__cursor=0))
+                for i, f in enumerate(range(first, first + frames, every))}
+
+    def test_menu_screens_that_take_turns_are_stuck_after_five_times_the_screen_limit(self) -> None:
+        menus, link, _ = make(stuck_seconds=30)
+        run(menus, link, 150 * 60, changes=self.go_round(link, 150 * 60))
+        with self.assertRaisesRegex(Stuck, r"^no race or city for 15\d s of game time, which is past the 150 s "
+                                           r"allowed; the screens went 11, 6, 11, 6, 11, 6, 11, 6, now 11 "):
+            run(menus, link, 400, first=150 * 60, changes=self.go_round(link, 400, first=150 * 60))
+
+    def test_no_screen_in_the_turns_was_up_for_its_own_limit(self) -> None:
+        menus, link, _ = make(stuck_seconds=30)
+        run(menus, link, 140 * 60, changes=self.go_round(link, 140 * 60))
+
+    def test_a_race_starts_the_time_without_one_again(self) -> None:
+        menus, link, _ = make(stuck_seconds=30)
+        run(menus, link, 140 * 60, changes=self.go_round(link, 140 * 60))
+        screen(link, bot_menus.RACE)
+        run(menus, link, 1, first=140 * 60)
+        run(menus, link, 140 * 60, first=140 * 60 + 1, changes=self.go_round(link, 140 * 60, first=140 * 60 + 1))
+
+    def test_the_time_without_a_race_starts_over_with_a_new_connection(self) -> None:
+        menus, link, _ = make(stuck_seconds=30)
+        run(menus, link, 140 * 60, changes=self.go_round(link, 140 * 60))
+        link.starts = 2
+        run(menus, link, 140 * 60, first=0, changes=self.go_round(link, 140 * 60))
+
 
 class RestartTest(unittest.TestCase):
     def test_a_new_connection_forgets_the_press_and_the_screen(self) -> None:
@@ -618,6 +670,28 @@ class PathTest(unittest.TestCase):
         link.starts = 2
         play_through(game, menus, 3000)
         self.assertEqual(game.visited, [38, 0, 2, 23, 6, 8, 18])
+
+    def test_a_modes_menu_that_opens_on_a_lower_row_is_climbed_to_start_game(self) -> None:
+        for mode in (AIR_RIDE, TOP_RIDE, CITY_TRIAL):
+            with self.subTest(mode=mode):
+                game = FakeGame(FakeLink(), item=3, race=100000)
+                play_through(game, Menus(1, Schedule(0, (mode,))), 5000)
+                self.assertEqual(len(game.started), 1)
+                self.assertNotIn(bot_menus.CITY_SETTINGS, game.visited)
+
+    def test_menus_that_go_round_in_a_circle_end_as_stuck(self) -> None:
+        class Bouncing(FakeGame):
+            """A game whose Start Game opens Game Settings, so the walker's A and B go round."""
+
+            def enter(self) -> None:
+                self.go(bot_menus.CITY_SETTINGS)
+
+        game = Bouncing(FakeLink(), race=100000)
+        menus = Menus(1, Schedule(0, (CITY_TRIAL,)), stuck_seconds=30)
+        with self.assertRaisesRegex(Stuck, r"^no race or city for 15\d s of game time"):
+            play_through(game, menus, 12000)
+        self.assertEqual(game.started, [])
+        self.assertGreater(game.visited.count(bot_menus.CITY_SETTINGS), 10)
 
     def test_the_walker_is_never_stuck_on_any_of_the_paths(self) -> None:
         for mode, players in ((AIR_RIDE, 1), (TOP_RIDE, 1), (CITY_TRIAL, 1), (CITY_TRIAL, 4)):

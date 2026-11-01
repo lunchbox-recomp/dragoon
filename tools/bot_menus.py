@@ -61,6 +61,8 @@ RETRY = 600  # frames a try at leaving a race gets before the walker tries again
 ROUND_SECONDS = 120  # game seconds a race lasts before the walker leaves it
 STUCK_SECONDS = 120  # game seconds a menu screen may stay up
 PLAY_SECONDS = 600  # and a race, the city or a stadium
+CYCLE_STUCKS = 5  # and the menus together may go on without a race or the city, this many screen limits
+TRAIL = 8  # screens a stop for that names, the ones before the screen it stopped on
 
 UNCONFIRMED = {
     "boot": "A while the game boots (minor 38). The routes press A at frames 120 and 300 only.",
@@ -124,7 +126,9 @@ class Menus:
     """Walks the menus for PORTS controllers, playing the rounds SCHEDULE says, and says what
     it's doing to SAY. A race is left after ROUND_SECONDS of game time through the pause menu,
     or never when `round_seconds` is None. Raises Stuck from `step` when a screen stays up for
-    STUCK_SECONDS, or a race for PLAY_SECONDS. TABLE is the kar_ram table to read by."""
+    STUCK_SECONDS, a race for PLAY_SECONDS, or the menus go on for CYCLE_STUCKS times
+    STUCK_SECONDS with no race or city, as when the screens take turns. TABLE is the kar_ram
+    table to read by."""
 
     def __init__(self, ports: int, schedule: Schedule, *, round_seconds: float | None = ROUND_SECONDS,
                  stuck_seconds: float = STUCK_SECONDS, play_seconds: float = PLAY_SECONDS,
@@ -137,6 +141,7 @@ class Menus:
         self.round_frames = None if round_seconds is None else round(round_seconds * FPS)
         self.stuck_frames = round(stuck_seconds * FPS)
         self.play_frames = round(play_seconds * FPS)
+        self.cycle_frames = CYCLE_STUCKS * self.stuck_frames
         self.say = say or (lambda text: None)
         self.table = dict(table) if table is not None else kar_ram.load()
         self.minor: int | None = None  # the screen at the last look
@@ -168,6 +173,8 @@ class Menus:
         self._since = frame  # the frame the screen last changed
         self._began = frame  # the frame the race began
         self._visits = 0  # looks at this screen
+        self._played: int | None = None  # the frame a race or the city was last on, or the first look
+        self._trail: deque[int] = deque(maxlen=TRAIL)  # the screens before this one
         self.minor = None
         self.mode = None
 
@@ -219,13 +226,21 @@ class Menus:
             if minor not in PLAYING:
                 self._script.clear()
                 self._left = None
+            if self.minor is not None:
+                self._trail.append(self.minor)
             self.minor, self._since, self._visits = minor, frame, 0
         else:
             self._visits += 1
+        if minor in PLAYING or self._played is None:
+            self._played = frame
         limit = self.play_frames if minor in PLAYING else self.stuck_frames
         if frame - self._since > limit:
             raise Stuck(f"screen {minor} ({self._name(minor)}) has stayed up for {(frame - self._since) / FPS:.0f} s "
                         f"of game time, which is past the {limit / FPS:.0f} s allowed")
+        if frame - self._played > self.cycle_frames:
+            raise Stuck(f"no race or city for {(frame - self._played) / FPS:.0f} s of game time, which is past the "
+                        f"{self.cycle_frames / FPS:.0f} s allowed; the screens went "
+                        f"{', '.join(map(str, self._trail))}, now {minor} ({self._name(minor)})")
 
     def _name(self, minor: int) -> str:
         return self.table["scene.minor"].meaning(minor) or "not named in kar_ram.json"
@@ -294,11 +309,12 @@ class Menus:
     def _main_menu(self, link: Link) -> Tap:
         want = MODE_CURSOR[self._goal()]
         mode = self._read(link, "menu.mode")
-        if self._read(link, "menu.page") == 1:  # a mode's own menu, with Start Game under the cursor
-            if mode == want:
-                return Tap(BUTTONS["A"])
-            self._unconfirmed("back to the mode select")
-            return Tap(BUTTONS["B"])
+        if self._read(link, "menu.page") == 1:  # a mode's own menu, where Start Game is row 0
+            if mode != want:
+                self._unconfirmed("back to the mode select")
+                return Tap(BUTTONS["B"])
+            # The cursor stays where the player left it, as after B out of Game Settings.
+            return Tap(BUTTONS["A" if self._read(link, "menu.item") == 0 else "UP"])
         if mode == want:
             return Tap(BUTTONS["A"])
         return Tap(BUTTONS["DOWN" if mode < want else "UP"])

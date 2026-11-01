@@ -152,13 +152,13 @@ The paths come from the routes in `tests/routes/` and the values in kar_ram.json
 | Path | What it presses | Still to confirm in the game |
 |---|---|---|
 | Boot to the mode select | A while the game boots, then A and START in turn on the opening movie and title, 100 frames apart | The routes press A at frames 120 and 300, A at 900 and START at 1000, so the boot and title presses are new |
-| Mode select | DOWN or UP to the mode, A, then A on the mode's own menu for Start Game, then A to skip its movie | Pressing B on another mode's own menu to change mode. No route does |
+| Mode select | DOWN or UP to the mode, A, then UP until `menu.item` reads 0 and A on the mode's own menu for Start Game, then A to skip its movie | Pressing B on another mode's own menu to change mode. No route does |
 | Air Ride | The cursor along its row and then down or up to the course, A, then A to join, A for OK and START | Courses with cursor 3, 4, 5 and 7. Only 0, 1, 2 and 6 have been read |
 | Top Ride | A on the course select, then A and START in turn on the machine select | The machine select, which has no RAM slot to read |
 | City Trial, 1 to 4 players | A on every port at the movie, A on each port not yet in at the player select, START once all are in and OK | |
 | Back to the menus | A race is left through the pause menu with START, DOWN, DOWN and A once `round_seconds` of game time are up. A race that ends first goes through its results with START. The city goes through its stats and card with A, then the stadium, then its results with START | START on a stadium's results, whose next screen was never watched |
 
-The walker says `unconfirmed step` the first time it takes each step in the right-hand column, and `screen N isn't in kar_ram.json` for a screen the table doesn't name, which it presses A on. A screen that stays up past `stuck_seconds` of game time (600 s for a race) raises `Stuck`. After a console reset the walker forgets the press under way and the screen, and starts over from the boot.
+The walker says `unconfirmed step` the first time it takes each step in the right-hand column, and `screen N isn't in kar_ram.json` for a screen the table doesn't name, which it presses A on. A screen that stays up past `stuck_seconds` of game time (600 s for a race) raises `Stuck`, and so do the menus going on for five times that with no race or city, as when two screens take turns. After a console reset the walker forgets the press under way and the screen, and starts over from the boot.
 
 ## bot_soak.py
 
@@ -176,7 +176,7 @@ It stops at the first of these.
 - The game sends no frame for `--hang` seconds of wall time, 30 by default.
 - The picture's hash stays the same for 10 s of game time while the race bots' input changes.
 - A music stream ends early, by stream_voices.py's rule on the run's `[axv]` lines.
-- A menu screen stays up for `--stuck` seconds of game time, 120 by default, or a race or the city for 600.
+- A menu screen stays up for `--stuck` seconds of game time, 120 by default, or a race or the city for 600, or the menus go on for five times `--stuck` with no race or city.
 
 A console reset rebuilds the shader cache before the bot connects again, and that time counts against the hang limit. The soak keeps the first reset's `[shaders] ... in Z ms` line, and warns when Z reaches two thirds of the limit. `--hang` raises the limit for the next run, since a run can't change it once it has started.
 

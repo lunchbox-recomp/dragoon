@@ -13,10 +13,16 @@ class FakeGame:
     """The screens the routes pass through, and what a press does on each, as the routes and
     kar_ram.json show them. It is a model of those, which lets the walker's paths be played end
     to end with no game. A press counts when the button goes down. A race ends after `race`
-    frames of play, not counting a pause. It keeps the screen's values in LINK."""
+    frames of play, not counting a pause. It keeps the screen's values in LINK.
 
-    def __init__(self, link: FakeLink, players: int = 1, race: int = 3000) -> None:
+    A mode's own menu has four rows. Its cursor is on row `item` when the menu first opens, and
+    stays where the player left it after that, as city-trial-stadium.txt shows: B out of Game
+    Settings (row 3 of City Trial's) leaves it there."""
+
+    def __init__(self, link: FakeLink, players: int = 1, race: int = 3000, item: int = 0) -> None:
         self.link, self.players, self.race_length = link, players, race
+        self.opening_item = item
+        self.item = 0
         self.minor, self.page, self.mode, self.cursor = bot_menus.BOOT, 0, 0, 0
         self.boot_presses = 0
         self.machine = 0
@@ -37,6 +43,7 @@ class FakeGame:
         link.set("scene.minor", self.minor)
         link.set("menu.page", self.page)
         link.set("menu.mode", self.mode)
+        link.set("menu.item", self.item)
         link.set("course_select.cursor", self.cursor)
         link.set("machine_select.port1", self.machine)
         for port, state in self.in_game.items():
@@ -79,15 +86,25 @@ class FakeGame:
                 if pressed("UP"):
                     self.mode = max(0, self.mode - 1)
                 if pressed("A") and self.mode <= 2:
-                    self.page = 1
+                    self.page, self.item = 1, self.opening_item
             elif pressed("B"):
                 self.page = 0
-            elif pressed("A"):
-                if self.mode in self.movies_seen:
-                    self.enter()
-                else:
-                    self.movies_seen.add(self.mode)
-                    self.go(bot_menus.MOVIES[self.mode])
+            else:
+                if pressed("DOWN"):
+                    self.item = min(3, self.item + 1)
+                if pressed("UP"):
+                    self.item = max(0, self.item - 1)
+                if pressed("A") and self.item == 3 and self.mode == 2:  # City Trial's Game Settings
+                    self.go(bot_menus.CITY_SETTINGS)
+                elif pressed("A") and self.item == 0:
+                    if self.mode in self.movies_seen:
+                        self.enter()
+                    else:
+                        self.movies_seen.add(self.mode)
+                        self.go(bot_menus.MOVIES[self.mode])
+        elif m == bot_menus.CITY_SETTINGS:
+            if pressed("B"):
+                self.go(bot_menus.MAIN_MENU)  # with the cursor where it was, on page 1
         elif m in bot_menus.MOVIES:
             if pressed("A"):
                 self.enter()
