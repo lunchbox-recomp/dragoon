@@ -249,18 +249,48 @@ def socket_path(run_dir: Path) -> str:
     return f"/tmp/dragoon-bot-{digest}.sock"
 
 
+def _lock(path: str) -> int:
+    """The lock file at `path`, open and locked. A bot removes its lock file as it stops, while
+    it still holds the lock, so a file opened just before that removal can be locked once that
+    bot is gone and no longer be the one at `path`. That lock is let go and `path` opened again.
+    When another bot holds the lock it's an OSError, and the file is left as it is."""
+    while True:
+        lock = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise OSError("another bot is listening on it") from None
+            try:
+                if os.path.samestat(os.fstat(lock), os.stat(path)):
+                    return lock
+            except FileNotFoundError:
+                pass
+        except OSError:
+            os.close(lock)
+            raise
+        os.close(lock)
+
+
+def _unlock(lock: int, path: str) -> None:
+    """Removes the lock file at `path`, then lets go of `lock`, its open file, so no lock file
+    is left that no bot holds."""
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    finally:
+        os.close(lock)
+
+
 def _listen(path: str) -> tuple[socket.socket, int]:
     """A socket listening at `path`, and the lock on `path`.lock held while it listens, as an
-    open file to close once the socket file is gone. When another bot holds the lock, it's an
+    open file for _unlock once the socket file is gone. When another bot holds the lock, it's an
     OSError and neither file is touched, since two bots on one socket would take each other's
     games. With the lock taken, a socket file at `path` is one an earlier run left, and it's
-    replaced; any other kind of file there is an OSError."""
-    lock = os.open(path + ".lock", os.O_RDWR | os.O_CREAT, 0o644)
+    replaced; any other kind of file there is an OSError, and the lock file goes."""
+    lock = _lock(path + ".lock")
     try:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise OSError("another bot is listening on it") from None
         try:
             if stat.S_ISSOCK(os.stat(path).st_mode):
                 os.unlink(path)
@@ -274,7 +304,7 @@ def _listen(path: str) -> tuple[socket.socket, int]:
             listener.close()
             raise
     except OSError:
-        os.close(lock)
+        _unlock(lock, path + ".lock")
         raise
     return listener, lock
 
@@ -591,7 +621,7 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
         except FileNotFoundError:
             pass
         # Only now, or a bot that took the lock first could have its new socket file removed.
-        os.close(lock)
+        _unlock(lock, sock + ".lock")
     session_dir, restarted = _session_lines(run_dir / "stdout.txt")
     input_log = session_inputs(run_dir, session_dir)
     if state.error is not None:

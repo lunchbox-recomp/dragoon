@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import fcntl
 import json
 import os
 import shutil
@@ -842,12 +843,13 @@ class OutcomeTest(FakeProbeCase):
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.GAME_EXITED, 5, 1))
         self.assertEqual(outcome.input_log, self.run_dir() / "session" / "run-2" / "inputs")
 
-    def test_a_run_removes_its_socket_and_leaves_the_lock(self):
+    def test_a_run_removes_its_socket_and_its_lock(self):
         self.plan([0])
         self.go(neutral)
         sock = socket_path(self.run_dir())
         self.assertFalse(os.path.exists(sock))
-        self.assertTrue(os.path.exists(sock + ".lock"))
+        self.assertFalse(os.path.exists(sock + ".lock"))
+        self.assertEqual(os.listdir(self.run_dir()).count("bot.sock.lock"), 0)
 
     def test_ctrl_c_in_the_bot_ends_the_game_too(self):
         self.plan(list(range(10)), ignore_hangup=True)
@@ -861,6 +863,7 @@ class OutcomeTest(FakeProbeCase):
         with self.assertRaises(ProcessLookupError):
             os.kill(pid, 0)
         self.assertFalse(os.path.exists(socket_path(self.run_dir())))
+        self.assertFalse(os.path.exists(socket_path(self.run_dir()) + ".lock"))
 
 
 class WaitClosedTest(unittest.TestCase):
@@ -999,7 +1002,9 @@ class SetupTest(FakeProbeCase):
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 2))
         record = json.loads((long / "build" / "probe" / "t" / "record.json").read_text())
         self.assertEqual(record["gcn_bot"], sock)
+        self.assertTrue(sock.startswith("/tmp/dragoon-bot-"), sock)
         self.assertFalse(os.path.exists(sock))
+        self.assertFalse(os.path.exists(sock + ".lock"))
 
     def test_a_second_listener_on_one_socket_is_refused_and_leaves_both_files(self):
         path = str(self.root / "bot.sock")
@@ -1008,6 +1013,7 @@ class SetupTest(FakeProbeCase):
             with self.assertRaises(OSError):
                 bot_link._listen(path)
             self.assertTrue(os.path.exists(path))
+            self.assertTrue(os.path.samestat(os.fstat(lock), os.stat(path + ".lock")))
             client = socket.socket(socket.AF_UNIX)
             client.connect(path)  # the first is still the one listening
             client.close()
@@ -1028,6 +1034,79 @@ class SetupTest(FakeProbeCase):
         with self.assertRaises(OSError):
             bot_link._listen(path)
         self.assertEqual(Path(path).read_text(), "not a socket")
+        self.assertFalse(os.path.exists(path + ".lock"))  # the refused bot held it, so it removed it
+
+    def flock_after_removal(self, path: str, then=None):
+        """fcntl.flock patched so that its first call finds the lock file at PATH removed just
+        before it locks, as the bot that held it removes it as it stops, and THEN run after
+        the removal. Every call locks for real."""
+        real = fcntl.flock
+        calls: list[int] = []
+
+        def flock(fd: int, op: int) -> None:
+            if not calls:
+                os.unlink(path)
+                if then is not None:
+                    then()
+            calls.append(fd)
+            real(fd, op)
+
+        return mock.patch.object(bot_link.fcntl, "flock", side_effect=flock)
+
+    def test_a_lock_on_a_file_removed_after_it_was_opened_is_let_go_for_the_file_there_now(self):
+        path = str(self.root / "bot.sock")
+        with self.flock_after_removal(path + ".lock"):
+            listener, lock = bot_link._listen(path)
+        try:
+            self.assertTrue(os.path.samestat(os.fstat(lock), os.stat(path + ".lock")))
+        finally:
+            listener.close()
+            os.close(lock)
+
+    def test_a_bot_that_locked_the_new_file_first_refuses_one_that_locked_the_removed_file(self):
+        path = str(self.root / "bot.sock")
+        other: list[int] = []
+        real = fcntl.flock
+
+        def third_bot() -> None:
+            fd = os.open(path + ".lock", os.O_RDWR | os.O_CREAT, 0o644)
+            other.append(fd)
+            real(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        with self.flock_after_removal(path + ".lock", then=third_bot):
+            with self.assertRaises(OSError):
+                bot_link._listen(path)
+        try:
+            self.assertTrue(os.path.samestat(os.fstat(other[0]), os.stat(path + ".lock")))
+            self.assertFalse(os.path.exists(path))
+        finally:
+            os.close(other[0])
+
+    def test_the_lock_file_is_removed_while_the_lock_is_still_held(self):
+        path = str(self.root / "bot.sock")
+        listener, lock = bot_link._listen(path)
+        listener.close()
+        held: list[bool] = []
+        real = os.unlink
+
+        def unlink(name, *args, **kwargs):
+            if name == path + ".lock":
+                fd = os.open(name, os.O_RDWR)
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    held.append(False)
+                except BlockingIOError:
+                    held.append(True)
+                finally:
+                    os.close(fd)
+            real(name, *args, **kwargs)
+
+        with mock.patch.object(bot_link.os, "unlink", side_effect=unlink):
+            bot_link._unlock(lock, path + ".lock")
+        self.assertEqual(held, [True])
+        self.assertFalse(os.path.exists(path + ".lock"))
+        with self.assertRaises(OSError):
+            os.fstat(lock)  # closed
 
     def test_a_run_whose_socket_is_taken_is_refused_before_it_touches_the_directory(self):
         run_dir = self.run_dir()

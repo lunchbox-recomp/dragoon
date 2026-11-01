@@ -89,7 +89,7 @@ The command exits 0 for `time_limit`, `exit_after` and `shutdown`. It exits 1 fo
 
 `never_linked` is a run that couldn't start, so it exits 2 like a bad argument, a socket another bot is listening on or a probe.sh that won't run.
 
-The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when that would pass the 103 bytes a Unix socket takes. Its lock is the same path with `.lock` on the end, and a second run on the same socket is refused while the first holds it. A socket file an earlier run left is replaced.
+The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when that would pass the 103 bytes a Unix socket takes. Its lock is the same path with `.lock` on the end, and a second run on the same socket is refused while the first holds it. A run removes its lock file as it stops, while it still holds the lock, so none is left behind. A socket file an earlier run left is replaced.
 
 A `stdout.txt`, a `panic.txt` or a `session/` that an earlier run of NAME left is deleted first, but its frames stay, so give each run a new NAME. A `GCN_SESSION` in `settings` is used in place of `session/`, and a relative one is taken from `build/probe/NAME/`.
 
