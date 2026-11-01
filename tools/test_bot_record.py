@@ -112,6 +112,11 @@ class ReplayLineTest(unittest.TestCase):
         line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), None))
         self.assertEqual((line[2], len(line)), ("3600", 6))
 
+    def test_frame_zero_is_no_frame_to_give_since_probe_sh_refuses_an_exit_after_of_zero(self) -> None:
+        line = bot_record.replay_line(Path("/p"), "n", Path("/i"), 0)
+        self.assertEqual((shlex.split(line)[2], len(shlex.split(line))), ("3600", 6))
+        self.assertNotIn("--exit-after", line)
+
     def test_a_path_with_a_space_is_quoted_so_the_line_runs_as_printed(self) -> None:
         line = bot_record.replay_line(Path("/my repo/tools/probe.sh"), "n", Path("/my repo/build/inputs"), 5)
         self.assertEqual(shlex.split(line)[0], "/my repo/tools/probe.sh")
@@ -140,14 +145,18 @@ class RecordTest(unittest.TestCase):
 
     def test_it_says_whether_the_stop_came_after_a_console_reset(self) -> None:
         self.assertIs(self.make(Stop(HANG, "x", 1))["after_reset"], False)
-        self.assertIs(self.make(Stop(HANG, "x", 1, after_reset=True))["after_reset"], True)
+        self.assertIs(self.make(Stop(HANG, "x", 1, resets_before=1))["after_reset"], True)
+
+    def test_it_says_whether_a_console_reset_came_after_the_stop(self) -> None:
+        self.assertIs(self.make(Stop(HANG, "x", 1))["before_reset"], False)
+        self.assertIs(self.make(Stop(HANG, "x", None, 0, True, "/r/session"))["before_reset"], True)
 
     def test_it_records_the_first_resets_shader_line(self) -> None:
         resets = Resets()
         line = "[shaders] 70 programs from cache (0 from binaries, 70 compiled) in 21500 ms"
         for text in ("[reset] the game reset the console (restart, code 0)", line):
             resets.add(text)
-        data = self.make(Stop(HANG, "x", 1, after_reset=True), resets)
+        data = self.make(Stop(HANG, "x", 1, resets_before=1), resets)
         self.assertEqual(data["resets"], {"count": 1, "first_shaders_line": line, "first_shaders_ms": 21500})
 
     def test_a_run_with_no_reset_has_none_to_record(self) -> None:

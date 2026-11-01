@@ -597,11 +597,11 @@ class OutcomeTest(FakeProbeCase):
         (self.root / "s" / "inputs").mkdir(parents=True)
         write_file(self.root / "s" / "inputs", "inputs.txt", "# end 0 0\n")
         (self.root / "t" / "inputs").mkdir(parents=True)  # a session whose game never opened its log
-        self.assertEqual(bot_link._input_log(self.root, str(self.root / "s")), self.root / "s" / "inputs")
-        self.assertEqual(bot_link._input_log(self.root, "s"), self.root / "s" / "inputs")  # relative: from the run
-        self.assertIsNone(bot_link._input_log(self.root, "t"))
-        self.assertIsNone(bot_link._input_log(self.root, "nowhere"))
-        self.assertIsNone(bot_link._input_log(self.root, None))
+        self.assertEqual(bot_link.session_inputs(self.root, str(self.root / "s")), self.root / "s" / "inputs")
+        self.assertEqual(bot_link.session_inputs(self.root, "s"), self.root / "s" / "inputs")  # relative: from the run
+        self.assertIsNone(bot_link.session_inputs(self.root, "t"))
+        self.assertIsNone(bot_link.session_inputs(self.root, "nowhere"))
+        self.assertIsNone(bot_link.session_inputs(self.root, None))
 
     def test_a_restart_that_never_began_a_session_is_game_died_and_the_first_log_is_not_its_end(self):
         run_dir = self.root / "run"

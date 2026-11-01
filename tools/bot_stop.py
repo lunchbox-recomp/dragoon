@@ -41,8 +41,14 @@ class SoakError(Exception):
 class Stop:
     kind: str  # one of KINDS
     detail: str
-    frame: Optional[int]  # the last frame the engine sent
-    after_reset: bool = False  # the game had reset the console before it, which a replay can't show
+    frame: Optional[int]  # the last frame the engine sent, or None when it isn't known in its own process
+    resets_before: int = 0  # console resets before it, so its process began from the card a reset left
+    before_reset: bool = False  # a reset came after it, so the last process's replay can't show it
+    session: Optional[str] = None  # the session directory of the process it was in, kept for that case
+
+    @property
+    def after_reset(self) -> bool:
+        return self.resets_before > 0
 
 
 def near_hang(shaders_ms: int, hang: Optional[float]) -> bool:
@@ -51,20 +57,32 @@ def near_hang(shaders_ms: int, hang: Optional[float]) -> bool:
     return hang is not None and shaders_ms / 1000 >= hang * NEAR_HANG
 
 
+def _found(found: Detected, resets: Optional[Resets]) -> Stop:
+    """The Stop a watcher's finding is. One read from the log knows the resets before it, so a
+    reset that came after it is told apart, and then the frame is in a process the last one
+    isn't. One from no log (the picture) is after the resets the log has shown so far."""
+    if found.resets is None:
+        return Stop(found.kind, found.detail, found.frame, 0 if resets is None else resets.count)
+    if resets is not None and resets.count > found.resets:
+        return Stop(found.kind, found.detail, None, found.resets, True, found.session)
+    return Stop(found.kind, found.detail, found.frame, found.resets)
+
+
 def classify(outcome: bot_link.Outcome, resets: Optional[Resets] = None, hang: Optional[float] = None,
-             *, asked_exit_after: bool = False) -> Optional[Stop]:
+             *, asked_exit_after: bool = False, late: Optional[Detected] = None) -> Optional[Stop]:
     """The stop OUTCOME is, or None for a run that ended as it should: at its time limit, or at
     an --exit-after the run was given (ASKED_EXIT_AFTER). A game that shuts itself down, or ends
     at an --exit-after nobody asked for, has exited. RESETS is what the log showed of console
-    resets, and HANG the limit the run had, for a hang that follows a slow restart. Raises
-    SoakError for a run that says nothing about the game."""
+    resets, and HANG the limit the run had, for a hang that follows a slow restart. LATE is a
+    finding from the log's last lines, which is the stop only when the run had none of its own.
+    Raises SoakError for a run that says nothing about the game."""
     reason, error = outcome.reason, outcome.error
     if reason == bot_link.TIME_LIMIT or (reason == bot_link.EXIT_AFTER and asked_exit_after):
-        return None
+        return None if late is None else _found(late, resets)
     if reason == bot_link.BOT_RAISED:
         if isinstance(error, Detected):
-            stop = Stop(error.kind, error.detail, error.frame)
-        elif isinstance(error, Stuck):
+            return _found(error, resets)
+        if isinstance(error, Stuck):
             stop = Stop(MENUS_STUCK, str(error), outcome.last_frame)
         else:
             raise SoakError(f"a bot raised {outcome.detail}") from error
@@ -73,7 +91,7 @@ def classify(outcome: bot_link.Outcome, resets: Optional[Resets] = None, hang: O
     else:
         raise SoakError(f"{reason}: {outcome.detail}")
     if resets is not None:
-        stop.after_reset = resets.count > 0
+        stop.resets_before = resets.count
         if stop.kind == HANG and resets.shaders_ms is not None and near_hang(resets.shaders_ms, hang):
             stop.detail += (f". The first reset's shader rebuild took {resets.shaders_ms / 1000:.1f} s of the "
                             f"{hang:g} s hang limit, so this may be that rebuild; run again with a higher --hang")

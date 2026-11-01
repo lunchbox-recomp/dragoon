@@ -38,13 +38,18 @@ Picture = Callable[[Link], Optional[Hashable]]
 
 class Detected(Exception):
     """A watcher saw a fault. KIND is FROZEN or MUSIC, DETAIL says what and FRAME is the frame the
-    bot was stepped at when it did."""
+    bot was stepped at when it did. A fault read from the game's log also says how many console
+    resets the log showed before it (RESETS) and the session directory of the process that wrote
+    it (SESSION), since the read may have reached past a reset by the time it was handled."""
 
-    def __init__(self, kind: str, detail: str, frame: int) -> None:
+    def __init__(self, kind: str, detail: str, frame: int, resets: Optional[int] = None,
+                 session: Optional[str] = None) -> None:
         super().__init__(detail)
         self.kind = kind
         self.detail = detail
         self.frame = frame
+        self.resets = resets
+        self.session = session
 
 
 def engine_picture(link: Link) -> Optional[Hashable]:
@@ -139,15 +144,19 @@ class Resets:
 class LogWatch:
     """Follows the game's stdout.txt as it grows. `look` reads what the game has written since
     the last read, once every LOG_EVERY frames, and raises Detected(MUSIC) for a music stream that
-    ended early. A process that starts its session again (after a console reset) starts the voices
-    over, since the old process's are gone. `resets` counts the resets, and `axv` says whether any
-    `[axv]` line has come, which `GCN_AXVOICES=1` is for."""
+    ended early. Every line of a read is handled before that, so the resets after a cut are
+    counted too, and the Detected is the read's first cut, with the resets that came before it.
+    A process that starts its session again (after a console reset) starts the voices over, since
+    the old process's are gone. `resets` counts the resets, and `axv` says whether any `[axv]`
+    line has come, which `GCN_AXVOICES=1` is for."""
 
     def __init__(self, path: Path, on_shaders: Optional[Callable[[str, int], None]] = None) -> None:
         self.path = path
         self.resets = Resets(on_shaders)
         self.axv = False
         self._voices = stream_voices.Tracker(keep=False)
+        self._session: Optional[str] = None  # the last `[session] DIR` line's DIR
+        self._cut: Optional[Detected] = None  # the first cut found since the last one was raised
         self._offset = 0
         self._partial = b""
         self._due = 0
@@ -161,11 +170,18 @@ class LogWatch:
         if frame >= self._due:
             self._due = frame + LOG_EVERY
             self._take(frame, LOG_CHUNK)
+            self._raise_cut()
 
     def finish(self, frame: int) -> None:
         """Reads all the log has now, for the run's last lines. Raises Detected as `look` does."""
         while self._take(frame, LOG_CHUNK):
             pass
+        self._raise_cut()
+
+    def _raise_cut(self) -> None:
+        cut, self._cut = self._cut, None
+        if cut is not None:
+            raise cut
 
     def _take(self, frame: int, limit: int) -> bool:
         """Reads up to LIMIT bytes and handles their lines. True if there may be more to read."""
@@ -187,10 +203,12 @@ class LogWatch:
         return self._offset < size
 
     def _line(self, line: str, frame: int) -> None:
-        if session_log.SESSION.match(line):
+        if m := session_log.SESSION.match(line):
             self._voices = stream_voices.Tracker(keep=False)
+            self._session = m[1]
         self.resets.add(line)
         voice = self._voices.add(line)
         self.axv = self.axv or self._voices.seen
-        if voice is not None:
-            raise Detected(MUSIC, f"a music stream ended early: {stream_voices.row(voice)}", frame)
+        if voice is not None and self._cut is None:
+            self._cut = Detected(MUSIC, f"a music stream ended early: {stream_voices.row(voice)}", frame,
+                                 self.resets.count, self._session)

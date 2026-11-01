@@ -140,15 +140,13 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
     except Detected as e:
         late = e
     try:
-        stop = classify(outcome, log.resets, args.hang,
+        stop = classify(outcome, log.resets, args.hang, late=late,
                         asked_exit_after=bot_link.EXIT_AFTER_ARG.search(" ".join(settings)) is not None)
     except SoakError as e:
         err(f"bot_soak.py: {e}")
         if outcome.error is not None:
             err("".join(traceback.format_exception(type(outcome.error), outcome.error, outcome.error.__traceback__)))
         return 2
-    if stop is None and late is not None:
-        stop = Stop(late.kind, late.detail, late.frame, after_reset=log.resets.count > 0)
     watched = {"picture_hashes": frozen.hashes > 0, "axv_lines": log.axv}
     if not watched["picture_hashes"]:
         out("the frozen-picture check saw no frame hash, so it did not run; the engine gives a bot none yet")
@@ -167,29 +165,37 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
 def report(stop: Stop, outcome: bot_link.Outcome, *, probe: Path, name: str, args: argparse.Namespace,
            settings: list[str], resets, watched: dict[str, bool], wall: float,
            out: Callable[[str], None]) -> None:
-    """Writes bot.json beside the stop's input log and prints the stop and the replay line."""
-    frame = stop.frame if stop.frame is not None else outcome.last_frame
+    """Writes bot.json beside the stop's input log and prints the stop and the replay line. The
+    log is the last process's, unless a console reset came after the stop, and then it's the
+    process the stop was in."""
+    frame = stop.frame
+    log = bot_link.session_inputs(outcome.run_dir, stop.session) if stop.before_reset else outcome.input_log
     replay = None
-    if outcome.input_log is not None:
-        replay = bot_record.replay_line(probe, name, outcome.input_log, frame)
+    if log is not None:
+        replay = bot_record.replay_line(probe, name, log, frame)
     arguments = {"seed": args.seed, "minutes": args.minutes, "modes": args.modes, "ports": args.ports,
                  "round_seconds": args.round, "stuck_seconds": args.stuck, "hang": args.hang,
                  "settings": settings}
     data = bot_record.record(name=name, seed=args.seed, arguments=arguments,
                              commit_ids=bot_record.commits(probe.parent.parent), stop=stop, resets=resets,
-                             input_log=outcome.input_log, replay=replay, frames=outcome.frames, wall_seconds=wall,
+                             input_log=log, replay=replay, frames=outcome.frames, wall_seconds=wall,
                              watched=watched)
-    directory = outcome.input_log.parent if outcome.input_log is not None else outcome.run_dir
-    path = bot_record.write(directory, data)
+    path = bot_record.write(log.parent if log is not None else outcome.run_dir, data)
     out(f"STOP {stop.kind}: {stop.detail}")
     out(f"  run {outcome.run_dir}")
     if frame is not None:
         out(f"  at frame {frame}, {frame / 60:.1f} s of game time, after {wall:.0f} s of wall time")
+    else:
+        out(f"  {wall:.0f} s of wall time")
     if stop.after_reset:
-        out(f"  after {count(resets.count, 'console reset')}; a replay plays only the process after the last one, "
-            "from a blank card")
-    if outcome.input_log is not None:
-        out(f"  input log {outcome.input_log}")
+        out(f"  after {count(stop.resets_before, 'console reset')}; a replay plays only the process after the last "
+            "one, from a blank card")
+    if stop.before_reset:
+        out("  a console reset came after it, so the last process's replay can't show it; "
+            + ("the input log and replay below are for the process it happened in" if log is not None
+               else "the process it happened in kept no input log"))
+    if log is not None:
+        out(f"  input log {log}")
     out(f"  {path}")
     out(f"  replay: {replay}" if replay else "  no input log to replay")
 

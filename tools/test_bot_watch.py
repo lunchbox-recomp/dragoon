@@ -306,6 +306,51 @@ class LogWatchTest(unittest.TestCase):
         with self.assertRaises(Detected):
             self.watch.finish(10)
 
+    SHADERS = "[shaders] 70 programs from cache (0 from binaries, 70 compiled) in 2107 ms\n"
+
+    def test_every_line_of_a_read_is_handled_when_one_of_them_is_a_cut(self) -> None:
+        self.write("[session] /a/session\n" + axv(100, "run") + axv(120, "end") + RESET
+                   + "[session] /a/session/run-2\n" + self.SHADERS)
+        with self.assertRaises(Detected):
+            self.watch.look(0)
+        self.assertEqual((self.watch.resets.count, self.watch.resets.shaders_ms), (1, 2107))
+
+    def test_a_cut_knows_the_resets_that_came_before_it_and_the_session_it_was_in(self) -> None:
+        self.write("[session] /a/session\n" + axv(100, "run") + axv(120, "end") + RESET)
+        with self.assertRaises(Detected) as caught:
+            self.watch.look(0)
+        self.assertEqual((caught.exception.resets, caught.exception.session), (0, "/a/session"))
+
+    def test_a_cut_after_a_reset_counts_it_and_is_in_the_new_session(self) -> None:
+        self.write("[session] /a/session\n" + RESET + "[session] /a/session/run-2\n" + axv(100, "run")
+                   + axv(120, "end"))
+        with self.assertRaises(Detected) as caught:
+            self.watch.look(0)
+        self.assertEqual((caught.exception.resets, caught.exception.session), (1, "/a/session/run-2"))
+
+    def test_the_first_cut_of_a_read_is_the_one_that_is_raised(self) -> None:
+        self.write(axv(100, "run") + axv(120, "end") + axv(200, "run", pb=OTHER) + axv(220, "end", pb=OTHER))
+        with self.assertRaises(Detected) as caught:
+            self.watch.look(0)
+        self.assertIn("pb 80579F88  list 100", caught.exception.detail)
+
+    def test_a_cut_is_raised_once(self) -> None:
+        self.write(axv(100, "run") + axv(120, "end"))
+        with self.assertRaises(Detected):
+            self.watch.look(0)
+        self.watch.look(60)
+        self.watch.finish(60)
+
+    def test_finish_reads_all_the_pieces_of_a_big_log_before_it_raises_the_cut(self) -> None:
+        old = bot_watch.LOG_CHUNK
+        bot_watch.LOG_CHUNK = 300
+        self.addCleanup(setattr, bot_watch, "LOG_CHUNK", old)
+        self.write(axv(100, "run") + axv(120, "end")
+                   + "".join(axv(n, "run", pb=f"{0x80000000 + n * 0x40:08X}") for n in range(40)) + RESET)
+        with self.assertRaises(Detected) as caught:
+            self.watch.finish(10)
+        self.assertEqual((caught.exception.resets, self.watch.resets.count), (0, 1))
+
     def test_a_log_with_no_axv_lines_says_so(self) -> None:
         self.write("[session] x\nsome other line\n")
         self.watch.finish(0)

@@ -410,7 +410,7 @@ def _reset_count(log: Path) -> int:
         return 0
 
 
-def _input_log(run_dir: Path, session: str | None) -> Path | None:
+def session_inputs(run_dir: Path, session: str | None) -> Path | None:
     """The inputs/ directory of the session a `[session] DIR` line names (an absolute DIR is
     used as it is and a relative one is taken from `run_dir`), when it holds an input log. It's
     what probe.sh's --replay= takes."""
@@ -586,7 +586,7 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
         # Only now, or a bot that took the lock first could have its new socket file removed.
         os.close(lock)
     session_dir, restarted = _session_lines(run_dir / "stdout.txt")
-    input_log = _input_log(run_dir, session_dir)
+    input_log = session_inputs(run_dir, session_dir)
     if state.error is not None:
         reason, detail = BOT_RAISED, f"{type(state.error).__name__}: {state.error}"
     elif state.bad_line is not None:

@@ -60,12 +60,14 @@ def commits(root: Path) -> dict[str, Optional[str]]:
 
 def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[int]) -> str:
     """The probe.sh command that plays INPUT_LOG back as a run called replay-NAME, which quits
-    after LAST_FRAME frames when the run's last frame is known. The seconds are generous, a
-    real-time game's worth of the frames and a minute, since the replay runs as fast as it can."""
-    seconds = 3600 if last_frame is None else math.ceil(last_frame / 60) + 60
+    after LAST_FRAME frames when there is a frame to give. None and 0 are none, and probe.sh
+    refuses an --exit-after of 0. The seconds are generous, a real-time game's worth of the
+    frames and a minute, since the replay runs as fast as it can."""
+    frame = last_frame or None
+    seconds = 3600 if frame is None else math.ceil(frame / 60) + 60
     args = [str(probe), f"replay-{name}", str(seconds), "", "60", f"--replay={input_log}"]
-    if last_frame is not None:
-        args.append(f"--exit-after={last_frame}")
+    if frame is not None:
+        args.append(f"--exit-after={frame}")
     return " ".join(shlex.quote(a) for a in args)
 
 
@@ -83,6 +85,7 @@ def record(*, name: str, seed: int, arguments: dict, commit_ids: dict[str, Optio
         "stop": {"kind": stop.kind, "detail": stop.detail, "frame": stop.frame,
                  "game_seconds": None if stop.frame is None else round(stop.frame / 60, 1)},
         "after_reset": stop.after_reset,
+        "before_reset": stop.before_reset,
         "resets": {"count": resets.count, "first_shaders_line": resets.shaders, "first_shaders_ms": resets.shaders_ms},
         "frames_answered": frames,
         "wall_seconds": round(wall_seconds, 1),

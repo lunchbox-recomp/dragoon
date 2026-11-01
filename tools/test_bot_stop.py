@@ -122,6 +122,49 @@ class ClassifyTest(unittest.TestCase):
         assert stop is not None
         self.assertTrue(stop.after_reset)
 
+    def cut(self, before: int = 0, session: str = "/r/session") -> Detected:
+        return Detected(MUSIC, "a music stream ended early", 4000, before, session)
+
+    def test_a_cut_the_log_put_before_a_reset_says_so_and_names_its_process(self) -> None:
+        stop = classify(outcome(bot_link.BOT_RAISED, "x", 0, self.cut(0, "/r/session")), resets(RESET))
+        self.assertEqual(stop, Stop(MUSIC, "a music stream ended early", None, 0, True, "/r/session"))
+        self.assertFalse(stop.after_reset)
+
+    def test_a_cut_after_a_reset_is_after_it_and_a_reset_after_that_is_before_the_next(self) -> None:
+        stop = classify(outcome(bot_link.BOT_RAISED, "x", 0, self.cut(1, "/r/session/run-2")), resets(RESET))
+        self.assertEqual(stop, Stop(MUSIC, "a music stream ended early", 4000, 1))
+        stop = classify(outcome(bot_link.BOT_RAISED, "x", 0, self.cut(1, "/r/session/run-2")), resets(RESET, RESET))
+        self.assertEqual(stop, Stop(MUSIC, "a music stream ended early", None, 1, True, "/r/session/run-2"))
+        self.assertTrue(stop.after_reset)
+
+    def test_a_cut_with_no_resets_around_it_is_just_a_cut(self) -> None:
+        self.assertEqual(classify(outcome(bot_link.BOT_RAISED, "x", 0, self.cut(0)), resets()),
+                         Stop(MUSIC, "a music stream ended early", 4000))
+
+    def test_a_finding_that_came_from_no_log_is_after_the_resets_so_far(self) -> None:
+        found = Detected(FROZEN, "the picture stayed", 3999)
+        stop = classify(outcome(bot_link.BOT_RAISED, "x", 4000, found), resets(RESET, RESET))
+        self.assertEqual(stop, Stop(FROZEN, "the picture stayed", 3999, 2))
+
+    def test_a_cut_found_after_a_clean_end_is_the_stop(self) -> None:
+        self.assertEqual(classify(outcome(bot_link.TIME_LIMIT), resets(RESET), late=self.cut(1)),
+                         Stop(MUSIC, "a music stream ended early", 4000, 1))
+        self.assertEqual(classify(outcome(bot_link.EXIT_AFTER, "--exit-after=9"), resets(), asked_exit_after=True,
+                                  late=self.cut(0)),
+                         Stop(MUSIC, "a music stream ended early", 4000))
+
+    def test_a_cut_found_late_that_a_reset_followed_names_its_process(self) -> None:
+        stop = classify(outcome(bot_link.TIME_LIMIT), resets(RESET), late=self.cut(0, "/r/session"))
+        self.assertEqual(stop, Stop(MUSIC, "a music stream ended early", None, 0, True, "/r/session"))
+
+    def test_a_cut_found_late_does_not_replace_a_stop_the_run_had(self) -> None:
+        stop = classify(outcome(bot_link.PANIC, "boom"), resets(), late=self.cut())
+        assert stop is not None
+        self.assertEqual((stop.kind, stop.detail), (bot_stop.PANIC, "boom"))
+
+    def test_nothing_found_late_and_a_clean_end_is_no_stop(self) -> None:
+        self.assertIsNone(classify(outcome(bot_link.TIME_LIMIT), resets(RESET), late=None))
+
     def test_a_hang_after_a_slow_restart_names_the_restart(self) -> None:
         stop = classify(outcome(bot_link.HANG, "no frame for 30 s after frame 3"),
                         resets(RESET, SHADERS.format(24500)), hang=30)

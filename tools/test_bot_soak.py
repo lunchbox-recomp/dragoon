@@ -384,6 +384,41 @@ class ResetTest(SoakCase):
     def bot_json_path(self, out: str) -> Path:
         return list(self.run_dir(out).rglob("bot.json"))[0]
 
+    def test_a_cut_just_before_a_reset_is_kept_with_the_process_it_was_in(self) -> None:
+        self.plan(race=100000, events=[at([["say", axv(100, "run")], ["say", axv(120, "end")],
+                                           ["reset", {"shaders_ms": 2107}]], frame=2010)])
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride")
+        self.assertEqual((code, err), (1, ""), out)
+        data = self.bot_json(out)
+        self.assertEqual(data["stop"]["kind"], "music_cut")
+        self.assertEqual((data["after_reset"], data["before_reset"]), (False, True))
+        self.assertEqual((data["resets"]["count"], data["resets"]["first_shaders_ms"]), (1, 2107))
+        self.assertEqual((data["stop"]["frame"], data["stop"]["game_seconds"]), (None, None))
+        log = Path(data["input_log"])
+        self.assertEqual(log, self.run_dir(out) / "session" / "inputs")  # the first process's, not run-2's
+        self.assertEqual(self.bot_json_path(out), log.parent / "bot.json")
+        self.assertEqual(shlex.split(data["replay"])[5:], [f"--replay={log}"])  # and no --exit-after to give
+        self.assertIn("  a console reset came after it, so the last process's replay can't show it; the input log "
+                      "and replay below are for the process it happened in", out)
+        self.assertIn(f"  input log {log}", out)
+        self.assertNotRegex(out, r"(?m)^  at frame")
+        self.assertNotIn("--exit-after=0", out)
+
+    def test_a_cut_in_the_last_second_after_a_reset_is_after_it(self) -> None:
+        self.plan(race=100000, events=[at([["reset", {"shaders_ms": 100}]], frame=500),
+                                       at([["say", axv(100, "run")], ["say", axv(120, "end")]], frame=2010,
+                                          process=2)])
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride",
+                                   settings=("--exit-after=2030",))
+        self.assertEqual((code, err), (1, ""), out)
+        data = self.bot_json(out)
+        self.assertEqual(data["stop"]["kind"], "music_cut")
+        self.assertEqual((data["after_reset"], data["before_reset"]), (True, False))
+        self.assertEqual(data["stop"]["frame"], 2029)
+        log = Path(data["input_log"])
+        self.assertEqual(log.parent.name, "run-2")
+        self.assertEqual(shlex.split(data["replay"])[5:], [f"--replay={log}", "--exit-after=2029"])
+
     def test_a_slow_restart_is_warned_about_as_it_happens(self) -> None:
         self.plan(race=100000, events=[at([["reset", {"shaders_ms": 25000}]], race=40),
                                        at([["panic"]], frame=500, process=2)])

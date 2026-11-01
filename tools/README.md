@@ -185,6 +185,8 @@ The engine gives a bot no hash of the picture yet. The frames it shows are copie
 
 A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the last process. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from a blank card.
 
+A music cut is read from the log, and the log can hold a console reset after it. The last process's replay can't show that cut, so the stop and `bot.json` say so (`before_reset`) and name the input log and replay line of the process it happened in, with no frame to give.
+
 The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The soak exits 0 when the run ended with no stop, at its time limit or at an `--exit-after` given after `--`, and 1 when it stopped. A bad argument, a game that never connected or a bot that raised an error exits 2 and writes no `bot.json`.
 
 The tests stand a fake probe.sh in for the game, so they need no disc.
