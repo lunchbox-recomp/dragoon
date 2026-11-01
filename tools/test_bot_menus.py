@@ -192,6 +192,13 @@ class ScreenTest(unittest.TestCase):
     def test_top_rides_course_select_takes_a(self) -> None:
         self.assertEqual(self.one(bot_menus.TOP_COURSES), {1: A})
 
+    def test_the_checklist_is_named_and_gets_a(self) -> None:
+        menus, link, said = make()
+        screen(link, bot_menus.CHECKLIST)
+        self.assertEqual(first_press(menus, link), {1: A})
+        self.assertIsNotNone(TABLE["scene.minor"].meaning(bot_menus.CHECKLIST))
+        self.assertEqual([line for line in said if "screen 34" in line or "other screen" in line], [])
+
     def test_an_unnamed_screen_gets_a_and_is_said_once(self) -> None:
         menus, link, said = make()
         screen(link, 12)

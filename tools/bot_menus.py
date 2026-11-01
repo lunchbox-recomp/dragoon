@@ -37,6 +37,7 @@ STADIUM_CARD = 17
 RACE = 18  # an Air Ride race, the city or a stadium
 TOP_RACE = 19
 MOVIES = (23, 24, 25)
+CHECKLIST = 34
 PLAYING = (RACE, TOP_RACE)
 
 AIR_RIDE = "air-ride"
@@ -165,7 +166,7 @@ class Menus:
             AIR_MACHINES: self._air_machines, TOP_MACHINES: self._top_machines,
             CITY_PLAYERS: self._city_players, AIR_RESULTS: self._press_start,
             STADIUM_RESULTS: self._stadium_results, CITY_STATS: self._press_a, STADIUM_CARD: self._press_a,
-            **{movie: self._movie for movie in MOVIES},
+            CHECKLIST: self._press_a, **{movie: self._movie for movie in MOVIES},
         }
         self._restart(0, 0)
 
