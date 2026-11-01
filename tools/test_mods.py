@@ -537,6 +537,16 @@ class PrepareTest(ModsCase):
         self.assertEqual((self.out / "files" / "a.bin").read_bytes(), b"abc")
         self.assertEqual(p.digest, mods.digest(self.scan()))
 
+    def test_a_file_gone_before_its_clone_is_a_prepare_error_naming_it(self) -> None:
+        self.put("Mod/files/a.bin")
+        gone = self.put("Mod/files/b.bin")
+        found = self.scan()
+        gone.unlink()
+        with self.assertRaises(mods.PrepareError) as cm:
+            mods.prepare(found, self.disc, self.dol, self.out, Path(sys.executable), self.recomp)
+        self.assertIn(f"{gone} can't be copied", str(cm.exception))
+        self.assertEqual(self.calls(), [])
+
     def test_the_digest_is_the_clones_and_not_what_the_mods_folder_holds_later(self) -> None:
         edited = self.put("Mod/files/a.bin", b"abc")
         before = mods.digest(self.scan())
