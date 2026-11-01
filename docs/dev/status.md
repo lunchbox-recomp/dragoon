@@ -962,8 +962,8 @@ Dragoon doesn't load an overlay or patch its DOL yet, so the game reads the disc
 before. Every frame and audio row matched, so no golden was recorded. Each check took about
 15 min.
 
-Both builds came before this tree moved onto main's `c3a5ed8`. Main had changed only files under
-`launcher/` by then, so the game and the hash tools are the same at `1576ae4`.
+Both builds came before this branch moved onto main's `7bcb026`, and the checks weren't run again
+there.
 
 ## gcn-recomp `bad7160`
 
