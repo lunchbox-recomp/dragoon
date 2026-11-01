@@ -67,7 +67,6 @@ CLIMB_UPS = 3  # presses of UP on a mode's menu that leave menu.item alone befor
 BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to its menu, which took 47 in the game
 
 UNCONFIRMED = {
-    "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
     "split stadium pause": "RIGHT on a stadium's pause menu with two or three players, for End Game. Only one "
                            "player's and four players' menus have been watched.",
     "other screen": "A on a screen scene.minor has no name for here.",
@@ -324,8 +323,7 @@ class Menus:
         want = MODE_CURSOR[self._goal()]
         mode = self._read(link, "menu.mode")
         if self._read(link, "menu.page") == 1:  # a mode's own menu, where Start Game is row 0
-            if mode != want:
-                self._unconfirmed("back to the mode select")
+            if mode != want:  # B goes back to the mode select, as a soak that changed modes showed
                 return Tap(BUTTONS["B"])
             return self._start_game(link)
         if mode == want:

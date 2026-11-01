@@ -290,11 +290,12 @@ class MainMenuTest(unittest.TestCase):
         first_press(menus, link)
         self.assertEqual([addr for addr, _ in link.reads][-1], item)
 
-    def test_another_modes_own_menu_is_left_by_b_and_that_step_is_said_to_be_unconfirmed(self) -> None:
+    def test_another_modes_own_menu_is_left_by_b_and_nothing_is_said_to_be_unconfirmed(self) -> None:
+        # A soak changed modes this way and the next round began in the new mode.
         menus, link, said = make(modes=(TOP_RIDE,))
         screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=0)
         self.assertEqual(first_press(menus, link), {1: B})
-        self.assertEqual(len([line for line in said if "back to the mode select" in line]), 1)
+        self.assertEqual([line for line in said if line.startswith("unconfirmed step") and "cadence" not in line], [])
 
     def test_the_goal_is_drawn_once_and_a_round_is_counted_for_it(self) -> None:
         menus, link, said = make(modes=(CITY_TRIAL,))
@@ -627,7 +628,6 @@ class RestartTest(unittest.TestCase):
 
 class UnconfirmedTest(unittest.TestCase):
     CASES = {
-        "back to the mode select": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 2}),
         "other screen": (12, {}),
         "press cadence": (bot_menus.MOVIES[0], {}),
     }

@@ -152,7 +152,7 @@ The paths come from the routes in `tests/routes/` and the values in kar_ram.json
 | Path | What it presses | Still to confirm in the game |
 |---|---|---|
 | Boot to the mode select | A while the game boots, then A and START in turn on the opening movie and title, 100 frames apart | |
-| Mode select | DOWN or UP to the mode, A, then UP until `menu.item` reads 0 and A on the mode's own menu for Start Game, then A to skip its movie. A row that 3 UPs leave alone gets A | Pressing B on another mode's own menu to change mode. No route does |
+| Mode select | B on another mode's own menu to go back to the mode select, then DOWN or UP to the mode, A, then UP until `menu.item` reads 0 and A on the mode's own menu for Start Game, then A to skip its movie. A row that 3 UPs leave alone gets A | |
 | Air Ride | The cursor along its row and then down or up to the course, A, then A to join, A for OK and START | |
 | Top Ride | A on the course select, then A and START in turn on the machine select | |
 | City Trial, 1 to 4 players | A on every port at the movie, A on each port not yet in at the player select, START once all are in and OK | |
