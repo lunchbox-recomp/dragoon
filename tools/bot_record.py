@@ -58,15 +58,16 @@ def commits(root: Path) -> dict[str, Optional[str]]:
             "engine": _head(root / "gcn-recomp") or info.get("gcn-recomp")}
 
 
-def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[int]) -> str:
+def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[int],
+                *, exit_after: bool = True) -> str:
     """The probe.sh command that plays INPUT_LOG back as a run called replay-NAME, which quits
-    after LAST_FRAME frames when there is a frame to give. None and 0 are none, and probe.sh
-    refuses an --exit-after of 0. The seconds are generous, a real-time game's worth of the
-    frames and a minute, since the replay runs as fast as it can."""
+    after LAST_FRAME frames when there is a frame to give and EXIT_AFTER is true. None and 0 are
+    none, and probe.sh refuses an --exit-after of 0. The seconds are generous, a real-time
+    game's worth of the frames and a minute, since the replay runs as fast as it can."""
     frame = last_frame or None
     seconds = 3600 if frame is None else math.ceil(frame / 60) + 60
     args = [str(probe), f"replay-{name}", str(seconds), "", "60", f"--replay={input_log}"]
-    if frame is not None:
+    if frame is not None and exit_after:
         args.append(f"--exit-after={frame}")
     return " ".join(shlex.quote(a) for a in args)
 

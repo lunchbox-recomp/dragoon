@@ -232,6 +232,13 @@ class StopTest(SoakCase):
                          '[bot] frame 500: done without a pad line for port 2, which the bot drives: "done"')
         self.assertEqual(data["stop"]["frame"], 500)
 
+    def test_a_hangs_replay_has_no_exit_after_since_the_replay_may_not_reach_the_hang(self) -> None:
+        out, data = self.stop([at([["hang", 60]], frame=300)], "--hang", "1")
+        self.assertEqual(data["stop"]["kind"], "hang")
+        log = Path(data["input_log"])
+        self.assertEqual(shlex.split(data["replay"])[2:], ["65", "", "60", f"--replay={log}"])
+        self.assertNotIn("--exit-after", data["replay"])
+
     def test_a_music_stream_that_ends_early_stops_the_run(self) -> None:
         out, data = self.stop([at([["say", axv(100, "run")], ["say", axv(120, "end")]], race=10)])
         self.assertEqual(data["stop"]["kind"], "music_cut")

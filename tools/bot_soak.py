@@ -50,7 +50,7 @@ import bot_link
 import bot_menus
 import bot_record
 from bot_player import Player, count
-from bot_stop import SoakError, Stop, classify, near_hang
+from bot_stop import HANG, SoakError, Stop, classify, near_hang
 from bot_watch import Detected, Frozen, LogWatch, Picture, engine_picture
 
 MINUTES = 10
@@ -172,7 +172,8 @@ def report(stop: Stop, outcome: bot_link.Outcome, *, probe: Path, name: str, arg
     log = bot_link.session_inputs(outcome.run_dir, stop.session) if stop.before_reset else outcome.input_log
     replay = None
     if log is not None:
-        replay = bot_record.replay_line(probe, name, log, frame)
+        # The last frame sent before a hang is not one a replay is known to reach, so it isn't a stopping point.
+        replay = bot_record.replay_line(probe, name, log, frame, exit_after=stop.kind != HANG)
     arguments = {"seed": args.seed, "minutes": args.minutes, "modes": args.modes, "ports": args.ports,
                  "round_seconds": args.round, "stuck_seconds": args.stuck, "hang": args.hang,
                  "settings": settings}

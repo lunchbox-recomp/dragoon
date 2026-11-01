@@ -117,6 +117,10 @@ class ReplayLineTest(unittest.TestCase):
         self.assertEqual((shlex.split(line)[2], len(shlex.split(line))), ("3600", 6))
         self.assertNotIn("--exit-after", line)
 
+    def test_a_replay_can_leave_the_exit_after_out_and_keeps_the_seconds_for_the_frames(self) -> None:
+        line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), 4000, exit_after=False))
+        self.assertEqual(line, ["/p", "replay-n", "127", "", "60", "--replay=/i"])
+
     def test_a_path_with_a_space_is_quoted_so_the_line_runs_as_printed(self) -> None:
         line = bot_record.replay_line(Path("/my repo/tools/probe.sh"), "n", Path("/my repo/build/inputs"), 5)
         self.assertEqual(shlex.split(line)[0], "/my repo/tools/probe.sh")
