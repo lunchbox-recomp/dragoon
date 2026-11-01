@@ -147,7 +147,8 @@ def _part(mod: str, entries: list[os.DirEntry], name: str) -> Optional[os.DirEnt
 def _check_disc_path(mod: str, files: str, path: str) -> None:
     shown = f"{files}/{path}"
     if not path.isascii():
-        raise ModError(mod, shown, "has a name that isn't ASCII, which a disc can't hold")
+        raise ModError(mod, shown, "has a name that isn't ASCII, and the disc's file table takes "
+                                   "only ASCII names")
     if any(ord(c) < 0x20 or ord(c) == 0x7F for c in path):
         raise ModError(mod, shown, "has a control character in its name")
     if path.lower() == BOOT_DOL:
@@ -170,6 +171,8 @@ def _check_dol_line(mod: str, path: Path, dol_sha1: str) -> None:
             continue
         if words[0] != "dol" or len(words) != 2:
             raise ModError(mod, f"{path.name}:{n}", "has to be the dol line naming the game's DOL")
+        if not SHA1.fullmatch(words[1].lower()):
+            raise ModError(mod, f"{path.name}:{n}", f"names {words[1]}, which isn't a SHA-1")
         if words[1].lower() != dol_sha1:
             raise ModError(mod, f"{path.name}:{n}", f"is for the DOL with SHA-1 {words[1].lower()}, "
                                                     f"not this game's {dol_sha1}")

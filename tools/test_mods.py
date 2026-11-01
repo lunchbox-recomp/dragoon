@@ -201,7 +201,8 @@ class RefusalTest(ModsCase):
 
     def test_a_name_that_isnt_ascii(self) -> None:
         self.put("Mod/files/Données/a.bin")
-        self.refused("Mod", "files/Données/a.bin", "isn't ASCII")
+        self.refused("Mod", "files/Données/a.bin",
+                     "^has a name that isn't ASCII, and the disc's file table takes only ASCII names$")
 
     def test_a_name_with_a_control_character(self) -> None:
         self.put("Mod/files/a\tb.bin")
@@ -232,6 +233,12 @@ class RefusalTest(ModsCase):
     def test_a_dol_line_for_another_dol(self) -> None:
         self.put("Mod/dol.txt", f"# for another version\ndol {OTHER.upper()}\n")
         self.refused("Mod", "dol.txt:2", f"SHA-1 {OTHER}, not this game's {SHA}")
+
+    def test_a_dol_line_naming_something_that_isnt_a_sha1(self) -> None:
+        for n, word in enumerate(("xyz", SHA[:-1] + "g", SHA + "0")):
+            with self.subTest(word=word):
+                self.mods = self.make({"Mod/dol.txt": f"dol {word}\n"})
+                self.refused("Mod", "dol.txt:1", f"^names {word}, which isn't a SHA-1$")
 
     def test_the_game_dol_sha1_may_come_in_upper_case(self) -> None:
         self.put("Mod/dol.txt", f"dol {SHA.upper()}\n")
