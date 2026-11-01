@@ -5,8 +5,9 @@ Usage: mods.py check MODS --dol-sha1 SHA
 
 Each folder in MODS whose name doesn't start with a dot is one mod. A mod's files/ folder
 mirrors the disc's root, and its dol.txt is a patch list in the format of gcn-recomp's
-docs/dol-patches.md, whose dol line has to name SHA, the game's DOL. Either may be missing.
-The other files beside dol.txt are the ones its section lines may name. Dotfiles and dot
+docs/dol-patches.md, whose dol line has to name SHA, the game's DOL. Either may be missing, and
+either name may come in any letter case. The other files beside dol.txt are the ones its
+section lines may name. Dotfiles and dot
 folders are skipped everywhere, and a loose file in MODS isn't a mod.
 
 check prints one JSON object with each mod's name, file count and bytes, in folder name order
@@ -18,7 +19,8 @@ is refused for a link, for anything that isn't a file or a folder or that can't 
 for a file of 4 GiB or more. Under files/ it's refused for a name that isn't ASCII or holds a
 control character, and for a main.dol at the top. A dol.txt that's over 1 MiB, isn't UTF-8 or
 doesn't start with a dol line naming SHA is refused too. So are two files that are one disc
-path ignoring case, in one mod or two, and a file where another needs a folder.
+path ignoring case, in one mod or two, and a file where another needs a folder. A mod holding
+files or dol.txt in two letter cases is refused.
 
 Exits 0, 1 for a refused mod and 2 on a bad argument or a MODS that can't be read.
 
@@ -133,8 +135,17 @@ def _walk(mod: str, folder: Path, prefix: str, skip: tuple[str, ...] = ()) -> It
                 yield path, Path(e.path)
 
 
-def _check_disc_path(mod: str, path: str) -> None:
-    shown = f"{FILES}/{path}"
+def _part(mod: str, entries: list[os.DirEntry], name: str) -> Optional[os.DirEntry]:
+    """The entry called NAME in any letter case, or None. Two spellings of it are refused."""
+    found = [e for e in entries if e.name.lower() == name]
+    if len(found) > 1:
+        raise ModError(mod, found[1].name, f"has the same name as {found[0].name} ignoring case, "
+                                           "and a mod can hold only one of them")
+    return found[0] if found else None
+
+
+def _check_disc_path(mod: str, files: str, path: str) -> None:
+    shown = f"{files}/{path}"
     if not path.isascii():
         raise ModError(mod, shown, "has a name that isn't ASCII, which a disc can't hold")
     if any(ord(c) < 0x20 or ord(c) == 0x7F for c in path):
@@ -148,42 +159,43 @@ def _check_dol_line(mod: str, path: Path, dol_sha1: str) -> None:
     with open(path, "rb") as f:
         raw = f.read(LIST_MAX + 1)
     if len(raw) > LIST_MAX:
-        raise ModError(mod, DOL_TXT, "is more than 1 MiB, which a patch list can't be")
+        raise ModError(mod, path.name, "is more than 1 MiB, which a patch list can't be")
     try:
         text = raw.decode("utf-8-sig")
     except ValueError:
-        raise ModError(mod, DOL_TXT, "isn't UTF-8 text") from None
+        raise ModError(mod, path.name, "isn't UTF-8 text") from None
     for n, line in enumerate(text.split("\n"), 1):
         words = COMMENT.sub("", line).split()
         if not words:
             continue
         if words[0] != "dol" or len(words) != 2:
-            raise ModError(mod, f"{DOL_TXT}:{n}", "has to be the dol line naming the game's DOL")
+            raise ModError(mod, f"{path.name}:{n}", "has to be the dol line naming the game's DOL")
         if words[1].lower() != dol_sha1:
-            raise ModError(mod, f"{DOL_TXT}:{n}", f"is for the DOL with SHA-1 {words[1].lower()}, "
-                                                  f"not this game's {dol_sha1}")
+            raise ModError(mod, f"{path.name}:{n}", f"is for the DOL with SHA-1 {words[1].lower()}, "
+                                                    f"not this game's {dol_sha1}")
         return
-    raise ModError(mod, DOL_TXT, "has no dol line")
+    raise ModError(mod, path.name, "has no dol line")
 
 
 def _read_mod(name: str, folder: Path, dol_sha1: str) -> Mod:
     mod = Mod(name, {})
     try:
-        parts = {e.name: e for e in _entries(folder)}
-        files = parts.get(FILES)
+        entries = _entries(folder)
+        files = _part(name, entries, FILES)
         if files is not None:
-            if not _is_dir(name, FILES, files):
-                raise ModError(name, FILES, "isn't a folder")
-            for path, host in _walk(name, folder / FILES, f"{FILES}/"):
-                _check_disc_path(name, path)
+            if not _is_dir(name, files.name, files):
+                raise ModError(name, files.name, "isn't a folder")
+            for path, host in _walk(name, Path(files.path), f"{files.name}/"):
+                _check_disc_path(name, files.name, path)
                 mod.files[path] = host
-        dol = parts.get(DOL_TXT)
+        dol = _part(name, entries, DOL_TXT)
         if dol is not None:
-            if _is_dir(name, DOL_TXT, dol):
-                raise ModError(name, DOL_TXT, "isn't a file")
-            _check_dol_line(name, folder / DOL_TXT, dol_sha1)
-            mod.dol = folder / DOL_TXT
-            mod.beside = dict(_walk(name, folder, "", (FILES, DOL_TXT)))
+            if _is_dir(name, dol.name, dol):
+                raise ModError(name, dol.name, "isn't a file")
+            mod.dol = Path(dol.path)
+            _check_dol_line(name, mod.dol, dol_sha1)
+            skip = tuple(e.name for e in (files, dol) if e is not None)
+            mod.beside = dict(_walk(name, folder, "", skip))
     except OSError as e:
         where = os.path.relpath(e.filename, folder) if e.filename else ""
         raise ModError(name, "" if where == "." else where,
