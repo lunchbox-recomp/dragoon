@@ -257,7 +257,7 @@ class MainMenuTest(unittest.TestCase):
         screen(link, bot_menus.MAIN_MENU, menu__page=0, menu__mode=0)
         run(menus, link, 400)
         self.assertEqual((menus.rounds, menus.goal), (1, CITY_TRIAL))
-        self.assertEqual(said, ["round 1: city-trial"])
+        self.assertEqual([line for line in said if line.startswith("round ")], ["round 1: city-trial"])
 
 
 class CourseTest(unittest.TestCase):
@@ -561,6 +561,7 @@ class UnconfirmedTest(unittest.TestCase):
         "Top Ride machines": (bot_menus.TOP_MACHINES, {}),
         "stadium results": (bot_menus.STADIUM_RESULTS, {}),
         "other screen": (12, {}),
+        "press cadence": (bot_menus.MOVIES[0], {}),
     }
 
     def test_each_unconfirmed_step_is_said_the_first_time_it_is_taken_and_not_again(self) -> None:
@@ -582,7 +583,17 @@ class UnconfirmedTest(unittest.TestCase):
     def test_every_unconfirmed_step_is_tested_here(self) -> None:
         self.assertEqual(set(bot_menus.UNCONFIRMED), {*self.CASES, "course cursor"})
 
-    def test_the_steps_the_routes_walk_say_nothing(self) -> None:
+    def test_the_press_cadence_is_said_with_the_first_press_and_not_with_a_wait(self) -> None:
+        cadence = f"unconfirmed step, press cadence: {bot_menus.UNCONFIRMED['press cadence']}"
+        menus, link, said = make()
+        screen(link, bot_menus.AIR_MACHINES, machine_select__port1=2)  # choosing, which is waited for
+        run(menus, link, 300)
+        self.assertNotIn(cadence, said)
+        screen(link, bot_menus.AIR_MACHINES, machine_select__port1=0)
+        run(menus, link, 100, first=300)
+        self.assertEqual(said.count(cadence), 1)
+
+    def test_the_steps_the_routes_walk_say_nothing_but_the_cadence_of_the_presses(self) -> None:
         menus, link, said = make(ports=4, modes=(CITY_TRIAL,))
         menus.course = 0
         for minor, named in ((bot_menus.MAIN_MENU, {"menu__page": 0, "menu__mode": 2}), (bot_menus.MOVIES[2], {}),
@@ -591,7 +602,8 @@ class UnconfirmedTest(unittest.TestCase):
                              (bot_menus.AIR_MACHINES, {"machine_select__port1": 0}), (bot_menus.AIR_RESULTS, {})):
             screen(link, minor, **named)
             run(menus, link, 100, first=link.frame + 1)
-        self.assertEqual(said, ["round 1: city-trial"])
+        self.assertEqual(said, ["round 1: city-trial",
+                                f"unconfirmed step, press cadence: {bot_menus.UNCONFIRMED['press cadence']}"])
 
 
 class PathTest(unittest.TestCase):

@@ -76,6 +76,8 @@ UNCONFIRMED = {
                          "RAM slot to read.",
     "stadium results": "START on a stadium's results (minor 13). The screen after it was never watched.",
     "other screen": "A on a screen scene.minor has no name for here.",
+    "press cadence": "Looks come 50 frames after a press, even one that changes the screen. The routes wait about "
+                     "300 frames there, so a press made during the change may land on the next screen.",
 }
 
 LEAVE = (  # the pause menu to End Game, as the courses routes press it
@@ -196,6 +198,8 @@ class Menus:
         if tap is None:
             self._look = frame + PLAY_CHECK
             return None
+        if tap.buttons:
+            self._unconfirmed("press cadence")
         self._tap, self._held = tap, tap.hold - 1
         self._wake = frame + tap.hold + tap.settle
         return self._pads(tap)
