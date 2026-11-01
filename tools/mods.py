@@ -52,6 +52,12 @@ SHA1 = re.compile(r"[0-9a-f]{40}")
 COMMENT = re.compile(r"(?:^|\s)#.*$")  # as dol_patch.py strips one
 TOOL_ENV = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8",
             "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
+# dol_patch.py's refusal of a list, `patches/N/dol.txt:line: reason` or without the line.
+LIST_SAID = re.compile(r"(patches/[0-9]+/)dol\.txt((?::[0-9]+)?): (.+)", re.S)
+# The reasons disc_overlay.py gives after a path under its files folder.
+OVERLAY_REASONS = ("is a directory on the disc, not a file", "is a file on the disc, not a directory",
+                   "is a symbolic link", "has a name that isn't ASCII", "isn't a file or a folder")
+CASE_TWINS = re.compile(r"matches .+ on the disc by case alone", re.S)
 
 
 class ModError(ValueError):
@@ -259,28 +265,41 @@ def _run(python: Path, tool: Path, args: list[str], cwd: Path) -> tuple[int, str
 
 
 def _blame_list(said: str, lists: list[tuple[str, str]]) -> Optional[ModError]:
-    """dol_patch.py's `file:line: reason` as a ModError naming the mod, with every list's clone
-    named by its mod. None when it names no list."""
-    for prefix, name in lists:
-        if said.startswith(prefix) and ": " in said:
-            where, why = said[len(prefix):].split(": ", 1)
-            for other, other_name in lists:
-                why = why.replace(other, f"{other_name}/")
-            return ModError(name, where, why)
-    return None
+    """dol_patch.py's refusal of a list as a ModError naming the list's mod, with every list's
+    clone named by its mod. None when it isn't a refusal of one of the lists."""
+    names = dict(lists)
+    m = LIST_SAID.fullmatch(said)
+    if not m or m[1] not in names:
+        return None
+    why = m[3]
+    for other, other_name in lists:
+        why = why.replace(other, f"{other_name}/")
+    return ModError(names[m[1]], DOL_TXT + m[2], why)
+
+
+def _disc_paths(mod: Mod) -> list[str]:
+    """Every file under the mod's files/ and every folder above one, by disc path."""
+    paths = set()
+    for disc in mod.files:
+        parts = disc.split("/")
+        paths.update("/".join(parts[:i]) for i in range(1, len(parts) + 1))
+    return sorted(paths)
 
 
 def _blame_file(said: str, mods: list[Mod]) -> Optional[ModError]:
-    """disc_overlay.py's refusal as a ModError naming the first mod with a file at or under the
-    path it starts with. None when it starts with no such path."""
-    text = said[len("error: "):] if said.startswith("error: ") else said
+    """disc_overlay.py's `error: <path> <reason>` for a path under its files folder, as a
+    ModError naming the first mod that holds that file or folder. Paths compare ignoring case,
+    as the clones' volume does. None for any other reason or a path no mod holds."""
+    if not said.startswith("error: "):
+        return None
+    text = said[len("error: "):]
     for mod in mods:
-        for disc in sorted(mod.files):
-            parts = disc.split("/")
-            for i in range(len(parts), 0, -1):
-                path = "/".join(parts[:i])
-                if text.lower().startswith(path.lower() + " "):
-                    return ModError(mod.name, f"{FILES}/{path}", text[len(path) + 1:])
+        for path in _disc_paths(mod):
+            if not text.lower().startswith(path.lower() + " "):
+                continue
+            why = text[len(path) + 1:]
+            if why in OVERLAY_REASONS or CASE_TWINS.fullmatch(why):
+                return ModError(mod.name, f"{FILES}/{path}", why)
     return None
 
 
