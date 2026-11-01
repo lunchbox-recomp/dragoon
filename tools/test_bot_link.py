@@ -49,6 +49,7 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #   "partial_data"   answers the first read with half a line and exits
 #   "bad_data"       answers a read with what isn't a data line
 #   "mute_reads"     never answers a read, and waits on for the bot's next line
+#   "slow_reads"     seconds to wait before it answers each read
 #   "ignore_hangup"  waits instead of exiting when the bot hangs up
 #   "moving"         makes RAM change from frame to frame
 #   "kind"           what a reset says it is: "restart" (the default), "hot reset" or "shutdown"
@@ -184,6 +185,8 @@ def step(frame):
                 continue
             if plan.get("mute_reads"):
                 continue
+            if plan.get("slow_reads"):
+                time.sleep(plan["slow_reads"])
             conn.sendall(b"data " + ram(addr, length, frame).hex().encode() + b"\n")
         elif words[0] == "pad":
             port = int(words[1])
@@ -805,8 +808,15 @@ class OutcomeTest(FakeProbeCase):
             time.sleep(1.2)
             return read_one(link)
 
+        began = time.monotonic()
         outcome = self.go(late, seconds=1)
+        self.assertLess(time.monotonic() - began, 8)
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.TIME_LIMIT, 0, 0))
+
+    def test_a_read_answered_late_but_within_the_hang_is_no_hang(self):
+        self.plan([0], slow_reads=0.5)
+        outcome = self.go(read_one, hang=3)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 1))
 
     def test_the_time_the_bot_takes_before_a_read_is_not_the_games_hang(self):
         self.plan([0, 1, 2])
