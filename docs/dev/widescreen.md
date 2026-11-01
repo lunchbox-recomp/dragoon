@@ -331,8 +331,9 @@ itself after it, such as a stripe straight through GX, stretches as a callback o
 does.
 
 A tree in a rect's left third anchors to its left edge, one in its right third to its right
-edge and one between to its middle. A tree no joint has drawn yet goes by its root, which only
-happens the frame it first shows.
+edge and one between to its middle. A tree no joint has drawn yet goes by its root. That
+happens the frame it first shows, and again when an element scaled to nothing reappears, since
+a joint scaled to zero has an all-zero matrix.
 
 A tree keeps the mark it chose for as long as it shows each frame, as a PC port keeps one edge
 for each HUD element. Chosen again every frame, an element moving 2 pixels across a third's line
@@ -403,8 +404,9 @@ loads of 4.2 to 5.0.
 - In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide. At
   3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
   table draws them.
-- A HUD element that first shows goes by its root's place for that frame, which can anchor it
-  to the wrong edge. No dump caught one.
+- A HUD element that first shows, or reappears after being scaled to nothing, goes by its
+  root's place until its joints have drawn, which can anchor it to the wrong edge. No dump caught
+  one.
 - An element that first draws in one third and then slides across the screen keeps that
   third's mark while it shows. No dump caught one.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
