@@ -36,8 +36,6 @@ from testutil import write_file
 
 TOOLS = Path(__file__).resolve().parent
 PICTURE_ADDR = 0x80001000
-SHADERS_LINE = ("[shaders] 70 programs from cache (0 from binaries, 70 compiled, 0 of them from the game's key list) "
-                "in {} ms")
 
 FAKE_ENGINE = r'''#!@PYTHON@
 import atexit, json, os, signal, socket, struct, sys, time

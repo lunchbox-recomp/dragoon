@@ -694,6 +694,14 @@ class OutcomeTest(FakeProbeCase):
         self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.HANG, 2))
 
+    def test_a_reset_line_is_a_restart_or_a_hot_reset_and_not_a_shutdown(self):
+        for kind, expected in (("restart", True), ("hot reset", True), ("shutdown", False)):
+            with self.subTest(kind=kind):
+                self.assertIs(bot_link.is_reset(f"[reset] the game reset the console ({kind}, code 0)"), expected)
+        for line in ("", "[session] /a/session", "  [reset] indented (restart, code 0)", "the [reset] (restart, code 0)"):
+            with self.subTest(line=line):
+                self.assertIs(bot_link.is_reset(line), False)
+
     def test_resets_are_counted_whatever_follows_them_and_a_shutdown_is_not_one(self):
         log = self.root / "stdout.txt"
         self.assertEqual(bot_link._reset_count(log), 0)  # no file

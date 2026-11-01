@@ -375,6 +375,12 @@ def _last_crash(text: str) -> str | None:
     return next((line for line in reversed(text.splitlines()) if session_log.FATAL.match(line)), None)
 
 
+def is_reset(line: str) -> bool:
+    """Whether LINE is the `[reset]` line of a restart or a hot reset, after which the game starts
+    again. A shutdown's isn't one, since the game doesn't start again."""
+    return bool(session_log.RESET.match(line)) and session_log.SHUTDOWN not in line
+
+
 def _session_lines(log: Path) -> tuple[str | None, str | None]:
     """What the game's stdout.txt says of its last process's session: the directory in its last
     `[session] DIR` line, and the `[reset]` line of a restart or hot reset that came after it.
@@ -387,7 +393,7 @@ def _session_lines(log: Path) -> tuple[str | None, str | None]:
                 line = line.rstrip("\n")
                 if m := session_log.SESSION.match(line):
                     session, reset = m[1], None
-                elif session_log.RESET.match(line) and session_log.SHUTDOWN not in line:
+                elif is_reset(line):
                     reset = line
     except OSError:
         pass
@@ -399,7 +405,7 @@ def _reset_count(log: Path) -> int:
     them. A shutdown isn't one, since the game doesn't start again."""
     try:
         with open(log, errors="replace") as f:
-            return sum(1 for line in f if session_log.RESET.match(line) and session_log.SHUTDOWN not in line)
+            return sum(1 for line in f if is_reset(line))
     except OSError:
         return 0
 

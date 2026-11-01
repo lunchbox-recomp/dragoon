@@ -56,7 +56,7 @@ That plays the menu route with a bot that presses nothing. It prints the four by
 
 Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, hang=)`. `bot(link)` gets a `Link` whose `frame` is the last frame number and whose `read(addr, length)` returns 1 to 256 bytes of RAM. It returns `{port: Pad(...)}`, and a port it leaves out stays out, so the engine stops the game and names the port.
 
-`every=None` dumps no frames, since probe.sh then gets an interval no run reaches. `split_settings`, `add_play_arguments`, `add_run_arguments`, `run_options` and `print_outcome` give another tool this command's `--` split, its run arguments and its outcome lines, as ram_peek.py does. `run_directory(name)` is the `build/probe/NAME/` a run of NAME keeps its output in.
+`every=None` dumps no frames, since probe.sh then gets an interval no run reaches. `split_settings`, `add_play_arguments`, `add_run_arguments`, `run_options` and `print_outcome` give another tool this command's `--` split, its run arguments and its outcome lines, as ram_peek.py does. `run_directory(name)` is the `build/probe/NAME/` a run of NAME keeps its output in, and `is_reset(line)` says whether a `[reset]` line is a restart or a hot reset, which a shutdown isn't.
 
 `Pad()` is a pad at rest and `BUTTONS` holds the PADStatus bits. A `Pad` value the engine would refuse is a `ValueError`, so a bot that computes one raises.
 

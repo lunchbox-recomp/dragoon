@@ -14,7 +14,6 @@ function it's given, which by default reads `link.picture`. A Link has none, so 
 from __future__ import annotations
 
 import os
-import re
 from collections import deque
 from collections.abc import Callable, Hashable, Mapping
 from pathlib import Path
@@ -22,14 +21,14 @@ from typing import Optional
 
 import session_log
 import stream_voices
-from bot_link import Link, Pad
+import warm_shaders
+from bot_link import Link, Pad, is_reset
 
 FPS = 60
 FROZEN_SECONDS = 10  # game seconds the picture may stay the same while the bots' input changes
 FROZEN_CHANGES = 2  # and the frames in those seconds the input has to change on, a press and its release
 LOG_EVERY = 60  # frames between reads of the game's log
 LOG_CHUNK = 1 << 23  # the most one read takes, so a log that grew fast is taken in pieces
-SHADER_LINE = re.compile(r"^\[shaders\] (\d+) programs from cache .* in (\d+) ms")
 
 FROZEN = "frozen_picture"
 MUSIC = "music_cut"
@@ -128,10 +127,10 @@ class Resets:
         self._waiting = False
 
     def add(self, line: str) -> None:
-        if session_log.RESET.match(line) and session_log.SHUTDOWN not in line:
+        if is_reset(line):
             self.count += 1
             self._waiting = self.shaders is None
-        elif self._waiting and (m := SHADER_LINE.match(line)):
+        elif self._waiting and (m := warm_shaders.BOOT_LINE.match(line)):
             self.shaders, self.shaders_ms, self._waiting = line, int(m[2]), False
             if self._on_shaders is not None:
                 self._on_shaders(line, int(m[2]))
