@@ -21,8 +21,9 @@ samples on blocks that still run an effect, so away from a stream address a voic
 flag and lost it isn't called early. A "set" that puts cur on a new loop address gives the block
 a new sample. That ends the voice that ran there as the game's doing and starts another, as when
 the game ended its music in two soaks by stopping one voice of the pair and giving the other an
-effect's sample in the same list. A move on a voice that never had either flag carries into the
-new one. A failure outside the stream addresses with no "set" between
+effect's sample in the same list. That holds while the other voice of the pair plays on, since a
+"set" is the game's own write to the block. A move on a voice that never had either flag carries
+into the new one. A failure outside the stream addresses with no "set" between
 its "run" and its "end" shows only in the count of other voices. Each early row names the rule,
 the list and the time (a list is 5 ms), and comes last, whether or not the voice ever had a
 flag. The other voices the mixer ended, which never had stream=1 or looping=1, are counted and

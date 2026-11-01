@@ -424,6 +424,22 @@ class NewSampleTest(unittest.TestCase):
         tracker.add(state(20, "set", looping=1, stream=0, loop=MUSIC, end=MUSIC_END, cur=MUSIC))
         self.assertEqual([(v.start, v.how) for v in tracker.voices], [(10, "still running")])
 
+    def test_a_music_voice_the_game_gives_an_effect_while_its_pair_plays_on_is_the_games_stop(self):
+        # Soak 544282's lines without the partner's stop. A set is the game's own write to the
+        # block, so re-pointing one voice of the pair is the game's choice, and a fault that cuts
+        # the music shows as a mixer end with no set.
+        voices, _, others = stream_voices.parse(text(
+            state(601347, "run", looping=1, stream=0, loop="01878A02", end="018889FF", cur="01878A02"),
+            state(601347, "run", pb=OTHER, looping=1, stream=0, loop="01868A02", end="018789FF", cur="01868A02"),
+            state(607919, "loop", looping=1, stream=0, loop="01897DC2", end="018871FF", cur="01897DC7"),
+            state(607921, "set", looping=1, stream=0, loop="01897DC2", end="018A717F", cur="01897F0F"),
+            state(607923, "set", looping=1, stream=0, loop="01857DC2", end="018A717F", cur="0189807D"),
+            state(608157, "set", looping=0, stream=0, loop="00BEC7C2", end="00BED1EC", cur="00BEC7C2"),
+            state(608185, "end", run=0, looping=0, stream=0, loop="00BEC7C2", end="00BED1EC", cur="00BED1ED")))
+        self.assertEqual([(v.pb, v.start, v.how, v.end_list) for v in voices],
+                         [(PB, 601347, self.GAME, 608157), (OTHER, 601347, "still running", None)])
+        self.assertEqual(others, 1)
+
     def test_a_voice_moved_with_no_flag_keeps_the_move_through_a_new_sample_and_its_end_is_early(self):
         lines = [state(100, "run", pb="80579650", looping=0, stream=0, loop="00D00000", end="00D0FFFF", cur="00D00000"),
                  state(150, "set", pb="80579650", looping=0, stream=0, loop="00D10000", end="00D1FFFF", cur="00D0F000"),
