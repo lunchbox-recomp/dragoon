@@ -189,7 +189,7 @@ A stop keeps the run's input log and writes `bot.json` beside it, in the session
 
 The commits are the checkout's HEAD, which may not be what was built. `engine_built` is the engine commit the game's `session.json` says it was built from, with `-dirty` for a tree with changes.
 
-A music cut is read from the log, and the log can hold a console reset after it. The last process's replay can't show that cut, so the stop and `bot.json` say so (`before_reset`) and name the input log and replay line of the process it happened in, with no frame to give.
+A music cut is read from the log, and the log can hold a console reset after it. The last process's replay can't show that cut, so the stop and `bot.json` say so (`before_reset`) and name the input log and replay line of the process it happened in. That replay ends with `--exit-after` at the frame of the `# end` line closing the log, and has none when the line is missing.
 
 The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The line carries the settings after `--`, so the replay runs the run's build and disc with the run's switches. Their `--disc` and `--bin` paths are made absolute, since probe.sh reads a relative one from where it was run, and `--pads` plugs in the ports `--ports` drove.
 

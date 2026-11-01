@@ -185,7 +185,9 @@ def report(stop: Stop, outcome: bot_link.Outcome, *, probe: Path, name: str, arg
     replay = None
     if log is not None:
         # The last frame sent before a hang is not one a replay is known to reach, so it isn't a stopping point.
-        replay = bot_record.replay_line(probe, name, log, frame, [*SOAK_SETTINGS, *settings],
+        # A stop with a reset after it has no frame of its own, so its replay runs to where its process ended.
+        until = bot_link.ended_at(log) if stop.before_reset else frame
+        replay = bot_record.replay_line(probe, name, log, until, [*SOAK_SETTINGS, *settings],
                                         exit_after=stop.kind != HANG, pads=args.ports)
     arguments = {"seed": args.seed, "minutes": args.minutes, "modes": args.modes, "ports": args.ports,
                  "round_seconds": args.round, "stuck_seconds": args.stuck, "hang": args.hang,

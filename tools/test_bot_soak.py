@@ -456,12 +456,38 @@ class ResetTest(SoakCase):
         log = Path(data["input_log"])
         self.assertEqual(log, self.run_dir(out) / "session" / "inputs")  # the first process's, not run-2's
         self.assertEqual(self.bot_json_path(out), log.parent / "bot.json")
-        self.assertEqual(shlex.split(data["replay"])[6:], [f"--replay={log}"])  # and no --exit-after to give
+        ended = int(re.search(r"(?m)^# end \d+ (\d+)$", (log / "inputs.txt").read_text())[1])  # type: ignore[index]
+        self.assertGreaterEqual(ended, 2010)
+        # The stop has no frame of its own, so the replay runs to where its process ended, at the reset.
+        self.assertEqual(shlex.split(data["replay"])[6:], [f"--replay={log}", f"--exit-after={ended}"])
         self.assertIn("  a console reset came after it, so the last process's replay can't show it; the input log "
                       "and replay below are for the process it happened in", out)
         self.assertIn(f"  input log {log}", out)
         self.assertNotRegex(out, r"(?m)^  at frame")
         self.assertNotIn("--exit-after=0", out)
+
+    def test_a_cut_before_a_reset_in_a_process_whose_log_has_no_end_line_has_no_exit_after(self) -> None:
+        self.plan(race=100000, events=[at([["say", axv(100, "run")], ["say", axv(120, "end")],
+                                           ["reset", {"shaders_ms": 2107}]], frame=2010)])
+        ap = bot_soak.parser()
+        args = ap.parse_args(["--probe", str(self.probe), "--seed", SEED, "--minutes", "1", "--modes", "air-ride"])
+        said: list[str] = []
+
+        def cut_short(name, seconds, bot, **kw):
+            outcome = bot_link.run(name, seconds, bot, **kw)
+            inputs = outcome.run_dir / "session" / "inputs" / "inputs.txt"  # the first process's
+            inputs.write_text("".join(t for t in inputs.read_text().splitlines(keepends=True)
+                                      if not t.startswith("# end")))
+            return outcome
+
+        self.assertEqual(bot_soak.soak(args, [], out=said.append, err=said.append, run=cut_short), 1, said)
+        out = "\n".join(said)
+        data = self.bot_json(out)
+        log = Path(data["input_log"])
+        self.assertEqual(log, self.run_dir(out) / "session" / "inputs")
+        self.assertNotIn("# end", (log / "inputs.txt").read_text())
+        self.assertEqual(shlex.split(data["replay"])[6:], [f"--replay={log}"])
+        self.assertNotIn("--exit-after", out)
 
     def test_a_cut_before_a_reset_in_a_process_that_kept_no_input_log_names_none(self) -> None:
         self.plan(race=100000, events=[at([["say", axv(100, "run")], ["say", axv(120, "end")],

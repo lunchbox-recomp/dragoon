@@ -603,6 +603,18 @@ class OutcomeTest(FakeProbeCase):
         self.assertIsNone(bot_link.session_inputs(self.root, "nowhere"))
         self.assertIsNone(bot_link.session_inputs(self.root, None))
 
+    def test_the_frame_an_input_log_ended_at_is_its_last_end_lines_second_number(self):
+        inputs = self.root / "s" / "inputs"
+        inputs.mkdir(parents=True)
+        self.assertIsNone(bot_link.ended_at(inputs))  # no inputs.txt
+        write_file(inputs, "inputs.txt", "# gcn-recomp input log v5\n0 1 2\n")
+        self.assertIsNone(bot_link.ended_at(inputs))  # a game that died leaves no end line
+        write_file(inputs, "inputs.txt", "# gcn-recomp input log v5\n0 1 2\n# end 9 1500\n")
+        self.assertEqual(bot_link.ended_at(inputs), 1500)
+        write_file(inputs, "inputs.txt", "# end 3 100\n# end 4 2500\n")
+        self.assertEqual(bot_link.ended_at(inputs), 2500)
+        self.assertIsNone(bot_link.ended_at(self.root / "nowhere"))
+
     def test_a_restart_that_never_began_a_session_is_game_died_and_the_first_log_is_not_its_end(self):
         run_dir = self.root / "run"
         (run_dir / "session" / "inputs").mkdir(parents=True)

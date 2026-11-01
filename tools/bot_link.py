@@ -420,6 +420,14 @@ def session_inputs(run_dir: Path, session: str | None) -> Path | None:
     return inputs if (inputs / "inputs.txt").is_file() else None
 
 
+def ended_at(inputs: Path) -> int | None:
+    """The frame the `# end POLL FRAME` line that closes the input log in INPUTS (an inputs/
+    directory) gives, or None when there is no such line, as when the game died. The engine
+    writes one on every way out it chooses, and a reset is one."""
+    found = END_LINE.findall(_tail(inputs / "inputs.txt", LOG_TAIL))
+    return int(found[-1][1]) if found else None
+
+
 def _game_verdict(run_dir: Path, starts: int, probe_err: str, input_log: Path | None,
                   settings: Sequence[str], restarted: str | None = None,
                   timed_out: bool = False) -> tuple[str, str]:
@@ -453,10 +461,9 @@ def _game_verdict(run_dir: Path, starts: int, probe_err: str, input_log: Path | 
         return NEVER_LINKED, probe_err.strip() or (lines[-1] if lines else "the game ended before it connected")
     if restarted is not None:
         return GAME_DIED, f"{restarted}, and no session began after it"
-    end = END_LINE.findall(_tail(input_log / "inputs.txt", LOG_TAIL)) if input_log is not None else []
-    if not end:
+    frame = ended_at(input_log) if input_log is not None else None
+    if frame is None:
         return GAME_DIED, lines[-1] if lines else "the game wrote nothing"
-    frame = int(end[-1][1])
     shutdown = next((t for t in reversed(lines) if session_log.RESET.match(t) and session_log.SHUTDOWN in t), None)
     if shutdown is not None:
         return SHUTDOWN, shutdown
