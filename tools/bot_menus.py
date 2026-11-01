@@ -68,8 +68,6 @@ BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to it
 
 UNCONFIRMED = {
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
-    "Top Ride machines": "A and START in turn on Top Ride's machine select (minor 9), which has no "
-                         "RAM slot to read.",
     "stadium results": "START on a stadium's results (minor 13). The screen after it was never watched.",
     "stadium pause": "START, DOWN and A on a stadium's pause menu, for End Game. Only Drag Race 3's has been "
                      "watched.",
@@ -362,7 +360,6 @@ class Menus:
         return Tap(BUTTONS["A"] if port in (0, 1) else 0)
 
     def _top_machines(self, link: Link) -> Tap:
-        self._unconfirmed("Top Ride machines")
         if self._visits % 2 == 0:
             return Tap(BUTTONS["A"])
         return Tap(BUTTONS["START"], settle=START_WAIT)

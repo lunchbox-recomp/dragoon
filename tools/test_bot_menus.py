@@ -351,7 +351,7 @@ class MachineTest(unittest.TestCase):
         menus, link, said = make()
         screen(link, bot_menus.TOP_MACHINES)
         self.assertEqual([b for _, b in presses(run(menus, link, 1500))[:3]], [{1: A}, {1: START}, {1: A}])
-        self.assertEqual(len([line for line in said if "Top Ride machines" in line]), 1)
+        self.assertEqual([line for line in said if line.startswith("unconfirmed step") and "cadence" not in line], [])
 
     def test_city_trials_player_select_has_each_port_in_that_is_not(self) -> None:
         menus, link, _ = make(ports=4)
@@ -616,7 +616,6 @@ class RestartTest(unittest.TestCase):
 class UnconfirmedTest(unittest.TestCase):
     CASES = {
         "back to the mode select": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 2}),
-        "Top Ride machines": (bot_menus.TOP_MACHINES, {}),
         "stadium results": (bot_menus.STADIUM_RESULTS, {}),
         "other screen": (12, {}),
         "press cadence": (bot_menus.MOVIES[0], {}),
