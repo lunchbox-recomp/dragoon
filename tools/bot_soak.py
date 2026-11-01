@@ -21,7 +21,8 @@ It stops at the first of these:
   the picture's hash stays the same for 10 s of game time while the race bots' input changes
   a music stream ends early (stream_voices.py's rule, on the run's [axv] lines)
   a menu screen stays up for --stuck seconds of game time (120 by default, 30 at least), or a race or the
-  city for 600, or the menus go on for five times --stuck with no race or city
+  city for 600 (a minute past --round when that's more), or the menus go on for five times
+  --stuck with no race or city
 
 The frozen-picture check needs a picture hash the link doesn't give yet, so it doesn't run, and
 the soak says so. A stop keeps the run's input log, writes bot.json beside it with the seed, the

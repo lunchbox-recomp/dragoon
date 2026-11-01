@@ -61,6 +61,7 @@ RETRY = 600  # frames a try at leaving a race gets before the walker tries again
 ROUND_SECONDS = 120  # game seconds a race lasts before the walker leaves it
 STUCK_SECONDS = 120  # game seconds a menu screen may stay up
 PLAY_SECONDS = 600  # and a race, the city or a stadium
+LEAVE_SECONDS = 60  # game seconds past a round's end the walker has to leave its race, where that is past PLAY_SECONDS
 CYCLE_STUCKS = 5  # and the menus together may go on without a race or the city, this many screen limits
 TRAIL = 8  # screens a stop for that names, the ones before the screen it stopped on
 CLIMB_UPS = 3  # presses of UP on a mode's menu that leave menu.item alone before the walker presses A

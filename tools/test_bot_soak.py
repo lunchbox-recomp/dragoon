@@ -110,6 +110,16 @@ class CleanRunTest(SoakCase):
         self.assertEqual(record["visited"][:7], [38, 0, 2, 23, 6, 8, 18])
         self.assertTrue(self.lines(out, "frame 300: round 1: air-ride"))
 
+    def test_a_round_past_the_race_limit_runs_its_length_and_is_left_with_no_stop(self) -> None:
+        self.plan(race=100000)
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride", "--round", "700",
+                                   settings=("--exit-after=48000",))
+        self.assertEqual((code, err), (0, ""), out)
+        self.assertIn("ended on exit_after", out)
+        self.assertRegex(out, r"(?m)^frame \d+: leaving air-ride after 70\d s of game time$")
+        record = self.record(out)
+        self.assertEqual(record["visited"][:8], [38, 0, 2, 23, 6, 8, 18, 2])  # the race, and then the menu
+
     def test_four_ports_play_a_four_player_city_trial(self) -> None:
         self.plan(race=100000)
         code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "city-trial", "--ports", "4",

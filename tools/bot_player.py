@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from typing import Callable, Optional
 
 from bot_link import Link, Pad
-from bot_menus import Menus, Schedule
+from bot_menus import LEAVE_SECONDS, PLAY_SECONDS, Menus, Schedule
 from bot_walk import Walk
 from bot_watch import Frozen, LogWatch
 
@@ -28,15 +28,18 @@ def count(n: int, noun: str) -> str:
 
 class Player:
     """Plays PORTS controllers from SEED through the MODES. ROUND_SECONDS and STUCK_SECONDS are
-    the menu walker's (bot_menus.Menus). FROZEN and LOG are the watchers, and SAY takes the lines
+    the menu walker's (bot_menus.Menus), and a race may last until LEAVE_SECONDS past the round
+    when that is later than PLAY_SECONDS. FROZEN and LOG are the watchers, and SAY takes the lines
     it prints, each starting with the frame it was said at. A line of progress comes every
     BEAT_SECONDS of CLOCK's time, None for never."""
 
     def __init__(self, seed: int, ports: int, modes: Sequence[str], *, round_seconds: Optional[float],
                  stuck_seconds: float, frozen: Frozen, log: LogWatch, say: Callable[[str], None],
                  beat_seconds: Optional[float] = BEAT_SECONDS, clock: Callable[[], float] = time.monotonic) -> None:
-        self.menus = Menus(ports, Schedule(seed, modes), round_seconds=round_seconds,
-                           stuck_seconds=stuck_seconds, say=self._said)
+        # A race may last its round and the time to leave it, or the usual limit when that is more.
+        play_seconds = PLAY_SECONDS if round_seconds is None else max(PLAY_SECONDS, round_seconds + LEAVE_SECONDS)
+        self.menus = Menus(ports, Schedule(seed, modes), round_seconds=round_seconds, stuck_seconds=stuck_seconds,
+                           play_seconds=play_seconds, say=self._said)
         self.walk = Walk(seed, ports)
         self.frozen = frozen
         self.log = log

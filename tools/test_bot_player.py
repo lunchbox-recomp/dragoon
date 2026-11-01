@@ -117,6 +117,32 @@ class PlayerTest(unittest.TestCase):
                 link.frame = frame
                 player(link)
 
+    def race_that_never_ends(self, player: Player, seconds: int) -> int:
+        """Play a link left on a race for SECONDS of game time, and the frame it was stuck at."""
+        link = FakeLink()
+        link.set("scene.minor", bot_menus.RACE)
+        for frame in range(seconds * 60):
+            link.frame = frame
+            player(link)
+        return link.frame
+
+    def test_a_race_that_never_leaves_is_stuck_a_minute_after_a_round_longer_than_the_race_limit(self) -> None:
+        player, _, _, _ = make(round_seconds=700)
+        with self.assertRaisesRegex(Stuck, r"past the 760 s allowed$") as caught:
+            self.race_that_never_ends(player, 800)
+        self.assertRegex(str(caught.exception), r"has stayed up for 76\d s")
+
+    def test_a_race_in_a_round_longer_than_the_race_limit_is_not_stuck_before_the_round_is_up(self) -> None:
+        player, _, _, _ = make(round_seconds=700)
+        self.assertEqual(self.race_that_never_ends(player, 759), 759 * 60 - 1)
+
+    def test_the_race_limit_follows_the_round_only_past_the_point_where_a_minute_more_is_over_it(self) -> None:
+        for round_seconds, allowed in ((None, 600), (120, 600), (540, 600), (541, 601), (3600, 3660)):
+            with self.subTest(round_seconds=round_seconds):
+                player, _, _, _ = make(round_seconds=round_seconds)
+                with self.assertRaisesRegex(Stuck, rf"past the {allowed} s allowed$"):
+                    self.race_that_never_ends(player, allowed + 30)
+
     def test_a_watcher_that_raises_ends_the_frame(self) -> None:
         player, _, _, _ = make(frozen=FrozenStub(raises_at=7))
         link = FakeLink()

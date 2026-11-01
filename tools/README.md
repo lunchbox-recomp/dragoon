@@ -159,7 +159,7 @@ The paths come from the routes in `tests/routes/` and the values in kar_ram.json
 | Back to the menus | A race is left through the pause menu with START, DOWN, DOWN and A once `round_seconds` of game time are up. A race that ends first goes through its results with START. The city goes through its stats and card with A, then the stadium, then its results with START | START on a stadium's results, whose next screen was never watched |
 | Most presses | 5 frames down and 45 up, so the screen is looked at again 50 frames after a press. The title waits 100 frames and a race's START 305. The pause menu waits 100 after START and 305 after its last A | The routes wait about 300 frames after any press that changes the screen. A press made during the change may land on the next screen |
 
-The walker says `unconfirmed step` the first time it takes each step in the right-hand column, and `screen N isn't in kar_ram.json` for a screen the table doesn't name, which it presses A on. A screen that stays up past `stuck_seconds` of game time (600 s for a race) raises `Stuck`, and so do the menus going on for five times that with no race or city, as when two screens take turns. After a console reset the walker forgets the press under way and the screen, and starts over from the boot.
+The walker says `unconfirmed step` the first time it takes each step in the right-hand column, and `screen N isn't in kar_ram.json` for a screen the table doesn't name, which it presses A on. A screen that stays up past `stuck_seconds` of game time (600 s for a race, or `round_seconds` and 60 when that's more) raises `Stuck`, and so do the menus going on for five times that with no race or city, as when two screens take turns. After a console reset the walker forgets the press under way and the screen, and starts over from the boot.
 
 ## bot_soak.py
 
@@ -179,7 +179,7 @@ It stops at the first of these.
 - The game sends no frame for `--hang` seconds of wall time, 30 by default.
 - The picture's hash stays the same for 10 s of game time while the race bots' input changes.
 - A music stream ends early, by stream_voices.py's rule on the run's `[axv]` lines.
-- A menu screen stays up for `--stuck` seconds of game time, 120 by default and 30 at least, or a race or the city for 600, or the menus go on for five times `--stuck` with no race or city.
+- A menu screen stays up for `--stuck` seconds of game time, 120 by default and 30 at least, or a race or the city for 600 (or `--round` and 60 when that's more), or the menus go on for five times `--stuck` with no race or city.
 
 A console reset rebuilds the shader cache before the bot connects again, and that time counts against the hang limit. The soak keeps the first reset's `[shaders] ... in Z ms` line, and warns when Z reaches two thirds of the limit. `--hang` raises the limit for the next run, since a run can't change it once it has started.
 
