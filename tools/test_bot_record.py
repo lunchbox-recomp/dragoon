@@ -117,6 +117,22 @@ class ReplayLineTest(unittest.TestCase):
         self.assertEqual((shlex.split(line)[2], len(shlex.split(line))), ("3600", 6))
         self.assertNotIn("--exit-after", line)
 
+    def test_the_runs_settings_go_in_the_line_before_the_replay_without_the_ones_the_soak_sets(self) -> None:
+        settings = ["GCN_AXVOICES=1", "--bin=/x/build/dragoon", "DRAGOON_CENSUS=1", "GCN_SESSION=/s", "--pads=2",
+                    "--exit-after=500", "GCN_BOT=/b.sock", "--disc=/my disc.iso"]
+        line = bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, settings)
+        self.assertEqual(shlex.split(line), ["/p", "replay-n", "61", "", "60", "--bin=/x/build/dragoon",
+                                             "DRAGOON_CENSUS=1", "--disc=/my disc.iso", "--replay=/i",
+                                             "--exit-after=10"])
+
+    def test_a_setting_with_a_space_is_quoted_in_the_line(self) -> None:
+        line = bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, ["--disc=/my disc.iso"])
+        self.assertIn("'--disc=/my disc.iso'", line)
+
+    def test_no_settings_leave_the_line_as_it_was(self) -> None:
+        self.assertEqual(bot_record.replay_line(Path("/p"), "n", Path("/i"), 10),
+                         bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, []))
+
     def test_a_replay_can_leave_the_exit_after_out_and_keeps_the_seconds_for_the_frames(self) -> None:
         line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), 4000, exit_after=False))
         self.assertEqual(line, ["/p", "replay-n", "127", "", "60", "--replay=/i"])

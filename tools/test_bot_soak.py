@@ -322,6 +322,14 @@ class StopTest(SoakCase):
         self.assertEqual(words[3:6], ["", "60", f"--replay={data['input_log']}"])
         self.assertEqual(words[6], f"--exit-after={data['stop']['frame']}")
 
+    def test_the_replay_line_carries_the_runs_settings_but_not_the_ones_the_soak_sets(self) -> None:
+        out, data = self.stop([at([["panic"]], race=50)], settings=("--bin=/x/build/dragoon", "DRAGOON_CENSUS=1"))
+        words = shlex.split(data["replay"])
+        self.assertEqual(words[5:], ["--bin=/x/build/dragoon", "DRAGOON_CENSUS=1", f"--replay={data['input_log']}",
+                                     f"--exit-after={data['stop']['frame']}"])
+        for left_out in ("GCN_AXVOICES", "GCN_SESSION", "GCN_BOT", "--pads"):
+            self.assertNotIn(left_out, data["replay"])
+
     def test_the_stop_prints_where_and_when_it_was(self) -> None:
         out, data = self.stop([at([["panic"]], race=50)])
         frame = data["stop"]["frame"]

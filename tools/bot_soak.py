@@ -56,6 +56,7 @@ from bot_watch import Detected, Frozen, LogWatch, Picture, engine_picture
 MINUTES = 10
 HANG_SECONDS = 30
 SEED_RANGE = 1_000_000
+SOAK_SETTINGS = ["GCN_AXVOICES=1"]  # what the soak sets before the user's settings
 
 
 def modes_arg(text: str) -> list[str]:
@@ -125,7 +126,7 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
         f"{count(args.ports, 'port')}, round {args.round:g} s, stuck {args.stuck:g} s, hang {args.hang:g} s")
     began = time.monotonic()
     try:
-        outcome = run(name, seconds, player, pads=args.ports, every=None, settings=["GCN_AXVOICES=1", *settings],
+        outcome = run(name, seconds, player, pads=args.ports, every=None, settings=[*SOAK_SETTINGS, *settings],
                       hang=args.hang, probe=probe)
     except (ValueError, bot_link.LinkSetupError) as e:
         err(f"bot_soak.py: {e}")
@@ -173,7 +174,8 @@ def report(stop: Stop, outcome: bot_link.Outcome, *, probe: Path, name: str, arg
     replay = None
     if log is not None:
         # The last frame sent before a hang is not one a replay is known to reach, so it isn't a stopping point.
-        replay = bot_record.replay_line(probe, name, log, frame, exit_after=stop.kind != HANG)
+        replay = bot_record.replay_line(probe, name, log, frame, [*SOAK_SETTINGS, *settings],
+                                        exit_after=stop.kind != HANG)
     arguments = {"seed": args.seed, "minutes": args.minutes, "modes": args.modes, "ports": args.ports,
                  "round_seconds": args.round, "stuck_seconds": args.stuck, "hang": args.hang,
                  "settings": settings}

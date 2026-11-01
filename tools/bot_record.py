@@ -14,13 +14,16 @@ import shlex
 import subprocess
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 import source_info
 from bot_stop import Stop
 from bot_watch import Resets
 
 RECORD = "bot.json"
+# The settings of a run that its replay doesn't take: the voice log the soak turns on, the session
+# and the link the run makes, the ports the bot drove, and the frame it quit after.
+NOT_REPLAYED = ("GCN_AXVOICES", "GCN_SESSION", "GCN_BOT", "--pads", "--exit-after")
 
 
 def new_name(seed: int, now: float, taken: Callable[[str], bool]) -> str:
@@ -59,14 +62,17 @@ def commits(root: Path) -> dict[str, Optional[str]]:
 
 
 def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[int],
-                *, exit_after: bool = True) -> str:
+                settings: Sequence[str] = (), *, exit_after: bool = True) -> str:
     """The probe.sh command that plays INPUT_LOG back as a run called replay-NAME, which quits
     after LAST_FRAME frames when there is a frame to give and EXIT_AFTER is true. None and 0 are
-    none, and probe.sh refuses an --exit-after of 0. The seconds are generous, a real-time
+    none, and probe.sh refuses an --exit-after of 0. SETTINGS are the run's, less the ones the
+    soak or the replay set for themselves (NOT_REPLAYED). A replay without the run's build, disc
+    or guest switches would part from its recording. The seconds are generous, a real-time
     game's worth of the frames and a minute, since the replay runs as fast as it can."""
     frame = last_frame or None
     seconds = 3600 if frame is None else math.ceil(frame / 60) + 60
-    args = [str(probe), f"replay-{name}", str(seconds), "", "60", f"--replay={input_log}"]
+    kept = [s for s in settings if not s.startswith(NOT_REPLAYED)]
+    args = [str(probe), f"replay-{name}", str(seconds), "", "60", *kept, f"--replay={input_log}"]
     if frame is not None and exit_after:
         args.append(f"--exit-after={frame}")
     return " ".join(shlex.quote(a) for a in args)
