@@ -130,19 +130,27 @@ inline Mark most_called(const std::vector<Mark>& marks, const std::optional<Mark
 // A point on screen, in the game's 640 by 480.
 struct Point {
     float x = 0.0f, y = 0.0f;
+    bool operator==(const Point& o) const { return x == o.x && y == o.y; }
 };
+
+// How many frames in a row a tree's joints sit in the same place before it has rested there.
+constexpr uint32_t kRestFrames = 30;
 
 // The marks Edge trees had the frame before, which their joints near a third's line keep
 // calling for (edge_mark). Without them an element moving 2 pixels across a line would jump to
 // another edge, as would a tree whose joints straddle a line in near-equal numbers when one of
-// them hides. A tree that misses a frame chooses afresh when it shows. A tree whose joints have
-// no place yet has nothing to keep, so it chooses from them once they have one. Trees are told
-// apart by their root, and a root shown more than once in a frame by which time it is.
+// them hides. Once a tree has rested, its joints' mean place the same for kRestFrames frames in
+// a row, they call for their nearest edges, so one that stopped inside the band moves to its
+// edge then rather than when it next misses a frame. A tree that misses a frame chooses afresh
+// when it shows. A tree whose joints have no place yet has nothing to keep, so it chooses from
+// them once they have one. Trees are told apart by their root, and a root shown more than once
+// in a frame by which time it is.
 class KeptMarks {
 public:
     // The mark of the tree at `root`, shown in `frame` with its joints at `joints` on screen
     // among `views`: the one most of them call for, holding the tree's mark from the frame
-    // before. With no joint placed, the mark from the frame before, or none.
+    // before until the tree has rested. With no joint placed, the mark from the frame before,
+    // or none.
     std::optional<Mark> place(uint32_t frame, uint32_t root, const std::vector<Point>& joints,
                               const std::vector<Rect>& views) {
         if (frame != frame_) {
@@ -153,18 +161,25 @@ public:
             now_.clear();
             frame_ = frame;
         }
-        uint32_t time = 0;
-        for (const Kept& k : now_) time += k.root == root;
-        std::optional<Mark> m;
-        for (const Kept& k : last_)
-            if (k.root == root && k.time == time) m = k.mark;
+        Kept k{root, 0, std::nullopt, {}, 0};
+        for (const Kept& n : now_) k.time += n.root == root;
+        const Kept* before = nullptr;
+        for (const Kept& l : last_)
+            if (l.root == root && l.time == k.time) before = &l;
+        if (before) k.mark = before->mark;
         if (!joints.empty()) {
+            for (const Point& p : joints) {
+                k.at.x += p.x / joints.size();
+                k.at.y += p.y / joints.size();
+            }
+            k.still = before && before->at == k.at ? before->still + 1 : 1;
+            const Mark held = k.still < kRestFrames ? k.mark.value_or(Mark{}) : Mark{};
             marks_.clear();
-            for (const Point& p : joints) marks_.push_back(edge_mark(p.x, p.y, views, m.value_or(Mark{})));
-            m = most_called(marks_, m);
+            for (const Point& p : joints) marks_.push_back(edge_mark(p.x, p.y, views, held));
+            k.mark = most_called(marks_, k.mark);
         }
-        now_.push_back({root, time, m});
-        return m;
+        now_.push_back(k);
+        return k.mark;
     }
 
 private:
@@ -172,6 +187,8 @@ private:
         uint32_t root;
         uint32_t time;  // which time in its frame the root showed, from 0
         std::optional<Mark> mark;
+        Point at;        // its joints' mean place, when it had any
+        uint32_t still;  // how many frames in a row, to this one, its joints were at `at`, or 0
     };
     uint32_t frame_ = 0;
     std::vector<Kept> last_, now_;  // the trees shown in the frame before and in this one

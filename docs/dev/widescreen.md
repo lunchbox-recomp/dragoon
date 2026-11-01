@@ -341,6 +341,11 @@ pixels at 16:9, and a tree whose joints straddle a line in near-equal numbers wo
 time one of them hid. Further past a line it takes the other edge, so an element that slides
 across one jumps there once.
 
+The edge holds only while the tree moves. Once its joints' mean place has been the same for 30
+frames in a row, it takes its nearest edge. Without that, an element that stopped inside the
+band would keep the edge it came from, then show at the other once it missed a frame. So one
+that stops there jumps once, 30 frames after it stops.
+
 Keeping each tree's first mark for as long as it showed doesn't work for this game's HUD. On
 Dragoon `34a24f5`, which did, every tree `fn_80114F1C` draws held C(0..640) in the race at 4200
 and the minimap's karts held L(0..640), away from their edges at 16:9. Chosen afresh each frame,
@@ -426,6 +431,8 @@ loads of 4.2 to 5.0.
   one.
 - An element that slides across a third's line jumps to the other edge once it's a quarter of a
   third past the line. No dump caught one.
+- An element that moves across a line and stops less than a quarter of a third past it shows at
+  the edge it came from for 30 frames, then jumps to its nearest edge. No dump caught one.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - No object is cut off at a side edge in these dumps, and the world drew at least as much at
