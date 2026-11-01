@@ -323,15 +323,15 @@ class CourseTest(unittest.TestCase):
         run(menus, link, 500)
         self.assertEqual(menus.course, chosen)
 
-    def test_only_a_course_the_game_never_showed_is_said_to_be_unconfirmed(self) -> None:
-        for course, said_so in ((0, False), (1, False), (2, False), (6, False), (3, True), (4, True), (5, True),
-                                (7, True)):
+    def test_every_course_is_one_the_game_showed_and_none_is_said_to_be_unconfirmed(self) -> None:
+        for course in bot_menus.COURSES:
             with self.subTest(course=course):
+                self.assertIsNotNone(TABLE["course_select.cursor"].meaning(course))
                 menus, link, said = make()
                 menus.course = course
                 screen(link, bot_menus.AIR_COURSES, course_select__cursor=0)
                 run(menus, link, 10)
-                self.assertEqual(any("course cursor" in line for line in said), said_so)
+                self.assertEqual([line for line in said if "course" in line], [])
 
 
 class MachineTest(unittest.TestCase):
@@ -640,15 +640,8 @@ class UnconfirmedTest(unittest.TestCase):
                 run(menus, link, 1000)
                 self.assertEqual([line for line in said if "menu.item" in line], [])
 
-    def test_a_course_the_game_never_showed_is_one_too(self) -> None:
-        menus, link, said = make()
-        menus.course = 7
-        screen(link, bot_menus.AIR_COURSES, course_select__cursor=0)
-        run(menus, link, 200)
-        self.assertEqual(len([line for line in said if "course cursor" in line]), 1)
-
     def test_every_unconfirmed_step_is_tested_here(self) -> None:
-        self.assertEqual(set(bot_menus.UNCONFIRMED), {*self.CASES, "course cursor", "stadium pause"})
+        self.assertEqual(set(bot_menus.UNCONFIRMED), {*self.CASES, "stadium pause"})
 
     def test_the_press_cadence_is_said_with_the_first_press_and_not_with_a_wait(self) -> None:
         cadence = f"unconfirmed step, press cadence: {bot_menus.UNCONFIRMED['press cadence']}"

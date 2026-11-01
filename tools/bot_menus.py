@@ -50,7 +50,6 @@ STARTS = {AIR_MACHINES: AIR_RIDE, TOP_MACHINES: TOP_RIDE, CITY_PLAYERS: CITY_TRI
 # slots with a course on a blank memory card are these.
 COLUMNS = 5
 COURSES = (0, 1, 2, 3, 4, 5, 6, 7)
-CONFIRMED_COURSES = (0, 1, 2, 6)  # the cursor values read in the game
 
 FPS = 60
 HOLD = 5  # frames a button is down, as the routes press
@@ -69,9 +68,6 @@ BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to it
 
 UNCONFIRMED = {
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
-    "course cursor": "Air Ride course cursors 3, 4, 5 and 7 (Frozen Hillside, Magma Flows, Beanstalk "
-                     "Park and Checker Knights). They follow the routes' grid, and only 0, 1, 2 and 6 "
-                     "have been read in the game.",
     "Top Ride machines": "A and START in turn on Top Ride's machine select (minor 9), which has no "
                          "RAM slot to read.",
     "stadium results": "START on a stadium's results (minor 13). The screen after it was never watched.",
@@ -351,8 +347,6 @@ class Menus:
     def _air_courses(self, link: Link) -> Tap:
         if self.course is None:
             self.course = self.schedule.course()
-        if self.course not in CONFIRMED_COURSES:
-            self._unconfirmed("course cursor")
         row, col = divmod(self._read(link, "course_select.cursor"), COLUMNS)
         want_row, want_col = divmod(self.course, COLUMNS)
         if col != want_col:

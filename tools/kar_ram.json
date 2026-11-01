@@ -84,7 +84,11 @@
       "0": "Fantasy Meadows",
       "1": "Celestial Valley",
       "2": "Sky Sands",
-      "6": "Machine Passage (air-ride-machine-passage.txt 2080)"
+      "3": "Frozen Hillside (air-ride-frozen-hillside.txt 2190)",
+      "4": "Magma Flows (air-ride-magma-flows.txt 2190)",
+      "5": "Beanstalk Park (air-ride-beanstalk-park.txt 2190)",
+      "6": "Machine Passage (air-ride-machine-passage.txt 2080)",
+      "7": "Checker Knights (air-ride-checker-knights.txt 2190)"
     },
     "route": "air-ride-courses-1.txt",
     "frames": [2000, 20750]
