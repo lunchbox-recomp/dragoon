@@ -449,6 +449,31 @@ class ResetTest(SoakCase):
         self.assertNotRegex(out, r"(?m)^  at frame")
         self.assertNotIn("--exit-after=0", out)
 
+    def test_a_cut_before_a_reset_in_a_process_that_kept_no_input_log_names_none(self) -> None:
+        self.plan(race=100000, events=[at([["say", axv(100, "run")], ["say", axv(120, "end")],
+                                           ["reset", {"shaders_ms": 2107}]], frame=2010)])
+        ap = bot_soak.parser()
+        args = ap.parse_args(["--probe", str(self.probe), "--seed", SEED, "--minutes", "1", "--modes", "air-ride"])
+        said: list[str] = []
+
+        def forgetting(name, seconds, bot, **kw):
+            outcome = bot_link.run(name, seconds, bot, **kw)
+            (outcome.run_dir / "session" / "inputs" / "inputs.txt").unlink()  # the first process's
+            return outcome
+
+        self.assertEqual(bot_soak.soak(args, [], out=said.append, err=said.append, run=forgetting), 1, said)
+        out = "\n".join(said)
+        run_dir = self.run_dir(out)
+        self.assertEqual(list(run_dir.rglob("bot.json")), [run_dir / "bot.json"])
+        data = self.bot_json(out)
+        self.assertEqual((data["stop"]["kind"], data["before_reset"]), ("music_cut", True))
+        self.assertEqual((data["input_log"], data["replay"], data["commits"]["engine_built"]), (None, None, None))
+        self.assertIn("  a console reset came after it, so the last process's replay can't show it; the process it "
+                      "happened in kept no input log", out)
+        self.assertIn("  no input log to replay", out)
+        self.assertEqual(self.lines(out, "  input log"), [])
+        self.assertNotIn("run-2", out)
+
     def test_a_cut_in_the_last_second_after_a_reset_is_after_it(self) -> None:
         self.plan(race=100000, events=[at([["reset", {"shaders_ms": 100}]], frame=500),
                                        at([["say", axv(100, "run")], ["say", axv(120, "end")]], frame=2010,
