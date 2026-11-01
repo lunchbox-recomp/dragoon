@@ -239,6 +239,15 @@ class MainMenuTest(unittest.TestCase):
                 self.assertEqual([buttons[1] for _, buttons in presses(run(menus, link, 400))][:6],
                                  [UP, UP, UP, A, A, A])
 
+    def test_the_ups_are_counted_again_when_the_menu_comes_back_after_another_screen(self) -> None:
+        menus, link, _ = make(modes=(TOP_RIDE,))
+        menu = dict(menu__page=1, menu__mode=1, menu__item=2)  # a row that never moves
+        screen(link, bot_menus.MAIN_MENU, **menu)
+        changes = {300: lambda: screen(link, bot_menus.AIR_RESULTS), 400: lambda: screen(link, bot_menus.MAIN_MENU, **menu)}
+        found = presses(run(menus, link, 700, changes=changes))
+        self.assertEqual([buttons[1] for frame, buttons in found if frame < 300][:4], [UP, UP, UP, A])
+        self.assertEqual([buttons[1] for frame, buttons in found if frame >= 400][:4], [UP, UP, UP, A])
+
     def test_a_row_that_moves_is_climbed_however_many_ups_it_takes(self) -> None:
         menus, link, _ = make(modes=(TOP_RIDE,))
         screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=1, menu__item=3)
