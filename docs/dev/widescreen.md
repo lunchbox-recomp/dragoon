@@ -423,8 +423,9 @@ to the edge across its rect, the race at 4200 and 4P at 3480 gave the same count
 time.
 
 On Dragoon `8e6bc30` at gcn-recomp `b11ebc6`, with `drawlog.py hud` also failing a centered draw
-past the band at a side, all four checkpoints gave the same counts, one run at a time. These
-four callbacks' trees took these anchors there.
+past the band at a side, all four checkpoints gave the same counts, one run at a time. They
+gave them again on `1ff85c8`, which holds nothing from a tree's first showing. These four
+callbacks' trees took these anchors on both.
 
 | Callback | Race, 4200 | City Trial, 3300 | 2P, 3480 | 4P, 3480 |
 |---|---|---|---|---|
