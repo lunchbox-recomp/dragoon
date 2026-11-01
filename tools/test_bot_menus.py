@@ -186,6 +186,10 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(self.one(bot_menus.CITY_STATS), {1: A})
         self.assertEqual(self.one(bot_menus.STADIUM_CARD), {1: A})
 
+    def test_a_stadiums_results_take_start_on_every_port(self) -> None:
+        # A four-player soak's Destruction Derby results waited for START from each player.
+        self.assertEqual(self.one(bot_menus.STADIUM_RESULTS, ports=4), {1: START, 2: START, 3: START, 4: START})
+
     def test_a_stadiums_results_are_not_an_unconfirmed_step(self) -> None:
         # A soak watched START on them go to the checklist and then City Trial's player entry.
         menus, link, said = make()

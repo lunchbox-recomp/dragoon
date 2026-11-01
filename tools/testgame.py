@@ -20,7 +20,8 @@ class FakeGame:
     stays where the player left it after that, as city-trial-stadium.txt shows: B out of Game
     Settings (row 3 of City Trial's) leaves it there.
 
-    A stadium's results go back to City Trial's player entry with every port out, through the
+    A stadium's results wait for START from every player, as a four-player soak's Destruction
+    Derby did, and then go back to City Trial's player entry with every port out, through the
     checklist the first time, as a soak showed. B held there for BACK_HELD frames goes back to
     City Trial's own menu, as a hold from city-trial.txt's player entry did. The city can't be
     paused here. A stadium's pause menu has two rows, Return to Game and End Game, and DOWN
@@ -45,6 +46,7 @@ class FakeGame:
         self.stage = 0  # City Trial: 0 the city, 1 the stadium
         self.checked = False  # whether the checklist has shown
         self.held_b = 0  # frames port 1 has held B
+        self.ready: set[int] = set()  # players who have pressed START on a stadium's results
         self.movies_seen: set[int] = set()
         self.visited: list[int] = [self.minor]
         self.started: list[tuple[str, int]] = []  # (mode, course) of each race that began
@@ -67,6 +69,7 @@ class FakeGame:
         self.visited.append(minor)
         self.raced = 0
         self.paused = False
+        self.ready = set()
 
     def enter(self) -> None:
         """The mode's first screen after its menu, or after its movie."""
@@ -170,10 +173,11 @@ class FakeGame:
                 self.stage = 1
                 self.go(bot_menus.RACE)
         elif m == bot_menus.STADIUM_RESULTS:
-            if pressed("START") and not self.checked:
+            self.ready |= {port for port in range(1, self.players + 1) if pressed("START", port)}
+            if len(self.ready) == self.players and not self.checked:
                 self.checked = True
                 self.go(bot_menus.CHECKLIST)
-            elif pressed("START"):
+            elif len(self.ready) == self.players:
                 self.enter()
         elif m == bot_menus.CHECKLIST:
             if pressed("A"):
