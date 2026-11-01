@@ -119,8 +119,12 @@ class ReplayLineTest(unittest.TestCase):
                                              "--replay=/r/build/probe/soak-s1-x/session/inputs", "--exit-after=4000"])
 
     def test_the_replay_runs_under_the_runs_name_with_replay_before_it(self) -> None:
-        line = bot_record.replay_line(Path("/r/tools/probe.sh"), "n", Path("/i"), 10)
-        self.assertEqual(shlex.split(line)[1], "replay-n")
+        for name in ("n", "soak-s7-20261031-120000", "soak-s7-20261031-120000-2"):
+            with self.subTest(name=name):
+                word = shlex.split(bot_record.replay_line(Path("/r/tools/probe.sh"), name, Path("/i"), 10))[1]
+                self.assertEqual(word, f"replay-{name}")  # the whole name, so two runs' replays don't meet
+                self.assertNotEqual(bot_link.run_directory(word), bot_link.run_directory(name))  # its own directory
+                self.assertTrue(bot_link.run_directory(word).name.endswith(name))
 
     def test_the_replay_writes_no_frame_dumps_since_one_is_over_a_megabyte(self) -> None:
         for last in (None, 0, 10, 216000):
