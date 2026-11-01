@@ -112,6 +112,31 @@ import Testing
             fixture.text(fixture.logs + "/panic-\(GameFixture.stamp).txt") == "an earlier run's panic\n")
     }
 
+    /// An earlier run's `panic.txt` that can't be moved, here because a file is where the logs
+    /// folder goes, isn't shown after a later run that wrote none.
+    @Test func aPanicLeftByAnEarlierRunThatCantBeMovedIsNeverShown() async throws {
+        let fixture = try GameFixture()
+        try fixture.write(fixture.logs, "not a folder\n")
+        try fixture.write(fixture.panic, "an earlier run's panic\n")
+        try fixture.install("exit 1")
+        #expect(await results(of: fixture.play()) == [.exited(.status(1), panic: nil)])
+        #expect(fixture.text(fixture.panic) == "an earlier run's panic\n")
+    }
+
+    /// A `panic.txt` the game writes over that leftover once the launch has begun is its own.
+    @Test func aPanicWrittenOverALeftoverThatCantBeMovedIsShown() async throws {
+        let fixture = try GameFixture()
+        try fixture.write(fixture.logs, "not a folder\n")
+        try fixture.write(fixture.panic, "an earlier run's panic\n")
+        try fixture.install(
+            """
+            echo 'this run' > panic.txt
+            exit 1
+            """)
+        #expect(
+            await results(of: fixture.play()) == [.exited(.status(1), panic: GamePanic("this run\n"))])
+    }
+
     /// A link at `panic.txt` isn't followed, so what it points to is never read or shown.
     @Test func aPanicThatsALinkIsntFollowed() async throws {
         let fixture = try GameFixture()

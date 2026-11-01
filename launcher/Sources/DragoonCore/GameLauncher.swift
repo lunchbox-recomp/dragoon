@@ -73,7 +73,8 @@ public final class GameLauncher: Sendable {
     /// After an ending that isn't a clean exit, the result carries the text of `<data>/panic.txt`
     /// when there is one, and that file moves to the log folder as `panic-<time>.txt`. A
     /// `panic.txt` that's there before the game starts is an earlier run's, so it moves there
-    /// first and is never shown.
+    /// first and is never shown. Only one written after the launch began is shown, so a leftover
+    /// that can't be moved isn't either.
     public func play(game: String, disc: String, data: String) -> GameSession {
         let (session, results) = GameSession.makeStream()
         let end = { @Sendable (result: GameResult) in
@@ -82,6 +83,8 @@ public final class GameLauncher: Sendable {
         }
         let panic = data + "/" + Self.panicName
         if fs.fileExists(at: panic) { movePanic(panic) }
+        // One that's still there couldn't be moved, and its time tells it from one the game writes.
+        let leftover = GamePanic.lastWritten(at: panic)
         let executable = game + "/Contents/MacOS/dragoon"
         guard fs.fileExists(at: executable) else {
             end(.couldNotStart(.missing(path: executable)))
@@ -107,7 +110,8 @@ public final class GameLauncher: Sendable {
             let ending: GameExit =
                 ended.terminationReason == .uncaughtSignal
                 ? .signal(ended.terminationStatus) : .status(ended.terminationStatus)
-            end(.exited(ending, panic: ending == .status(0) ? nil : takePanic(panic)))
+            end(.exited(
+                ending, panic: ending == .status(0) ? nil : takePanic(panic, leftover: leftover)))
         }
         do {
             try process.run()
@@ -125,9 +129,11 @@ public final class GameLauncher: Sendable {
         return descriptor < 0 ? nil : FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
     }
 
-    /// The `panic.txt` at `path`, which then moves to the log folder, or nil when there's none.
-    private func takePanic(_ path: String) -> GamePanic? {
-        guard let panic = GamePanic.read(at: path) else { return nil }
+    /// The `panic.txt` at `path`, which then moves to the log folder, or nil when there's none
+    /// written since the launch began. `leftover` is when the one there before was written.
+    private func takePanic(_ path: String, leftover: Int64?) -> GamePanic? {
+        guard GamePanic.lastWritten(at: path) != leftover, let panic = GamePanic.read(at: path)
+        else { return nil }
         movePanic(path)
         return panic
     }

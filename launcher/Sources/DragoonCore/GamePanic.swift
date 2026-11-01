@@ -16,6 +16,14 @@ public struct GamePanic: Equatable, Sendable {
         self.cut = cut
     }
 
+    /// When what's at `path` was last written, in nanoseconds since 1970, or nil when nothing is
+    /// there. A link isn't followed.
+    static func lastWritten(at path: String) -> Int64? {
+        var info = stat()
+        guard lstat(path, &info) == 0 else { return nil }
+        return Int64(info.st_mtimespec.tv_sec) * 1_000_000_000 + Int64(info.st_mtimespec.tv_nsec)
+    }
+
     /// The `panic.txt` at `path`, or nil when no regular file is there. A link isn't followed,
     /// and a FIFO is opened without waiting for a writer and then left unread.
     static func read(at path: String) -> GamePanic? {
