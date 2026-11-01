@@ -160,6 +160,18 @@ The paths come from the routes in `tests/routes/` and the values in kar_ram.json
 
 The walker says `unconfirmed step` the first time it takes each step in the right-hand column, and `screen N isn't in kar_ram.json` for a screen the table doesn't name, which it presses A on. A screen that stays up past `stuck_seconds` of game time (600 s for a race) raises `Stuck`. After a console reset the walker forgets the press under way and the screen, and starts over from the boot.
 
+## bot_watch.py
+
+What does the soak watch for while the bots play? `Frozen` watches the picture and `LogWatch` follows the game's `stdout.txt`, and each raises `Detected` from the bot callback. That ends the run at that frame with its input log whole.
+
+`Frozen` fires when the picture's hash has stayed the same for 10 s of game time and the race bots' pads changed on at least 2 frames of those seconds. Frames the menu walker plays don't count, because a menu or a loading screen can stand still while the walker presses. `LogWatch` reads the log every 60 frames, gives the `[axv]` lines to stream_voices.py's `Tracker` and counts the console resets. A `[session]` line starts the voices over, since the old process's are gone. It has no command line.
+
+## bot_stop.py
+
+How did the run end, and was that a fault? `classify` turns a `bot_link.run` result into a `Stop` whose kind is `game_exit`, `panic`, `engine_stop`, `hang`, `frozen_picture`, `music_cut` or `menus_stuck`. It returns None for a run that ended as a bot run is meant to. A game that never connected, a bad link or a bot that raised an error says nothing about the game, so those are a `SoakError`.
+
+A hang after a reset whose shader rebuild took two thirds of the hang limit or more says so in its detail. It has no command line.
+
 ## playtest.sh
 
 What happened while I played? It runs the game in its window with sound, as `build/dragoon` runs for a player. It sets `GCN_SESSION` to `build/playtest/<date>-<time>/` ("Playtest sessions" in gcn-recomp's `docs/diagnostics.md`).
