@@ -1,9 +1,13 @@
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
 import drawlog
+import hud_boxes
 from testutil import run_main, write_file
+
+HEADER = Path(__file__).resolve().parents[1] / "src" / "hud_anchors.h"
 
 # A 2D draw in the HUD's 64 by 48 frame, a world draw at 4:3 and the same world draw widened
 # for 16:9, as GCN_DRAWLOG prints them.
@@ -497,6 +501,13 @@ class HudCommandTest(unittest.TestCase):
         code, out, _ = run_main(drawlog.main, "hud", str(old), str(new))
         self.assertEqual(code, 1)
         self.assertIn("FAIL width", out)
+
+
+class HeldBandTest(unittest.TestCase):
+    def test_the_band_is_the_hooks(self):
+        m = re.search(r"constexpr float kHeldBand = ([0-9.]+)f;", HEADER.read_text())
+        self.assertIsNotNone(m, HEADER)
+        self.assertEqual(hud_boxes.HELD_BAND, float(m[1]))
 
 
 if __name__ == "__main__":
