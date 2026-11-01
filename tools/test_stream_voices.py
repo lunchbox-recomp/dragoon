@@ -424,6 +424,17 @@ class NewSampleTest(unittest.TestCase):
         tracker.add(state(20, "set", looping=1, stream=0, loop=MUSIC, end=MUSIC_END, cur=MUSIC))
         self.assertEqual([(v.start, v.how) for v in tracker.voices], [(10, "still running")])
 
+    def test_a_voice_moved_with_no_flag_keeps_the_move_through_a_new_sample_and_its_end_is_early(self):
+        lines = [state(100, "run", pb="80579650", looping=0, stream=0, loop="00D00000", end="00D0FFFF", cur="00D00000"),
+                 state(150, "set", pb="80579650", looping=0, stream=0, loop="00D10000", end="00D1FFFF", cur="00D0F000"),
+                 state(200, "set", pb="80579650", looping=0, stream=0, loop="00D20000", end="00D2FFFF", cur="00D20000"),
+                 state(210, "end", pb="80579650", run=0, looping=0, stream=0, loop="00D20000", end="00D2FFFF",
+                       cur="00D21000")]
+        v = one(*lines)
+        self.assertEqual((v.pb, v.start, v.how, v.end_list, v.why), ("80579650", 200, EARLY, 210, [stream_voices.MOVED]))
+        tracker = stream_voices.Tracker(keep=False)  # as LogWatch follows a soak's log
+        self.assertEqual([tracker.add(line) is not None for line in lines], [False, False, False, True])
+
 
 class MainTest(unittest.TestCase):
     def setUp(self):

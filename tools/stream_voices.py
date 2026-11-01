@@ -21,7 +21,8 @@ samples on blocks that still run an effect, so away from a stream address a voic
 flag and lost it isn't called early. A "set" that puts cur on a new loop address gives the block
 a new sample. That ends the voice that ran there as the game's doing and starts another, as when
 the game ended its music in two soaks by stopping one voice of the pair and giving the other an
-effect's sample in the same list. A failure outside the stream addresses with no "set" between
+effect's sample in the same list. A move on a voice that never had either flag carries into the
+new one. A failure outside the stream addresses with no "set" between
 its "run" and its "end" shows only in the count of other voices. Each early row names the rule,
 the list and the time (a list is 5 ms), and comes last, whether or not the voice ever had a
 flag. The other voices the mixer ended, which never had stream=1 or looping=1, are counted and
@@ -105,7 +106,9 @@ class Tracker:
         if new_sample and v.how == RUNNING:
             v.end_list, v.how = n, GAME
         if v is None or kind == "run" or new_sample:
-            v = self._current[pb] = Voice(pb, n, loop, loop, end)
+            # A move on a voice that never had a flag stays with the block through a new sample.
+            carried = new_sample and v.moved and not v.listed
+            v = self._current[pb] = Voice(pb, n, loop, loop, end, moved=carried)
             if self.keep:
                 self.voices.append(v)
         v.listed = v.listed or "1" in (looping, stream)
