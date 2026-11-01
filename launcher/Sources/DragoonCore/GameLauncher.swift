@@ -31,9 +31,9 @@ public enum GameStartFailure: Equatable, Sendable {
 
 /// How one launch of the game ended.
 public enum GameResult: Equatable, Sendable {
-    /// The game ran and ended. `panic` is the text of the `panic.txt` the runtime wrote, which is
-    /// read only after an ending that isn't a clean exit.
-    case exited(GameExit, panic: String?)
+    /// The game ran and ended. `panic` is what the runtime wrote to `panic.txt`, which is read
+    /// only after an ending that isn't a clean exit.
+    case exited(GameExit, panic: GamePanic?)
     case couldNotStart(GameStartFailure)
 }
 
@@ -125,12 +125,11 @@ public final class GameLauncher: Sendable {
         return descriptor < 0 ? nil : FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
     }
 
-    /// The text of the `panic.txt` at `path`, which then moves to the log folder, or nil when
-    /// there's none.
-    private func takePanic(_ path: String) -> String? {
-        guard let bytes = try? fs.readData(at: path) else { return nil }
+    /// The `panic.txt` at `path`, which then moves to the log folder, or nil when there's none.
+    private func takePanic(_ path: String) -> GamePanic? {
+        guard let panic = GamePanic.read(at: path) else { return nil }
         movePanic(path)
-        return String(decoding: bytes, as: UTF8.self)
+        return panic
     }
 
     /// Moves the `panic.txt` at `path` to the log folder as `panic-<time>.txt`, or as

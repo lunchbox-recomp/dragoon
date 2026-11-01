@@ -250,7 +250,7 @@ private let oldCommits = Commits(
         #expect(run.send(playToStarting).last == [.play(disc: flowDisc, launch: 2)])
         let running = run.state
         let others: [Flow.Event] = [
-            .gameExited(launch: 1, exit: .status(3), panic: "late"),
+            .gameExited(launch: 1, exit: .status(3), panic: GamePanic("late")),
             .gameCouldNotStart(launch: 1, reason: "late"),
             .gameExited(launch: 3, exit: .status(0), panic: nil),
         ]

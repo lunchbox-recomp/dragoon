@@ -166,6 +166,7 @@ enum Strings {
     static let rebuildNow = "Rebuild Now"
     static let later = "Later"
     static let panicHeading = "The game wrote this in panic.txt"
+    static let panicCut = "panic.txt is longer than this, so only its first \(GamePanic.limit / 1024) KB are shown."
 
     static func gameFailed(_ problem: GameProblem) -> String {
         switch problem {

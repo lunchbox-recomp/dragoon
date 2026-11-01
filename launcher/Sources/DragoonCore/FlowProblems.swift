@@ -66,7 +66,7 @@ public enum DiscProblem: Equatable, Sendable {
 public enum GameProblem: Equatable, Sendable {
     /// The game exited with a nonzero code or was stopped by a signal. `panic` is what the
     /// runtime wrote to `panic.txt`, when it wrote one.
-    case exited(GameExit, panic: String?)
+    case exited(GameExit, panic: GamePanic?)
     case couldNotStart(reason: String)
 }
 

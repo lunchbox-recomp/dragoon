@@ -63,9 +63,9 @@ extension Flow {
         /// The build's stream ended, with nil when the new game is current.
         case buildEnded(BuildFailure?)
         case logTailRead(path: String, lines: [String])
-        /// The game that the `play` with this launch number started has ended. `panic` is the
-        /// text of the `panic.txt` the runtime wrote, after an ending that isn't a clean exit.
-        case gameExited(launch: Int, exit: GameExit, panic: String?)
+        /// The game that the `play` with this launch number started has ended. `panic` is what
+        /// the runtime wrote to `panic.txt`, after an ending that isn't a clean exit.
+        case gameExited(launch: Int, exit: GameExit, panic: GamePanic?)
         /// The `play` with this launch number couldn't start the game, and `reason` says why.
         case gameCouldNotStart(launch: Int, reason: String)
     }

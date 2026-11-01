@@ -97,6 +97,8 @@ Library offers a rebuild when `game/current/stamp.json` names other commits than
 
 Each launch ends in one result, which says how the game ended or why it couldn't start. After a nonzero exit or a signal, Library shows the code or the signal's number and name with the text of `panic.txt` when the runtime wrote one. A zero exit shows nothing.
 
+Only a regular file at `panic.txt` is read. A link isn't followed and a FIFO isn't waited on. Library shows at most the file's first 64 KB, with a note when there's more.
+
 That `panic.txt` then moves into the logs folder as `panic-<time>.txt`, under a name no other file has, so it never replaces one. A `panic.txt` that's there before the game starts is from an earlier run, so it moves there first and is never shown.
 
 The window hides while the game runs and comes back when it exits or can't start. Each `play` effect carries a launch number that its result echoes, and `Flow` ignores a result for any other launch. A late result can't end a game that's running.

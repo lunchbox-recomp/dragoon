@@ -178,10 +178,10 @@ import Testing
     @Test func aGameThatExitedWithAnErrorShowsItsCodeAndPanic() {
         var run = launched()
         _ = run.send(playToStarting)
-        #expect(run.send(.gameExited(
-            launch: 1, exit: .status(134), panic: "unmapped read at 0x80001234")) == [.deleteOldBuilds])
+        let panic = GamePanic("unmapped read at 0x80001234")
+        #expect(run.send(.gameExited(launch: 1, exit: .status(134), panic: panic)) == [.deleteOldBuilds])
         #expect(!run.state.gameRunning)
-        #expect(run.state.gameProblem == .exited(.status(134), panic: "unmapped read at 0x80001234"))
+        #expect(run.state.gameProblem == .exited(.status(134), panic: panic))
         // Playing again clears it, and so does a clean exit.
         run.send(.playPressed)
         #expect(run.state.gameProblem == nil)
@@ -197,10 +197,10 @@ import Testing
     @Test func aGameStoppedByASignalShowsWhichOne() {
         var run = launched()
         _ = run.send(playToStarting)
-        #expect(run.send(.gameExited(launch: 1, exit: .signal(SIGSEGV), panic: "bad read"))
+        #expect(run.send(.gameExited(launch: 1, exit: .signal(SIGSEGV), panic: GamePanic("bad read")))
             == [.deleteOldBuilds])
         #expect(!run.state.gameRunning)
-        #expect(run.state.gameProblem == .exited(.signal(SIGSEGV), panic: "bad read"))
+        #expect(run.state.gameProblem == .exited(.signal(SIGSEGV), panic: GamePanic("bad read")))
     }
 
     /// The game is counted as running from the moment Play starts it, so Play, Rebuild and

@@ -30,12 +30,15 @@ struct LibraryView: View {
                         if case .exited(_, let panic?) = problem {
                             Text(Strings.panicHeading).font(.headline)
                             ScrollView {
-                                Text(panic)
+                                Text(panic.text)
                                     .font(.caption.monospaced())
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .frame(maxHeight: 160)
+                            if panic.cut {
+                                Text(Strings.panicCut)
+                            }
                         }
                     }
                     .padding(4)

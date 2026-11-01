@@ -54,7 +54,7 @@ import Testing
             """)
         #expect(
             await results(of: fixture.play())
-                == [.exited(.status(3), panic: "guest panic: unmapped read at 0x80001234\n")])
+                == [.exited(.status(3), panic: GamePanic("guest panic: unmapped read at 0x80001234\n"))])
         #expect(!FileManager.default.fileExists(atPath: fixture.panic))
         #expect(
             fixture.text(fixture.logs + "/panic-\(GameFixture.stamp).txt")
@@ -69,7 +69,8 @@ import Testing
             kill -TERM $$
             """)
         #expect(
-            await results(of: fixture.play()) == [.exited(.signal(SIGTERM), panic: "guest panic: stopped\n")])
+            await results(of: fixture.play())
+                == [.exited(.signal(SIGTERM), panic: GamePanic("guest panic: stopped\n"))])
     }
 
     @Test func aCleanExitHandsOverNoPanic() async throws {
@@ -91,7 +92,7 @@ import Testing
             echo 'this run' > panic.txt
             exit 1
             """)
-        #expect(await results(of: fixture.play()) == [.exited(.status(1), panic: "this run\n")])
+        #expect(await results(of: fixture.play()) == [.exited(.status(1), panic: GamePanic("this run\n"))])
         #expect(fixture.text(taken) == "an older panic\n")
         #expect(fixture.text(fixture.logs + "/panic-\(GameFixture.stamp)-1.txt") == "this run\n")
         #expect(!FileManager.default.fileExists(atPath: fixture.panic))
@@ -109,6 +110,53 @@ import Testing
         #expect(fixture.text(fixture.noteFile) == nil)
         #expect(
             fixture.text(fixture.logs + "/panic-\(GameFixture.stamp).txt") == "an earlier run's panic\n")
+    }
+
+    /// A link at `panic.txt` isn't followed, so what it points to is never read or shown.
+    @Test func aPanicThatsALinkIsntFollowed() async throws {
+        let fixture = try GameFixture()
+        let elsewhere = fixture.root + "/not a panic.txt"
+        try fixture.write(elsewhere, "someone else's file\n")
+        try fixture.install(
+            """
+            ln -s \(shellWord(elsewhere)) panic.txt
+            exit 1
+            """)
+        #expect(await results(of: fixture.play()) == [.exited(.status(1), panic: nil)])
+    }
+
+    /// A FIFO at `panic.txt` that nothing writes to gives no panic, rather than a read that waits
+    /// for a writer and holds back the launch's result. Foundation's `Data(contentsOf:)` already
+    /// refused a FIFO on this Mac, so this guards the `O_NONBLOCK` open that replaced it.
+    @Test func aPanicThatsAFIFOGivesNoPanicAndTheResultStillComes() async throws {
+        let fixture = try GameFixture()
+        try fixture.install(
+            """
+            mkfifo panic.txt
+            exit 1
+            """)
+        #expect(await results(of: fixture.play()) == [.exited(.status(1), panic: nil)])
+    }
+
+    /// Only the first `GamePanic.limit` bytes are read, and the panic says when there were more.
+    @Test(arguments: [GamePanic.limit, GamePanic.limit + 1])
+    func aPanicIsReadUpToTheLimitAndSaysWhenItWasCut(size: Int) async throws {
+        let fixture = try GameFixture()
+        let written = fixture.root + "/a long panic.txt"
+        try fixture.write(written, String(repeating: "x", count: size))
+        try fixture.install(
+            """
+            cp \(shellWord(written)) panic.txt
+            exit 1
+            """)
+        let all = await results(of: fixture.play())
+        guard all.count == 1, case .exited(.status(1), let panic?) = all[0] else {
+            Issue.record("expected one exit 1 with a panic, got \(all.count) results")
+            return
+        }
+        #expect(panic.text.utf8.count == GamePanic.limit)
+        #expect(Set(panic.text) == ["x"])
+        #expect(panic.cut == (size > GamePanic.limit))
     }
 
     @Test func aGameWhoseFileIsMissingCantStartAndWritesNoLog() async throws {
