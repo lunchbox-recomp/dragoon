@@ -516,6 +516,70 @@ at the results. One more, 111 ms at frame 17,547 in the middle of Drag Race 3, c
 textures. What the guest was doing then wasn't checked. The four-player run stalled at the same
 four scene changes. The rest of the slow intervals were between 20 and 50 ms.
 
+## Bot soak
+
+`tools/bot_soak.py` played the game with bots at gcn-recomp `b11ebc6`, unpaced in a hidden
+window with no gamepads and `GCN_AXVOICES=1`. The walker in `tools/bot_menus.py` takes the
+menus. In a race, the city or a stadium each bot holds the stick toward a walk drawn from the
+seed and taps A. A race or a City Trial stadium still on after 120 s of game time is left
+through its pause menu. The frozen-picture check didn't run in any soak, since the link gives a
+bot no picture hash yet. No soak had a console reset, so none rebuilt the shader cache.
+
+| Seed | Modes | Ports | Minutes | Dragoon | Wall time | Rounds | End |
+|---|---|---|---|---|---|---|---|
+| 506028 | Air Ride | 1 | 10 | `525580e` | 10.0 min | 37 | Time limit |
+| 506694 | Top Ride | 1 | 10 | `525580e` | 10.0 min | 39 | Time limit |
+| 507330 | City Trial | 1 | 10 | `525580e` | 420 s | 1 | Stop at frame 192,620: a stadium up for 601 s |
+| 511308 | City Trial | 1 | 10 | `0cb53f4` | 10.0 min | 11 | Time limit |
+| 512002 | Air Ride, `-- --exit-after=12000` | 1 | 10 | `c9bf0f9` | 0.4 min | 2 | `exit_after`, exit 0 |
+| 512035 | City Trial | 4 | 60 | `c9bf0f9` | 91 s | 1 | Stop at frame 32,471: a stadium's results up for 121 s |
+| 513333 | City Trial | 4 | 60 | `ee88df6` | 518 s | 5 | Stop at frame 159,374: a stadium up for 602 s |
+| 544282 | City Trial | 4 | 60 | `63932c5` | 645 s | 8 | Stop at frame 181,800: a music stream ended early |
+| 545590 | All three | 1 | 60 | `63932c5` | 1,230 s | 37 | Stop at frame 505,140: a music stream ended early |
+
+The first three stops were the walker's, and the next soak of that mode ran with the fix. After
+a stadium's results the game showed a checklist (screen 34) when the round had checked a box,
+and then City Trial's player entry with every port out. The walker joined again from there and
+never reached the menus, and a later stadium ran past 600 s. Since `b67fd1c` it presses A on the
+checklist. Since `3dd0176` it holds B on the player entry, which goes back to City Trial's own
+menu. Since `c4d608d` it ends a stadium after 120 s through its pause menu.
+
+With four players a stadium's results wait for START from every player. Frame 32,000 of
+512035's replay shows Destruction Derby's results with P1 alone ready, since the walker pressed
+START on port 1 only. It has pressed START on every port since `ee88df6`. With four players a
+stadium's pause menu has Return to Game and End Game side by side, so the walker's DOWN left the
+cursor on Return to Game and its A went back to a Single Race, 49 times over. Frames 130,550 to
+130,650 of 513333's replay show it once. Since `457b37b` it presses RIGHT there instead, which took a
+run of `city-trial-stadium-4p.txt` to End Game on Drag Race 3.
+
+The last two stops came from `tools/stream_voices.py`'s rule. In each, the music's two voices
+changed in the same command list, in a City Trial round's city. The game stopped one with a
+`stop` line and gave the other a sound effect's sample with a `set` line, and the mixer ended
+that sample when it ran out. The rule follows a parameter block across a `set`, so the block's
+earlier stream address made that end an early one. In 544282 it was list 608,157, about 7,100
+frames into the round, and in 545590 list 1,691,796, about 7,400 frames in. Whether a console's
+game stops its music there wasn't checked.
+
+Each stop's replay line ran with `GCN_SESSION` and `GCN_AXVOICES=1` added, so the replay kept
+its own input log and voice lines. Each replay's input log matched the soak's up to the stop
+apart from the header's start time and epoch. Its `[axv]` lines matched the soak's byte for
+byte. There were 292,085 of them for 507330, 35,964 for 512035, 227,595 for 513333, 282,093 for
+544282 and 982,893 for 545590. A replay has no bot, so a screen limit can't fire in one. On the two music
+stops' replays `stream_voices.py` found the same single early end as on their soaks.
+
+Replaying 512035's input log with `--pads=1` gave the same game as `--pads=4`. Its input log
+matched the soak's apart from the header, and its 35,964 `[axv]` lines matched byte for byte. In
+gcn-recomp `b11ebc6` a replay sets
+every port's state from the log, plugged in or not (`input_pad_poll` in `runtime/input_log.cpp`),
+and past the log's end a port the log ended plugged in stays plugged in. So `--pads` isn't what
+makes a four-port replay play as its run. The replay line still carries it.
+
+Each step the soaks showed right came out of the walker's unconfirmed list, and three stay in
+it. A screen kar_ram.json doesn't name gets A. The press cadence stays because a log can't show
+which screen each press landed on. RIGHT on a stadium's pause menu with two or three players
+stays because no soak has played two or three. No four-player soak has run its full hour. The
+longest ran 645 s.
+
 ## Audio
 
 At gcn-recomp `bf31b7b`. `GCN_AXSTATS=1` makes the game print its mixer's counts every 400
