@@ -842,7 +842,7 @@ What a mods folder costs and what it catches, against the bars set for it. Times
 
 | Target | Bar | Measured | Result |
 |---|---|---|---|
-| Noticing a change | `mods.py check` on 120 MB takes 1 s or less, and any added, removed, edited or renamed file changes the digest | 0.08 s in each of three runs on 125,829,120 bytes in 120 files, at a load of 3.0 (Dragoon `a7f02c7`). `test_mods.py` adds, removes, edits and renames a file, renames a mod and moves a file between mods, and each changes the digest | Pass |
+| Noticing a change | `mods.py check` on 120 MB takes 1 s or less, and any added, removed, edited or renamed file changes the digest | 0.08 s in each of three runs on 125,829,120 bytes in 120 files, at a load of 3.0 (Dragoon `b2517cf`, whose `mods.py` is `d0f3272`'s). `test_mods.py` adds, removes, edits and renames a file, renames a mod and moves a file between mods, and each changes the digest | Pass |
 
 The files were 120 pieces of 1 MiB from `/dev/urandom` in one mod's `files/audio/`, written just before, so they were in the page cache. `check` ran under the Command Line Tools' Python 3.9.6 with `/usr/bin/time -p`, and the row gives its real time.
 
