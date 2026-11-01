@@ -69,9 +69,6 @@ BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to it
 
 UNCONFIRMED = {
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
-    "menu.item": "The climb to Start Game on Air Ride's and Top Ride's own menus (minor 2, menu.page 1), by "
-                 "menu.item. Only City Trial's menu has been read there, so UP gives up after "
-                 f"{CLIMB_UPS} presses that leave the row alone and A is pressed.",
     "course cursor": "Air Ride course cursors 3, 4, 5 and 7 (Frozen Hillside, Magma Flows, Beanstalk "
                      "Park and Checker Knights). They follow the routes' grid, and only 0, 1, 2 and 6 "
                      "have been read in the game.",
@@ -341,8 +338,6 @@ class Menus:
         """A on row 0 of the goal's own menu, which is Start Game, and UP to it from any other row.
         The cursor stays where the player left it, as after B out of City Trial's Game Settings.
         A row that stays put through CLIMB_UPS presses of UP is pressed A on."""
-        if self.goal != CITY_TRIAL:
-            self._unconfirmed("menu.item")
         item = self._read(link, "menu.item")
         row, ups = self._climb
         if item != row:

@@ -616,7 +616,6 @@ class RestartTest(unittest.TestCase):
 class UnconfirmedTest(unittest.TestCase):
     CASES = {
         "back to the mode select": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 2}),
-        "menu.item": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 0}),
         "Top Ride machines": (bot_menus.TOP_MACHINES, {}),
         "stadium results": (bot_menus.STADIUM_RESULTS, {}),
         "other screen": (12, {}),
@@ -632,19 +631,14 @@ class UnconfirmedTest(unittest.TestCase):
                 self.assertEqual([line for line in said if line.startswith(f"unconfirmed step, {key}: ")],
                                  [f"unconfirmed step, {key}: {bot_menus.UNCONFIRMED[key]}"])
 
-    def test_the_row_is_unconfirmed_on_air_and_top_rides_menus_and_not_on_city_trials(self) -> None:
-        for goal, mode, told in ((AIR_RIDE, 0, 1), (TOP_RIDE, 1, 1), (CITY_TRIAL, 2, 0)):
+    def test_the_row_is_unconfirmed_on_no_modes_menu(self) -> None:
+        # Air Ride's and Top Ride's rows were read in the game as City Trial's were.
+        for goal, mode in ((AIR_RIDE, 0), (TOP_RIDE, 1), (CITY_TRIAL, 2)):
             with self.subTest(goal=goal):
                 menus, link, said = make(modes=(goal,))
                 screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=mode, menu__item=1)
                 run(menus, link, 1000)
-                self.assertEqual(len([line for line in said if line.startswith("unconfirmed step, menu.item: ")]), told)
-
-    def test_the_row_is_not_said_before_the_walker_reads_it(self) -> None:
-        menus, link, said = make(modes=(TOP_RIDE,))
-        screen(link, bot_menus.MAIN_MENU, menu__page=1, menu__mode=0)  # another mode's menu
-        run(menus, link, 1000)
-        self.assertEqual([line for line in said if "menu.item" in line], [])
+                self.assertEqual([line for line in said if "menu.item" in line], [])
 
     def test_a_course_the_game_never_showed_is_one_too(self) -> None:
         menus, link, said = make()
