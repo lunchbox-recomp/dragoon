@@ -68,7 +68,6 @@ BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to it
 
 UNCONFIRMED = {
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
-    "stadium results": "START on a stadium's results (minor 13). The screen after it was never watched.",
     "stadium pause": "START, DOWN and A on a stadium's pause menu, for End Game. Only Drag Race 3's has been "
                      "watched.",
     "other screen": "A on a screen scene.minor has no name for here.",
@@ -159,7 +158,7 @@ class Menus:
             CITY_SETTINGS: self._back, AIR_COURSES: self._air_courses, TOP_COURSES: self._press_a,
             AIR_MACHINES: self._air_machines, TOP_MACHINES: self._top_machines,
             CITY_PLAYERS: self._city_players, AIR_RESULTS: self._press_start,
-            STADIUM_RESULTS: self._stadium_results, CITY_STATS: self._press_a, STADIUM_CARD: self._press_a,
+            STADIUM_RESULTS: self._press_start, CITY_STATS: self._press_a, STADIUM_CARD: self._press_a,
             CHECKLIST: self._press_a, **{movie: self._movie for movie in MOVIES},
         }
         self._restart(0, 0)
@@ -303,10 +302,6 @@ class Menus:
 
     def _back(self, link: Link) -> Tap:
         return Tap(BUTTONS["B"])
-
-    def _stadium_results(self, link: Link) -> Tap:
-        self._unconfirmed("stadium results")
-        return Tap(BUTTONS["START"])
 
     def _other(self, link: Link) -> Tap:
         self._unconfirmed("other screen")

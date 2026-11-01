@@ -186,6 +186,13 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(self.one(bot_menus.CITY_STATS), {1: A})
         self.assertEqual(self.one(bot_menus.STADIUM_CARD), {1: A})
 
+    def test_a_stadiums_results_are_not_an_unconfirmed_step(self) -> None:
+        # A soak watched START on them go to the checklist and then City Trial's player entry.
+        menus, link, said = make()
+        screen(link, bot_menus.STADIUM_RESULTS)
+        run(menus, link, 1000)
+        self.assertEqual([line for line in said if line.startswith("unconfirmed step") and "cadence" not in line], [])
+
     def test_game_settings_are_left_by_b(self) -> None:
         self.assertEqual(self.one(bot_menus.CITY_SETTINGS), {1: B})
 
@@ -616,7 +623,6 @@ class RestartTest(unittest.TestCase):
 class UnconfirmedTest(unittest.TestCase):
     CASES = {
         "back to the mode select": (bot_menus.MAIN_MENU, {"menu__page": 1, "menu__mode": 2}),
-        "stadium results": (bot_menus.STADIUM_RESULTS, {}),
         "other screen": (12, {}),
         "press cadence": (bot_menus.MOVIES[0], {}),
     }
