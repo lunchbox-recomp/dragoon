@@ -171,6 +171,8 @@ tools/bot_soak.py --seed 7 --minutes 60 --modes city-trial --ports 4
 
 The seed is a whole number from 0. It's printed, and it defaults to one made from the clock. Each run gets a new NAME, since a run in an old `build/probe/NAME/` starts from the memory card that run left. The soak adds `GCN_AXVOICES=1`, makes no frame dumps and gives `bot_link.run` the settings after `--` as they are.
 
+`--minutes` is at most a week, and `--round`, `--stuck` and `--hang` are at most a day. A bigger number is a usage error.
+
 It stops at the first of these.
 
 - The game exits, shuts itself down, panics or is stopped by the engine.

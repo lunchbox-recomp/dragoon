@@ -11,7 +11,8 @@ list of air-ride, top-ride and city-trial (all three by default), with PORTS con
 default). In a race or the city each bot holds the stick toward wherever a walk from SEED says
 and taps A at random, and never presses START (bot_walk.py). The walker leaves an Air Ride or
 Top Ride race through the pause menu after SECONDS of game time (--round, 120 by default). SEED
-is a whole number from 0, which is printed and defaults to one made from the clock.
+is a whole number from 0, which is printed and defaults to one made from the clock. --minutes
+is at most a week, and --round, --stuck and --hang are at most a day.
 
 It stops at the first of these:
 
@@ -60,6 +61,10 @@ SOAK_SETTINGS = ["GCN_AXVOICES=1"]  # what the soak sets before the user's setti
 # The menus are cut off at five times --stuck, and a first walk from the boot to a race takes up to
 # about 72 s, so a --stuck much under this one could stop a healthy run.
 STUCK_FLOOR = 30
+# The most each time may be, which keeps round(seconds * FPS) and the like finite. Each is the
+# number and the unit it's given in.
+CEILINGS = {"minutes": (7 * 24 * 60, "minutes (a week)"), "round": (24 * 60 * 60, "seconds (a day)"),
+            "stuck": (24 * 60 * 60, "seconds (a day)"), "hang": (24 * 60 * 60, "seconds (a day)")}
 
 
 def modes_arg(text: str) -> list[str]:
@@ -92,9 +97,11 @@ def checked(ap: argparse.ArgumentParser, args: argparse.Namespace, clock: Callab
         args.seed = int(clock()) % SEED_RANGE
     if args.seed < 0:
         ap.error("--seed is a whole number from 0")
-    for name in ("minutes", "round", "stuck", "hang"):
+    for name, (ceiling, unit) in CEILINGS.items():
         if not 0 < getattr(args, name) < math.inf:  # nan fails both
             ap.error(f"--{name} is a finite number above 0")
+        if getattr(args, name) > ceiling:
+            ap.error(f"--{name} is at most {ceiling} {unit}")
     if args.stuck < STUCK_FLOOR:
         ap.error(f"--stuck is at least {STUCK_FLOOR} seconds")
 

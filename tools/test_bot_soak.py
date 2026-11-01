@@ -603,6 +603,21 @@ class ArgumentTest(SoakCase):
             with self.subTest(value=value):
                 self.assertEqual(self.check("stuck", value), "")
 
+    def test_a_time_past_its_ceiling_is_a_usage_error_and_the_ceiling_itself_is_taken(self) -> None:
+        for name, ceiling, unit in (("minutes", 7 * 24 * 60, "minutes (a week)"), ("round", 86400, "seconds (a day)"),
+                                    ("stuck", 86400, "seconds (a day)"), ("hang", 86400, "seconds (a day)")):
+            with self.subTest(name=name):
+                self.assertEqual(self.check(name, str(ceiling)), "")
+                self.assertIn(f"--{name} is at most {ceiling} {unit}", self.check(name, str(ceiling + 1)))
+
+    def test_a_huge_time_is_refused_before_anything_is_run_and_does_not_overflow(self) -> None:
+        for name in ("minutes", "round", "stuck", "hang"):
+            with self.subTest(name=name):
+                self.assertIn(f"--{name} is at most", self.check(name, "1e308"))
+        err = self.refused("--minutes=1e308")
+        self.assertIn("--minutes is at most 10080 minutes (a week)", err)
+        self.assertFalse((self.root / "build").exists())
+
     def test_no_other_time_has_a_floor_above_zero(self) -> None:
         for name in ("minutes", "round", "hang"):
             with self.subTest(name=name):
