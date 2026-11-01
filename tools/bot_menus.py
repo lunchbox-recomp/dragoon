@@ -68,6 +68,8 @@ BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to it
 
 UNCONFIRMED = {
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
+    "split stadium pause": "RIGHT on a stadium's pause menu with two or three players, for End Game. Only one "
+                           "player's and four players' menus have been watched.",
     "other screen": "A on a screen scene.minor has no name for here.",
     "press cadence": "Looks come 50 frames after most presses, even one that changes the screen. The title, a "
                      "race's START and the pause menu wait longer. The routes usually wait about 300 frames "
@@ -81,6 +83,9 @@ LEAVE = (  # the pause menu to End Game, as the courses routes press it
 # A stadium's pause menu has two rows, Return to Game and End Game, and DOWN wraps, as Drag Race 3's
 # did. End Game went to City Trial's own menu, there and on each stadium a soak left this way.
 STADIUM_LEAVE = (("START", SLOW), ("DOWN", SETTLE), ("A", START_WAIT))
+# With four players the two sit side by side, End Game on the right, and DOWN leaves the cursor on
+# Return to Game, as a four-player soak's Single Race showed. RIGHT reached End Game on Drag Race 3's.
+SPLIT_STADIUM_LEAVE = (("START", SLOW), ("RIGHT", SETTLE), ("A", START_WAIT))
 
 
 class Stuck(Exception):
@@ -264,7 +269,9 @@ class Menus:
         if self.mode in (AIR_RIDE, TOP_RIDE):
             what, way = self.mode, LEAVE
         elif self._stadium:
-            what, way = "the stadium", STADIUM_LEAVE
+            what, way = "the stadium", STADIUM_LEAVE if self.ports == 1 else SPLIT_STADIUM_LEAVE
+            if self.ports in (2, 3):
+                self._unconfirmed("split stadium pause")
         else:
             return None
         self._left = frame

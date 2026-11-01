@@ -25,7 +25,9 @@ class FakeGame:
     checklist the first time, as a soak showed. B held there for BACK_HELD frames goes back to
     City Trial's own menu, as a hold from city-trial.txt's player entry did. The city can't be
     paused here. A stadium's pause menu has two rows, Return to Game and End Game, and DOWN
-    wraps, as Drag Race 3's did. Its End Game goes to City Trial's own menu."""
+    wraps, as Drag Race 3's did. With more than one player the two sit side by side, as a
+    four-player Single Race's did, and RIGHT moves to End Game, as on Drag Race 3's. End Game
+    goes to City Trial's own menu."""
 
     BACK_HELD = 47  # frames of B the game took to leave the player entry
 
@@ -188,7 +190,9 @@ class FakeGame:
         in_city = self.started[-1][0] == "city"
         stadium = in_city and self.stage == 1
         if self.paused:
-            if pressed("DOWN"):  # a stadium's two rows wrap, as Drag Race 3's did
+            if stadium and self.players > 1:  # side by side, as four players' Single Race showed them
+                self.pause_row = 1 if pressed("RIGHT") else self.pause_row
+            elif pressed("DOWN"):  # a stadium's two rows wrap, as Drag Race 3's did
                 self.pause_row = (self.pause_row + 1) % 2 if stadium else min(2, self.pause_row + 1)
             if pressed("A"):
                 if self.pause_row == (1 if stadium else 2):  # End Game: back to the mode's own menu

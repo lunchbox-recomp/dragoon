@@ -651,7 +651,22 @@ class UnconfirmedTest(unittest.TestCase):
                 self.assertEqual([line for line in said if "menu.item" in line], [])
 
     def test_every_unconfirmed_step_is_tested_here(self) -> None:
-        self.assertEqual(set(bot_menus.UNCONFIRMED), set(self.CASES))
+        self.assertEqual(set(bot_menus.UNCONFIRMED), {*self.CASES, "split stadium pause"})
+
+    def test_a_stadium_left_with_two_or_three_players_is_one_and_with_one_or_four_is_not(self) -> None:
+        for ports, said_so in ((1, False), (2, True), (3, True), (4, False)):
+            with self.subTest(ports=ports):
+                menus, link, said = make(ports, modes=(CITY_TRIAL,), round_seconds=10)
+                screen(link, bot_menus.CITY_PLAYERS)
+                run(menus, link, 1)
+                screen(link, bot_menus.RACE)
+                run(menus, link, 100, first=1)
+                screen(link, bot_menus.STADIUM_CARD)
+                run(menus, link, 100, first=101)
+                screen(link, bot_menus.RACE)
+                steps = run(menus, link, 1200, first=201)
+                self.assertEqual([pads[1] for _, pads in presses(steps)], [START, RIGHT if ports > 1 else DOWN, A])
+                self.assertEqual(any("split stadium pause" in line for line in said), said_so)
 
     def test_the_press_cadence_is_said_with_the_first_press_and_not_with_a_wait(self) -> None:
         cadence = f"unconfirmed step, press cadence: {bot_menus.UNCONFIRMED['press cadence']}"
@@ -738,6 +753,11 @@ class PathTest(unittest.TestCase):
 
     def test_a_stadium_that_goes_on_is_ended_from_its_pause_menu_and_the_next_round_starts(self) -> None:
         game, menus = self.path(CITY_TRIAL, frames=12000, race=2000, stadium=10 ** 9, round_seconds=30)
+        self.assertEqual(game.visited[:11], [38, 0, 2, 25, 10, 18, 16, 17, 18, 2, 10])
+        self.assertGreaterEqual(len(game.started), 2)
+
+    def test_a_four_player_stadium_that_goes_on_is_ended_from_its_side_by_side_pause_menu(self) -> None:
+        game, menus = self.path(CITY_TRIAL, players=4, frames=12000, race=2000, stadium=10 ** 9, round_seconds=30)
         self.assertEqual(game.visited[:11], [38, 0, 2, 25, 10, 18, 16, 17, 18, 2, 10])
         self.assertGreaterEqual(len(game.started), 2)
 
