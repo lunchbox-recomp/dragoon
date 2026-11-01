@@ -22,9 +22,9 @@ RESET = "[reset] the game reset the console (restart, code 0)\n"
 
 
 def axv(n: int, kind: str, pb: str = PB, loop: str = MUSIC_LOOP, end: str = MUSIC_END,
-        flags: str = "0 stream=0") -> str:
+        flags: str = "0 stream=0", cur: str = "00DD0195") -> str:
     return (f"[axv] list={n} pb={pb} {kind} run=1 looping={flags} fmt=00 src=0 loop={loop} end={end} "
-            f"cur=00DD0195 ratio=00010000\n")
+            f"cur={cur} ratio=00010000\n")
 
 
 class Source:
@@ -217,6 +217,17 @@ class LogWatchTest(unittest.TestCase):
     def test_a_stream_the_game_stops_is_not_early(self) -> None:
         self.write(axv(100, "run", flags="1 stream=1") + axv(120, "stop", flags="1 stream=1"))
         self.watch.look(0)
+        self.assertTrue(self.watch.axv)
+
+    def test_music_the_game_ends_by_giving_one_voice_an_effect_and_stopping_the_other_is_not_a_cut(self) -> None:
+        # Soak 544282's stop, in one list: the other voice stopped and this one given an effect's sample.
+        self.write(axv(601347, "run", loop="01878A02", end="018889FF", flags="1 stream=0", cur="01878A02")
+                   + axv(601347, "run", pb=OTHER, loop="01868A02", end="018789FF", flags="1 stream=0", cur="01868A02")
+                   + axv(608157, "stop", pb=OTHER, loop="01848A02", end="01897DBF", flags="1 stream=0")
+                   + axv(608157, "set", loop="00BEC7C2", end="00BED1EC", cur="00BEC7C2")
+                   + axv(608185, "end", loop="00BEC7C2", end="00BED1EC", cur="00BED1ED"))
+        self.watch.look(0)
+        self.watch.finish(0)
         self.assertTrue(self.watch.axv)
 
     def test_an_effect_the_mixer_ends_is_not_early(self) -> None:

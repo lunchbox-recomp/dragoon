@@ -9,7 +9,7 @@ block address, with the list it started at, the loop address it started with, ho
 looped, its last level peak and how it ended:
 
   still running at the end of the log
-  stopped by the game       a "stop" line
+  stopped by the game       a "stop" line, or a "set" that gives the block a new sample
   ended by the mixer        an "end" line
   ended early               an "end" line on a stream, or on a moved voice with no loop flag
 
@@ -18,13 +18,15 @@ a clear flag says nothing. A voice ended early when any of its lines had a strea
 (018xxxxx, or the PCM16 ring at 0062A280 or 0062A780), or when a "set" line moved its loop or
 end address while it ran and no line of it ever had stream=1 or looping=1. The game starts new
 samples on blocks that still run an effect, so away from a stream address a voice that had a
-flag and lost it isn't called early, and neither is a "set" that puts cur on the new loop
-address, which restarts the block and moves nothing. A failure outside the stream addresses
-with no "set" between its "run" and its "end" shows only in the count of other voices. Each
-early row names the rule, the list and the time (a list is 5 ms), and comes last,
-whether or not the voice ever had a flag. The other voices the mixer ended, which never had
-stream=1 or looping=1, are counted and not listed. A parameter block that runs again after it
-stops or ends is a voice for each run. It only reports, so it never exits 1.
+flag and lost it isn't called early. A "set" that puts cur on a new loop address gives the block
+a new sample. That ends the voice that ran there as the game's doing and starts another, as when
+the game ended its music in two soaks by stopping one voice of the pair and giving the other an
+effect's sample in the same list. A failure outside the stream addresses with no "set" between
+its "run" and its "end" shows only in the count of other voices. Each early row names the rule,
+the list and the time (a list is 5 ms), and comes last, whether or not the voice ever had a
+flag. The other voices the mixer ended, which never had stream=1 or looping=1, are counted and
+not listed. A parameter block that runs again after it stops or ends, or gets a new sample, is a
+voice for each run. It only reports, so it never exits 1.
 
 Exits 0 once it has read the log, 2 on a bad argument or a log it can't read or that has no
 [axv] lines.
@@ -96,14 +98,18 @@ class Tracker:
         self.seen = True
         n, pb, kind, looping, stream, loop, end, cur = int(m[1]), m[2], m[3], m[4], m[5], m[6], m[7], m[8]
         self.last = max(self.last, n)
-        if kind == "run" or pb not in self._current:
-            self._current[pb] = Voice(pb, n, loop, loop, end)
+        v = self._current.get(pb)
+        # A set that puts cur on a new loop address gives the block a new sample, which ends the
+        # voice that ran there as the game's doing.
+        new_sample = v is not None and kind == "set" and (loop, end) != (v.loop, v.end) and cur == loop
+        if new_sample and v.how == RUNNING:
+            v.end_list, v.how = n, GAME
+        if v is None or kind == "run" or new_sample:
+            v = self._current[pb] = Voice(pb, n, loop, loop, end)
             if self.keep:
-                self.voices.append(self._current[pb])
-        v = self._current[pb]
+                self.voices.append(v)
         v.listed = v.listed or "1" in (looping, stream)
         v.on_stream = v.on_stream or bool(STREAM.match(loop))
-        # A set that puts cur on the new loop address starts a new sample on the block, not a move.
         v.moved = v.moved or ((loop, end) != (v.loop, v.end) and cur != loop)
         v.loop, v.end = loop, end
         if kind == "loop":

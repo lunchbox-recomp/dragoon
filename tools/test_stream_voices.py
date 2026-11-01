@@ -325,6 +325,86 @@ class TrackerTest(unittest.TestCase):
         self.assertFalse(tracker.seen)
 
 
+class NewSampleTest(unittest.TestCase):
+    """A set that puts cur on a new loop address gives the block a new sample, which ends the
+    voice that ran there as the game's doing. The music stops of soaks 544282 and 545590 were
+    that: in one list the game stopped one voice of the music's pair and gave the other an
+    effect's sample, which the mixer ended when it ran out."""
+
+    GAME = "stopped by the game"
+
+    def test_the_pair_of_soak_544282_both_play_the_effect_and_neither_stream_ended_early(self):
+        voices, _, others = stream_voices.parse(text(
+            state(601347, "run", looping=1, stream=0, loop="01878A02", end="018889FF", cur="01878A02"),
+            state(601347, "run", pb=OTHER, looping=1, stream=0, loop="01868A02", end="018789FF", cur="01868A02"),
+            state(607919, "loop", looping=1, stream=0, loop="01897DC2", end="018871FF", cur="01897DC7"),
+            state(607921, "set", looping=1, stream=0, loop="01897DC2", end="018A717F", cur="01897F0F"),
+            state(607923, "set", looping=1, stream=0, loop="01857DC2", end="018A717F", cur="0189807D"),
+            state(608157, "stop", pb=OTHER, run=0, looping=1, stream=0, loop="01848A02", end="01897DBF",
+                  cur="018933E3"),
+            state(608157, "set", looping=0, stream=0, loop="00BEC7C2", end="00BED1EC", cur="00BEC7C2"),
+            state(608161, "run", pb=OTHER, looping=0, stream=0, loop="00BEC7C2", end="00BED1EC", cur="00BEC7C2"),
+            state(608185, "end", run=0, looping=0, stream=0, loop="00BEC7C2", end="00BED1EC", cur="00BED1ED"),
+            state(608189, "end", pb=OTHER, run=0, looping=0, stream=0, loop="00BEC7C2", end="00BED1EC",
+                  cur="00BED1ED")))
+        self.assertEqual([(v.pb, v.start, v.how, v.end_list) for v in voices],
+                         [(PB, 601347, self.GAME, 608157), (OTHER, 601347, self.GAME, 608157)])
+        self.assertEqual(others, 2)
+
+    def test_the_pair_of_soak_545590_goes_on_to_other_effects_and_neither_stream_ended_early(self):
+        voices, _, others = stream_voices.parse(text(
+            state(1685793, "run", pb=OTHER, looping=1, stream=0, loop="01848A02", end="018589FF", cur="01848A02"),
+            state(1685793, "run", looping=1, stream=0, loop="01858A02", end="018689FF", cur="01858A02"),
+            state(1691461, "set", looping=1, stream=0, loop="018983C2", end="01887D7F", cur="01878654"),
+            state(1691796, "stop", pb=OTHER, run=0, looping=1, stream=0, loop="01888A02", end="018783BF",
+                  cur="01877BDC"),
+            state(1691796, "set", looping=0, stream=0, loop="00DCB362", end="00DD49F4", cur="00DCB362"),
+            state(1691802, "run", pb=OTHER, looping=0, stream=0, loop="012F8AA2", end="012FC2C6", cur="012F8AA2"),
+            state(1691879, "end", pb=OTHER, run=0, looping=0, stream=0, loop="012F8AA2", end="012FC2C6",
+                  cur="012FC2C7"),
+            state(1692215, "end", run=0, looping=0, stream=0, loop="00DCB362", end="00DD49F4", cur="00DD49F5"),
+            state(1692223, "run", looping=1, stream=0, loop="012CA6F4", end="012E0438", cur="012C69B2")))
+        self.assertEqual([(v.pb, v.start, v.how, v.end_list) for v in voices],
+                         [(OTHER, 1685793, self.GAME, 1691796), (PB, 1685793, self.GAME, 1691796),
+                          (PB, 1692223, "still running", None)])
+        self.assertEqual(others, 2)
+
+    def test_a_stream_of_that_pair_the_mixer_ends_with_no_stop_or_new_sample_is_still_early(self):
+        voices, _, _ = stream_voices.parse(text(
+            state(1685793, "run", pb=OTHER, looping=1, stream=0, loop="01848A02", end="018589FF", cur="01848A02"),
+            state(1685793, "run", looping=1, stream=0, loop="01858A02", end="018689FF", cur="01858A02"),
+            state(1691461, "set", looping=1, stream=0, loop="018983C2", end="01887D7F", cur="01878654"),
+            state(1692215, "end", run=0, looping=0, stream=0, loop="018983C2", end="01887D7F", cur="01887D80")))
+        self.assertEqual([(v.pb, v.how, v.end_list, v.why) for v in voices if v.how == EARLY],
+                         [(PB, EARLY, 1692215, [stream_voices.AT_STREAM])])
+
+    def test_a_new_sample_at_a_stream_address_that_the_mixer_ends_is_still_early(self):
+        v = one(state(10, "run", looping=0, stream=0),
+                state(20, "set", looping=0, stream=0, loop=MUSIC, end=MUSIC_END, cur=MUSIC),
+                state(90, "end", run=0, looping=0, stream=0, loop=MUSIC, end=MUSIC_END, cur="018189FF"))
+        self.assertEqual((v.start, v.how, v.why), (20, EARLY, [stream_voices.AT_STREAM]))
+
+    def test_a_new_sample_after_the_mixer_ended_the_voice_leaves_that_end_as_it_was(self):
+        tracker = stream_voices.Tracker()
+        tracker.add(state(10, "run", looping=0, stream=0, loop=MUSIC, end=MUSIC_END))
+        tracker.add(state(50, "end", run=0, looping=0, stream=0, loop=MUSIC, end=MUSIC_END))
+        tracker.add(state(60, "set", looping=0, stream=0, cur=SFX))
+        self.assertEqual([(v.start, v.how, v.end_list) for v in tracker.voices],
+                         [(10, EARLY, 50), (60, "still running", None)])
+
+    def test_a_set_that_moves_the_stream_with_cur_elsewhere_is_not_a_new_sample(self):
+        tracker = stream_voices.Tracker()
+        tracker.add(state(10, "run", looping=1, stream=0, loop=MUSIC, end=MUSIC_END, cur=MUSIC))
+        tracker.add(state(20, "set", looping=1, stream=0, loop="01818A02", end=MUSIC_END, cur="01810000"))
+        self.assertEqual([(v.start, v.how) for v in tracker.voices], [(10, "still running")])
+
+    def test_a_set_that_keeps_the_addresses_and_puts_cur_on_the_loop_is_not_a_new_sample(self):
+        tracker = stream_voices.Tracker()
+        tracker.add(state(10, "run", looping=1, stream=0, loop=MUSIC, end=MUSIC_END, cur="01810000"))
+        tracker.add(state(20, "set", looping=1, stream=0, loop=MUSIC, end=MUSIC_END, cur=MUSIC))
+        self.assertEqual([(v.start, v.how) for v in tracker.voices], [(10, "still running")])
+
+
 class MainTest(unittest.TestCase):
     def setUp(self):
         self.dir = temp_dir(self)
