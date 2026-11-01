@@ -539,9 +539,8 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
     for each port it drives, ports 1 to `pads`. `script` is probe.sh's INPUT_SCRIPT, `every`
     its DUMP_EVERY (None for no dumps) and `settings` more of its settings. `hang` is the wall
     seconds without a frame, or without an answer to a read, before the run stops as a hang,
-    None for never. `probe` is a
-    probe.sh-compatible program for a fake in a test; its run directory is where probe.sh's
-    would be.
+    None for never. `probe` is a probe.sh-compatible program for a fake in a test; its run
+    directory is where probe.sh's would be.
 
     The run is a session, build/probe/NAME/session unless `settings` names a GCN_SESSION, so
     its input log replays with no bot. A session the run makes records no audio, unless

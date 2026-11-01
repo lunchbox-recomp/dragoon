@@ -73,7 +73,7 @@ Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, h
 | `shutdown` | The game shut the console down by itself | Its `[reset]` line |
 | `game_exited` | The game ended some other way and left its input log whole | The frame it ended at |
 | `game_died` | The game ended and its input log has no `# end` line, or it reset the console and the new process began no session | The last line of `stdout.txt`, or the `[reset]` line |
-| `hang` | No frame or no answer to a read for `hang` seconds, or no new connection that long after a reset | How long, and after which frame or at which frame the read was, or after a reset the game's last line |
+| `hang` | No frame or no answer to a read for `hang` seconds, or no new connection that long after a reset | How long, and the last frame or the frame of the unanswered read, or after a reset the game's last line |
 | `engine_stop` | The engine stopped the game | Its `[bot] frame N: ...` line from `stdout.txt` |
 | `connect_failed` | The engine couldn't connect | Its `--bot PATH: ...` line |
 | `panic` | The game crashed | The first line of `panic.txt`, or the `FATAL` or `FAULT` line |
