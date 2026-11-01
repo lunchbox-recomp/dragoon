@@ -11,6 +11,7 @@ import time
 import unittest
 from pathlib import Path
 from typing import Optional
+from unittest import mock
 
 import bot_link
 import bot_menus
@@ -18,7 +19,7 @@ import bot_record
 import bot_soak
 from bot_watch import engine_picture
 from testengine import PICTURE_ADDR, axv, built_sha, make_tree, set_plan
-from testutil import RUN_LIMIT, commit, run_main, time_limit
+from testutil import RUN_LIMIT, TimeLimit, commit, run_main, time_limit
 
 SEED = "3"
 
@@ -795,6 +796,47 @@ class TimeLimitTest(unittest.TestCase):
         self.assertLess(took, 4)
         self.assertEqual(len(errors), 2, errors)
         self.assertTrue(all("TimeLimit: " in text for text in errors), errors)
+
+    def test_an_outer_limit_still_fires_after_an_inner_one_ends(self) -> None:
+        class Inner(SoakCase):
+            limit = 30.0
+
+            def test_quick(self) -> None:
+                pass
+
+        class Outer(unittest.TestCase):
+            def test_waits(self) -> None:
+                time_limit(self, 1.0)
+                inner = unittest.TestResult()
+                Inner("test_quick").run(inner)
+                self.assertTrue(inner.wasSuccessful(), inner.errors)
+                time.sleep(5)
+
+        errors, took = self.outcome(Outer("test_waits"))
+        self.assertLess(took, 4)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("Outer.test_waits ran past its 1 s limit", errors[0])
+
+    def test_the_old_handler_comes_back_when_an_alarm_lands_as_the_limit_ends(self) -> None:
+        real = signal.setitimer
+        calls: list[tuple] = []
+
+        def setitimer(which: int, *args: float) -> tuple[float, float]:
+            calls.append(args)
+            got = real(which, *args)
+            if len(calls) == 2:  # the limit's end, with an alarm just after it puts the timer back
+                raise TimeLimit("an alarm as the limit ends")
+            return got
+
+        class Quick(unittest.TestCase):
+            def test_quick(self) -> None:
+                time_limit(self, 30.0)
+
+        with mock.patch.object(signal, "setitimer", side_effect=setitimer):
+            errors, _ = self.outcome(Quick("test_quick"))
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("an alarm as the limit ends", errors[0])
 
 
 if __name__ == "__main__":

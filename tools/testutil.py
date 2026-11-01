@@ -74,18 +74,21 @@ def time_limit(test: unittest.TestCase, seconds: float) -> None:
     """Raises TimeLimit in TEST wherever it waits, once it has run SECONDS of wall time and again
     each SECONDS after that, so a cleanup that waits too can't hold it. A cleanup ends the limit,
     and since cleanups run last first, the ones TEST adds later run under it. TEST can't use
-    SIGALRM or the real-time interval timer while it holds them."""
+    SIGALRM or the real-time interval timer while it holds them. The end gives back the timer and
+    the handler it found, so a limit around this one still fires."""
     def expired(signum: int, frame: Optional[FrameType]) -> None:
         raise TimeLimit(f"{test.id()} ran past its {seconds:g} s limit")
 
     before = signal.signal(signal.SIGALRM, expired)
 
     def end() -> None:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, before)
+        try:
+            signal.setitimer(signal.ITIMER_REAL, *outer)
+        finally:
+            signal.signal(signal.SIGALRM, before)
 
     test.addCleanup(end)
-    signal.setitimer(signal.ITIMER_REAL, seconds, seconds)
+    outer = signal.setitimer(signal.ITIMER_REAL, seconds, seconds)
 
 
 def run_main(main: Callable[[list[str]], int], *argv: str) -> tuple[int, str, str]:
