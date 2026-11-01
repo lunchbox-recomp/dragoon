@@ -177,7 +177,7 @@ It stops at the first of these.
 - The game sends no frame for `--hang` seconds of wall time, 30 by default.
 - The picture's hash stays the same for 10 s of game time while the race bots' input changes.
 - A music stream ends early, by stream_voices.py's rule on the run's `[axv]` lines.
-- A menu screen stays up for `--stuck` seconds of game time, 120 by default, or a race or the city for 600, or the menus go on for five times `--stuck` with no race or city.
+- A menu screen stays up for `--stuck` seconds of game time, 120 by default and 30 at least, or a race or the city for 600, or the menus go on for five times `--stuck` with no race or city.
 
 A console reset rebuilds the shader cache before the bot connects again, and that time counts against the hang limit. The soak keeps the first reset's `[shaders] ... in Z ms` line, and warns when Z reaches two thirds of the limit. `--hang` raises the limit for the next run, since a run can't change it once it has started.
 

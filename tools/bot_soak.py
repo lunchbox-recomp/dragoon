@@ -19,7 +19,7 @@ It stops at the first of these:
   the game sends no frame for --hang seconds of wall time (30 by default)
   the picture's hash stays the same for 10 s of game time while the race bots' input changes
   a music stream ends early (stream_voices.py's rule, on the run's [axv] lines)
-  a menu screen stays up for --stuck seconds of game time (120 by default), or a race or the
+  a menu screen stays up for --stuck seconds of game time (120 by default, 30 at least), or a race or the
   city for 600, or the menus go on for five times --stuck with no race or city
 
 The frozen-picture check needs a picture hash the link doesn't give yet, so it doesn't run, and
@@ -57,6 +57,9 @@ MINUTES = 10
 HANG_SECONDS = 30
 SEED_RANGE = 1_000_000
 SOAK_SETTINGS = ["GCN_AXVOICES=1"]  # what the soak sets before the user's settings
+# The menus are cut off at five times --stuck, and a first walk from the boot to a race takes up to
+# about 72 s, so a --stuck much under this one could stop a healthy run.
+STUCK_FLOOR = 30
 
 
 def modes_arg(text: str) -> list[str]:
@@ -92,6 +95,8 @@ def checked(ap: argparse.ArgumentParser, args: argparse.Namespace, clock: Callab
     for name in ("minutes", "round", "stuck", "hang"):
         if not 0 < getattr(args, name) < math.inf:  # nan fails both
             ap.error(f"--{name} is a finite number above 0")
+    if args.stuck < STUCK_FLOOR:
+        ap.error(f"--stuck is at least {STUCK_FLOOR} seconds")
 
 
 def say(text: str) -> None:

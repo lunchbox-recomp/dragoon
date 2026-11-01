@@ -255,9 +255,9 @@ class StopTest(SoakCase):
         self.assertEqual(data["stop"]["kind"], "music_cut")
 
     def test_a_menu_screen_that_stays_up_stops_the_run(self) -> None:
-        out, data = self.stop([at([["screen", 12]], frame=300)], "--stuck", "3")
+        out, data = self.stop([at([["screen", 12]], frame=300)], "--stuck", "30")
         self.assertEqual(data["stop"]["kind"], "menus_stuck")
-        self.assertRegex(data["stop"]["detail"], r"^screen 12 \(not named in kar_ram.json\) has stayed up for 3 s ")
+        self.assertRegex(data["stop"]["detail"], r"^screen 12 \(not named in kar_ram.json\) has stayed up for 3\d s ")
         self.assertIn("screen 12 isn't in kar_ram.json; pressing A", out)
 
     def test_a_frozen_picture_stops_the_run(self) -> None:
@@ -582,6 +582,31 @@ class ArgumentTest(SoakCase):
                         bot_soak.checked(ap, args, time.time)
                     self.assertEqual(caught.exception.code, 2)
                     self.assertIn(f"--{name} is a finite number above 0", err.getvalue())
+
+    def check(self, name: str, value: str) -> str:
+        """What `checked` says about --NAME=VALUE: '' when it takes it, and else the usage error."""
+        ap = bot_soak.parser()
+        args = ap.parse_args([f"--{name}={value}"])
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            try:
+                bot_soak.checked(ap, args, time.time)
+            except SystemExit as e:
+                self.assertEqual(e.code, 2)
+        return err.getvalue()
+
+    def test_a_stuck_under_thirty_seconds_is_a_usage_error_since_the_first_walk_would_not_fit(self) -> None:
+        for value in ("29.9", "29", "15", "1", "0.5"):
+            with self.subTest(value=value):
+                self.assertIn("--stuck is at least 30 seconds", self.check("stuck", value))
+        for value in ("30", "30.0", "120"):
+            with self.subTest(value=value):
+                self.assertEqual(self.check("stuck", value), "")
+
+    def test_no_other_time_has_a_floor_above_zero(self) -> None:
+        for name in ("minutes", "round", "hang"):
+            with self.subTest(name=name):
+                self.assertEqual(self.check(name, "0.01"), "")
 
     def test_a_time_that_is_not_finite_is_refused_before_anything_is_run(self) -> None:
         for argv in (["--minutes", "inf"], ["--hang", "nan"], ["--minutes", "nan"], ["--hang", "inf"]):
