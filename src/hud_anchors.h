@@ -204,7 +204,7 @@ private:
     std::vector<Mark> marks_;       // the marks the joints call for
 };
 
-// Whether a joint's matrix, three rows of four, has been made: the game leaves a new joint's
+// Whether a joint's matrix, three rows of four, has been made: the game can leave a new joint's
 // all zero until it first draws it, so one with nothing in its 3 by 3 part has no place yet.
 inline bool matrix_made(const float m[12]) {
     for (int r = 0; r < 3; r++)

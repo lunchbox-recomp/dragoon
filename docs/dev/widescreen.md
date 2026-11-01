@@ -333,8 +333,8 @@ does.
 A tree in a rect's left third anchors to its left edge, one in its right third to its right
 edge and one between to its middle. A tree goes by its root when none of its joints has drawn
 and it had no mark the frame before. A new joint's matrix is all zero until the game first draws
-it, as is one scaled to zero. So that's the frame a tree first shows, each frame after while it
-stays scaled to nothing, and a frame it shows scaled to nothing after missing one.
+it, as is one scaled to zero. So that can be the frame a tree first shows, each frame after
+while it stays scaled to nothing, and a frame it shows scaled to nothing after missing one.
 
 A tree holds the edge it had the frame before for a quarter of a third past each of that edge's
 lines. Without that, an element moving 2 pixels across a line would jump about 109 display
@@ -344,14 +344,18 @@ across one jumps there once.
 
 The edge holds only while the tree moves. Once the same joints have drawn in the same places
 for 30 frames in a row, it takes its nearest edge. A joint that moves, shows or hides starts the
-count again. Without that, an element that stopped inside the band would keep the edge it came
-from, then show at the other once it missed a frame. So one that stops there shows the edge it
-came from for 29 frames from the one it stops in. It takes its nearest edge on the 30th.
+count again.
+
+Without that, an element that stopped inside the band would keep the edge it came from, then
+show at the other once it missed a frame. So one that stops there shows the edge it came from for
+29 frames from the one it stops in. It takes its nearest edge on the 30th.
 
 A tie in a tree's vote goes to the edge it held while it moves. Once it has rested, the tie goes
-to the first of those tied in the order the tree draws its joints. On Dragoon `fb8cf35`, which gave a rested tree's tie to its held edge too,
-the speedometer's frame held the middle it first showed in, in the race at 4200 and City Trial
-at 3300. Its joints split evenly between the middle and the right.
+to the first of those tied in the order the tree draws its joints.
+
+On Dragoon `fb8cf35`, which gave a rested tree's tie to its held edge too, the speedometer's
+frame held the middle it first showed in, in the race at 4200 and City Trial at 3300. Its joints
+split evenly between the middle and the right.
 
 Keeping each tree's first mark for as long as it showed doesn't work for this game's HUD. On
 Dragoon `34a24f5`, which did, every tree `fn_80114F1C` draws held C(0..640) in the race at 4200
@@ -360,19 +364,19 @@ the position went to the left and the rest to the right.
 
 A tree that misses a frame chooses afresh when it next shows, and holds nothing from that
 showing, since its joints sit where they last drew, before the frame it missed. One shown for the
-first time does the same, as its joints sit where the game made them. Every tree `fn_80114F1C`
-draws in the race and City Trial first shows with all its joints at the screen's middle. One
-whose joints haven't drawn holds the mark it had the frame before, or goes by its root when it
-had none.
+first time does the same, as its joints sit where the game made them, which for every tree
+`fn_80114F1C` draws in the race and City Trial is the screen's middle. One whose joints haven't
+drawn holds the mark it had the frame before, or goes by its root when it had none.
 
 The speedometer's frame never moves at the start. Dragoon `751c981` held a first showing's mark,
 so the frame held the middle from its first frame, 3241 in the race and 2852 in City Trial,
-through a tie between its joint at the right and its root at the middle. It took the right once
-it had rested, at 3271 and 2882, a jump of 107 display pixels at 16:9. Holding nothing from its
-first showing, it takes the right on its second frame, 3242 and 2853, the first its joints draw
-where it sits. In 2P the screen's middle is on the bar between the views. There each view's
-frame stretches for its first frame at 2852. On `751c981` it already sat at the right from the
-next.
+through a tie between a joint at the right and a joint at the middle. It took the right once it
+had rested, at 3271 and 2882, a jump of 107 display pixels at 16:9.
+
+Holding nothing from its first showing, it takes the right on its second frame, 3242 and 2853,
+the first its joints draw where it sits. In 2P the screen's middle is on the bar between the
+views, so there each view's frame stretches for its first frame at 2852. On `751c981` it already
+sat at the right from the next.
 
 The rect is the screen in one player. In 2P and 4P it's the view the tree sits in, from the
 viewports of the frame's world cameras, which `src/cameras.cpp` passes as the game sets their
@@ -462,10 +466,10 @@ loads of 4.2 to 5.0.
   `HSD_GObjJObjDisp`, the render callback of every model object, so the table can't name them.
 - A HUD element that first shows goes by its root's place, or by joints still where the game made
   them, until its joints have drawn. That can anchor it to the wrong edge for a frame, as it can
-  one that shows scaled to nothing after missing a frame. The draw logs caught it at the start.
-  In the race at 3241 and City Trial at 2852 every tree `fn_80114F1C` draws shows in the middle
-  for its first frame, 107 display pixels from where it sits from the next, and in 2P at 2852
-  they stretch for theirs.
+  one that shows scaled to nothing after missing a frame. In the draw logs every tree
+  `fn_80114F1C` draws shows in the middle for its first frame in the race at 3241 and City Trial
+  at 2852, 107 display pixels from where it sits from the next, and in 2P at 2852 they stretch
+  for theirs.
 - An element that slides across a third's line jumps to the other edge once it's a quarter of a
   third past the line. No dump caught one.
 - An element that moves across a line and stops less than a quarter of a third past it shows at
