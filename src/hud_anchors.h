@@ -144,17 +144,20 @@ constexpr uint32_t kRestFrames = 30;
 // kRestFrames frames in a row, it holds nothing: its joints call for their nearest edges and a
 // tie goes to the first of those tied in the order the tree draws its joints. A joint that
 // moves, shows or hides starts the rest again. So one that stopped inside the band moves to its
-// edge then rather than when it next misses a frame, and one that first showed in the middle
-// doesn't keep the middle through a tie at a side, as the race's speedometer frame would at
-// 4200. A tree that misses a frame chooses afresh when it shows. A tree whose joints have no
-// place yet has nothing to keep, so it chooses from them once they have one. Trees are told
-// apart by their root, and a root shown more than once in a frame by which time it is.
+// edge then rather than when it next misses a frame. A tree that misses a frame chooses afresh
+// when it shows, and holds nothing from that showing, since its joints sit where they last drew,
+// before the frame it missed. One shown for the first time does the same, its joints sitting
+// where the game made them: every tree fn_80114F1C draws in the race first shows with all its
+// joints at the screen's middle, and the speedometer's frame held the middle from then through a
+// tie at the right until it had rested. A tree whose joints have no place yet has nothing to
+// keep, so it chooses from them once they have one. Trees are told apart by their root, and a
+// root shown more than once in a frame by which time it is.
 class KeptMarks {
 public:
     // The mark of the tree at `root`, shown in `frame` with its joints at `joints` on screen
     // among `views`: the one most of them call for, holding the tree's mark from the frame
-    // before until the tree has rested. With no joint placed, the mark from the frame before,
-    // or none.
+    // before, when it chose that from where its joints drew, until the tree has rested. With no
+    // joint placed, the mark from the frame before, or none.
     std::optional<Mark> place(uint32_t frame, uint32_t root, const std::vector<Point>& joints,
                               const std::vector<Rect>& views) {
         if (frame != frame_) {
@@ -165,19 +168,23 @@ public:
             now_.clear();
             frame_ = frame;
         }
-        Kept k{root, 0, std::nullopt, {}, 0};
+        Kept k{root, 0, std::nullopt, {}, 0, false};
         for (const Kept& n : now_) k.time += n.root == root;
         const Kept* before = nullptr;
         for (const Kept& l : last_)
             if (l.root == root && l.time == k.time) before = &l;
-        if (before) k.mark = before->mark;
+        if (before) {
+            k.mark = before->mark;
+            k.drawn = before->drawn;
+        }
         if (!joints.empty()) {
             k.at = joints;
             k.still = before && before->at == k.at ? before->still + 1 : 1;
-            const std::optional<Mark> held = k.still < kRestFrames ? k.mark : std::nullopt;
+            const std::optional<Mark> held = k.drawn && k.still < kRestFrames ? k.mark : std::nullopt;
             marks_.clear();
             for (const Point& p : joints) marks_.push_back(edge_mark(p.x, p.y, views, held.value_or(Mark{})));
             k.mark = most_called(marks_, held);
+            k.drawn = before != nullptr;
         }
         now_.push_back(std::move(k));
         return now_.back().mark;
@@ -190,6 +197,7 @@ private:
         std::optional<Mark> mark;
         std::vector<Point> at;  // where its joints were placed, in the order it draws them
         uint32_t still;         // how many frames in a row, to this one, its joints were at `at`, or 0
+        bool drawn;             // `mark` came from where its joints drew, the tree having shown the frame before
     };
     uint32_t frame_ = 0;
     std::vector<Kept> last_, now_;  // the trees shown in the frame before and in this one

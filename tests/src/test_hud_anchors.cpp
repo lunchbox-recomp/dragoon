@@ -153,11 +153,14 @@ constexpr uint32_t kRoot = 0x81200000, kOtherRoot = 0x81200400;
 const Mark kLeft{Anchor::Left, 0, 640}, kMiddle{Anchor::Center, 0, 640}, kRight{Anchor::Right, 0, 640};
 
 // On the screen the thirds' lines sit at 213.3 and 426.7, and a held edge reaches 53.3 past them.
+// A tree holds nothing from its first showing, so a test that holds a mark from frame 10 first
+// shows its tree at frame 9.
 TEST(KeptMarks, AnElementMovingAcrossAThirdsLineKeepsItsEdge) {
     // Centered at x 425 a tree is C(0..640). At 427 it would be R(0..640), drawn about 109
     // display pixels further right at 16:9.
     ASSERT_EQ(dragoon::edge_mark(427, 100, {}), kRight);
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{425, 100}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{425, 100}}, {}), kMiddle);
     EXPECT_EQ(k.place(11, kRoot, {{427, 100}}, {}), kMiddle);
     EXPECT_EQ(k.place(12, kRoot, {{427, 100}}, {}), kMiddle);
@@ -171,11 +174,23 @@ TEST(KeptMarks, AnElementThatFirstShowsInTheMiddleSettlesAtItsEdge) {
     EXPECT_EQ(k.place(11, kRoot, {{590, 400}}, {}), kRight);
 }
 
+TEST(KeptMarks, ATreeHoldsNothingFromItsFirstShowing) {
+    // The race's speedometer frame from its first drawn frame, 3241, when its joints sat where
+    // the game made them, at the screen's middle. From 3242 it draws at its place, one joint in
+    // the right third and its root at the middle, a tie, so the middle it held from 3241 kept it
+    // there until it had rested 29 frames later.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(3241, kRoot, {{320, 240}, {320, 240}}, {}), kMiddle);
+    for (uint32_t f = 3242; f < 3290; f++)
+        EXPECT_EQ(k.place(f, kRoot, {{578.4f, 408.8f}, {320, 240}}, {}), kRight) << f;
+}
+
 TEST(KeptMarks, AnElementRestingInTheBandTakesItsNearestEdge) {
     // The review's input. Coming from the middle, a tree at 470 holds C while it moves there.
     // Once it has sat there 30 frames in a row it takes R, so it doesn't jump when it shows again
     // after missing a frame.
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{320, 400}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{320, 400}}, {}), kMiddle);
     for (uint32_t f = 11; f < 40; f++) EXPECT_EQ(k.place(f, kRoot, {{470, 400}}, {}), kMiddle) << f;
     EXPECT_EQ(k.place(40, kRoot, {{470, 400}}, {}), kRight);
@@ -184,6 +199,7 @@ TEST(KeptMarks, AnElementRestingInTheBandTakesItsNearestEdge) {
 
 TEST(KeptMarks, AMoveStartsTheRestAgain) {
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{320, 400}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{320, 400}}, {}), kMiddle);
     for (uint32_t f = 11; f < 40; f++) k.place(f, kRoot, {{470, 400}}, {});
     for (uint32_t f = 40; f < 69; f++) EXPECT_EQ(k.place(f, kRoot, {{471, 400}}, {}), kMiddle) << f;
@@ -192,6 +208,7 @@ TEST(KeptMarks, AMoveStartsTheRestAgain) {
 
 TEST(KeptMarks, AFrameWithNoJointPlacedStartsTheRestAgain) {
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{320, 400}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{320, 400}}, {}), kMiddle);
     for (uint32_t f = 11; f < 31; f++) k.place(f, kRoot, {{470, 400}}, {});
     EXPECT_EQ(k.place(31, kRoot, {}, {}), kMiddle);
@@ -201,22 +218,25 @@ TEST(KeptMarks, AFrameWithNoJointPlacedStartsTheRestAgain) {
 
 TEST(KeptMarks, AnElementMovingUpOrDownHasntRested) {
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{320, 400}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{320, 400}}, {}), kMiddle);
     for (uint32_t f = 11; f < 60; f++) EXPECT_EQ(k.place(f, kRoot, {{470, 300.0f + f}}, {}), kMiddle) << f;
 }
 
 TEST(KeptMarks, ATreeRestsOnlyWhenAllItsJointsDo) {
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{320, 400}, {320, 400}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{320, 400}, {320, 400}}, {}), kMiddle);
     for (uint32_t f = 11; f < 60; f++)
         EXPECT_EQ(k.place(f, kRoot, {{470, 400}, {470.0f + f % 2, 400}}, {}), kMiddle) << f;
 }
 
 TEST(KeptMarks, ARestedTreesTieGoesToTheFirstOfThoseTied) {
-    // The race's speedometer frame at 4200: first shown in the middle, it comes to rest with its
-    // joints split between the right and the middle, the right's first. It holds the middle
-    // while it moves and takes the right once it has rested.
+    // Shown in the middle, it moves to rest with its joints split between the right and the
+    // middle, the right's first. It holds the middle while it moves and takes the right once it
+    // has rested.
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{320, 400}, {320, 400}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{320, 400}, {320, 400}}, {}), kMiddle);
     for (uint32_t f = 11; f < 40; f++)
         EXPECT_EQ(k.place(f, kRoot, {{500, 400}, {300, 400}}, {}), kMiddle) << f;
@@ -235,6 +255,7 @@ TEST(KeptMarks, ARestedTreesTieFollowsTheOrderItDrawsItsJoints) {
 TEST(KeptMarks, JointsThatPulseAboutTheirMeanHaventRested) {
     // The review's pulse: the joints move out and back while their mean stays at 320.
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{215, 100}, {425, 100}}, {});
     for (uint32_t f = 10; f < 80; f++) {
         const std::vector<dragoon::Point> joints =
             f % 2 ? std::vector<dragoon::Point>{{212, 100}, {428, 100}} : std::vector<dragoon::Point>{{215, 100}, {425, 100}};
@@ -257,6 +278,7 @@ TEST(KeptMarks, JointsThatSwapPlacesHaventRested) {
 TEST(KeptMarks, AStillElementWithAJointThatBlinksNeverRests) {
     // Which joints are placed changes every frame, so it keeps the edge it came with.
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{320, 400}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{320, 400}}, {}), kMiddle);
     for (uint32_t f = 11; f < 200; f++) {
         const std::vector<dragoon::Point> joints =
@@ -270,6 +292,7 @@ TEST(KeptMarks, AJointThatHidesDoesntTurnTheVote) {
     // the three hidden: a tie, which would go to the first, in the middle.
     ASSERT_EQ(dragoon::most_called({kMiddle, kMiddle, kRight, kRight}), kMiddle);
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{415, 100}, {420, 100}, {430, 100}, {435, 100}, {440, 100}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{415, 100}, {420, 100}, {430, 100}, {435, 100}, {440, 100}}, {}), kRight);
     EXPECT_EQ(k.place(11, kRoot, {{415, 100}, {420, 100}, {435, 100}, {440, 100}}, {}), kRight);
 }
@@ -278,6 +301,7 @@ TEST(KeptMarks, ATieGoesToTheHeldEdge) {
     // Two joints at 300 and three at 500 call for R, and with the three at 400 they still do,
     // as R holds there. With one of those hidden it's a tie, which the first would take to C.
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{300, 100}, {300, 100}, {500, 100}, {500, 100}, {500, 100}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{300, 100}, {300, 100}, {500, 100}, {500, 100}, {500, 100}}, {}), kRight);
     EXPECT_EQ(k.place(11, kRoot, {{300, 100}, {300, 100}, {400, 100}, {400, 100}, {400, 100}}, {}), kRight);
     EXPECT_EQ(k.place(12, kRoot, {{300, 100}, {300, 100}, {400, 100}, {400, 100}}, {}), kRight);
@@ -286,9 +310,12 @@ TEST(KeptMarks, ATieGoesToTheHeldEdge) {
 
 TEST(KeptMarks, ATreeThatMissesAFrameChoosesAgain) {
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {{200, 100}}, {});
     EXPECT_EQ(k.place(10, kRoot, {{200, 100}}, {}), kLeft);
     EXPECT_EQ(k.place(11, kRoot, {{230, 100}}, {}), kLeft);
     EXPECT_EQ(k.place(13, kRoot, {{230, 100}}, {}), kMiddle);
+    // Its joints showed where they drew before the frame it missed, so it holds nothing from then.
+    EXPECT_EQ(k.place(14, kRoot, {{200, 100}}, {}), kLeft);
 }
 
 TEST(KeptMarks, ATreeWithNoJointPlacedYetKeepsNothing) {
@@ -306,9 +333,11 @@ TEST(KeptMarks, ATreesMarkHoldsWhileNoJointHasAPlace) {
 
 TEST(KeptMarks, EachTreeAndEachTimeItShowsInAFrameKeepsItsOwn) {
     dragoon::KeptMarks k;
-    k.place(10, kRoot, {{200, 100}}, {});
-    k.place(10, kOtherRoot, {{450, 100}}, {});
-    k.place(10, kRoot, {{300, 100}}, {});
+    for (uint32_t f = 9; f < 11; f++) {
+        k.place(f, kRoot, {{200, 100}}, {});
+        k.place(f, kOtherRoot, {{450, 100}}, {});
+        k.place(f, kRoot, {{300, 100}}, {});
+    }
     EXPECT_EQ(k.place(11, kRoot, {{230, 100}}, {}), kLeft);
     EXPECT_EQ(k.place(11, kOtherRoot, {{400, 100}}, {}), kRight);
     EXPECT_EQ(k.place(11, kRoot, {{470, 100}}, {}), kMiddle);
@@ -318,6 +347,8 @@ TEST(KeptMarks, AShowingWithNoJointPlacedStillCountsAsOne) {
     // A root shown twice a frame, first with no joint placed and then at x 600. Its second
     // showing holds R the next frame at 400, which on its own would be C.
     dragoon::KeptMarks k;
+    k.place(9, kRoot, {}, {});
+    k.place(9, kRoot, {{600, 100}}, {});
     EXPECT_EQ(k.place(10, kRoot, {}, {}), std::nullopt);
     EXPECT_EQ(k.place(10, kRoot, {{600, 100}}, {}), kRight);
     EXPECT_EQ(k.place(11, kRoot, {}, {}), std::nullopt);

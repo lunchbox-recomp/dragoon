@@ -358,8 +358,21 @@ Dragoon `34a24f5`, which did, every tree `fn_80114F1C` draws held C(0..640) in t
 and the minimap's karts held L(0..640), away from their edges at 16:9. Chosen afresh each frame,
 the position went to the left and the rest to the right.
 
-A tree that misses a frame chooses afresh when it next shows. One whose joints haven't drawn
-holds the mark it had the frame before, or goes by its root when it had none.
+A tree that misses a frame chooses afresh when it next shows, and holds nothing from that
+showing, since its joints sit where they last drew, before the frame it missed. One shown for the
+first time does the same, as its joints sit where the game made them. Every tree `fn_80114F1C`
+draws in the race and City Trial first shows with all its joints at the screen's middle. One
+whose joints haven't drawn holds the mark it had the frame before, or goes by its root when it
+had none.
+
+The speedometer's frame never moves at the start. Dragoon `751c981` held a first showing's mark,
+so the frame held the middle from its first frame, 3241 in the race and 2852 in City Trial,
+through a tie between its joint at the right and its root at the middle. It took the right once
+it had rested, at 3271 and 2882, a jump of 107 display pixels at 16:9. Holding nothing from its
+first showing, it takes the right on its second frame, 3242 and 2853, the first its joints draw
+where it sits. In 2P the screen's middle is on the bar between the views. There each view's
+frame stretches for its first frame at 2852. On `751c981` it already sat at the right from the
+next.
 
 The rect is the screen in one player. In 2P and 4P it's the view the tree sits in, from the
 viewports of the frame's world cameras, which `src/cameras.cpp` passes as the game sets their
@@ -446,9 +459,12 @@ loads of 4.2 to 5.0.
   3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
   table draws them. Top Ride's census on Dragoon `701a2dd` has all 38 drawn by
   `HSD_GObjJObjDisp`, the render callback of every model object, so the table can't name them.
-- A HUD element that first shows, or shows scaled to nothing after missing a frame, goes by its
-  root's place until its joints have drawn, which can anchor it to the wrong edge. No dump caught
-  one.
+- A HUD element that first shows goes by its root's place, or by joints still where the game made
+  them, until its joints have drawn. That can anchor it to the wrong edge for a frame, as it can
+  one that shows scaled to nothing after missing a frame. The draw logs caught it at the start.
+  In the race at 3241 and City Trial at 2852 every tree `fn_80114F1C` draws shows in the middle
+  for its first frame, 107 display pixels from where it sits from the next, and in 2P at 2852
+  they stretch for theirs.
 - An element that slides across a third's line jumps to the other edge once it's a quarter of a
   third past the line. No dump caught one.
 - An element that moves across a line and stops less than a quarter of a third past it shows at
