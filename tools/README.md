@@ -172,6 +172,10 @@ How did the run end, and was that a fault? `classify` turns a `bot_link.run` res
 
 A hang after a reset whose shader rebuild took two thirds of the hang limit or more says so in its detail. It has no command line.
 
+## bot_record.py
+
+What does a stop keep? `new_name` gives a run a NAME no earlier run used, `commits` reads the Dragoon and engine commits through git or `source-info.json`, and `record` and `write` make `bot.json`. `replay_line` is the `probe.sh` command that plays an input log back, and `remove_dumps` deletes the frames a run dumped. It has no command line.
+
 ## playtest.sh
 
 What happened while I played? It runs the game in its window with sound, as `build/dragoon` runs for a player. It sets `GCN_SESSION` to `build/playtest/<date>-<time>/` ("Playtest sessions" in gcn-recomp's `docs/diagnostics.md`).
