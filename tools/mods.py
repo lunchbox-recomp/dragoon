@@ -58,9 +58,10 @@ SHA1 = re.compile(r"[0-9a-f]{40}")
 COMMENT = re.compile(r"(?:^|\s)#.*$")  # as dol_patch.py strips one
 # dol_patch.py's refusal of a list, `patches/N/dol.txt:line: reason` or without the line.
 LIST_SAID = re.compile(r"(patches/[0-9]+/)dol\.txt((?::[0-9]+)?): (.+)", re.S)
-# The reasons disc_overlay.py gives after a path under its files folder.
+# The reasons disc_overlay.py gives after a path under its files folder that can be about a
+# mod's clone. The scan refuses the names and kinds behind its other two first.
 OVERLAY_REASONS = ("is a directory on the disc, not a file", "is a file on the disc, not a directory",
-                   "is a symbolic link", "has a name that isn't ASCII", "isn't a file or a folder")
+                   "is a symbolic link")
 CASE_TWINS = re.compile(r"matches .+ on the disc by case alone", re.S)
 
 
