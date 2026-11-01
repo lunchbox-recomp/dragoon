@@ -943,10 +943,11 @@ its end.
 
 ## gcn-recomp `013d907`
 
-The pin moved from `5e49451` to `013d907`, 54 commits. They add an FST reader and writer in
-Python and a builder for a disc overlay, which lays loose files over the disc. The runtime reads
-the disc through an overlay named by `--disc-overlay` or `GCN_DISC_OVERLAY`, and
-`recomp/dol_patch.py` applies patch lists to a DOL.
+This branch moves no pin, since `mods.py` is a tools change on main's own pin. That pin holds
+`013d907`, which adds 54 commits to `5e49451`. They add an FST reader and writer in Python and a
+builder for a disc overlay, which lays loose files over the disc. The runtime reads the disc
+through an overlay named by `--disc-overlay` or `GCN_DISC_OVERLAY`, and `recomp/dol_patch.py`
+applies patch lists to a DOL.
 
 Built at Dragoon `8202011`, on the tree that became `1576ae4`, `tools/frame_hashes.py check`
 matched all twenty-four routes and 1,906 frames in one pass. The load was 6.4 at its start and
