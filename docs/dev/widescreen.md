@@ -353,6 +353,10 @@ The rect is the screen in one player. In 2P and 4P it's the view the tree sits i
 viewports of the frame's world cameras, which `src/cameras.cpp` passes as the game sets their
 aspect.
 
+In a 4P race on Dragoon `701a2dd` each player's camera was set every frame through all four
+finishes, so whether a split view ever draws through a camera the game sets only once, and drops
+out of the views, is still open.
+
 A tree outside every view sits on the bars between them and anchors to the screen, as the 4P
 clock does at the left. In the bars' middle third it's the bars themselves, which span the
 screen and stretch with it.
@@ -388,6 +392,10 @@ Two of 4P's anchored draws are markers with no match, both in player 3's view. A
 is past that view's left edge and shows as an icon there, and at 16:9 player 4 is in view and
 shows as a marker over their kart.
 
+On Dragoon `701a2dd` at gcn-recomp `b11ebc6`, with `drawlog.py hud` also failing a draw anchored
+to the edge across its rect, the race at 4200 and 4P at 3480 gave the same counts, one run at a
+time.
+
 In the output dumps at 16:9 the race's position sits at the left and the timer in the middle.
 The minimap, the lap count and the speedometer sit at the right, and the CPU marker sits over
 its kart. In 2P and 4P each player's name sits at the left of their view and the speedometer at
@@ -405,11 +413,14 @@ but the mode select's are from Dragoon `e52dce1`, with the race at 8400 and Top 
 loads of 4.2 to 5.0.
 
 - After the finish `fn_8011500C` draws the replay's banner and buttons, and they keep their 4:3
-  shape in the middle of the screen. `drawlog.py hud` passed all 11 of their draws at 8400. The
-  banner's dark stripe spans the screen at 4:3, though, so at 16:9 it stops short of both sides.
+  shape in the middle of the screen. `drawlog.py hud` passed all 11 of their draws at 8400, as
+  it did again on Dragoon `701a2dd`. The banner's dark stripe spans the screen at 4:3, though,
+  and it's drawn within one of the callback's joint trees, so at 16:9 it takes the tree's middle
+  anchor and stops short of both sides.
 - In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide. At
   3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
-  table draws them.
+  table draws them. Top Ride's census on Dragoon `701a2dd` has all 38 drawn by
+  `HSD_GObjJObjDisp`, the render callback of every model object, so the table can't name them.
 - A HUD element that first shows, or reappears after being scaled to nothing, goes by its
   root's place until its joints have drawn, which can anchor it to the wrong edge. No dump caught
   one.
