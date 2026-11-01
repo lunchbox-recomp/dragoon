@@ -69,31 +69,38 @@ class Voice:
     why: list[str] = field(default_factory=list)  # what made an end early
 
 
-def parse(text: str) -> tuple[list[Voice], int, int]:
-    """The voices in TEXT that ran with stream=1 or looping=1 or ended early, in the order they
-    started, the last list any [axv] line gives, and how many other voices the mixer ended.
-    Raises ValueError for a log with no [axv] line."""
-    voices: list[Voice] = []
-    current: dict[str, Voice] = {}  # the voice each address runs now, or ran last
-    last = 0
-    seen = False
-    for line in text.splitlines():
+class Tracker:
+    """Reads [axv] lines one at a time, so a log can be followed as it grows. `voices` holds every
+    voice in the order it started unless `keep` is False, which a long run follows with so that
+    memory stays with the voices still running; `last` is the last list any line gave and `seen`
+    says whether any line was an [axv] line."""
+
+    def __init__(self, keep: bool = True) -> None:
+        self.keep = keep
+        self.voices: list[Voice] = []
+        self.last = 0
+        self.seen = False
+        self._current: dict[str, Voice] = {}  # the voice each address runs now, or ran last
+
+    def add(self, line: str) -> Voice | None:
+        """Takes one line. Returns the voice that line ended early, None for any other line."""
         if m := LEVEL.match(line):
-            seen = True
-            last = max(last, int(m[1]))
-            if m[2] in current:
-                current[m[2]].peak = int(m[3])
-            continue
+            self.seen = True
+            self.last = max(self.last, int(m[1]))
+            if m[2] in self._current:
+                self._current[m[2]].peak = int(m[3])
+            return None
         m = STATE.match(line)
         if not m:
-            continue
-        seen = True
+            return None
+        self.seen = True
         n, pb, kind, looping, stream, loop, end, cur = int(m[1]), m[2], m[3], m[4], m[5], m[6], m[7], m[8]
-        last = max(last, n)
-        if kind == "run" or pb not in current:
-            current[pb] = Voice(pb, n, loop, loop, end)
-            voices.append(current[pb])
-        v = current[pb]
+        self.last = max(self.last, n)
+        if kind == "run" or pb not in self._current:
+            self._current[pb] = Voice(pb, n, loop, loop, end)
+            if self.keep:
+                self.voices.append(self._current[pb])
+        v = self._current[pb]
         v.listed = v.listed or "1" in (looping, stream)
         v.on_stream = v.on_stream or bool(STREAM.match(loop))
         # A set that puts cur on the new loop address starts a new sample on the block, not a move.
@@ -107,10 +114,22 @@ def parse(text: str) -> tuple[list[Voice], int, int]:
             v.end_list = n
             v.why = [why for why, hit in ((AT_STREAM, v.on_stream), (MOVED, v.moved and not v.listed)) if hit]
             v.how = EARLY if v.why else MIXER
-    if not seen:
+            return v if v.how == EARLY else None
+        return None
+
+
+def parse(text: str) -> tuple[list[Voice], int, int]:
+    """The voices in TEXT that ran with stream=1 or looping=1 or ended early, in the order they
+    started, the last list any [axv] line gives, and how many other voices the mixer ended.
+    Raises ValueError for a log with no [axv] line."""
+    tracker = Tracker()
+    for line in text.splitlines():
+        tracker.add(line)
+    if not tracker.seen:
         raise ValueError("no [axv] lines; was GCN_AXVOICES=1 set?")
+    voices = tracker.voices
     others = sum(v.how == MIXER and not v.listed for v in voices)
-    return [v for v in voices if v.listed or v.how == EARLY], last, others
+    return [v for v in voices if v.listed or v.how == EARLY], tracker.last, others
 
 
 def seconds(n: int) -> str:

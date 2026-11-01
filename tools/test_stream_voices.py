@@ -275,6 +275,56 @@ class ParseTest(unittest.TestCase):
             stream_voices.parse("[ax] pb list=400 voice_ms=3\n")
 
 
+class TrackerTest(unittest.TestCase):
+    def test_the_line_that_ends_a_voice_early_returns_it_and_no_other_line_does(self):
+        tracker = stream_voices.Tracker()
+        self.assertIsNone(tracker.add("[ax] pb list=400 voice_ms=3"))
+        self.assertIsNone(tracker.add(state(10, "run", looping=0, stream=0, loop=MUSIC, end=MUSIC_END)))
+        self.assertIsNone(tracker.add(level(200, 5)))
+        v = tracker.add(state(50, "end", run=0, looping=0, stream=0, loop=MUSIC, end=MUSIC_END))
+        self.assertIsNotNone(v)
+        self.assertEqual((v.how, v.end_list, v.peak), (EARLY, 50, 5))
+        self.assertEqual((tracker.seen, tracker.last, tracker.voices), (True, 200, [v]))
+
+    def test_an_ordinary_end_and_a_stop_return_nothing(self):
+        tracker = stream_voices.Tracker()
+        tracker.add(state(10, "run", looping=0, stream=0))
+        self.assertIsNone(tracker.add(state(50, "end", run=0, looping=0, stream=0)))
+        tracker.add(state(60, "run", pb=OTHER, loop=MUSIC, end=MUSIC_END))
+        self.assertIsNone(tracker.add(state(70, "stop", pb=OTHER, run=0, loop=MUSIC, end=MUSIC_END)))
+
+    def test_state_carries_over_from_one_line_to_the_next_as_the_log_grows(self):
+        whole = stream_voices.Tracker()
+        piecemeal = stream_voices.Tracker()
+        lines = [state(10, "run", looping=0, stream=0), state(20, "set", looping=0, stream=0, end="00DD5000"),
+                 state(90, "end", run=0, looping=0, stream=0, end="00DD5000")]
+        early = [piecemeal.add(line) for line in lines]
+        for line in lines:
+            whole.add(line)
+        self.assertEqual([v is not None for v in early], [False, False, True])
+        self.assertEqual(early[2].why, [stream_voices.MOVED])
+        self.assertEqual(whole.voices[0].why, [stream_voices.MOVED])
+
+    def test_a_tracker_that_keeps_nothing_still_finds_the_early_end(self):
+        tracker = stream_voices.Tracker(keep=False)
+        tracker.add(state(10, "run", looping=0, stream=0, loop=MUSIC, end=MUSIC_END))
+        v = tracker.add(state(50, "end", run=0, looping=0, stream=0, loop=MUSIC, end=MUSIC_END))
+        self.assertEqual(v.how, EARLY)
+        self.assertEqual(tracker.voices, [])
+
+    def test_a_slot_used_again_is_a_new_voice_that_has_not_ended(self):
+        tracker = stream_voices.Tracker()
+        tracker.add(state(10, "run", looping=0, stream=0, loop=MUSIC, end=MUSIC_END))
+        self.assertIsNotNone(tracker.add(state(50, "end", run=0, looping=0, stream=0, loop=MUSIC, end=MUSIC_END)))
+        self.assertIsNone(tracker.add(state(60, "run", loop=SFX, end=SFX_END)))
+        self.assertIsNone(tracker.add(state(70, "loop", loop=SFX, end=SFX_END)))
+
+    def test_a_log_without_axv_lines_has_seen_none(self):
+        tracker = stream_voices.Tracker()
+        tracker.add("[audio] device driver=dummy rate=48000 channels=2 buffer=1024")
+        self.assertFalse(tracker.seen)
+
+
 class MainTest(unittest.TestCase):
     def setUp(self):
         self.dir = temp_dir(self)
