@@ -6,6 +6,7 @@ import io
 import math
 import os
 import random
+import signal
 import struct
 import subprocess
 import sys
@@ -14,7 +15,8 @@ import unittest
 import wave
 from array import array
 from pathlib import Path
-from typing import Callable
+from types import FrameType
+from typing import Callable, Optional
 
 # Fixture repositories ignore the user's and the system's git config, so no signing, hook
 # or filter of theirs runs, and commit as a fixed name.
@@ -57,6 +59,33 @@ class FakeLink:
         assert 1 <= length <= 256 and 0x80000000 <= address and address + length <= 0x81800000, (hex(address), length)
         self.reads.append((address, length))
         return bytes(self.bytes.get(address + i, 0) for i in range(length))
+
+
+# The wall seconds a test that starts a probe.sh run may take. The slowest takes about 3.
+RUN_LIMIT = 120.0
+
+
+class TimeLimit(BaseException):
+    """A test ran past its time limit. It isn't an Exception, so code under test that takes an
+    Exception for its own, as bot_link.run does a bot's, lets it through."""
+
+
+def time_limit(test: unittest.TestCase, seconds: float) -> None:
+    """Raises TimeLimit in TEST wherever it waits, once it has run SECONDS of wall time and again
+    each SECONDS after that, so a cleanup that waits too can't hold it. A cleanup ends the limit,
+    and since cleanups run last first, the ones TEST adds later run under it. TEST can't use
+    SIGALRM or the real-time interval timer while it holds them."""
+    def expired(signum: int, frame: Optional[FrameType]) -> None:
+        raise TimeLimit(f"{test.id()} ran past its {seconds:g} s limit")
+
+    before = signal.signal(signal.SIGALRM, expired)
+
+    def end() -> None:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, before)
+
+    test.addCleanup(end)
+    signal.setitimer(signal.ITIMER_REAL, seconds, seconds)
 
 
 def run_main(main: Callable[[list[str]], int], *argv: str) -> tuple[int, str, str]:

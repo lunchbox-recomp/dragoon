@@ -5,6 +5,7 @@ import io
 import json
 import re
 import shlex
+import signal
 import tempfile
 import time
 import unittest
@@ -17,7 +18,7 @@ import bot_record
 import bot_soak
 from bot_watch import engine_picture
 from testengine import PICTURE_ADDR, axv, built_sha, make_tree, set_plan
-from testutil import commit, run_main
+from testutil import RUN_LIMIT, commit, run_main, time_limit
 
 SEED = "3"
 
@@ -33,9 +34,13 @@ def at(do: list, *, frame: Optional[int] = None, race: Optional[int] = None, pro
 
 
 class SoakCase(unittest.TestCase):
-    """A temp tree with the fake probe.sh of testengine.py, and the soak run against it."""
+    """A temp tree with the fake probe.sh of testengine.py, and the soak run against it, under a
+    time limit of `limit` seconds."""
+
+    limit = RUN_LIMIT
 
     def setUp(self) -> None:
+        time_limit(self, self.limit)
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name).resolve()
@@ -745,6 +750,51 @@ class RunOptionsTest(SoakCase):
         self.assertEqual(seen["settings"], ["GCN_AXVOICES=1", "--real-time"])
         self.assertEqual(seen["probe"], self.probe)
         self.assertRegex(seen["name"], r"^soak-s1-\d{8}-\d{6}$")
+
+
+class TimeLimitTest(unittest.TestCase):
+    """A soak test that waits, as one that drove the fake probe.sh once did for 7 h 45 min, fails
+    at its limit instead."""
+
+    def outcome(self, test: unittest.TestCase) -> tuple[list[str], float]:
+        """The errors TEST ends with, and the wall seconds it took."""
+        alarm = signal.getsignal(signal.SIGALRM)
+        result = unittest.TestResult()
+        began = time.monotonic()
+        test.run(result)
+        took = time.monotonic() - began
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+        self.assertIs(signal.getsignal(signal.SIGALRM), alarm)
+        return [text for _, text in result.errors], took
+
+    def test_a_soak_test_that_waits_past_its_limit_fails_there_through_an_except_exception(self) -> None:
+        class Waits(SoakCase):
+            limit = 0.5
+
+            def test_waits(self) -> None:
+                try:
+                    time.sleep(5)
+                except Exception:  # as bot_link.run takes a bot's errors for its own
+                    pass
+
+        errors, took = self.outcome(Waits("test_waits"))
+        self.assertLess(took, 4)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("TimeLimit: ", errors[0])
+        self.assertIn("test_waits ran past its 0.5 s limit", errors[0])
+
+    def test_a_cleanup_that_waits_too_fails_at_the_next_limit(self) -> None:
+        class Waits(SoakCase):
+            limit = 0.5
+
+            def test_waits(self) -> None:
+                self.addCleanup(time.sleep, 5)
+                time.sleep(5)
+
+        errors, took = self.outcome(Waits("test_waits"))
+        self.assertLess(took, 4)
+        self.assertEqual(len(errors), 2, errors)
+        self.assertTrue(all("TimeLimit: " in text for text in errors), errors)
 
 
 if __name__ == "__main__":

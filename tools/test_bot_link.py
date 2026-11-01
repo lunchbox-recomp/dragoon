@@ -16,7 +16,7 @@ from unittest import mock
 
 import bot_link
 from bot_link import BUTTONS, Link, LinkSetupError, Outcome, Pad, encode_pads, run, socket_path
-from testutil import run_main, write_file
+from testutil import RUN_LIMIT, run_main, time_limit, write_file
 
 REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 
@@ -296,9 +296,13 @@ def neutral(link: Link) -> dict[int, Pad]:
 
 
 class FakeProbeCase(unittest.TestCase):
-    """A temp tree with a fake probe.sh in tools/, the way test_probe.py makes one."""
+    """A temp tree with a fake probe.sh in tools/, the way test_probe.py makes one, under a time
+    limit of `limit` seconds."""
+
+    limit = RUN_LIMIT
 
     def setUp(self) -> None:
+        time_limit(self, self.limit)
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name).resolve()
@@ -1049,6 +1053,11 @@ class SetupTest(FakeProbeCase):
 
 
 class RealProbeTest(unittest.TestCase):
+    limit = RUN_LIMIT
+
+    def setUp(self) -> None:
+        time_limit(self, self.limit)
+
     def tree(self, tmp: str) -> tuple[Path, Path]:
         """The real probe.sh over FAKE_GAME in a temp tree: the tree's root and its probe.sh."""
         root = Path(tmp).resolve()
@@ -1244,6 +1253,24 @@ class CommandHelperTest(unittest.TestCase):
         outcome = Outcome(0, None, bot_link.NEVER_LINKED, "no build/dragoon", Path("/r"))
         _, out, err = run_main(lambda argv: bot_link.print_outcome(outcome, "tool.py"))
         self.assertEqual((out, err), ("", "tool.py: the game never connected: no build/dragoon\n"))
+
+
+class TimeLimitTest(unittest.TestCase):
+    def test_a_test_that_runs_a_probe_and_waits_past_its_limit_fails_there(self):
+        for case in (FakeProbeCase, RealProbeTest):
+            with self.subTest(case=case.__name__):
+                class Waits(case):
+                    limit = 0.5
+
+                    def test_waits(self):
+                        time.sleep(5)
+
+                result = unittest.TestResult()
+                began = time.monotonic()
+                Waits("test_waits").run(result)
+                self.assertLess(time.monotonic() - began, 4)
+                self.assertEqual(len(result.errors), 1, result.errors)
+                self.assertIn("test_waits ran past its 0.5 s limit", result.errors[0][1])
 
 
 if __name__ == "__main__":
