@@ -5,9 +5,10 @@ link over testgame.FakeGame's menus, as `bot_link.run(probe=...)` runs it. It wo
 build/probe/NAME/ the real probe.sh does, keeps a session whose input log ends in `# end 0 FRAME`
 on every way out, says its `[session]`, `[reset]` and `[shaders]` lines in stdout.txt and puts a
 counter at PICTURE_ADDR that stands in for the picture's hash. On SIGTERM it saves and exits at
-once. It records what it saw in record.json. A `--exit-after=N` setting ends the game once a
-process has shown N frames, as the engine's does. What it does besides play is in plan.json,
-which `set_plan` writes beside tools/:
+once. It records what it saw in record.json. As the engine does, it ends the game once a
+process has shown the frames of an `--exit-after=N` setting, and stops it on a `done` that
+leaves out a port the bot drives. What it does besides play is in plan.json, which `set_plan`
+writes beside tools/:
 
   "race"     frames a race lasts before the game ends it, 3000 by default
   "events"    a list of {"frame": N or "race": N, "process": P, "do": [ACTION, ...]}. It happens
@@ -212,6 +213,11 @@ def step(pads):
             b, sx, sy, cx, cy, l, r = int(words[2], 16), *map(int, words[3:9])
             pads[int(words[1])] = Pad(buttons=b, sx=sx, sy=sy, cx=cx, cy=cy, l=l, r=r)
         elif words[0] == "done":
+            for port in range(1, ports + 1):
+                if port not in pads:  # the engine stops the game on a port the bot drives and left out
+                    say('[bot] frame %d: done without a pad line for port %d, which the bot drives: "%s"\n'
+                        % (frame, port, line.strip()))
+                    stop_game(1)
             return
 
 

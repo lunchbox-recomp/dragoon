@@ -206,6 +206,30 @@ class StopTest(SoakCase):
         self.assertEqual(data["stop"]["detail"], "no frame for 1 s after frame 299")
         self.assertEqual(data["stop"]["frame"], 299)
 
+    def test_a_pad_line_the_bot_drops_is_the_engines_stop_with_its_line(self) -> None:
+        self.plan(race=100000)
+        ap = bot_soak.parser()
+        args = ap.parse_args(["--probe", str(self.probe), "--seed", SEED, "--minutes", "1", "--ports", "2"])
+        out: list[str] = []
+        err: list[str] = []
+
+        def dropping(name, seconds, bot, **kw):
+            def bot_that_drops_a_port(link):
+                pads = dict(bot(link))
+                if link.frame == 500:
+                    del pads[2]
+                return pads
+
+            return bot_link.run(name, seconds, bot_that_drops_a_port, **kw)
+
+        self.assertEqual(bot_soak.soak(args, [], out=out.append, err=err.append, run=dropping), 1, out)
+        self.assertEqual(err, [])
+        data = self.bot_json("\n".join(out))
+        self.assertEqual(data["stop"]["kind"], "engine_stop")
+        self.assertEqual(data["stop"]["detail"],
+                         '[bot] frame 500: done without a pad line for port 2, which the bot drives: "done"')
+        self.assertEqual(data["stop"]["frame"], 500)
+
     def test_a_music_stream_that_ends_early_stops_the_run(self) -> None:
         out, data = self.stop([at([["say", axv(100, "run")], ["say", axv(120, "end")]], race=10)])
         self.assertEqual(data["stop"]["kind"], "music_cut")
