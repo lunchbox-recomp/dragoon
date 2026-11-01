@@ -100,6 +100,59 @@ TEST(MostCalled, ATieGoesToTheFirst) {
 
 TEST(MostCalled, NoneIsStretch) { EXPECT_EQ(dragoon::most_called({}), Mark{}); }
 
+constexpr uint32_t kRoot = 0x81200000, kOtherRoot = 0x81200400;
+const Mark kLeft{Anchor::Left, 0, 640}, kMiddle{Anchor::Center, 0, 640}, kRight{Anchor::Right, 0, 640};
+
+TEST(KeptMarks, AnElementMovingAcrossAThirdsLineKeepsItsEdge) {
+    // Centered at x 425 a tree is C(0..640). At 427 it would be R(0..640), drawn about 109
+    // display pixels further right at 16:9.
+    const std::vector<Mark> at425 = {dragoon::edge_mark(425, 100, {})}, at427 = {dragoon::edge_mark(427, 100, {})};
+    ASSERT_EQ(at427[0], kRight);
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, at425), kMiddle);
+    EXPECT_EQ(k.place(11, kRoot, at427), kMiddle);
+    EXPECT_EQ(k.place(12, kRoot, at427), kMiddle);
+}
+
+TEST(KeptMarks, AJointThatHidesDoesntTurnTheVote) {
+    // Three joints at the right and two at the left, then one at the right hidden: a tie, which
+    // would go to the first, at the left.
+    ASSERT_EQ(dragoon::most_called({kLeft, kRight, kLeft, kRight}), kLeft);
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {kLeft, kRight, kLeft, kRight, kRight}), kRight);
+    EXPECT_EQ(k.place(11, kRoot, {kLeft, kRight, kLeft, kRight}), kRight);
+}
+
+TEST(KeptMarks, ATreeThatMissesAFrameChoosesAgain) {
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {kLeft}), kLeft);
+    EXPECT_EQ(k.place(11, kRoot, {kRight}), kLeft);
+    EXPECT_EQ(k.place(13, kRoot, {kRight}), kRight);
+}
+
+TEST(KeptMarks, ATreeWithNoJointPlacedYetKeepsNothing) {
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {}), std::nullopt);
+    EXPECT_EQ(k.place(11, kRoot, {kRight}), kRight);
+}
+
+TEST(KeptMarks, AKeptMarkHoldsWhileNoJointHasAPlace) {
+    // As when the element is scaled to nothing, which leaves its joints' matrices all zero.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {kRight}), kRight);
+    EXPECT_EQ(k.place(11, kRoot, {}), kRight);
+}
+
+TEST(KeptMarks, EachTreeAndEachTimeItShowsInAFrameKeepsItsOwn) {
+    dragoon::KeptMarks k;
+    k.place(10, kRoot, {kLeft});
+    k.place(10, kOtherRoot, {kRight});
+    k.place(10, kRoot, {kMiddle});
+    EXPECT_EQ(k.place(11, kRoot, {kRight}), kLeft);
+    EXPECT_EQ(k.place(11, kOtherRoot, {kLeft}), kRight);
+    EXPECT_EQ(k.place(11, kRoot, {kRight}), kMiddle);
+}
+
 TEST(MatrixMade, AnyOfItsThreeByThreePart) {
     for (int i : {0, 5, 10}) {
         float m[12] = {};

@@ -4,8 +4,9 @@
 // recomp/patches.txt calls dragoon_hud_enter and dragoon_hud_leave from GObj_SetTextureCamera
 // (0x8042A0B4) around each object's render callback. recomp/hle.txt lists HSD_JObjDispAll
 // (0x8040A7B8), so its calls come here, and a HUD callback's joint tree is placed as it's
-// displayed. An Edge tree goes by where its joints drew their shapes on screen last frame,
-// through the current camera, and an Own tree by where its root sits. src/cameras.cpp passes
+// displayed. An Edge tree chooses by where its joints drew their shapes on screen last frame,
+// through the current camera, and keeps that while it shows. An Own tree goes by where its root
+// sits. src/cameras.cpp passes
 // each world camera as the game sets its aspect, and a split view's HUD anchors in the
 // viewport of the one it sits in. At 4:3 every anchor is the identity and nothing moves.
 //
@@ -69,6 +70,7 @@ constexpr uint32_t kJObjMtx = 0x44;            // its place in the world, three 
 
 dragoon::HudCallbacks g_hud;
 dragoon::WorldViews g_views;
+dragoon::KeptMarks g_kept;
 dragoon::Mark g_sent;  // the mark last put in the command stream
 
 // The frame being drawn, one more than the frames the game had submitted.
@@ -136,9 +138,10 @@ void send(const dragoon::Mark& m) {
     dragoon::mark_anchor(m.a, m.x0, m.x1);
 }
 
-// A HUD callback displays the joint tree at `jobj`. An Edge element goes by where most of its
-// joints drew their shapes last frame, or by its root's place when none has drawn yet. An Own
-// element is centered on its root, which the game has just put over what it follows.
+// A HUD callback displays the joint tree at `jobj`. An Edge element keeps the mark it chose
+// while it keeps showing, and chooses by where most of its joints drew their shapes last frame,
+// or goes by its root's place when none has drawn yet. An Own element is centered on its root,
+// which the game has just put over what it follows.
 void place_tree(uint32_t jobj) {
     const uint32_t cobj = mem_r32(kCObjCurrent);
     if (!in_ram(cobj) || !in_ram(jobj)) return;
@@ -146,16 +149,19 @@ void place_tree(uint32_t jobj) {
     const std::vector<dragoon::Rect>& views = g_views.at(this_frame());
     static std::vector<dragoon::Mark> marks;
     marks.clear();
-    if (g_hud.placement() == Placement::Edge) joint_marks(jobj, lens, views, marks, 0);
-    dragoon::Mark m = dragoon::most_called(marks);
-    if (marks.empty()) {
+    std::optional<dragoon::Mark> m;
+    if (g_hud.placement() == Placement::Edge) {
+        joint_marks(jobj, lens, views, marks, 0);
+        m = g_kept.place(this_frame(), jobj, marks);
+    }
+    if (!m) {
         float p[3], x, y;
         joint_origin(jobj, p);
         if (!dragoon::to_screen(lens, p, &x, &y)) return;
         m = dragoon::mark_for(g_hud.placement(), x, y, views);
     }
-    g_hud.set_mark(m);
-    send(m);
+    g_hud.set_mark(*m);
+    send(*m);
 }
 
 }  // namespace

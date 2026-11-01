@@ -334,6 +334,14 @@ A tree in a rect's left third anchors to its left edge, one in its right third t
 edge and one between to its middle. A tree no joint has drawn yet goes by its root, which only
 happens the frame it first shows.
 
+A tree keeps the mark it chose for as long as it shows each frame, as a PC port keeps one edge
+for each HUD element. Chosen again every frame, an element moving 2 pixels across a third's line
+would jump about 109 display pixels at 16:9. A tree whose joints sit nearly evenly in two thirds
+would turn too, each time one of them hid.
+
+A tree that misses a frame chooses again when it next shows. One that goes by its root keeps
+nothing, so it chooses from its joints once they've drawn.
+
 The rect is the screen in one player. In 2P and 4P it's the view the tree sits in, from the
 viewports of the frame's world cameras, which `src/cameras.cpp` passes as the game sets their
 aspect.
@@ -378,7 +386,8 @@ The minimap, the lap count and the speedometer sit at the right, and the CPU mar
 its kart. In 2P and 4P each player's name sits at the left of their view and the speedometer at
 its right, with the clock at the left of the bars.
 
-`tests/src/test_hud_anchors.cpp` checks the thirds, the views, the vote and the cameras' maths.
+`tests/src/test_hud_anchors.cpp` checks the thirds, the views, the vote, the kept marks and the
+cameras' maths.
 `tests/src/test_draw_marks.cpp` checks the padding.
 
 ## What 16:9 still gets wrong
@@ -396,6 +405,8 @@ loads of 4.2 to 5.0.
   table draws them.
 - A HUD element that first shows goes by its root's place for that frame, which can anchor it
   to the wrong edge. No dump caught one.
+- An element that first draws in one third and then slides across the screen keeps that
+  third's mark while it shows. No dump caught one.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - No object is cut off at a side edge in these dumps, and the world drew at least as much at

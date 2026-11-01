@@ -12,6 +12,7 @@
 #include "gx/anchor.h"
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace dragoon {
@@ -95,6 +96,46 @@ inline Mark most_called(const std::vector<Mark>& marks) {
     }
     return best;
 }
+
+// The marks Edge trees chose, each kept for as long as its tree keeps showing, as a port keeps
+// one edge for each element. Chosen again each frame, an element moving across a third's line
+// would jump to another edge, as would a tree whose vote turns when a joint hides. A tree that
+// misses a frame chooses again when it shows. A tree whose joints have no place yet keeps
+// nothing, so it chooses from them once they have one. Trees are told apart by their root, and
+// a root shown more than once in a frame by which time it is.
+class KeptMarks {
+public:
+    // The mark of the tree at `root`, shown in `frame` with the marks its joints call for: the
+    // one it kept when it showed in the frame before, or else the one most of them call for,
+    // which it keeps. None when it has neither.
+    std::optional<Mark> place(uint32_t frame, uint32_t root, const std::vector<Mark>& joints) {
+        if (frame != frame_) {
+            if (frame == frame_ + 1)
+                last_.swap(now_);
+            else
+                last_.clear();
+            now_.clear();
+            frame_ = frame;
+        }
+        uint32_t time = 0;
+        for (const Kept& k : now_) time += k.root == root;
+        std::optional<Mark> m;
+        for (const Kept& k : last_)
+            if (k.root == root && k.time == time) m = k.mark;
+        if (!m && !joints.empty()) m = most_called(joints);
+        now_.push_back({root, time, m});
+        return m;
+    }
+
+private:
+    struct Kept {
+        uint32_t root;
+        uint32_t time;  // which time in its frame the root showed, from 0
+        std::optional<Mark> mark;
+    };
+    uint32_t frame_ = 0;
+    std::vector<Kept> last_, now_;  // the trees shown in the frame before and in this one
+};
 
 // Whether a joint's matrix, three rows of four, has been made: the game leaves a new joint's
 // all zero until it first draws it, so one with nothing in its 3 by 3 part has no place yet.
