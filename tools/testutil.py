@@ -6,6 +6,7 @@ import io
 import math
 import os
 import random
+import struct
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,37 @@ GIT_ENV = {
     "GIT_COMMITTER_NAME": "Test",
     "GIT_COMMITTER_EMAIL": "test@example.com",
 }
+
+
+class FakeLink:
+    """A bot_link.Link over made-up guest RAM: the bytes put at addresses, zero elsewhere. `reads`
+    lists each (address, length) asked for, and `set` puts a kar_ram.json entry's value where the
+    table says it lives (one without a path)."""
+
+    def __init__(self, frame: int = 0, starts: int = 1) -> None:
+        self.frame = frame
+        self.starts = starts
+        self.bytes: dict[int, int] = {}
+        self.reads: list[tuple[int, int]] = []
+
+    def put(self, address: int, data: bytes) -> None:
+        for i, b in enumerate(data):
+            self.bytes[address + i] = b
+
+    _table: dict | None = None
+
+    def set(self, name: str, value: int | float) -> None:
+        import kar_ram
+        if FakeLink._table is None:
+            FakeLink._table = kar_ram.load()
+        entry = FakeLink._table[name]
+        assert not entry.path, name
+        self.put(entry.address, struct.pack(kar_ram.FORMATS[entry.type], value))
+
+    def read(self, address: int, length: int) -> bytes:
+        assert 1 <= length <= 256 and 0x80000000 <= address and address + length <= 0x81800000, (hex(address), length)
+        self.reads.append((address, length))
+        return bytes(self.bytes.get(address + i, 0) for i in range(length))
 
 
 def run_main(main: Callable[[list[str]], int], *argv: str) -> tuple[int, str, str]:

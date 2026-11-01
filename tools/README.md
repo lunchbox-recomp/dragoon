@@ -137,7 +137,28 @@ Top Ride's races keep their players elsewhere, so there the player values read a
 
 Where do the soak's bots steer? `Walk(seed, ports)` gives each port a pad every time `pads()` is called. A port holds the stick toward one heading for half a second to two seconds, then turns to another. It taps A for 4 frames now and then, and never presses START.
 
-The walk reads no RAM, so a seed gives the same pads whatever the game does. Port N of seed S walks from `random.Random(S * 5 + N)`, so adding a port leaves the others as they were. It has no command line.
+The walk reads no RAM, so a seed gives the same pads whatever the game does. Port N of seed S walks from `random.Random(S * 5 + N)`, so adding a port leaves the others as they were, and 5S is left for the menu walker's schedule. It has no command line.
+
+## bot_menus.py
+
+How does a bot get from the boot to a race and back to the menus? `Menus(ports, Schedule(seed, modes))` reads which screen is up and where its cursor is. It presses a button as libmelee's menu helper does, down for 5 frames and then up for 45 while the screen answers.
+
+A menu value keeps its last value off its own screen, so `Menus` reads `scene.minor` first and a cursor only on the screen that owns it. `step(link)` is for a `bot_link.run` callback. It gives the pads for the frame, or None while a race or the city plays, which is the race bots' turn (bot_walk.py).
+
+The schedule picks each round's mode and the Air Ride course from the seed, and the modes come round in a shuffled order each time through. `Menus` says what it's doing to the `say` it was given. It has no command line.
+
+The paths come from the routes in `tests/routes/` and the values in kar_ram.json.
+
+| Path | What it presses | Still to confirm in the game |
+|---|---|---|
+| Boot to the mode select | A while the game boots, then A and START in turn on the opening movie and title, 100 frames apart | The routes press A at frames 120 and 300, A at 900 and START at 1000, so the boot and title presses are new |
+| Mode select | DOWN or UP to the mode, A, then A on the mode's own menu for Start Game, then A to skip its movie | Pressing B on another mode's own menu to change mode. No route does |
+| Air Ride | The cursor along its row and then down or up to the course, A, then A to join, A for OK and START | Courses with cursor 3, 4, 5 and 7. Only 0, 1, 2 and 6 have been read |
+| Top Ride | A on the course select, then A and START in turn on the machine select | The machine select, which has no RAM slot to read |
+| City Trial, 1 to 4 players | A on every port at the movie, A on each port not yet in at the player select, START once all are in and OK | |
+| Back to the menus | A race is left through the pause menu with START, DOWN, DOWN and A once `round_seconds` of game time are up. A race that ends first goes through its results with START. The city goes through its stats and card with A, then the stadium, then its results with START | START on a stadium's results, whose next screen was never watched |
+
+The walker says `unconfirmed step` the first time it takes each step in the right-hand column, and `screen N isn't in kar_ram.json` for a screen the table doesn't name, which it presses A on. A screen that stays up past `stuck_seconds` of game time (600 s for a race) raises `Stuck`. After a console reset the walker forgets the press under way and the screen, and starts over from the boot.
 
 ## playtest.sh
 
