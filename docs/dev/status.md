@@ -949,10 +949,10 @@ builder for a disc overlay, which lays loose files over the disc. The runtime re
 through an overlay named by `--disc-overlay` or `GCN_DISC_OVERLAY`, and `recomp/dol_patch.py`
 applies patch lists to a DOL.
 
-Built at Dragoon `8202011`, on the tree that became `1576ae4`, `tools/frame_hashes.py check`
-matched all twenty-four routes and 1,906 frames in one pass. The load was 6.4 at its start and
-4.1 at its end. Then `tools/audio_hashes.py check` matched all 48 audio rows, with the load at
-4.1 at its start and 2.3 at its end.
+Built at Dragoon `8202011`, `tools/frame_hashes.py check` matched all twenty-four routes and
+1,906 frames in one pass. The load was 6.4 at its start and 4.1 at its end. Then
+`tools/audio_hashes.py check` matched all 48 audio rows, with the load at 4.1 at its start and
+2.3 at its end.
 
 A second fresh build at `91e318d`, whose tree differs from `8202011`'s only in this file, matched
 every frame and audio row again. Its frame check ran at loads of 3.4 to 3.6 and its audio check
