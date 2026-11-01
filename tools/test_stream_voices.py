@@ -398,6 +398,26 @@ class NewSampleTest(unittest.TestCase):
         tracker.add(state(20, "set", looping=1, stream=0, loop="01818A02", end=MUSIC_END, cur="01810000"))
         self.assertEqual([(v.start, v.how) for v in tracker.voices], [(10, "still running")])
 
+    def test_a_set_that_gives_a_new_end_alone_with_cur_on_the_loop_is_a_new_sample(self):
+        tracker = stream_voices.Tracker()
+        tracker.add(state(10, "run", looping=0, stream=0))
+        tracker.add(state(20, "set", looping=0, stream=0, end="00DD5000", cur=SFX))
+        self.assertEqual([(v.start, v.how, v.end_list) for v in tracker.voices],
+                         [(10, self.GAME, 20), (20, "still running", None)])
+
+    def test_a_set_that_gives_a_new_loop_alone_with_cur_on_it_is_a_new_sample(self):
+        tracker = stream_voices.Tracker()
+        tracker.add(state(10, "run", looping=0, stream=0))
+        tracker.add(state(20, "set", looping=0, stream=0, loop="00D13BF2", cur="00D13BF2"))
+        self.assertEqual([(v.start, v.how, v.end_list) for v in tracker.voices],
+                         [(10, self.GAME, 20), (20, "still running", None)])
+
+    def test_only_a_set_gives_a_new_sample_and_a_loop_line_on_moved_addresses_does_not(self):
+        tracker = stream_voices.Tracker()
+        tracker.add(state(10, "run", looping=1, stream=0, loop=MUSIC, end=MUSIC_END, cur=MUSIC))
+        tracker.add(state(20, "loop", looping=1, stream=0, loop="01818A02", end=MUSIC_END, cur="01818A02"))
+        self.assertEqual([(v.start, v.how) for v in tracker.voices], [(10, "still running")])
+
     def test_a_set_that_keeps_the_addresses_and_puts_cur_on_the_loop_is_not_a_new_sample(self):
         tracker = stream_voices.Tracker()
         tracker.add(state(10, "run", looping=1, stream=0, loop=MUSIC, end=MUSIC_END, cur="01810000"))
