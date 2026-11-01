@@ -165,6 +165,12 @@ class ClassifyTest(unittest.TestCase):
                                       "of the 30 s hang limit, so this may be that rebuild; run again with a higher "
                                       "--hang")
 
+    def test_a_read_with_no_answer_after_a_slow_restart_is_not_blamed_on_it(self) -> None:
+        detail = "no answer to a read for 30 s at frame 3"
+        stop = classify(outcome(bot_link.HANG, detail), resets(RESET, SHADERS.format(24500)), hang=30)
+        assert stop is not None
+        self.assertEqual((stop.kind, stop.detail), (bot_stop.HANG, detail))
+
     def test_a_hang_after_a_quick_restart_is_just_a_hang(self) -> None:
         stop = classify(outcome(bot_link.HANG, "no frame"), resets(RESET, SHADERS.format(2500)), hang=30)
         assert stop is not None

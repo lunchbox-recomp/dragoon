@@ -73,9 +73,9 @@ def classify(outcome: bot_link.Outcome, resets: Optional[Resets] = None, hang: O
     """The stop OUTCOME is, or None for a run that ended as it should: at its time limit, or at
     an --exit-after, which bot_link reports only for one the run's settings gave. A game that
     shuts itself down has exited. RESETS is what the log showed of console resets, and HANG the
-    limit the run had, for a hang that follows a slow restart. LATE is a finding from the log's
-    last lines, which is the stop only when the run had none of its own. Raises SoakError for a
-    run that says nothing about the game."""
+    limit the run had, for a hang with no frame that follows a slow restart. LATE is a finding
+    from the log's last lines, which is the stop only when the run had none of its own. Raises
+    SoakError for a run that says nothing about the game."""
     reason, error = outcome.reason, outcome.error
     if reason in (bot_link.TIME_LIMIT, bot_link.EXIT_AFTER):
         return None if late is None else _found(late, resets)
@@ -92,7 +92,10 @@ def classify(outcome: bot_link.Outcome, resets: Optional[Resets] = None, hang: O
         raise SoakError(f"{reason}: {outcome.detail}")
     if resets is not None:
         stop.resets_before = resets.count
-        if stop.kind == HANG and resets.shaders_ms is not None and near_hang(resets.shaders_ms, hang):
+        # A shader rebuild holds back frames, but the engine answers a read within a frame's
+        # step, so a rebuild can't leave a read unanswered.
+        if (stop.kind == HANG and not stop.detail.startswith("no answer to a read")
+                and resets.shaders_ms is not None and near_hang(resets.shaders_ms, hang)):
             stop.detail += (f". The first reset's shader rebuild took {resets.shaders_ms / 1000:.1f} s of the "
                             f"{hang:g} s hang limit, so this may be that rebuild; run again with a higher --hang")
     return stop

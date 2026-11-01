@@ -213,7 +213,7 @@ What does the soak watch for while the bots play? `Frozen` watches the picture a
 
 How did the run end, and was that a fault? `classify` turns a `bot_link.run` result into a `Stop` whose kind is `game_exit`, `panic`, `engine_stop`, `hang`, `frozen_picture`, `music_cut` or `menus_stuck`. It returns None for a run that reached its time limit, or an `--exit-after` it was given. A game that never connected, a bad link or a bot that raised an error says nothing about the game, so those are a `SoakError`.
 
-A hang after a reset whose shader rebuild took two thirds of the hang limit or more says so in its detail. It has no command line.
+A hang with no frame after a reset whose shader rebuild took two thirds of the hang limit or more says so in its detail. It has no command line.
 
 ## bot_record.py
 
