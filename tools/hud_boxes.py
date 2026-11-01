@@ -17,6 +17,10 @@ is from the rect's middle to its own. Its anchor and rect must be the same at bo
 draw centered on a rect of no width is a marker centered on its own place, which may move with
 the wider world.
 
+A draw anchored to the left or right edge fails, too, when the middle of its 4:3 box sits in the
+rect's third at the other side. That's an element anchored to the wrong edge, which keeps its size
+and its distance to that edge as well as one anchored to the right one.
+
 No side of the box may stick out of its view by more than 1 pixel more than at 4:3 either. Its
 view is the smallest world view its whole 4:3 box sits in, or else the screen. The world views
 are the viewports of OLD's draws whose projection NEW doesn't have, which are the ones that
@@ -184,6 +188,17 @@ def edge_distance(anchor: str, rect: tuple[float, float], box: Box) -> float:
     return (box[0] + box[1]) / 2 - (rect[0] + rect[1]) / 2
 
 
+def opposite_third(anchor: str, rect: tuple[float, float], box: Box) -> str | None:
+    """The third of the rect across from the anchored edge, when the box's middle sits in it."""
+    third = (rect[1] - rect[0]) / 3
+    middle = (box[0] + box[1]) / 2
+    if anchor == "L" and middle > rect[1] - third:
+        return "right"
+    if anchor == "R" and middle < rect[0] + third:
+        return "left"
+    return None
+
+
 def follows(d: HudDraw) -> bool:
     """Centered on a rect of no width: a marker centered on its own place, which moves with the
     wider world."""
@@ -199,6 +214,8 @@ def faults(old: HudDraw, new: HudDraw, scale: float, label: str, views: list[Rec
     a = old.box
     b = (new.box[0] * scale, new.box[1] * scale, new.box[2], new.box[3])
     out = []
+    if third := opposite_third(old.anchor, old.rect, a):
+        out.append(f"{EDGES[old.anchor]} from the {third} third")
     if abs((b[1] - b[0]) - (a[1] - a[0])) > TOLERANCE:
         out.append(f"width {a[1] - a[0]:.1f} to {b[1] - b[0]:.1f}")
     if abs((b[3] - b[2]) - (a[3] - a[2])) > TOLERANCE:

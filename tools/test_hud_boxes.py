@@ -255,6 +255,31 @@ class HudCommandTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(line.endswith("FAIL anchor R(0..640) at 4:3, R(320..640) at 16:9"), line)
 
+    def test_right_anchor_on_a_box_in_the_left_third_fails(self):
+        # A left element squeezed to the right keeps its width and its distance to the right edge.
+        code, line = self.one_draw(draw(1, "20.0..100.0,30.0..60.0", "R(0..640)"),
+                                   draw(1, "175.0..235.0,30.0..60.0", "R(0..640)"))
+        self.assertEqual(code, 1)
+        self.assertTrue(line.endswith("16:9 233.3..313.3,30.0..60.0  FAIL right edge from the left third"),
+                        line)
+
+    def test_left_anchor_on_a_box_in_its_views_right_third_fails(self):
+        # The box's middle sits in the right third, though its left side doesn't.
+        old = [*world_4p(WORLD), draw(4, "520.0..560.0,50.0..70.0", "L(324..632)")]
+        new = [*world_4p(WIDE_WORLD), draw(4, "471.0..501.0,50.0..70.0", "L(324..632)")]
+        code, out, _ = self.hud(old, new)
+        self.assertEqual(code, 1)
+        self.assertTrue(out.splitlines()[0].endswith(
+            "16:9 628.0..668.0,50.0..70.0  FAIL left edge from the right third"), out)
+
+    def test_edge_anchors_in_the_middle_third_pass(self):
+        old = [*world(0, WORLD), draw(1, "220.0..260.0,30.0..60.0", "L(0..640)"),
+               draw(2, "400.0..440.0,30.0..60.0", "R(0..640)", tex=OTHER_TEX)]
+        new = [*world(0, WIDE_WORLD), draw(1, "165.0..195.0,30.0..60.0", "L(0..640)"),
+               draw(2, "460.0..490.0,30.0..60.0", "R(0..640)", tex=OTHER_TEX)]
+        code, out, _ = self.hud(old, new)
+        self.assertEqual(code, 0, out)
+
     def test_marker_centered_on_its_own_point_may_follow_the_world(self):
         code, line = self.one_draw(draw(1, "320.0..360.0,100.0..140.0", "C(340..340)"),
                                    draw(1, "285.0..315.0,100.0..140.0", "C(300..300)"))

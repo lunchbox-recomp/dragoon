@@ -261,7 +261,7 @@ When no line is left, `setters` says so on stderr. A camera whose aspect the gam
 
 `hud` checks that the HUD keeps its 4:3 shape at a wider output. It reads two runs of one route to one frame with `GCN_DRAWLOG=N` and `GCN_DRAWLOG_VERBOSE=1`, the first at 4:3 and the second at `--aspect` (16:9 by default). A HUD draw is one with an anchor or one whose projection both runs drew with, since the world's projections widen and the HUD's don't.
 
-The two runs' HUD draws pair by projection kind, textures and order. An anchored pair fails when its width, its height or its distance to its rect's anchored edge moves by more than 1 display pixel at 480 high. It also fails when it overhangs its view by more than it did at 4:3, its view being the world view its 4:3 box sits in or else the screen.
+The two runs' HUD draws pair by projection kind, textures and order. An anchored pair fails when its width, its height or its distance to its rect's anchored edge moves by more than 1 display pixel at 480 high. It also fails when it overhangs its view by more than it did at 4:3, its view being the world view its 4:3 box sits in or else the screen. One anchored to the left or right edge fails, too, when its 4:3 box's middle sits in the rect's third at the other side.
 
 A marker over a kart or an item is centered on a rect of no width at its own place, which moves with the wider world, so its rect may differ between the runs. A marker with no match passes too, since the wider world shows a different set of karts and items.
 
