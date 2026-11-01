@@ -19,8 +19,9 @@ the wider world.
 
 A draw anchored to the left or right edge fails, too, when the middle of its 4:3 box sits in the
 rect's third at the other side. That's an element anchored to the wrong edge, which keeps its size
-and its distance to that edge as well as one anchored to the right one. A centered draw fails when
-its whole 4:3 box sits in a side third, past the quarter of a third a held middle reaches into it.
+and its distance to that edge as well as one anchored to the right one. A centered draw other than
+a marker fails when its whole 4:3 box sits in a side third, past the quarter of a third a held
+middle reaches into it.
 A wide centered element's pieces at its sides fail that too, as three of the replay banner's do.
 
 No side of the box may stick out of its view by more than 1 pixel more than at 4:3 either. Its
@@ -231,7 +232,7 @@ def faults(old: HudDraw, new: HudDraw, scale: float, label: str, views: list[Rec
     out = []
     if third := opposite_third(old.anchor, old.rect, a):
         out.append(f"{EDGES[old.anchor]} from the {third} third")
-    if old.anchor == "C" and (third := side_third(old.rect, a)):
+    if old.anchor == "C" and not follows(old) and (third := side_third(old.rect, a)):
         out.append(f"middle from the {third} third")
     if abs((b[1] - b[0]) - (a[1] - a[0])) > TOLERANCE:
         out.append(f"width {a[1] - a[0]:.1f} to {b[1] - b[0]:.1f}")

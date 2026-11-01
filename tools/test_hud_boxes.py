@@ -316,6 +316,14 @@ class HudCommandTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(out.splitlines()[0].endswith("FAIL middle from the right third"), out)
 
+    def test_marker_beside_its_point_at_a_side_passes(self):
+        # 4P's icon for a player past a view's left edge, at 3480: its box sits to the right of its
+        # point, a rect of no width, at both aspects.
+        code, line = self.one_draw(draw(1, "14.6..51.9,53.1..90.4", "C(10..10)"),
+                                   draw(1, "13.4..41.4,53.1..90.4", "C(10..10)"))
+        self.assertEqual(code, 0)
+        self.assertTrue(line.endswith("16:9 17.9..55.2,53.1..90.4  ok"), line)
+
     def test_marker_centered_on_its_own_point_may_follow_the_world(self):
         code, line = self.one_draw(draw(1, "320.0..360.0,100.0..140.0", "C(340..340)"),
                                    draw(1, "285.0..315.0,100.0..140.0", "C(300..300)"))
