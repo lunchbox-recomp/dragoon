@@ -166,7 +166,7 @@ The walker says `unconfirmed step` the first time it takes each step in the righ
 Does the game hold up when bots play it for a long time? `bot_soak.py` plays it through bot_link.py as a new run in `build/probe/soak-sSEED-TIME/` and stops at the first fault. The menu walker (bot_menus.py) takes it from the boot to a race and back to the menus after each round, for the modes in `--modes` (`air-ride`, `top-ride` and `city-trial`, all three by default) with `--ports` controllers. In a race or the city each bot holds the stick toward wherever a walk from the seed says and taps A at random, and never presses START (bot_walk.py).
 
 ```
-tools/bot_soak.py --seed 7 --minutes 60 --modes city-trial --ports 4 -- --real-time
+tools/bot_soak.py --seed 7 --minutes 60 --modes city-trial --ports 4
 ```
 
 The seed is a whole number from 0. It's printed, and it defaults to one made from the clock. Each run gets a new NAME, since a run in an old `build/probe/NAME/` starts from the memory card that run left. The soak adds `GCN_AXVOICES=1`, makes no frame dumps and gives `bot_link.run` the settings after `--` as they are.
@@ -181,7 +181,7 @@ It stops at the first of these.
 
 A console reset rebuilds the shader cache before the bot connects again, and that time counts against the hang limit. The soak keeps the first reset's `[shaders] ... in Z ms` line, and warns when Z reaches two thirds of the limit. `--hang` raises the limit for the next run, since a run can't change it once it has started.
 
-The engine gives a bot no hash of the picture yet. The frames it shows are copied on the GPU and never written to guest RAM, and the link sends only `frame N`. The frozen-picture check takes its hash from `link.picture`, which no Link has, so it says it saw none and never fires. It needs the engine to send a hash with each frame.
+The frozen-picture check needs a picture hash that the link doesn't give yet, so it doesn't run.
 
 A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the last process. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from the card as it stood at the last reset.
 

@@ -22,8 +22,8 @@ It stops at the first of these:
   a menu screen stays up for --stuck seconds of game time (120 by default), or a race or the
   city for 600, or the menus go on for five times --stuck with no race or city
 
-The engine gives a bot no hash of the picture yet, so the frozen-picture check sees none and
-says so. A stop keeps the run's input log, writes bot.json beside it with the seed, the
+The frozen-picture check needs a picture hash the link doesn't give yet, so it doesn't run, and
+the soak says so. A stop keeps the run's input log, writes bot.json beside it with the seed, the
 arguments, the Dragoon and engine commits and how the run stopped, and prints the probe.sh line
 that plays the input log back. bot.json says when the stop came after a console reset, since a
 replay plays only the process after the last reset, from the card as it stood then. A restart
