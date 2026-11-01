@@ -215,6 +215,13 @@ class ParseTest(unittest.TestCase):
             state(30, "run", looping=0, stream=1), state(90, "loop", looping=0, stream=1)))
         self.assertEqual([(v.start, v.how) for v in voices], [(10, EARLY), (30, "still running")])
 
+    def test_a_move_on_a_flagless_voice_does_not_carry_into_a_new_run_of_its_block(self):
+        voices, _, others = stream_voices.parse(text(
+            state(10, "run", looping=0, stream=0), state(15, "set", looping=0, stream=0, end="00DD5000"),
+            state(20, "stop", run=0, looping=0, stream=0, end="00DD5000"),
+            state(30, "run", looping=0, stream=0), state(40, "end", run=0, looping=0, stream=0)))
+        self.assertEqual((voices, others), ([], 1))
+
     def test_a_level_line_after_the_end_belongs_to_the_voice_that_ended(self):
         v = one(state(190, "run"), state(195, "end", run=0, looping=0), level(200, 321))
         self.assertEqual(v.peak, 321)
