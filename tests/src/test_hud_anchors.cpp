@@ -194,6 +194,16 @@ TEST(KeptMarks, EachTreeAndEachTimeItShowsInAFrameKeepsItsOwn) {
     EXPECT_EQ(k.place(11, kRoot, {{470, 100}}, {}), kMiddle);
 }
 
+TEST(KeptMarks, AShowingWithNoJointPlacedStillCountsAsOne) {
+    // A root shown twice a frame, first with no joint placed and then at x 600. Its second
+    // showing holds R the next frame at 400, which on its own would be C.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {}, {}), std::nullopt);
+    EXPECT_EQ(k.place(10, kRoot, {{600, 100}}, {}), kRight);
+    EXPECT_EQ(k.place(11, kRoot, {}, {}), std::nullopt);
+    EXPECT_EQ(k.place(11, kRoot, {{400, 100}}, {}), kRight);
+}
+
 TEST(KeptMarks, ATreeGoesByItsView) {
     dragoon::KeptMarks k;
     EXPECT_EQ(k.place(10, kRoot, {{300, 100}}, kFourViews), (Mark{Anchor::Right, 10, 318}));
