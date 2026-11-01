@@ -205,8 +205,10 @@ class RefusalTest(ModsCase):
                      "^has a name that isn't ASCII, and the disc's file table takes only ASCII names$")
 
     def test_a_name_with_a_control_character(self) -> None:
-        self.put("Mod/files/a\tb.bin")
-        self.refused("Mod", "files/a\tb.bin", "control character")
+        for name in ("a\tb.bin", "a\x7fb.bin"):
+            with self.subTest(name=name):
+                self.mods = self.make({f"Mod/files/{name}": b"x"})
+                self.refused("Mod", f"files/{name}", "control character")
 
     def test_a_name_that_isnt_ascii_is_fine_outside_files(self) -> None:
         self.put("Modé/dol.txt", DOL_TXT)
