@@ -236,7 +236,8 @@ class StopTest(SoakCase):
         out, data = self.stop([at([["hang", 60]], frame=300)], "--hang", "1")
         self.assertEqual(data["stop"]["kind"], "hang")
         log = Path(data["input_log"])
-        self.assertEqual(shlex.split(data["replay"])[2:], ["65", "", str(bot_link.NO_DUMPS), f"--replay={log}"])
+        self.assertEqual(shlex.split(data["replay"])[2:],
+                         ["65", "", str(bot_link.NO_DUMPS), "--pads=1", f"--replay={log}"])
         self.assertNotIn("--exit-after", data["replay"])
 
     def test_a_music_stream_that_ends_early_stops_the_run(self) -> None:
@@ -349,16 +350,29 @@ class StopTest(SoakCase):
         words = shlex.split(line)
         name = self.name(out)
         self.assertEqual(words[:2], [str(self.probe), f"replay-{name}"])
-        self.assertEqual(words[3:6], ["", str(bot_link.NO_DUMPS), f"--replay={data['input_log']}"])
-        self.assertEqual(words[6], f"--exit-after={data['stop']['frame']}")
+        self.assertEqual(words[3:7], ["", str(bot_link.NO_DUMPS), "--pads=1", f"--replay={data['input_log']}"])
+        self.assertEqual(words[7], f"--exit-after={data['stop']['frame']}")
 
     def test_the_replay_line_carries_the_runs_settings_but_not_the_ones_the_soak_sets(self) -> None:
         out, data = self.stop([at([["panic"]], race=50)], settings=("--bin=/x/build/dragoon", "DRAGOON_CENSUS=1"))
         words = shlex.split(data["replay"])
-        self.assertEqual(words[5:], ["--bin=/x/build/dragoon", "DRAGOON_CENSUS=1", f"--replay={data['input_log']}",
+        self.assertEqual(words[6:], ["--bin=/x/build/dragoon", "DRAGOON_CENSUS=1", f"--replay={data['input_log']}",
                                      f"--exit-after={data['stop']['frame']}"])
-        for left_out in ("GCN_AXVOICES", "GCN_SESSION", "GCN_BOT", "--pads"):
+        for left_out in ("GCN_AXVOICES", "GCN_SESSION", "GCN_BOT"):
             self.assertNotIn(left_out, data["replay"])
+
+    def test_the_replay_plugs_in_the_ports_the_bots_drove(self) -> None:
+        for ports in ("1", "2", "4"):
+            with self.subTest(ports=ports):
+                out, data = self.stop([at([["panic"]], race=50)], "--modes", "city-trial", "--ports", ports)
+                self.assertEqual(shlex.split(data["replay"])[5], f"--pads={ports}")
+
+    def test_the_recordings_the_run_made_are_not_in_the_replay_line(self) -> None:
+        out, data = self.stop([at([["panic"]], race=50)], settings=("GCN_WAV=/r/mine.wav", "GCN_AIDWAV=/r/aid.wav",
+                                                                   "DRAGOON_CENSUS=1"))
+        self.assertNotIn("GCN_WAV", data["replay"])
+        self.assertNotIn("GCN_AIDWAV", data["replay"])
+        self.assertIn("DRAGOON_CENSUS=1", data["replay"])
 
     def test_the_stop_prints_where_and_when_it_was(self) -> None:
         out, data = self.stop([at([["panic"]], race=50)])
@@ -442,7 +456,7 @@ class ResetTest(SoakCase):
         log = Path(data["input_log"])
         self.assertEqual(log, self.run_dir(out) / "session" / "inputs")  # the first process's, not run-2's
         self.assertEqual(self.bot_json_path(out), log.parent / "bot.json")
-        self.assertEqual(shlex.split(data["replay"])[5:], [f"--replay={log}"])  # and no --exit-after to give
+        self.assertEqual(shlex.split(data["replay"])[6:], [f"--replay={log}"])  # and no --exit-after to give
         self.assertIn("  a console reset came after it, so the last process's replay can't show it; the input log "
                       "and replay below are for the process it happened in", out)
         self.assertIn(f"  input log {log}", out)
@@ -487,7 +501,7 @@ class ResetTest(SoakCase):
         self.assertEqual(data["stop"]["frame"], 2029)
         log = Path(data["input_log"])
         self.assertEqual(log.parent.name, "run-2")
-        self.assertEqual(shlex.split(data["replay"])[5:], [f"--replay={log}", "--exit-after=2029"])
+        self.assertEqual(shlex.split(data["replay"])[6:], [f"--replay={log}", "--exit-after=2029"])
 
     def test_a_slow_restart_is_warned_about_as_it_happens(self) -> None:
         self.plan(race=100000, events=[at([["reset", {"shaders_ms": 25000}]], race=40),

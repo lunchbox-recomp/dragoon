@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shlex
 import subprocess
 import time
@@ -22,9 +23,14 @@ from bot_stop import Stop
 from bot_watch import Resets
 
 RECORD = "bot.json"
-# The settings of a run that its replay doesn't take: the voice log the soak turns on, the session
-# and the link the run makes, the ports the bot drove, and the frame it quit after.
-NOT_REPLAYED = ("GCN_AXVOICES", "GCN_SESSION", "GCN_BOT", "--pads", "--exit-after")
+# The settings of a run that its replay doesn't take, by name and not by prefix: the voice log the
+# soak turns on, the session and the link the run makes, the frame it quit after, and the two
+# recordings, which a replay would write over. The ports are given as --pads, from the soak's.
+NOT_REPLAYED = ("GCN_AXVOICES=", "GCN_SESSION=", "GCN_BOT=", "GCN_WAV=", "GCN_AIDWAV=", "--exit-after=")
+# The settings that name a file, which probe.sh takes from the directory it was run in. A disc
+# setting can also name a speed.
+FILE_SETTINGS = ("--disc=", "--bin=")
+DISC_SPEEDS = ("fast", "console")
 
 
 def new_name(seed: int, now: float, taken: Callable[[str], bool]) -> str:
@@ -74,19 +80,32 @@ def built_engine(session: Path) -> Optional[str]:
     return sha if isinstance(sha, str) and sha else None
 
 
+def _as_given(setting: str) -> str:
+    """SETTING with a --disc or --bin path made absolute, since the line may be run from another
+    directory than the soak was. A disc speed is not a path."""
+    for prefix in FILE_SETTINGS:
+        value = setting[len(prefix):]
+        if setting.startswith(prefix) and value and not (prefix == "--disc=" and value in DISC_SPEEDS):
+            return prefix + os.path.abspath(value)
+    return setting
+
+
 def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[int],
-                settings: Sequence[str] = (), *, exit_after: bool = True) -> str:
+                settings: Sequence[str] = (), *, exit_after: bool = True, pads: Optional[int] = None) -> str:
     """The probe.sh command that plays INPUT_LOG back as a run called replay-NAME, which quits
     after LAST_FRAME frames when there is a frame to give and EXIT_AFTER is true. None and 0 are
     none, and probe.sh refuses an --exit-after of 0. SETTINGS are the run's, less the ones the
-    soak or the replay set for themselves (NOT_REPLAYED). A replay without the run's build, disc
-    or guest switches would part from its recording. The seconds are generous, a real-time
-    game's worth of the frames and a minute, since the replay runs as fast as it can. It dumps
-    no frames, as the soak didn't, since each is over a megabyte."""
+    soak or the replay set for themselves (NOT_REPLAYED), with their file paths made absolute. A
+    replay without the run's build, disc or guest switches would part from its recording, and one
+    without its PADS would leave a port unplugged. The seconds are generous, a real-time game's
+    worth of the frames and a minute, since the replay runs as fast as it can. It dumps no
+    frames, as the soak didn't, since each is over a megabyte."""
     frame = last_frame or None
     seconds = 3600 if frame is None else math.ceil(frame / 60) + 60
-    kept = [s for s in settings if not s.startswith(NOT_REPLAYED)]
-    args = [str(probe), f"replay-{name}", str(seconds), "", str(bot_link.NO_DUMPS), *kept, f"--replay={input_log}"]
+    kept = [_as_given(s) for s in settings if not s.startswith(NOT_REPLAYED)]
+    plugged = [] if pads is None else [f"--pads={pads}"]
+    args = [str(probe), f"replay-{name}", str(seconds), "", str(bot_link.NO_DUMPS), *plugged, *kept,
+            f"--replay={input_log}"]
     if frame is not None and exit_after:
         args.append(f"--exit-after={frame}")
     return " ".join(shlex.quote(a) for a in args)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import tempfile
@@ -144,12 +145,50 @@ class ReplayLineTest(unittest.TestCase):
         self.assertNotIn("--exit-after", line)
 
     def test_the_runs_settings_go_in_the_line_before_the_replay_without_the_ones_the_soak_sets(self) -> None:
-        settings = ["GCN_AXVOICES=1", "--bin=/x/build/dragoon", "DRAGOON_CENSUS=1", "GCN_SESSION=/s", "--pads=2",
+        settings = ["GCN_AXVOICES=1", "--bin=/x/build/dragoon", "DRAGOON_CENSUS=1", "GCN_SESSION=/s",
                     "--exit-after=500", "GCN_BOT=/b.sock", "--disc=/my disc.iso"]
         line = bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, settings)
         self.assertEqual(shlex.split(line), ["/p", "replay-n", "61", "", str(bot_link.NO_DUMPS), "--bin=/x/build/dragoon",
                                              "DRAGOON_CENSUS=1", "--disc=/my disc.iso", "--replay=/i",
                                              "--exit-after=10"])
+
+    def test_the_ports_the_soak_drove_are_plugged_in_the_replay_right_after_the_dump_interval(self) -> None:
+        for pads in (1, 2, 4):
+            with self.subTest(pads=pads):
+                line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, ["DRAGOON_CENSUS=1"],
+                                                          pads=pads))
+                self.assertEqual(line[4:7], [str(bot_link.NO_DUMPS), f"--pads={pads}", "DRAGOON_CENSUS=1"])
+
+    def test_no_ports_given_leaves_pads_to_probe_shs_default(self) -> None:
+        self.assertNotIn("--pads", bot_record.replay_line(Path("/p"), "n", Path("/i"), 10))
+
+    def test_a_switch_is_left_out_only_when_it_is_one_of_the_names_the_soak_sets(self) -> None:
+        kept = ["GCN_BOTTLE=1", "GCN_SESSION_DIR=/d", "GCN_AXVOICES2=1", "GCN_WAVE=1", "GCN_AIDWAVE=1",
+                "--exit-after-x"]
+        settings = [*kept, "GCN_AXVOICES=1", "GCN_SESSION=/s", "GCN_BOT=/b.sock", "--exit-after=500"]
+        line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, settings))
+        self.assertEqual(line[5:5 + len(kept)], kept)
+        self.assertEqual(line[5 + len(kept):], ["--replay=/i", "--exit-after=10"])
+
+    def test_the_recordings_are_left_out_so_the_replay_does_not_write_over_the_soaks(self) -> None:
+        line = bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, ["GCN_WAV=/a.wav", "GCN_AIDWAV=/b.wav",
+                                                                        "DRAGOON_CENSUS=1"])
+        self.assertEqual(shlex.split(line)[5:], ["DRAGOON_CENSUS=1", "--replay=/i", "--exit-after=10"])
+
+    def test_a_disc_or_bin_path_is_printed_absolute_since_probe_sh_reads_it_from_where_it_ran(self) -> None:
+        settings = ["--disc=rel/disc.iso", "--bin=build/dragoon", "--bin=../up/dragoon", "--disc=./fast",
+                    "--disc=/abs/disc.iso", "--bin=/abs/dragoon"]
+        line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, settings))
+        self.assertEqual(line[5:11], [f"--disc={os.path.abspath('rel/disc.iso')}", f"--bin={os.path.abspath('build/dragoon')}",
+                                      f"--bin={os.path.abspath('../up/dragoon')}", f"--disc={os.path.abspath('./fast')}",
+                                      "--disc=/abs/disc.iso", "--bin=/abs/dragoon"])
+        self.assertTrue(all(os.path.isabs(s.split("=", 1)[1]) for s in line[5:11]))
+
+    def test_a_disc_speed_is_not_a_path(self) -> None:
+        line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, ["--disc=fast"]))
+        self.assertEqual(line[5], "--disc=fast")
+        line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, ["--disc=console"]))
+        self.assertEqual(line[5], "--disc=console")
 
     def test_a_setting_with_a_space_is_quoted_in_the_line(self) -> None:
         line = bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, ["--disc=/my disc.iso"])
