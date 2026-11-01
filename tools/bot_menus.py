@@ -82,8 +82,9 @@ UNCONFIRMED = {
     "stadium results": "START on a stadium's results (minor 13). The screen after it was never watched.",
     "other screen": "A on a screen scene.minor has no name for here.",
     "press cadence": "Looks come 50 frames after most presses, even one that changes the screen. The title, a "
-                     "race's START and the pause menu wait longer. The routes wait about 300 frames after any "
-                     "press that changes the screen, so a press made during the change may land on the next screen.",
+                     "race's START and the pause menu wait longer. The routes usually wait about 300 frames "
+                     "after a press that changes the screen, so a press made during the change may land on the next "
+                     "screen.",
 }
 
 LEAVE = (  # the pause menu to End Game, as the courses routes press it
