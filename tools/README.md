@@ -193,7 +193,7 @@ The commits are the checkout's HEAD, which may not be what was built. `engine_bu
 
 A music cut is read from the log, and the log can hold a console reset after it. The last process's replay can't show that cut, so the stop and `bot.json` say so (`before_reset`) and name the input log and replay line of the process it happened in. That replay ends with `--exit-after` at the frame of the `# end` line closing the log, and has none when the line is missing.
 
-The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The line carries the settings after `--`, so the replay runs the run's build and disc with the run's switches. Their `--disc` and `--bin` paths are made absolute, since probe.sh reads a relative one from where it was run, and `--pads` plugs in the ports `--ports` drove.
+The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The line carries the settings after `--`, so the replay runs the run's build and disc with the run's switches. Their `--disc` and `--bin` paths are made absolute, since probe.sh reads a relative one from where it was run, and `--pads` plugs in the ports `--ports` drove. The replay doesn't depend on it, since the engine sets every port from the input log during a replay. A four-port soak's log replayed the same with `--pads=1`.
 
 The line leaves out what the soak sets for itself, and any `GCN_WAV` or `GCN_AIDWAV` recording, which a replay would write over. It ends at the stop's frame with `--exit-after`, except for a hang, whose last frame a replay isn't known to reach.
 

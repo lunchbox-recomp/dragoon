@@ -96,10 +96,13 @@ def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[in
     after LAST_FRAME frames when there is a frame to give and EXIT_AFTER is true. None and 0 are
     none, and probe.sh refuses an --exit-after of 0. SETTINGS are the run's, less the ones the
     soak or the replay set for themselves (NOT_REPLAYED), with their file paths made absolute. A
-    replay without the run's build, disc or guest switches would part from its recording, and one
-    without its PADS would leave a port unplugged. The seconds are generous, a real-time game's
-    worth of the frames and a minute, since the replay runs as fast as it can. It dumps no
-    frames, as the soak didn't, since each is over a megabyte."""
+    replay without the run's build, disc or guest switches would part from its recording. PADS
+    goes in as the run's --pads, though a replay doesn't depend on it: in gcn-recomp `b11ebc6`,
+    input_pad_poll (runtime/input_log.cpp) sets every port's state from the log during a replay,
+    plugged in or not, and past the log's end keeps a port the log ended plugged in plugged in at
+    rest. A four-port soak's log replayed the same with --pads=1. The seconds are generous, a
+    real-time game's worth of the frames and a minute, since the replay runs as fast as it can.
+    It dumps no frames, as the soak didn't, since each is over a megabyte."""
     frame = last_frame or None
     seconds = 3600 if frame is None else math.ceil(frame / 60) + 60
     kept = [_as_given(s) for s in settings if not s.startswith(NOT_REPLAYED)]
