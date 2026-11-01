@@ -941,30 +941,6 @@ On Dragoon `05b3389`, which also forgets a kept camera as the game frees it, the
 all twenty-four routes and 1,906 frames in one pass. The load was 2.3 at its start and 4.2 at
 its end.
 
-## gcn-recomp `013d907`
-
-This branch moves no pin, since `mods.py` is a tools change on main's own pin. That pin holds
-`013d907`, which adds 54 commits to `5e49451`. They add an FST reader and writer in Python and a
-builder for a disc overlay, which lays loose files over the disc. The runtime reads the disc
-through an overlay named by `--disc-overlay` or `GCN_DISC_OVERLAY`, and `recomp/dol_patch.py`
-applies patch lists to a DOL.
-
-Built at Dragoon `8202011`, `tools/frame_hashes.py check` matched all twenty-four routes and
-1,906 frames in one pass. The load was 6.4 at its start and 4.1 at its end. Then
-`tools/audio_hashes.py check` matched all 48 audio rows, with the load at 4.1 at its start and
-2.3 at its end.
-
-A second fresh build at `91e318d`, whose tree differs from `8202011`'s only in this file, matched
-every frame and audio row again. Its frame check ran at loads of 3.4 to 3.6 and its audio check
-at 3.6 to 2.4.
-
-Dragoon doesn't load an overlay or patch its DOL yet, so the game reads the disc as it did
-before. Every frame and audio row matched, so no golden was recorded. Each check took about
-15 min.
-
-Both builds came before this branch moved onto main's `7bcb026`, and the checks weren't run again
-there.
-
 ## gcn-recomp `bad7160`
 
 The pin moved from `5e49451` to `bad7160`, 65 commits. Eleven time disc reads as a console's
