@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import shlex
@@ -464,10 +466,25 @@ class ArgumentTest(SoakCase):
         self.assertIn("--seed is a whole number from 0", self.refused("--seed", "-1"))
         self.assertIn("invalid int value", self.refused("--seed", "1.5"))
 
-    def test_the_times_are_above_zero(self) -> None:
+    def test_the_times_are_finite_numbers_above_zero(self) -> None:
         for name in ("minutes", "round", "stuck", "hang"):
-            with self.subTest(name=name):
-                self.assertIn(f"--{name} is a number above 0", self.refused(f"--{name}", "0"))
+            for value in ("0", "-1", "-inf", "nan", "inf", "infinity"):
+                with self.subTest(name=name, value=value):
+                    ap = bot_soak.parser()
+                    args = ap.parse_args([f"--{name}={value}"])
+                    err = io.StringIO()
+                    with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
+                        bot_soak.checked(ap, args, time.time)
+                    self.assertEqual(caught.exception.code, 2)
+                    self.assertIn(f"--{name} is a finite number above 0", err.getvalue())
+
+    def test_a_time_that_is_not_finite_is_refused_before_anything_is_run(self) -> None:
+        for argv in (["--minutes", "inf"], ["--hang", "nan"], ["--minutes", "nan"], ["--hang", "inf"]):
+            with self.subTest(argv=argv):
+                code, out, err = self.soak(*argv)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("is a finite number above 0", err)
+        self.assertFalse((self.root / "build").exists())
 
     def test_nothing_is_run_for_a_bad_argument(self) -> None:
         self.refused("--ports", "5")

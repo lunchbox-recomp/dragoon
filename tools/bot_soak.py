@@ -38,6 +38,7 @@ never connected, or a bot raised an error.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 import time
@@ -88,8 +89,8 @@ def checked(ap: argparse.ArgumentParser, args: argparse.Namespace, clock: Callab
     if args.seed < 0:
         ap.error("--seed is a whole number from 0")
     for name in ("minutes", "round", "stuck", "hang"):
-        if getattr(args, name) <= 0:
-            ap.error(f"--{name} is a number above 0")
+        if not 0 < getattr(args, name) < math.inf:  # nan fails both
+            ap.error(f"--{name} is a finite number above 0")
 
 
 def say(text: str) -> None:
