@@ -114,12 +114,19 @@ class ReplayLineTest(unittest.TestCase):
     def test_it_is_the_probe_line_the_readme_gives_with_the_logs_directory(self) -> None:
         inputs = Path("/r/build/probe/soak-s1-x/session/inputs")
         line = bot_record.replay_line(Path("/r/tools/probe.sh"), "soak-s1-x", inputs, 4000)
-        self.assertEqual(shlex.split(line), ["/r/tools/probe.sh", "replay-soak-s1-x", "127", "", "60",
+        self.assertEqual(shlex.split(line), ["/r/tools/probe.sh", "replay-soak-s1-x", "127", "", str(bot_link.NO_DUMPS),
                                              "--replay=/r/build/probe/soak-s1-x/session/inputs", "--exit-after=4000"])
 
     def test_the_replay_runs_under_the_runs_name_with_replay_before_it(self) -> None:
         line = bot_record.replay_line(Path("/r/tools/probe.sh"), "n", Path("/i"), 10)
         self.assertEqual(shlex.split(line)[1], "replay-n")
+
+    def test_the_replay_writes_no_frame_dumps_since_one_is_over_a_megabyte(self) -> None:
+        for last in (None, 0, 10, 216000):
+            with self.subTest(last=last):
+                line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), last))
+                self.assertGreaterEqual(int(line[4]), 1_000_000)
+                self.assertEqual(line[4], str(bot_link.NO_DUMPS))
 
     def test_the_seconds_are_the_frames_at_sixty_a_second_and_a_minute(self) -> None:
         for frames, seconds in ((1, 61), (60, 61), (61, 62), (216000, 3660)):
@@ -140,7 +147,7 @@ class ReplayLineTest(unittest.TestCase):
         settings = ["GCN_AXVOICES=1", "--bin=/x/build/dragoon", "DRAGOON_CENSUS=1", "GCN_SESSION=/s", "--pads=2",
                     "--exit-after=500", "GCN_BOT=/b.sock", "--disc=/my disc.iso"]
         line = bot_record.replay_line(Path("/p"), "n", Path("/i"), 10, settings)
-        self.assertEqual(shlex.split(line), ["/p", "replay-n", "61", "", "60", "--bin=/x/build/dragoon",
+        self.assertEqual(shlex.split(line), ["/p", "replay-n", "61", "", str(bot_link.NO_DUMPS), "--bin=/x/build/dragoon",
                                              "DRAGOON_CENSUS=1", "--disc=/my disc.iso", "--replay=/i",
                                              "--exit-after=10"])
 
@@ -154,7 +161,7 @@ class ReplayLineTest(unittest.TestCase):
 
     def test_a_replay_can_leave_the_exit_after_out_and_keeps_the_seconds_for_the_frames(self) -> None:
         line = shlex.split(bot_record.replay_line(Path("/p"), "n", Path("/i"), 4000, exit_after=False))
-        self.assertEqual(line, ["/p", "replay-n", "127", "", "60", "--replay=/i"])
+        self.assertEqual(line, ["/p", "replay-n", "127", "", str(bot_link.NO_DUMPS), "--replay=/i"])
 
     def test_a_path_with_a_space_is_quoted_so_the_line_runs_as_printed(self) -> None:
         line = bot_record.replay_line(Path("/my repo/tools/probe.sh"), "n", Path("/my repo/build/inputs"), 5)

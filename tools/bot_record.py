@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
+import bot_link
 import source_info
 from bot_stop import Stop
 from bot_watch import Resets
@@ -80,11 +81,12 @@ def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[in
     none, and probe.sh refuses an --exit-after of 0. SETTINGS are the run's, less the ones the
     soak or the replay set for themselves (NOT_REPLAYED). A replay without the run's build, disc
     or guest switches would part from its recording. The seconds are generous, a real-time
-    game's worth of the frames and a minute, since the replay runs as fast as it can."""
+    game's worth of the frames and a minute, since the replay runs as fast as it can. It dumps
+    no frames, as the soak didn't, since each is over a megabyte."""
     frame = last_frame or None
     seconds = 3600 if frame is None else math.ceil(frame / 60) + 60
     kept = [s for s in settings if not s.startswith(NOT_REPLAYED)]
-    args = [str(probe), f"replay-{name}", str(seconds), "", "60", *kept, f"--replay={input_log}"]
+    args = [str(probe), f"replay-{name}", str(seconds), "", str(bot_link.NO_DUMPS), *kept, f"--replay={input_log}"]
     if frame is not None and exit_after:
         args.append(f"--exit-after={frame}")
     return " ".join(shlex.quote(a) for a in args)

@@ -236,7 +236,7 @@ class StopTest(SoakCase):
         out, data = self.stop([at([["hang", 60]], frame=300)], "--hang", "1")
         self.assertEqual(data["stop"]["kind"], "hang")
         log = Path(data["input_log"])
-        self.assertEqual(shlex.split(data["replay"])[2:], ["65", "", "60", f"--replay={log}"])
+        self.assertEqual(shlex.split(data["replay"])[2:], ["65", "", str(bot_link.NO_DUMPS), f"--replay={log}"])
         self.assertNotIn("--exit-after", data["replay"])
 
     def test_a_music_stream_that_ends_early_stops_the_run(self) -> None:
@@ -349,7 +349,7 @@ class StopTest(SoakCase):
         words = shlex.split(line)
         name = self.name(out)
         self.assertEqual(words[:2], [str(self.probe), f"replay-{name}"])
-        self.assertEqual(words[3:6], ["", "60", f"--replay={data['input_log']}"])
+        self.assertEqual(words[3:6], ["", str(bot_link.NO_DUMPS), f"--replay={data['input_log']}"])
         self.assertEqual(words[6], f"--exit-after={data['stop']['frame']}")
 
     def test_the_replay_line_carries_the_runs_settings_but_not_the_ones_the_soak_sets(self) -> None:
