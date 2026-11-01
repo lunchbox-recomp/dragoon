@@ -119,40 +119,6 @@ class ReplayLineTest(unittest.TestCase):
         self.assertIn("''", line)  # the empty INPUT_SCRIPT
 
 
-class RemoveDumpsTest(unittest.TestCase):
-    def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
-
-    def test_frames_and_outputs_go_and_the_rest_stays(self) -> None:
-        for name in ("frame_00060.png", "frame_00120.png", "output_00060.png", "stdout.txt", "panic.txt",
-                     "frame_x.png", "notes_frame_00060.png"):
-            write_file(self.dir, name, "x")
-        self.assertEqual(bot_record.remove_dumps(self.dir), 3)
-        self.assertEqual(sorted(p.name for p in self.dir.iterdir()),
-                         ["frame_x.png", "notes_frame_00060.png", "panic.txt", "stdout.txt"])
-
-    def test_a_directory_with_a_dumps_name_is_left(self) -> None:
-        (self.dir / "frame_00060.png").mkdir()
-        self.assertEqual(bot_record.remove_dumps(self.dir), 0)
-        self.assertTrue((self.dir / "frame_00060.png").is_dir())
-
-    def test_a_link_is_left_and_so_is_its_target(self) -> None:
-        target = write_file(self.dir, "keep.png", "x")
-        (self.dir / "frame_00060.png").symlink_to(target)
-        self.assertEqual(bot_record.remove_dumps(self.dir), 0)
-        self.assertTrue(target.exists())
-
-    def test_a_missing_directory_has_none(self) -> None:
-        self.assertEqual(bot_record.remove_dumps(self.dir / "nope"), 0)
-
-    def test_frames_in_a_session_below_are_not_touched(self) -> None:
-        (self.dir / "session").mkdir()
-        write_file(self.dir / "session", "frame_00060.png", "x")
-        self.assertEqual(bot_record.remove_dumps(self.dir), 0)
-
-
 class RecordTest(unittest.TestCase):
     def make(self, stop: Stop, resets: Resets | None = None,
              input_log: Path | None = Path("/r/session/inputs")) -> dict:

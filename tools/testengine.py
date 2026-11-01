@@ -13,7 +13,6 @@ once. It records what it saw in record.json. What it does besides play is in pla
               at frame N of process P (1 before a reset), or at the Nth frame of the first race
               the process plays, once. An ACTION is one of
                 ["say", TEXT]            a line in stdout.txt
-                ["file", NAME]           an empty file in the run's directory, a frame dump
                 ["panic"]                panic.txt, and the game ends
                 ["exit"]                 the game ends on its own
                 ["shutdown"]             the console shuts down, which is a clean end
@@ -161,8 +160,6 @@ def act(do):
         kind = action[0]
         if kind == "say":
             say(action[1] + "\n")
-        elif kind == "file":
-            open(action[1], "w").close()
         elif kind == "panic":
             say("guest panic: foo.c:12: boom\nguest backtrace (innermost first):\n", "panic.txt")
             stop_game(1)

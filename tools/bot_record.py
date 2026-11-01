@@ -3,8 +3,8 @@
 A stop keeps the run's input log and gets a `bot.json` beside it, with the seed, the arguments,
 the Dragoon and engine commits and how the run stopped. `replay_line` is the probe.sh command
 that plays the input log back with no bot. `new_name` gives each run a NAME no earlier run used,
-since a run in an old `build/probe/NAME/` starts from the memory card that run left. A run that
-dumps frames has them deleted when it ends. It has no command line.
+since a run in an old `build/probe/NAME/` starts from the memory card that run left. It has no
+command line.
 """
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-import frame_dumps
 import source_info
 from bot_stop import Stop
 from bot_watch import Resets
@@ -68,22 +67,6 @@ def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[in
     if last_frame is not None:
         args.append(f"--exit-after={last_frame}")
     return " ".join(shlex.quote(a) for a in args)
-
-
-def remove_dumps(run_dir: Path) -> int:
-    """Deletes the frames probe.sh dumped into RUN_DIR, frame_NNNNN.png and output_NNNNN.png.
-    Returns how many."""
-    removed = 0
-    try:
-        files = list(run_dir.iterdir())
-    except OSError:
-        return 0
-    for path in files:
-        dump = frame_dumps.FRAME_NAME.fullmatch(path.name) or frame_dumps.OUTPUT_NAME.fullmatch(path.name)
-        if dump and path.is_file() and not path.is_symlink():
-            path.unlink()
-            removed += 1
-    return removed
 
 
 def record(*, name: str, seed: int, arguments: dict, commit_ids: dict[str, Optional[str]], stop: Stop,

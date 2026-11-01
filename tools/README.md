@@ -185,7 +185,7 @@ The engine gives a bot no hash of the picture yet. The frames it shows are copie
 
 A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the last process. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from a blank card.
 
-The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`, and deletes any frame dumps. The soak exits 0 when the run ended with no stop and 1 when it stopped. A bad argument, a game that never connected or a bot that raised an error exits 2 and writes no `bot.json`.
+The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The soak exits 0 when the run ended with no stop and 1 when it stopped. A bad argument, a game that never connected or a bot that raised an error exits 2 and writes no `bot.json`.
 
 The tests stand a fake probe.sh in for the game, so they need no disc.
 
@@ -203,7 +203,7 @@ A hang after a reset whose shader rebuild took two thirds of the hang limit or m
 
 ## bot_record.py
 
-What does a stop keep? `new_name` gives a run a NAME no earlier run used, `commits` reads the Dragoon and engine commits through git or `source-info.json`, and `record` and `write` make `bot.json`. `replay_line` is the `probe.sh` command that plays an input log back, and `remove_dumps` deletes the frames a run dumped. It has no command line.
+What does a stop keep? `new_name` gives a run a NAME no earlier run used, `commits` reads the Dragoon and engine commits through git or `source-info.json`, and `record` and `write` make `bot.json`. `replay_line` is the `probe.sh` command that plays an input log back. It has no command line.
 
 ## bot_player.py
 

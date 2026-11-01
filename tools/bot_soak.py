@@ -24,8 +24,8 @@ It stops at the first of these:
 
 The engine gives a bot no hash of the picture yet, so the frozen-picture check sees none and
 says so. A stop keeps the run's input log, writes bot.json beside it with the seed, the
-arguments, the Dragoon and engine commits and how the run stopped, deletes any frame dumps and
-prints the probe.sh line that plays the input log back. bot.json says when the stop came after
+arguments, the Dragoon and engine commits and how the run stopped, and prints the probe.sh line
+that plays the input log back. bot.json says when the stop came after
 a console reset, since a replay plays only the process after the last reset. A restart rebuilds
 the shader cache before the bot connects again, and that counts against the hang limit. The
 first reset's `[shaders] ... in Z ms` line is kept, a Z near the limit is warned about when it
@@ -137,9 +137,6 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
         log.finish(outcome.last_frame or 0)
     except Detected as e:
         late = e
-    removed = bot_record.remove_dumps(outcome.run_dir)
-    if removed:
-        out(f"deleted {count(removed, 'frame dump')}")
     try:
         stop = classify(outcome, log.resets, args.hang)
     except SoakError as e:

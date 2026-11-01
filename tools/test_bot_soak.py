@@ -144,15 +144,6 @@ class CleanRunTest(SoakCase):
         self.assertEqual(lines[0].split(":")[0], old.name + "-2")
         self.assertEqual((old / "memory-card.raw").read_text(), "a card an earlier run left")
 
-    def test_frame_dumps_are_deleted_on_any_end(self) -> None:
-        self.plan(events=[at([["file", "frame_00060.png"], ["file", "output_00060.png"], ["file", "keep.txt"],
-                              ["shutdown"]], frame=30)])
-        code, out, err = self.soak("--seed", SEED, "--minutes", "1")
-        self.assertEqual((code, err), (0, ""), out)
-        self.assertIn("deleted 2 frame dumps", out)
-        self.assertEqual(sorted(p.name for p in self.run_dir(out).glob("*.png")), [])
-        self.assertTrue((self.run_dir(out) / "keep.txt").exists())
-
     def test_it_says_when_a_detector_had_nothing_to_read(self) -> None:
         self.plan(events=[at([["shutdown"]], frame=30)])
         _, out, _ = self.soak("--seed", SEED, "--minutes", "1")
@@ -301,13 +292,6 @@ class StopTest(SoakCase):
         self.assertRegex(out, rf"(?m)^  run {self.run_dir(out)}$")
         self.assertRegex(out, rf"(?m)^  input log {data['input_log']}$")
         self.assertNotIn("console reset", "\n".join(self.lines(out, "  after")))
-
-    def test_frame_dumps_are_deleted_at_a_stop_and_the_input_log_is_not(self) -> None:
-        out, data = self.stop([at([["file", "frame_00060.png"], ["panic"]], race=50)])
-        self.assertIn("deleted 1 frame dump", out)
-        self.assertNotIn("frame dumps", out)
-        self.assertFalse(list(self.run_dir(out).glob("*.png")))
-        self.assertTrue((Path(data["input_log"]) / "inputs.txt").is_file())
 
     def test_a_stop_exits_1_and_a_clean_end_0(self) -> None:
         self.plan(events=[at([["panic"]], frame=100)])
