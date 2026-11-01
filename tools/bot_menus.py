@@ -68,8 +68,6 @@ BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to it
 
 UNCONFIRMED = {
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
-    "stadium pause": "START, DOWN and A on a stadium's pause menu, for End Game. Only Drag Race 3's has been "
-                     "watched.",
     "other screen": "A on a screen scene.minor has no name for here.",
     "press cadence": "Looks come 50 frames after most presses, even one that changes the screen. The title, a "
                      "race's START and the pause menu wait longer. The routes usually wait about 300 frames "
@@ -81,7 +79,7 @@ LEAVE = (  # the pause menu to End Game, as the courses routes press it
     ("START", SLOW), ("DOWN", SETTLE), ("DOWN", SETTLE), ("A", START_WAIT),
 )
 # A stadium's pause menu has two rows, Return to Game and End Game, and DOWN wraps, as Drag Race 3's
-# did. End Game went to City Trial's own menu.
+# did. End Game went to City Trial's own menu, there and on each stadium a soak left this way.
 STADIUM_LEAVE = (("START", SLOW), ("DOWN", SETTLE), ("A", START_WAIT))
 
 
@@ -267,7 +265,6 @@ class Menus:
             what, way = self.mode, LEAVE
         elif self._stadium:
             what, way = "the stadium", STADIUM_LEAVE
-            self._unconfirmed("stadium pause")
         else:
             return None
         self._left = frame

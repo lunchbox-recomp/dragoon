@@ -495,7 +495,8 @@ class PlayTest(unittest.TestCase):
                 # The stadium begins at 201, when the walker's A on the screen before has settled.
                 self.assertEqual(presses(steps), [(801, {1: START}), (901, {1: DOWN}), (951, {1: A})])
                 self.assertEqual(len([line for line in said if line.startswith("leaving the stadium after 10 s")]), 1)
-                self.assertEqual(len([line for line in said if "stadium pause" in line]), 1)
+                self.assertEqual([line for line in said if line.startswith("unconfirmed step") and "cadence" not in line],
+                                 [])
 
     def test_a_race_that_began_where_the_walker_did_not_see_is_not_left_early(self) -> None:
         menus, link, _ = make(round_seconds=10)
@@ -646,7 +647,7 @@ class UnconfirmedTest(unittest.TestCase):
                 self.assertEqual([line for line in said if "menu.item" in line], [])
 
     def test_every_unconfirmed_step_is_tested_here(self) -> None:
-        self.assertEqual(set(bot_menus.UNCONFIRMED), {*self.CASES, "stadium pause"})
+        self.assertEqual(set(bot_menus.UNCONFIRMED), set(self.CASES))
 
     def test_the_press_cadence_is_said_with_the_first_press_and_not_with_a_wait(self) -> None:
         cadence = f"unconfirmed step, press cadence: {bot_menus.UNCONFIRMED['press cadence']}"
