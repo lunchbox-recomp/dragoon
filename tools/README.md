@@ -199,7 +199,7 @@ The tests stand a fake probe.sh in for the game, so they need no disc.
 
 What does the soak watch for while the bots play? `Frozen` watches the picture and `LogWatch` follows the game's `stdout.txt`, and each raises `Detected` from the bot callback. That ends the run at that frame with its input log whole.
 
-`Frozen` fires when the picture's hash has stayed the same for 10 s of game time and the race bots' pads changed on at least 2 frames of those seconds. Frames the menu walker plays don't count, because a menu or a loading screen can stand still while the walker presses. `LogWatch` reads the log every 60 frames, gives the `[axv]` lines to stream_voices.py's `Tracker` and counts the console resets. A `[session]` line starts the voices over, since the old process's are gone. It has no command line.
+`Frozen` fires when the picture's hash has stayed the same for 10 s of game time and the race bots' pads changed on at least 2 frames of those seconds. Frames the menu walker plays don't count, because a menu or a loading screen can stand still while the walker presses. `LogWatch` reads the log every 60 frames, gives the `[axv]` lines to stream_voices.py's `Tracker` and counts the console resets. It handles every line of a read before it raises the first cut, which carries the resets and the session that came before it. A `[session]` line starts the voices over, since the old process's are gone. It has no command line.
 
 ## bot_stop.py
 
