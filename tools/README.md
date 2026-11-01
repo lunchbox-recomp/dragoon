@@ -133,6 +133,12 @@ A type is a big-endian `u8`, `s8`, `u16`, `s16`, `u32` or `s32`, an `f32` or `by
 
 Top Ride's races keep their players elsewhere, so there the player values read as if nobody played.
 
+## bot_walk.py
+
+Where do the soak's bots steer? `Walk(seed, ports)` gives each port a pad every time `pads()` is called. A port holds the stick toward one heading for half a second to two seconds, then turns to another. It taps A for 4 frames now and then, and never presses START.
+
+The walk reads no RAM, so a seed gives the same pads whatever the game does. Port N of seed S walks from `random.Random(S * 5 + N)`, so adding a port leaves the others as they were. It has no command line.
+
 ## playtest.sh
 
 What happened while I played? It runs the game in its window with sound, as `build/dragoon` runs for a player. It sets `GCN_SESSION` to `build/playtest/<date>-<time>/` ("Playtest sessions" in gcn-recomp's `docs/diagnostics.md`).
