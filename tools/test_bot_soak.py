@@ -476,6 +476,29 @@ class ResetTest(SoakCase):
         self.assertNotRegex(out, r"(?m)^  at frame")
         self.assertNotIn("--exit-after=0", out)
 
+    def test_a_cut_in_the_middle_of_two_resets_is_after_one_and_before_the_next(self) -> None:
+        self.plan(race=100000, events=[at([["reset", {"shaders_ms": 100}]], frame=500),
+                                       at([["say", axv(100, "run")], ["say", axv(120, "end")],
+                                           ["reset", {"shaders_ms": 100}]], frame=2010, process=2)])
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride")
+        self.assertEqual((code, err), (1, ""), out)
+        data = self.bot_json(out)
+        self.assertEqual(data["stop"]["kind"], "music_cut")
+        self.assertEqual((data["after_reset"], data["before_reset"]), (True, True))
+        self.assertEqual(data["resets"]["count"], 2)
+        self.assertIsNone(data["stop"]["frame"])
+        log = Path(data["input_log"])
+        self.assertEqual(log.parent.name, "run-2")  # the middle process's, not the first's or the last's
+        self.assertEqual(self.bot_json_path(out), log.parent / "bot.json")
+        self.assertEqual(data["commits"]["engine_built"], built_sha(2))
+        ended = int(re.search(r"(?m)^# end \d+ (\d+)$", (log / "inputs.txt").read_text())[1])  # type: ignore[index]
+        self.assertGreaterEqual(ended, 2010)
+        self.assertEqual(shlex.split(data["replay"])[6:], [f"--replay={log}", f"--exit-after={ended}"])
+        self.assertIn("  after 1 console reset; a replay starts from the card as it stood at the last reset", out)
+        self.assertIn("  a console reset came after it, so the last process's replay can't show it; the input log "
+                      "and replay below are for the process it happened in", out)
+        self.assertIn(f"  input log {log}", out)
+
     def test_a_cut_before_a_reset_in_a_process_whose_log_has_no_end_line_has_no_exit_after(self) -> None:
         self.plan(race=100000, events=[at([["say", axv(100, "run")], ["say", axv(120, "end")],
                                            ["reset", {"shaders_ms": 2107}]], frame=2010)])
