@@ -27,7 +27,7 @@ KINDS = (EXIT, PANIC, ENGINE_STOP, HANG, FROZEN, MUSIC, MENUS_STUCK)
 NEAR_HANG = 2 / 3
 
 _REASONS = {
-    bot_link.GAME_EXITED: EXIT, bot_link.GAME_DIED: EXIT, bot_link.SHUTDOWN: EXIT, bot_link.EXIT_AFTER: EXIT,
+    bot_link.GAME_EXITED: EXIT, bot_link.GAME_DIED: EXIT, bot_link.SHUTDOWN: EXIT,
     bot_link.PANIC: PANIC, bot_link.ENGINE_STOP: ENGINE_STOP, bot_link.HANG: HANG,
 }
 
@@ -69,15 +69,15 @@ def _found(found: Detected, resets: Optional[Resets]) -> Stop:
 
 
 def classify(outcome: bot_link.Outcome, resets: Optional[Resets] = None, hang: Optional[float] = None,
-             *, asked_exit_after: bool = False, late: Optional[Detected] = None) -> Optional[Stop]:
+             *, late: Optional[Detected] = None) -> Optional[Stop]:
     """The stop OUTCOME is, or None for a run that ended as it should: at its time limit, or at
-    an --exit-after the run was given (ASKED_EXIT_AFTER). A game that shuts itself down, or ends
-    at an --exit-after nobody asked for, has exited. RESETS is what the log showed of console
-    resets, and HANG the limit the run had, for a hang that follows a slow restart. LATE is a
-    finding from the log's last lines, which is the stop only when the run had none of its own.
-    Raises SoakError for a run that says nothing about the game."""
+    an --exit-after, which bot_link reports only for one the run's settings gave. A game that
+    shuts itself down has exited. RESETS is what the log showed of console resets, and HANG the
+    limit the run had, for a hang that follows a slow restart. LATE is a finding from the log's
+    last lines, which is the stop only when the run had none of its own. Raises SoakError for a
+    run that says nothing about the game."""
     reason, error = outcome.reason, outcome.error
-    if reason == bot_link.TIME_LIMIT or (reason == bot_link.EXIT_AFTER and asked_exit_after):
+    if reason in (bot_link.TIME_LIMIT, bot_link.EXIT_AFTER):
         return None if late is None else _found(late, resets)
     if reason == bot_link.BOT_RAISED:
         if isinstance(error, Detected):

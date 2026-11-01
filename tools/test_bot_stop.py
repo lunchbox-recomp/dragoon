@@ -29,19 +29,12 @@ class ClassifyTest(unittest.TestCase):
     def test_a_run_that_reached_its_time_limit_is_no_stop(self) -> None:
         self.assertIsNone(classify(outcome(bot_link.TIME_LIMIT)))
 
-    def test_a_run_that_reached_the_exit_after_it_was_given_is_no_stop(self) -> None:
-        self.assertIsNone(classify(outcome(bot_link.EXIT_AFTER, "--exit-after=500"), asked_exit_after=True))
+    def test_a_run_that_reached_its_exit_after_is_no_stop_since_bot_link_reports_one_only_when_given(self) -> None:
+        self.assertIsNone(classify(outcome(bot_link.EXIT_AFTER, "--exit-after=500")))
 
-    def test_an_exit_after_nobody_asked_for_is_an_exit(self) -> None:
-        self.assertEqual(classify(outcome(bot_link.EXIT_AFTER, "--exit-after=500")),
-                         Stop(bot_stop.EXIT, "--exit-after=500", 4000))
-
-    def test_the_game_shutting_itself_down_is_an_exit_whatever_the_run_asked_for(self) -> None:
+    def test_the_game_shutting_itself_down_is_an_exit(self) -> None:
         line = "[reset] the game reset the console (shutdown, code 0)"
-        for asked in (False, True):
-            with self.subTest(asked_exit_after=asked):
-                self.assertEqual(classify(outcome(bot_link.SHUTDOWN, line), asked_exit_after=asked),
-                                 Stop(bot_stop.EXIT, line, 4000))
+        self.assertEqual(classify(outcome(bot_link.SHUTDOWN, line)), Stop(bot_stop.EXIT, line, 4000))
 
     def test_a_shutdown_after_a_reset_says_so(self) -> None:
         stop = classify(outcome(bot_link.SHUTDOWN, "x"), resets(RESET))
@@ -149,8 +142,7 @@ class ClassifyTest(unittest.TestCase):
     def test_a_cut_found_after_a_clean_end_is_the_stop(self) -> None:
         self.assertEqual(classify(outcome(bot_link.TIME_LIMIT), resets(RESET), late=self.cut(1)),
                          Stop(MUSIC, "a music stream ended early", 4000, 1))
-        self.assertEqual(classify(outcome(bot_link.EXIT_AFTER, "--exit-after=9"), resets(), asked_exit_after=True,
-                                  late=self.cut(0)),
+        self.assertEqual(classify(outcome(bot_link.EXIT_AFTER, "--exit-after=9"), resets(), late=self.cut(0)),
                          Stop(MUSIC, "a music stream ended early", 4000))
 
     def test_a_cut_found_late_that_a_reset_followed_names_its_process(self) -> None:

@@ -153,8 +153,7 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
     except Detected as e:
         late = e
     try:
-        stop = classify(outcome, log.resets, args.hang, late=late,
-                        asked_exit_after=bot_link.EXIT_AFTER_ARG.search(" ".join(settings)) is not None)
+        stop = classify(outcome, log.resets, args.hang, late=late)
     except SoakError as e:
         err(f"bot_soak.py: {e}")
         if outcome.error is not None:
