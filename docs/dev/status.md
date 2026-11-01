@@ -536,6 +536,8 @@ bot no picture hash yet. No soak had a console reset, so none rebuilt the shader
 | 513333 | City Trial | 4 | 60 | `ee88df6` | 518 s | 5 | Stop at frame 159,374: a stadium up for 602 s |
 | 544282 | City Trial | 4 | 60 | `63932c5` | 645 s | 8 | Stop at frame 181,800: a music stream ended early |
 | 545590 | All three | 1 | 60 | `63932c5` | 1,230 s | 37 | Stop at frame 505,140: a music stream ended early |
+| 555018 | City Trial | 4 | 60 | `16e67cd` | 60.0 min | 42 | Time limit |
+| 558640 | All three | 1 | 60 | `16e67cd` | 60.0 min | 119 | Time limit |
 
 The first three stops were the walker's, and the next soak of that mode ran with the fix. After
 a stadium's results the game showed a checklist (screen 34) when the round had checked a box,
@@ -560,7 +562,8 @@ earlier stream address made that end an early one. In 544282 it was list 608,157
 frames into the round, and in 545590 list 1,691,796, about 7,400 frames in. Neither point was
 compared with a console. Since `c82a688` a `set` that gives a block a new sample ends the voice
 that ran there as the game's doing, and an end the mixer makes on a stream the game didn't stop
-or give a new sample is still an early one.
+or give a new sample is still an early one. With that rule 555018 and 558640 ran their hours,
+and `stream_voices.py` finds no early end in either log.
 
 Each stop's replay line ran with `GCN_SESSION` and `GCN_AXVOICES=1` added, so the replay kept
 its own input log and voice lines. Each replay's input log matched the soak's up to the stop
@@ -579,8 +582,9 @@ makes a four-port replay play as its run. The replay line still carries it.
 Each step the soaks showed right came out of the walker's unconfirmed list, and three stay in
 it. A screen kar_ram.json doesn't name gets A. The press cadence stays because a log can't show
 which screen each press landed on. RIGHT on a stadium's pause menu with two or three players
-stays because no soak has played two or three. No four-player soak has run its full hour. The
-longest ran 645 s.
+stays because no soak has played two or three. 555018 played four-player City Trial for its
+full hour with no stop, 42 rounds with the menus between them. 558640's 119 rounds were 40 of
+Air Ride, 39 of Top Ride and 40 of City Trial.
 
 ## Audio
 
