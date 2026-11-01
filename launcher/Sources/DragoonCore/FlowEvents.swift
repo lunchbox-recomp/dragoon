@@ -10,16 +10,19 @@ extension Flow {
         /// The app's source snapshot, or nil when its `source-info.json` can't be used.
         public var source: SourceInfo?
         public var installed: InstalledGame?
+        /// The pid of a game an earlier launcher started that's still running, or nil.
+        public var earlierGame: Int32?
 
         public init(
             appPath: String, onReadOnlyVolume: Bool, settings: LauncherSettings,
-            source: SourceInfo?, installed: InstalledGame?
+            source: SourceInfo?, installed: InstalledGame?, earlierGame: Int32? = nil
         ) {
             self.appPath = appPath
             self.onReadOnlyVolume = onReadOnlyVolume
             self.settings = settings
             self.source = source
             self.installed = installed
+            self.earlierGame = earlierGame
         }
     }
 
@@ -68,6 +71,8 @@ extension Flow {
         case gameExited(launch: Int, exit: GameExit, panic: GamePanic?)
         /// The `play` with this launch number couldn't start the game, and `reason` says why.
         case gameCouldNotStart(launch: Int, reason: String)
+        /// The game an earlier launcher started, which `watchEarlierGame` waits on, has ended.
+        case earlierGameEnded
     }
 
     /// What the app does for the flow. Each result comes back as an event.
@@ -100,6 +105,9 @@ extension Flow {
         /// Starts the current game with the disc at `disc`. Its one result is `gameExited` once
         /// the game ends, or `gameCouldNotStart`, and either echoes `launch`.
         case play(disc: String, launch: Int)
+        /// Waits for the game an earlier launcher started, running as `pid`, to end, which gives
+        /// `earlierGameEnded`.
+        case watchEarlierGame(pid: Int32)
         case showSaves
         /// `OldBuilds.delete`, sent only while no game and no build is running.
         case deleteOldBuilds

@@ -263,6 +263,33 @@ private let oldCommits = Commits(
         #expect(!run.state.gameRunning)
     }
 
+    /// A game an earlier launcher started that still runs keeps Library's buttons off and old
+    /// builds where they are until it ends. How it ended can't be known, so nothing is shown.
+    @Test func aGameAnEarlierLauncherStartedKeepsLibraryWaitingUntilItEnds() {
+        var run = launched(earlierGame: 4242)
+        #expect(run.effects == [.watchEarlierGame(pid: 4242)])
+        #expect(run.screen == .library)
+        #expect(run.state.gameRunning)
+        for event: Flow.Event in [.playPressed, .rebuildPressed, .changeDiscPressed] {
+            #expect(run.send(event) == [], "\(event)")
+        }
+        #expect(run.send(.earlierGameEnded) == [.deleteOldBuilds])
+        #expect(!run.state.gameRunning)
+        #expect(run.state.gameProblem == nil)
+        #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
+    }
+
+    /// The end of an earlier launcher's game changes nothing when there was none, or once this
+    /// launcher has started a game of its own.
+    @Test func anEarlierGameEndingChangesNothingWhenNoneWasRunning() {
+        var run = launched()
+        #expect(run.send(.earlierGameEnded) == [])
+        _ = run.send(playToStarting)
+        let running = run.state
+        #expect(run.send(.earlierGameEnded) == [])
+        #expect(run.state == running)
+    }
+
     @Test func showSavesIsAnEffect() {
         var run = launched()
         #expect(run.send(.showSavesPressed) == [.showSaves])

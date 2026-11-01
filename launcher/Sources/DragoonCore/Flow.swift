@@ -181,6 +181,11 @@ extension Flow.State {
         case .gameCouldNotStart(let launch, let reason):
             guard launch == launchNumber else { return [] }
             return gameStopped(.couldNotStart(reason: reason))
+        case .earlierGameEnded:
+            // The earlier launcher's game holds launch 0's place, since Play stays off until it
+            // ends.
+            guard gameRunning, launchNumber == 0 else { return [] }
+            return gameStopped(nil)
         }
     }
 
@@ -198,6 +203,14 @@ extension Flow.State {
             screen = .damaged
             return []
         }
+        // A game an earlier launcher started counts as running until it ends.
+        gameRunning = launch.earlierGame != nil
+        let watch = launch.earlierGame.map { [Effect.watchEarlierGame(pid: $0)] } ?? []
+        return watch + firstScreen()
+    }
+
+    /// Library when there's a game, and otherwise Welcome until it's been seen, then Tools.
+    private mutating func firstScreen() -> [Effect] {
         if installed != nil { return showLibrary() }
         if !settings.welcomeSeen {
             screen = .welcome

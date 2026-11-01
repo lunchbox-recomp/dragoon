@@ -226,6 +226,7 @@ import Testing
         let all = await results(of: fixture.play())
         #expect(all.count == 1, "\(all)")
         if ending == .diesAtOnce { #expect(all == [.exited(.signal(SIGKILL), panic: nil)]) }
+        #expect(!FileManager.default.fileExists(atPath: fixture.record))
     }
 
     @Test func onlyTheNewestTenGameLogsStayAndTheBuildLogsAreLeftAlone() async throws {

@@ -24,7 +24,8 @@ final class LauncherModel {
             appPath: places.bundle, onReadOnlyVolume: Volume.isReadOnly(places.bundle),
             settings: LauncherSettings.load(from: places.data, fs: fs),
             source: SourceInfo.read(at: places.sourceInfo, fs: fs),
-            installed: InstalledGame.read(dataDirectory: places.data, fs: fs))))
+            installed: InstalledGame.read(dataDirectory: places.data, fs: fs),
+            earlierGame: GameRecord.runningGame(game: places.game, data: places.data, fs: fs))))
     }
 
     func send(_ event: Flow.Event) {

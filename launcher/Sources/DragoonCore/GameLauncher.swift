@@ -75,7 +75,18 @@ public final class GameLauncher: Sendable {
     /// `panic.txt` that's there before the game starts is an earlier run's, so it moves there
     /// first and is never shown. Only one written after the launch began is shown, so a leftover
     /// that can't be moved isn't either.
+    ///
+    /// While the game runs, `<data>/game.pid` records it for `GameRecord.runningGame`, and the
+    /// record goes as the result is sent.
     public func play(game: String, disc: String, data: String) -> GameSession {
+        play(game: game, disc: disc, data: data, started: { _ in })
+    }
+
+    /// `play`, which also gives `started` the game's pid once it's running, so a test can stop
+    /// a game it started.
+    func play(
+        game: String, disc: String, data: String, started: (pid_t) -> Void
+    ) -> GameSession {
         let (session, results) = GameSession.makeStream()
         let end = { @Sendable (result: GameResult) in
             results.yield(result)
@@ -85,7 +96,7 @@ public final class GameLauncher: Sendable {
         if fs.fileExists(at: panic) { movePanic(panic) }
         // One that's still there couldn't be moved, and its time tells it from one the game writes.
         let leftover = GamePanic.lastWritten(at: panic)
-        let executable = game + "/Contents/MacOS/dragoon"
+        let executable = Self.executable(in: game)
         guard fs.fileExists(at: executable) else {
             end(.couldNotStart(.missing(path: executable)))
             return session
@@ -106,19 +117,33 @@ public final class GameLauncher: Sendable {
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = log ?? FileHandle.nullDevice
         process.standardError = log ?? FileHandle.nullDevice
+        // The handler waits until the record is written, so a game that ends at once can't
+        // leave one behind.
+        let recorded = DispatchSemaphore(value: 0)
         process.terminationHandler = { [self] ended in
+            recorded.wait()
             let ending: GameExit =
                 ended.terminationReason == .uncaughtSignal
                 ? .signal(ended.terminationStatus) : .status(ended.terminationStatus)
-            end(.exited(
-                ending, panic: ending == .status(0) ? nil : takePanic(panic, leftover: leftover)))
+            let shown = ending == .status(0) ? nil : takePanic(panic, leftover: leftover)
+            GameRecord.remove(data: data, fs: fs)
+            end(.exited(ending, panic: shown))
         }
         do {
             try process.run()
         } catch {
             end(.couldNotStart(.failed(reason: error.localizedDescription)))
+            return session
         }
+        started(process.processIdentifier)
+        GameRecord.write(pid: process.processIdentifier, data: data, fs: fs)
+        recorded.signal()
         return session
+    }
+
+    /// The executable in the built `Dragoon.app` at `game`.
+    static func executable(in game: String) -> String {
+        game + "/Contents/MacOS/dragoon"
     }
 
     /// The log at `path` opened for appending, with its folder made first, or nil when it can't

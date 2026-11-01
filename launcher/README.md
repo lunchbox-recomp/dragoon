@@ -103,6 +103,10 @@ That `panic.txt` then moves into the logs folder as `panic-<time>.txt`, under a 
 
 The window hides while the game runs and comes back when it exits or can't start. Each `play` effect carries a launch number that its result echoes, and `Flow` ignores a result for any other launch. A late result can't end a game that's running.
 
+While the game runs, `<data>/game.pid` holds its pid and the time its process started, and the file goes as the result is sent. A launcher that opens in the meantime takes the game as running when that pid's process started at that time and runs the installed game. Library counts it as running until a kqueue process source sees it exit, and then shows nothing, since how it ended can't be known.
+
+A `game.pid` that's garbled is removed and ignored, and so is one whose process has gone or isn't the game.
+
 ## Why a wrapper runs the tests
 
 The Command Line Tools ship Swift Testing, but not where `swift test` looks. `Testing.framework` is in `/Library/Developer/CommandLineTools/Library/Developer/Frameworks` and `lib_TestingInterop.dylib` is in `.../Library/Developer/usr/lib`. The compiler needs the first as a framework search path, and the test runner needs both as rpaths.

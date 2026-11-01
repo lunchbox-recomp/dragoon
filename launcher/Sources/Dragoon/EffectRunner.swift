@@ -70,6 +70,11 @@ final class EffectRunner {
             NSWorkspace.shared.open(URL(fileURLWithPath: log))
         case .play(let disc, let launch):
             play(disc: disc, launch: launch)
+        case .watchEarlierGame(let pid):
+            background {
+                await LiveProcess.waitForEnd(of: pid)
+                return .earlierGameEnded
+            }
         case .showSaves:
             let folder = fs.isDirectory(at: places.saves) ? places.saves : places.data
             NSWorkspace.shared.open(URL(fileURLWithPath: folder))

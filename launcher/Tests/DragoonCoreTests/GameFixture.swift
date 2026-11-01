@@ -1,11 +1,15 @@
-import DragoonCore
+@testable import DragoonCore
 import Foundation
 
 /// A scratch directory with spaces in its name that holds a built game, the player's data
 /// directory and the logs folder. The game's executable is a shell script a test writes, and
-/// `<data>/game/current` links to its build as the recipe's swap leaves it.
+/// `<data>/game/current` links to its build as the recipe's swap leaves it. Every game a fixture
+/// starts is stopped when the fixture goes at the end of its test, so a test that fails early
+/// leaves nothing running.
 final class GameFixture: @unchecked Sendable {
     let root: String
+    /// The pids of the games `play` started.
+    private var started: [pid_t] = []
 
     var data: String { root + "/Library/Application Support/Dragoon" }
     var logs: String { root + "/Library/Logs/Dragoon" }
@@ -13,6 +17,7 @@ final class GameFixture: @unchecked Sendable {
     var executable: String { game + "/Contents/MacOS/dragoon" }
     var disc: String { root + "/Kirby Air Ride (USA).gcm" }
     var panic: String { data + "/panic.txt" }
+    var record: String { data + "/game.pid" }
     /// Where the fake game writes its arguments, one per line, its working directory and a note.
     var argumentsFile: String { root + "/game arguments.txt" }
     var directoryFile: String { root + "/game directory.txt" }
@@ -36,7 +41,11 @@ final class GameFixture: @unchecked Sendable {
             atPath: data + "/game/current", withDestinationPath: "build one")
     }
 
-    deinit { try? FileManager.default.removeItem(atPath: root) }
+    deinit {
+        // A game that has ended already is gone, and the signal reaches nothing.
+        for pid in started { kill(pid, SIGKILL) }
+        try? FileManager.default.removeItem(atPath: root)
+    }
 
     /// Installs `body` as the game. Before it runs, the script writes its arguments and its
     /// working directory.
@@ -55,9 +64,26 @@ final class GameFixture: @unchecked Sendable {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable)
     }
 
-    func play(environment: [String: String] = ProcessInfo.processInfo.environment) -> GameSession {
+    /// Installs a link to /bin/sleep as the game, so the game's process runs the installed game's
+    /// executable once links are resolved. The disc argument is how many seconds it sleeps.
+    func installSleep() throws {
+        try FileManager.default.createDirectory(
+            atPath: (executable as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(atPath: executable, withDestinationPath: "/bin/sleep")
+    }
+
+    /// Starts the game with `disc` as its one argument, or the fixture's disc when it's nil.
+    func play(
+        disc: String? = nil, environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> GameSession {
         GameLauncher(logFolder: logs, environment: environment, now: { GameFixture.clock })
-            .play(game: game, disc: disc, data: data)
+            .play(game: game, disc: disc ?? self.disc, data: data) { started.append($0) }
+    }
+
+    /// What `GameRecord.runningGame` finds for this fixture's game.
+    func runningGame() -> pid_t? {
+        GameRecord.runningGame(game: game, data: data, fs: SystemFileSystem())
     }
 
     /// The names of the files in the logs folder.

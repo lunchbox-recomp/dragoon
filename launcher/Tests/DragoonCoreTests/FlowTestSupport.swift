@@ -50,12 +50,12 @@ func launched(
     settings: LauncherSettings = LauncherSettings(welcomeSeen: true, disc: flowBookmark),
     installed: InstalledGame? = InstalledGame(stamp: sourceCommits),
     appPath: String = flowApp, onReadOnlyVolume: Bool = false,
-    source: SourceInfo? = flowSource
+    source: SourceInfo? = flowSource, earlierGame: Int32? = nil
 ) -> FlowRun {
     var run = FlowRun()
     run.send(.launched(Flow.Launch(
         appPath: appPath, onReadOnlyVolume: onReadOnlyVolume, settings: settings, source: source,
-        installed: installed)))
+        installed: installed, earlierGame: earlierGame)))
     return run
 }
 

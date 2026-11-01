@@ -55,7 +55,8 @@ extension Flow {
         public var intent: Intent?
         public var waiting: Waiting?
         /// The game is starting or running, from the `play` effect until `gameExited` or
-        /// `gameCouldNotStart` for its launch.
+        /// `gameCouldNotStart` for its launch. A game an earlier launcher started runs until
+        /// `earlierGameEnded`.
         public var gameRunning = false
         /// The launch number of the last `play`, which is 0 before the first. A result that
         /// echoes any other number is ignored, so a late one can't end a game that's running.
