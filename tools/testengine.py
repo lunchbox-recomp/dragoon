@@ -37,6 +37,12 @@ from testutil import write_file
 
 TOOLS = Path(__file__).resolve().parent
 PICTURE_ADDR = 0x80001000
+ENGINE_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+def built_sha(process: int) -> str:
+    """The `engine_sha` the fake writes in the session.json of its PROCESSth process."""
+    return f"{ENGINE_SHA}-dirty{process}"
 
 FAKE_ENGINE = r'''#!@PYTHON@
 import atexit, json, os, signal, socket, struct, sys, time
@@ -98,7 +104,7 @@ def begin_log():
         where = os.path.join(where, "run-%d" % n)
     os.makedirs(os.path.join(where, "inputs"))
     with open(os.path.join(where, "session.json"), "w") as f:
-        f.write("{}")
+        json.dump({"engine_sha": "@ENGINE_SHA@-dirty%d" % process}, f)
     say("[session] %s\n" % where)
     log = open(os.path.join(where, "inputs", "inputs.txt"), "w")
     log.write("# gcn-recomp input log v5\n")
@@ -248,8 +254,8 @@ while True:
 
 def make_tree(root: Path) -> Path:
     """Writes the fake probe.sh into ROOT/tools/ and returns its path."""
-    text = FAKE_ENGINE.replace("@PYTHON@", sys.executable).replace("@TOOLS@", str(TOOLS)).replace(
-        "@PICTURE@", str(PICTURE_ADDR))
+    text = (FAKE_ENGINE.replace("@PYTHON@", sys.executable).replace("@TOOLS@", str(TOOLS))
+            .replace("@PICTURE@", str(PICTURE_ADDR)).replace("@ENGINE_SHA@", ENGINE_SHA))
     (root / "tools").mkdir(parents=True, exist_ok=True)
     probe = write_file(root / "tools", "probe.sh", text)
     probe.chmod(0o755)

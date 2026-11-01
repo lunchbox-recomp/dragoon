@@ -61,6 +61,18 @@ def commits(root: Path) -> dict[str, Optional[str]]:
             "engine": _head(root / "gcn-recomp") or info.get("gcn-recomp")}
 
 
+def built_engine(session: Path) -> Optional[str]:
+    """The engine commit the game says it was built from, in SESSION's session.json, with `-dirty`
+    when the tree had changes. The checkout's HEAD (`commits`) may not be what was built. None
+    when the file or the field isn't there."""
+    try:
+        data = json.loads((session / "session.json").read_text())
+    except (OSError, ValueError):
+        return None
+    sha = data.get("engine_sha") if isinstance(data, dict) else None
+    return sha if isinstance(sha, str) and sha else None
+
+
 def replay_line(probe: Path, name: str, input_log: Path, last_frame: Optional[int],
                 settings: Sequence[str] = (), *, exit_after: bool = True) -> str:
     """The probe.sh command that plays INPUT_LOG back as a run called replay-NAME, which quits

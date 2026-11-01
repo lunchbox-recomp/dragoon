@@ -16,7 +16,7 @@ import bot_menus
 import bot_record
 import bot_soak
 from bot_watch import engine_picture
-from testengine import PICTURE_ADDR, axv, make_tree, set_plan
+from testengine import PICTURE_ADDR, axv, built_sha, make_tree, set_plan
 from testutil import commit, run_main
 
 SEED = "3"
@@ -294,7 +294,7 @@ class StopTest(SoakCase):
                               "--round", "90", "--stuck", "60", "--hang", "20")
         self.assertEqual(data["seed"], 3)
         self.assertEqual(data["name"], self.name(out))
-        self.assertEqual(data["commits"], {"dragoon": dragoon, "engine": engine})
+        self.assertEqual(data["commits"], {"dragoon": dragoon, "engine": engine, "engine_built": built_sha(1)})
         self.assertEqual(data["arguments"], {"seed": 3, "minutes": 1.0, "modes": ["air-ride", "city-trial"],
                                              "ports": 2, "round_seconds": 90.0, "stuck_seconds": 60.0, "hang": 20.0,
                                              "settings": []})
@@ -302,6 +302,36 @@ class StopTest(SoakCase):
         self.assertEqual(data["resets"], {"count": 0, "first_shaders_line": None, "first_shaders_ms": None})
         self.assertEqual(data["watched"], {"picture_hashes": False, "axv_lines": False})
         self.assertGreater(data["frames_answered"], 100)
+
+    def test_the_engine_built_is_the_one_the_stops_own_session_recorded(self) -> None:
+        self.plan(race=100000, events=[at([["reset", {"shaders_ms": 100}]], frame=500),
+                                       at([["panic"]], frame=700, process=2)])
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride")
+        self.assertEqual((code, err), (1, ""), out)
+        data = self.bot_json(out)
+        self.assertEqual(Path(data["input_log"]).parent.name, "run-2")
+        self.assertEqual(data["commits"]["engine_built"], built_sha(2))
+
+    def test_the_engine_built_for_a_cut_before_a_reset_is_the_earlier_processs(self) -> None:
+        self.plan(race=100000, events=[at([["say", axv(100, "run")], ["say", axv(120, "end")],
+                                           ["reset", {"shaders_ms": 100}]], frame=2010)])
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride")
+        self.assertEqual((code, err), (1, ""), out)
+        self.assertEqual(self.bot_json(out)["commits"]["engine_built"], built_sha(1))
+
+    def test_a_session_with_no_session_json_has_no_engine_built(self) -> None:
+        self.plan(race=100000, events=[at([["panic"]], race=50)])
+        ap = bot_soak.parser()
+        args = ap.parse_args(["--probe", str(self.probe), "--seed", SEED, "--minutes", "1"])
+        out: list[str] = []
+
+        def forgetting(name, seconds, bot, **kw):
+            outcome = bot_link.run(name, seconds, bot, **kw)
+            (outcome.input_log.parent / "session.json").unlink()
+            return outcome
+
+        self.assertEqual(bot_soak.soak(args, [], out=out.append, err=out.append, run=forgetting), 1, out)
+        self.assertIsNone(self.bot_json("\n".join(out))["commits"]["engine_built"])
 
     def test_bot_json_is_beside_the_input_log(self) -> None:
         out, data = self.stop([at([["panic"]], race=50)])

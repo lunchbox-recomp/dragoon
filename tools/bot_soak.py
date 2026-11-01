@@ -179,8 +179,10 @@ def report(stop: Stop, outcome: bot_link.Outcome, *, probe: Path, name: str, arg
     arguments = {"seed": args.seed, "minutes": args.minutes, "modes": args.modes, "ports": args.ports,
                  "round_seconds": args.round, "stuck_seconds": args.stuck, "hang": args.hang,
                  "settings": settings}
+    commit_ids = {**bot_record.commits(probe.parent.parent),
+                  "engine_built": bot_record.built_engine(log.parent) if log is not None else None}
     data = bot_record.record(name=name, seed=args.seed, arguments=arguments,
-                             commit_ids=bot_record.commits(probe.parent.parent), stop=stop, resets=resets,
+                             commit_ids=commit_ids, stop=stop, resets=resets,
                              input_log=log, replay=replay, frames=outcome.frames, wall_seconds=wall,
                              watched=watched)
     path = bot_record.write(log.parent if log is not None else outcome.run_dir, data)

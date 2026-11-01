@@ -185,6 +185,8 @@ The engine gives a bot no hash of the picture yet. The frames it shows are copie
 
 A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the last process. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from the card as it stood at the last reset.
 
+The commits are the checkout's HEAD, which may not be what was built. `engine_built` is the engine commit the game's `session.json` says it was built from, with `-dirty` for a tree with changes.
+
 A music cut is read from the log, and the log can hold a console reset after it. The last process's replay can't show that cut, so the stop and `bot.json` say so (`before_reset`) and name the input log and replay line of the process it happened in, with no frame to give.
 
 The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The line carries the settings after `--`, so the replay runs the run's build and disc with the run's switches, less the ones the soak and the replay set for themselves. It ends at the stop's frame with `--exit-after`, except for a hang, whose last frame a replay isn't known to reach.
@@ -207,7 +209,7 @@ A hang after a reset whose shader rebuild took two thirds of the hang limit or m
 
 ## bot_record.py
 
-What does a stop keep? `new_name` gives a run a NAME no earlier run used, `commits` reads the Dragoon and engine commits through git or `source-info.json`, and `record` and `write` make `bot.json`. `replay_line` is the `probe.sh` command that plays an input log back. It has no command line.
+What does a stop keep? `new_name` gives a run a NAME no earlier run used, `commits` reads the Dragoon and engine commits through git or `source-info.json`, `built_engine` reads the engine commit a session's `session.json` names, and `record` and `write` make `bot.json`. `replay_line` is the `probe.sh` command that plays an input log back. It has no command line.
 
 ## bot_player.py
 

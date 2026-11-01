@@ -91,6 +91,25 @@ class CommitsTest(unittest.TestCase):
         self.assertEqual(bot_record.commits(self.root)["dragoon"], None)
 
 
+class BuiltEngineTest(unittest.TestCase):
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.session = Path(tmp.name)
+
+    def test_it_is_the_engine_sha_the_session_recorded_with_its_dirty_mark(self) -> None:
+        write_file(self.session, "session.json", json.dumps({"engine_sha": SHA_B + "-dirty", "x": 1}))
+        self.assertEqual(bot_record.built_engine(self.session), SHA_B + "-dirty")
+
+    def test_a_session_with_no_file_no_sha_or_a_bad_file_has_none(self) -> None:
+        self.assertIsNone(bot_record.built_engine(self.session))  # no file
+        for text in ("{}", '{"engine_sha": ""}', '{"engine_sha": 5}', "[1]", "not json", ""):
+            with self.subTest(text=text):
+                write_file(self.session, "session.json", text)
+                self.assertIsNone(bot_record.built_engine(self.session))
+        self.assertIsNone(bot_record.built_engine(self.session / "nowhere"))
+
+
 class ReplayLineTest(unittest.TestCase):
     def test_it_is_the_probe_line_the_readme_gives_with_the_logs_directory(self) -> None:
         inputs = Path("/r/build/probe/soak-s1-x/session/inputs")
