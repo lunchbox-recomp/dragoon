@@ -126,7 +126,7 @@ class ScanTest(ModsCase):
         dol = self.put("Code Mod/DOL.txt", DOL_TXT)
         hook = self.put("Code Mod/hook.bin")
         big, code = self.scan()
-        self.assertEqual(big, mods.Mod("Big Mod", {"a.bin": added}))
+        self.assertEqual(big, mods.Mod("Big Mod", {"a.bin": added}, files_name="Files"))
         self.assertEqual(code, mods.Mod("Code Mod", {}, dol, {"hook.bin": hook}))
 
     def test_files_beside_a_mod_without_dol_txt_are_left_alone(self) -> None:
@@ -271,10 +271,10 @@ class RefusalTest(ModsCase):
         self.assertEqual(len(self.scan()), 1)
 
     def test_two_mods_with_one_disc_path_ignoring_case(self) -> None:
-        self.put("A Mod/files/Data/Readme.txt")
-        self.put("b mod/files/data/README.TXT")
-        self.refused("b mod", "files/data/README.TXT",
-                     "same disc file as A Mod/files/Data/Readme.txt")
+        self.put("A Mod/FILES/Data/Readme.txt")
+        self.put("b mod/Files/data/README.TXT")
+        self.refused("b mod", "Files/data/README.TXT",
+                     "same disc file as A Mod/FILES/Data/Readme.txt")
 
     def test_two_mods_may_share_a_folder(self) -> None:
         self.put("A Mod/files/Data/a.bin")
@@ -282,10 +282,10 @@ class RefusalTest(ModsCase):
         self.assertEqual(len(self.scan()), 2)
 
     def test_a_file_where_another_mod_needs_a_folder(self) -> None:
-        self.put("A Mod/files/data")
-        self.put("B Mod/files/Data/b.bin")
-        self.refused("B Mod", "files/Data/b.bin",
-                     "needs files/Data to be a folder, and A Mod/files/data is a file")
+        self.put("A Mod/FILES/data")
+        self.put("B Mod/Files/Data/b.bin")
+        self.refused("B Mod", "Files/Data/b.bin",
+                     "needs Files/Data to be a folder, and A Mod/FILES/data is a file")
 
     @unittest.skipIf(os.geteuid() == 0, "root reads a folder whatever its mode")
     def test_a_folder_that_cant_be_read(self) -> None:
@@ -572,26 +572,26 @@ class PrepareTest(ModsCase):
         self.assertNotEqual(mods.digest(self.scan()), before)
 
     def test_a_patch_list_refusal_names_the_mod_and_each_list_by_its_mod(self) -> None:
-        self.put("A Mod/dol.txt", DOL_TXT)
-        self.put("B Mod/dol.txt", DOL_TXT)
+        self.put("A Mod/DOL.txt", DOL_TXT)
+        self.put("B Mod/Dol.txt", DOL_TXT)
         self.put("dol_patch.py.refuse", "patches/2/dol.txt:4: word 80003104 was already written "
                                         "at patches/1/dol.txt:4\n", self.recomp)
         with self.assertRaises(mods.ModError) as cm:
             self.prepare()
         e = cm.exception
         self.assertEqual((e.mod, e.path, e.why), (
-            "B Mod", "dol.txt:4", "word 80003104 was already written at A Mod/dol.txt:4"))
+            "B Mod", "Dol.txt:4", "word 80003104 was already written at A Mod/DOL.txt:4"))
         self.assertEqual([c["tool"] for c in self.calls()], ["dol_patch.py"])
 
     def test_an_overlay_refusal_names_the_mod_with_a_file_at_or_under_its_path(self) -> None:
         self.put("A Mod/files/a.bin")
-        self.put("B Mod/files/Data/b.bin")
+        self.put("B Mod/Files/Data/b.bin")
         for n, (said, path, why) in enumerate((
-                ("Data is a file on the disc, not a directory", "files/Data",
+                ("Data is a file on the disc, not a directory", "Files/Data",
                  "is a file on the disc, not a directory"),
-                ("data/B.BIN is a directory on the disc, not a file", "files/Data/b.bin",
+                ("data/B.BIN is a directory on the disc, not a file", "Files/Data/b.bin",
                  "is a directory on the disc, not a file"),
-                ("Data/b.bin is a symbolic link", "files/Data/b.bin", "is a symbolic link"))):
+                ("Data/b.bin is a symbolic link", "Files/Data/b.bin", "is a symbolic link"))):
             with self.subTest(said=said):
                 self.put("disc_overlay.py.refuse", f"error: {said}\n", self.recomp)
                 with self.assertRaises(mods.ModError) as cm:
@@ -807,12 +807,12 @@ class RealToolsTest(ModsCase):
         self.assertIn("holds 38600001", cm.exception.why)
 
     def test_two_mods_writing_one_word_name_both(self) -> None:
-        self.put("A Mod/dol.txt", f"dol {self.sha}\nword {TEXT + 4:08X} 38600002 38600001\n")
-        self.put("B Mod/dol.txt", f"dol {self.sha}\nword {TEXT + 4:08X} 38600003 38600002\n")
+        self.put("A Mod/DOL.txt", f"dol {self.sha}\nword {TEXT + 4:08X} 38600002 38600001\n")
+        self.put("B Mod/Dol.txt", f"dol {self.sha}\nword {TEXT + 4:08X} 38600003 38600002\n")
         with self.assertRaises(mods.ModError) as cm:
             self.prepare()
-        self.assertEqual(str(cm.exception), f"B Mod/dol.txt:2: word {TEXT + 4:08X} was already "
-                                            "written at A Mod/dol.txt:2")
+        self.assertEqual(str(cm.exception), f"B Mod/Dol.txt:2: word {TEXT + 4:08X} was already "
+                                            "written at A Mod/DOL.txt:2")
 
     def test_a_file_where_the_disc_has_a_folder_names_the_mod(self) -> None:
         self.put("Big Mod/files/Data", b"not a folder")
@@ -823,11 +823,11 @@ class RealToolsTest(ModsCase):
 
     def test_a_folder_where_the_disc_has_a_file_names_the_mod_that_needs_it(self) -> None:
         self.put("A Mod/files/Data/readme")
-        self.put("B Mod/files/Data/readme text.txt/x.bin")
+        self.put("B Mod/Files/Data/readme text.txt/x.bin")
         with self.assertRaises(mods.ModError) as cm:
             self.prepare()
         e = cm.exception
-        self.assertEqual((e.mod, e.path, e.why), ("B Mod", "files/Data/readme text.txt",
+        self.assertEqual((e.mod, e.path, e.why), ("B Mod", "Files/Data/readme text.txt",
                                                   "is a file on the disc, not a directory"))
 
     def test_a_file_swapped_for_a_link_after_the_scan_names_the_mod(self) -> None:

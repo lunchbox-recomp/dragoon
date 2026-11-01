@@ -86,6 +86,7 @@ class Mod:
     files: dict[str, Path]  # disc path to host path, from files/
     dol: Optional[Path] = None  # dol.txt
     beside: dict[str, Path] = field(default_factory=dict)  # the other files beside dol.txt
+    files_name: str = FILES  # files/ as the mod spells it
 
     def held(self) -> list[tuple[str, Path]]:
         """Every file the mod holds, as (its path in the mod, host path), sorted by path."""
@@ -192,6 +193,7 @@ def _read_mod(name: str, folder: Path, dol_sha1: str) -> Mod:
         if files is not None:
             if not _is_dir(name, files.name, files):
                 raise ModError(name, files.name, "isn't a folder")
+            mod.files_name = files.name
             for path, host in _walk(name, Path(files.path), f"{files.name}/"):
                 _check_disc_path(name, files.name, path)
                 mod.files[path] = host
@@ -216,9 +218,10 @@ def _refuse_shared_paths(mods: list[Mod]) -> None:
     owner: dict[str, str] = {}  # each disc path in lower case, to the first file that has it
     for mod in mods:
         for disc in sorted(mod.files):
-            first = owner.setdefault(disc.lower(), f"{mod.name}/{FILES}/{disc}")
-            if first != f"{mod.name}/{FILES}/{disc}":
-                raise ModError(mod.name, f"{FILES}/{disc}",
+            mine = f"{mod.name}/{mod.files_name}/{disc}"
+            first = owner.setdefault(disc.lower(), mine)
+            if first != mine:
+                raise ModError(mod.name, f"{mod.files_name}/{disc}",
                                f"changes the same disc file as {first}, and only one of them can")
     for mod in mods:
         for disc in sorted(mod.files):
@@ -226,8 +229,8 @@ def _refuse_shared_paths(mods: list[Mod]) -> None:
             for i in range(1, len(parts)):
                 folder = "/".join(parts[:i])
                 if folder.lower() in owner:
-                    raise ModError(mod.name, f"{FILES}/{disc}",
-                                   f"needs {FILES}/{folder} to be a folder, and "
+                    raise ModError(mod.name, f"{mod.files_name}/{disc}",
+                                   f"needs {mod.files_name}/{folder} to be a folder, and "
                                    f"{owner[folder.lower()]} is a file")
 
 
@@ -288,17 +291,19 @@ def _run(python: Path, tool: Path, args: list[str], cwd: Path) -> tuple[int, str
     return done.returncode, said.decode("utf-8", "replace").strip()
 
 
-def _blame_list(said: str, lists: list[tuple[str, str]]) -> Optional[ModError]:
+def _blame_list(said: str, lists: list[tuple[str, str, str]]) -> Optional[ModError]:
     """dol_patch.py's refusal of a list as a ModError naming the list's mod, with every list's
-    clone named by its mod. None when it isn't a refusal of one of the lists."""
-    names = dict(lists)
+    clone named by its mod and spelled as the mod spells dol.txt. None when it isn't a refusal
+    of one of the lists."""
+    names = {prefix: (name, spelled) for prefix, name, spelled in lists}
     m = LIST_SAID.fullmatch(said)
     if not m or m[1] not in names:
         return None
     why = m[3]
-    for other, other_name in lists:
-        why = why.replace(other, f"{other_name}/")
-    return ModError(names[m[1]], DOL_TXT + m[2], why)
+    for prefix, name, spelled in lists:
+        why = why.replace(prefix + DOL_TXT, f"{name}/{spelled}").replace(prefix, f"{name}/")
+    name, spelled = names[m[1]]
+    return ModError(name, spelled + m[2], why)
 
 
 def _disc_paths(mod: Mod) -> list[str]:
@@ -323,7 +328,7 @@ def _blame_file(said: str, mods: list[Mod]) -> Optional[ModError]:
                 continue
             why = text[len(path) + 1:]
             if why in OVERLAY_REASONS or CASE_TWINS.fullmatch(why):
-                return ModError(mod.name, f"{FILES}/{path}", why)
+                return ModError(mod.name, f"{mod.files_name}/{path}", why)
     return None
 
 
@@ -347,7 +352,7 @@ def prepare(mods: list[Mod], disc: Path, dol: Path, out: Path, python: Path,
     out.mkdir(parents=True)
     (out / FILES).mkdir()
     clones = []
-    lists = []  # each list's folder under OUT with a slash, and its mod's name
+    lists = []  # each list's folder under OUT with a slash, its mod's name and its own spelling
     for n, mod in enumerate(mods, 1):
         copy = Mod(mod.name, {disc_path: _place(host, out / FILES / disc_path)
                               for disc_path, host in mod.files.items()})
@@ -356,12 +361,12 @@ def prepare(mods: list[Mod], disc: Path, dol: Path, out: Path, python: Path,
             copy.dol = _place(mod.dol, out / folder / DOL_TXT)
             copy.beside = {path: _place(host, out / folder / path)
                            for path, host in mod.beside.items()}
-            lists.append((f"{folder}/", mod.name))
+            lists.append((f"{folder}/", mod.name, mod.dol.name))
         clones.append(copy)
     boot = dol
     if lists:
         boot = out / BOOT_DOL
-        args = [os.path.abspath(dol), BOOT_DOL] + [f"{prefix}{DOL_TXT}" for prefix, _ in lists]
+        args = [os.path.abspath(dol), BOOT_DOL] + [f"{prefix}{DOL_TXT}" for prefix, _, _ in lists]
         code, said = _run(python, recomp / "dol_patch.py", args, out)
         if code:
             raise _blame_list(said, lists) or PrepareError(f"dol_patch.py exited {code}: {said}")
