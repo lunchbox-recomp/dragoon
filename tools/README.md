@@ -160,6 +160,34 @@ The paths come from the routes in `tests/routes/` and the values in kar_ram.json
 
 The walker says `unconfirmed step` the first time it takes each step in the right-hand column, and `screen N isn't in kar_ram.json` for a screen the table doesn't name, which it presses A on. A screen that stays up past `stuck_seconds` of game time (600 s for a race) raises `Stuck`. After a console reset the walker forgets the press under way and the screen, and starts over from the boot.
 
+## bot_soak.py
+
+Does the game hold up when bots play it for a long time? `bot_soak.py` plays it through bot_link.py as a new run in `build/probe/soak-sSEED-TIME/` and stops at the first fault. The menu walker (bot_menus.py) takes it from the boot to a race and back to the menus after each round, for the modes in `--modes` (`air-ride`, `top-ride` and `city-trial`, all three by default) with `--ports` controllers. In a race or the city each bot holds the stick toward wherever a walk from the seed says and taps A at random, and never presses START (bot_walk.py).
+
+```
+tools/bot_soak.py --seed 7 --minutes 60 --modes city-trial --ports 4 -- --real-time
+```
+
+The seed is a whole number from 0. It's printed, and it defaults to one made from the clock. Each run gets a new NAME, since a run in an old `build/probe/NAME/` starts from the memory card that run left. The soak adds `GCN_AXVOICES=1`, makes no frame dumps and gives `bot_link.run` the settings after `--` as they are.
+
+It stops at the first of these.
+
+- The game exits, panics or is stopped by the engine.
+- The game sends no frame for `--hang` seconds of wall time, 30 by default.
+- The picture's hash stays the same for 10 s of game time while the race bots' input changes.
+- A music stream ends early, by stream_voices.py's rule on the run's `[axv]` lines.
+- A menu screen stays up for `--stuck` seconds of game time, 120 by default, or a race or the city for 600.
+
+A console reset rebuilds the shader cache before the bot connects again, and that time counts against the hang limit. The soak keeps the first reset's `[shaders] ... in Z ms` line, and warns when Z reaches two thirds of the limit. `--hang` raises the limit for the next run, since a run can't change it once it has started.
+
+The engine gives a bot no hash of the picture yet. The frames it shows are copied on the GPU and never written to guest RAM, and the link sends only `frame N`. The frozen-picture check takes its hash from `link.picture`, which no Link has, so it says it saw none and never fires. It needs the engine to send a hash with each frame.
+
+A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the last process. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from a blank card.
+
+The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`, and deletes any frame dumps. The soak exits 0 when the run ended with no stop and 1 when it stopped. A bad argument, a game that never connected or a bot that raised an error exits 2 and writes no `bot.json`.
+
+The tests stand a fake probe.sh in for the game, so they need no disc.
+
 ## bot_watch.py
 
 What does the soak watch for while the bots play? `Frozen` watches the picture and `LogWatch` follows the game's `stdout.txt`, and each raises `Detected` from the bot callback. That ends the run at that frame with its input log whole.
@@ -175,6 +203,10 @@ A hang after a reset whose shader rebuild took two thirds of the hang limit or m
 ## bot_record.py
 
 What does a stop keep? `new_name` gives a run a NAME no earlier run used, `commits` reads the Dragoon and engine commits through git or `source-info.json`, and `record` and `write` make `bot.json`. `replay_line` is the `probe.sh` command that plays an input log back, and `remove_dumps` deletes the frames a run dumped. It has no command line.
+
+## bot_player.py
+
+What does the soak's bot do on each frame? `Player` is the callback `bot_link.run` takes. The menu walker has the pads while a menu is up and the race bots have them while a race or the city plays, and every frame the watchers are told what was sent. It prints a line of progress every five minutes, and has no command line.
 
 ## playtest.sh
 
