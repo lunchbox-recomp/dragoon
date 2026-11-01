@@ -38,6 +38,28 @@ TEST(NearestEdge, ThirdsOfTheRect) {
     EXPECT_EQ(dragoon::nearest_edge(427, dragoon::kScreen), Anchor::Right);
 }
 
+TEST(NearestEdge, AHeldEdgeReachesAQuarterOfAThirdPastItsLines) {
+    // The lines sit at 213.3 and 426.7, and a quarter of a third is 53.3.
+    EXPECT_EQ(dragoon::nearest_edge(266, dragoon::kScreen, Anchor::Left), Anchor::Left);
+    EXPECT_EQ(dragoon::nearest_edge(267, dragoon::kScreen, Anchor::Left), Anchor::Center);
+    EXPECT_EQ(dragoon::nearest_edge(161, dragoon::kScreen, Anchor::Center), Anchor::Center);
+    EXPECT_EQ(dragoon::nearest_edge(159, dragoon::kScreen, Anchor::Center), Anchor::Left);
+    EXPECT_EQ(dragoon::nearest_edge(479, dragoon::kScreen, Anchor::Center), Anchor::Center);
+    EXPECT_EQ(dragoon::nearest_edge(481, dragoon::kScreen, Anchor::Center), Anchor::Right);
+    EXPECT_EQ(dragoon::nearest_edge(374, dragoon::kScreen, Anchor::Right), Anchor::Right);
+    EXPECT_EQ(dragoon::nearest_edge(373, dragoon::kScreen, Anchor::Right), Anchor::Center);
+}
+
+TEST(NearestEdge, PastItsBandAHeldEdgeGoesByTheThirds) {
+    EXPECT_EQ(dragoon::nearest_edge(600, dragoon::kScreen, Anchor::Left), Anchor::Right);
+    EXPECT_EQ(dragoon::nearest_edge(40, dragoon::kScreen, Anchor::Right), Anchor::Left);
+}
+
+TEST(NearestEdge, StretchHoldsNothing) {
+    EXPECT_EQ(dragoon::nearest_edge(214, dragoon::kScreen, Anchor::Stretch), Anchor::Center);
+    EXPECT_EQ(dragoon::nearest_edge(427, dragoon::kScreen, Anchor::Stretch), Anchor::Right);
+}
+
 TEST(NearestEdge, ThirdsOfAViewAwayFromTheScreensEdge) {
     const Rect v{322, 630, 16, 224};
     EXPECT_EQ(dragoon::nearest_edge(424, v), Anchor::Left);
@@ -82,6 +104,17 @@ TEST(EdgeMark, WithNoViewsTheMiddleIsCentered) {
     EXPECT_EQ(dragoon::edge_mark(320, 240, {}), (Mark{Anchor::Center, 0, 640}));
 }
 
+TEST(EdgeMark, ALastMarkHoldsItsEdgeInItsOwnRect) {
+    // x 105 is in the left third of player 1's view, whose line sits at 112.7, within a
+    // quarter of a third of it.
+    EXPECT_EQ(dragoon::edge_mark(105, 100, kFourViews, {Anchor::Center, 10, 318}), (Mark{Anchor::Center, 10, 318}));
+    EXPECT_EQ(dragoon::edge_mark(105, 100, kFourViews, {Anchor::Center, 322, 630}), (Mark{Anchor::Left, 10, 318}));
+}
+
+TEST(EdgeMark, OnTheBarsALastMarkHoldsItsEdgeInTheScreen) {
+    EXPECT_EQ(dragoon::edge_mark(250, 240, kFourViews, {Anchor::Left, 0, 640}), (Mark{Anchor::Left, 0, 640}));
+}
+
 TEST(MarkFor, EachPlacement) {
     EXPECT_EQ(dragoon::mark_for(dragoon::Placement::Edge, 600, 200, kFourViews), (Mark{Anchor::Right, 322, 630}));
     EXPECT_EQ(dragoon::mark_for(dragoon::Placement::Own, 600, 200, kFourViews), (Mark{Anchor::Center, 600, 600}));
@@ -103,54 +136,67 @@ TEST(MostCalled, NoneIsStretch) { EXPECT_EQ(dragoon::most_called({}), Mark{}); }
 constexpr uint32_t kRoot = 0x81200000, kOtherRoot = 0x81200400;
 const Mark kLeft{Anchor::Left, 0, 640}, kMiddle{Anchor::Center, 0, 640}, kRight{Anchor::Right, 0, 640};
 
+// On the screen the thirds' lines sit at 213.3 and 426.7, and a held edge reaches 53.3 past them.
 TEST(KeptMarks, AnElementMovingAcrossAThirdsLineKeepsItsEdge) {
     // Centered at x 425 a tree is C(0..640). At 427 it would be R(0..640), drawn about 109
     // display pixels further right at 16:9.
-    const std::vector<Mark> at425 = {dragoon::edge_mark(425, 100, {})}, at427 = {dragoon::edge_mark(427, 100, {})};
-    ASSERT_EQ(at427[0], kRight);
+    ASSERT_EQ(dragoon::edge_mark(427, 100, {}), kRight);
     dragoon::KeptMarks k;
-    EXPECT_EQ(k.place(10, kRoot, at425), kMiddle);
-    EXPECT_EQ(k.place(11, kRoot, at427), kMiddle);
-    EXPECT_EQ(k.place(12, kRoot, at427), kMiddle);
+    EXPECT_EQ(k.place(10, kRoot, {{425, 100}}, {}), kMiddle);
+    EXPECT_EQ(k.place(11, kRoot, {{427, 100}}, {}), kMiddle);
+    EXPECT_EQ(k.place(12, kRoot, {{427, 100}}, {}), kMiddle);
+}
+
+TEST(KeptMarks, AnElementThatFirstShowsInTheMiddleSettlesAtItsEdge) {
+    // As fn_80114F1C's speedometer does in the race: its joints first drew in the middle
+    // third, and it sits in the right third from then on.
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {{320, 400}}, {}), kMiddle);
+    EXPECT_EQ(k.place(11, kRoot, {{590, 400}}, {}), kRight);
 }
 
 TEST(KeptMarks, AJointThatHidesDoesntTurnTheVote) {
-    // Three joints at the right and two at the left, then one at the right hidden: a tie, which
-    // would go to the first, at the left.
-    ASSERT_EQ(dragoon::most_called({kLeft, kRight, kLeft, kRight}), kLeft);
+    // Two joints just left of the right third's line and three just right of it, then one of
+    // the three hidden: a tie, which would go to the first, in the middle.
+    ASSERT_EQ(dragoon::most_called({kMiddle, kMiddle, kRight, kRight}), kMiddle);
     dragoon::KeptMarks k;
-    EXPECT_EQ(k.place(10, kRoot, {kLeft, kRight, kLeft, kRight, kRight}), kRight);
-    EXPECT_EQ(k.place(11, kRoot, {kLeft, kRight, kLeft, kRight}), kRight);
+    EXPECT_EQ(k.place(10, kRoot, {{415, 100}, {420, 100}, {430, 100}, {435, 100}, {440, 100}}, {}), kRight);
+    EXPECT_EQ(k.place(11, kRoot, {{415, 100}, {420, 100}, {435, 100}, {440, 100}}, {}), kRight);
 }
 
 TEST(KeptMarks, ATreeThatMissesAFrameChoosesAgain) {
     dragoon::KeptMarks k;
-    EXPECT_EQ(k.place(10, kRoot, {kLeft}), kLeft);
-    EXPECT_EQ(k.place(11, kRoot, {kRight}), kLeft);
-    EXPECT_EQ(k.place(13, kRoot, {kRight}), kRight);
+    EXPECT_EQ(k.place(10, kRoot, {{200, 100}}, {}), kLeft);
+    EXPECT_EQ(k.place(11, kRoot, {{230, 100}}, {}), kLeft);
+    EXPECT_EQ(k.place(13, kRoot, {{230, 100}}, {}), kMiddle);
 }
 
 TEST(KeptMarks, ATreeWithNoJointPlacedYetKeepsNothing) {
     dragoon::KeptMarks k;
-    EXPECT_EQ(k.place(10, kRoot, {}), std::nullopt);
-    EXPECT_EQ(k.place(11, kRoot, {kRight}), kRight);
+    EXPECT_EQ(k.place(10, kRoot, {}, {}), std::nullopt);
+    EXPECT_EQ(k.place(11, kRoot, {{230, 100}}, {}), kMiddle);
 }
 
-TEST(KeptMarks, AKeptMarkHoldsWhileNoJointHasAPlace) {
+TEST(KeptMarks, ATreesMarkHoldsWhileNoJointHasAPlace) {
     // As when the element is scaled to nothing, which leaves its joints' matrices all zero.
     dragoon::KeptMarks k;
-    EXPECT_EQ(k.place(10, kRoot, {kRight}), kRight);
-    EXPECT_EQ(k.place(11, kRoot, {}), kRight);
+    EXPECT_EQ(k.place(10, kRoot, {{600, 100}}, {}), kRight);
+    EXPECT_EQ(k.place(11, kRoot, {}, {}), kRight);
 }
 
 TEST(KeptMarks, EachTreeAndEachTimeItShowsInAFrameKeepsItsOwn) {
     dragoon::KeptMarks k;
-    k.place(10, kRoot, {kLeft});
-    k.place(10, kOtherRoot, {kRight});
-    k.place(10, kRoot, {kMiddle});
-    EXPECT_EQ(k.place(11, kRoot, {kRight}), kLeft);
-    EXPECT_EQ(k.place(11, kOtherRoot, {kLeft}), kRight);
-    EXPECT_EQ(k.place(11, kRoot, {kRight}), kMiddle);
+    k.place(10, kRoot, {{200, 100}}, {});
+    k.place(10, kOtherRoot, {{450, 100}}, {});
+    k.place(10, kRoot, {{300, 100}}, {});
+    EXPECT_EQ(k.place(11, kRoot, {{230, 100}}, {}), kLeft);
+    EXPECT_EQ(k.place(11, kOtherRoot, {{400, 100}}, {}), kRight);
+    EXPECT_EQ(k.place(11, kRoot, {{470, 100}}, {}), kMiddle);
+}
+
+TEST(KeptMarks, ATreeGoesByItsView) {
+    dragoon::KeptMarks k;
+    EXPECT_EQ(k.place(10, kRoot, {{300, 100}}, kFourViews), (Mark{Anchor::Right, 10, 318}));
 }
 
 TEST(MatrixMade, AnyOfItsThreeByThreePart) {

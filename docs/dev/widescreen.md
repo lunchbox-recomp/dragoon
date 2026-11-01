@@ -335,13 +335,19 @@ edge and one between to its middle. A tree no joint has drawn yet goes by its ro
 happens the frame it first shows, and again when an element scaled to nothing reappears, since
 a joint scaled to zero has an all-zero matrix.
 
-A tree keeps the mark it chose for as long as it shows each frame, as a PC port keeps one edge
-for each HUD element. Chosen again every frame, an element moving 2 pixels across a third's line
-would jump about 109 display pixels at 16:9. A tree whose joints sit nearly evenly in two thirds
-would turn too, each time one of them hid.
+A tree holds the edge it had the frame before for a quarter of a third past each of that edge's
+lines. Without that, an element moving 2 pixels across a line would jump about 109 display
+pixels at 16:9, and a tree whose joints straddle a line in near-equal numbers would turn each
+time one of them hid. Further past a line it takes the other edge, so an element that slides
+across one jumps there once.
 
-A tree that misses a frame chooses again when it next shows. One that goes by its root keeps
-nothing, so it chooses from its joints once they've drawn.
+Keeping each tree's first mark for as long as it showed doesn't work for this game's HUD. On
+Dragoon `34a24f5`, which did, every tree `fn_80114F1C` draws held C(0..640) in the race at 4200
+and the minimap's karts held L(0..640), away from their edges at 16:9. Chosen afresh each frame,
+the position went to the left and the rest to the right.
+
+A tree that misses a frame chooses afresh when it next shows. One whose joints haven't drawn
+holds the mark it had the frame before, or goes by its root when it had none.
 
 The rect is the screen in one player. In 2P and 4P it's the view the tree sits in, from the
 viewports of the frame's world cameras, which `src/cameras.cpp` passes as the game sets their
@@ -387,7 +393,7 @@ The minimap, the lap count and the speedometer sit at the right, and the CPU mar
 its kart. In 2P and 4P each player's name sits at the left of their view and the speedometer at
 its right, with the clock at the left of the bars.
 
-`tests/src/test_hud_anchors.cpp` checks the thirds, the views, the vote, the kept marks and the
+`tests/src/test_hud_anchors.cpp` checks the thirds, the views, the vote, the held edges and the
 cameras' maths.
 `tests/src/test_draw_marks.cpp` checks the padding.
 
@@ -407,8 +413,8 @@ loads of 4.2 to 5.0.
 - A HUD element that first shows, or reappears after being scaled to nothing, goes by its
   root's place until its joints have drawn, which can anchor it to the wrong edge. No dump caught
   one.
-- An element that first draws in one third and then slides across the screen keeps that
-  third's mark while it shows. No dump caught one.
+- An element that slides across a third's line jumps to the other edge once it's a quarter of a
+  third past the line. No dump caught one.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - No object is cut off at a side edge in these dumps, and the world drew at least as much at

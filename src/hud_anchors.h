@@ -48,6 +48,31 @@ inline gx::Anchor nearest_edge(float x, const Rect& r) {
     return gx::Anchor::Center;
 }
 
+// How far past its lines an element's last edge still holds, in thirds of the rect.
+constexpr float kHeldBand = 0.25f;
+
+// The edge of `r` an element at x is anchored to when it had edge `held` of r the frame
+// before: that edge's part of the rect reaches a quarter of a third past each of its lines.
+// So an element moving a little across a line keeps its edge, and one sitting well past it
+// takes the other. Stretch holds nothing.
+inline gx::Anchor nearest_edge(float x, const Rect& r, gx::Anchor held) {
+    const float third = (r.x1 - r.x0) / 3.0f, band = kHeldBand * third;
+    const float left = r.x0 + third, right = r.x1 - third;
+    switch (held) {
+    case gx::Anchor::Left:
+        if (x < left + band) return held;
+        break;
+    case gx::Anchor::Center:
+        if (x >= left - band && x <= right + band) return held;
+        break;
+    case gx::Anchor::Right:
+        if (x > right - band) return held;
+        break;
+    default: break;
+    }
+    return nearest_edge(x, r);
+}
+
 // The smallest of `views` holding the point, or null when none does.
 inline const Rect* view_holding(float x, float y, const std::vector<Rect>& views) {
     const Rect* best = nullptr;
@@ -60,10 +85,14 @@ inline const Rect* view_holding(float x, float y, const std::vector<Rect>& views
 // HUD sitting in its player's view. One in a view anchors to that view's edges. One outside
 // every view sits on the bars between them and belongs to the screen, as the 4-player clock
 // does, except in the middle third: there it's the bars themselves, which span the screen and
-// stretch with it.
-inline Mark edge_mark(float x, float y, const std::vector<Rect>& views) {
-    if (const Rect* v = view_holding(x, y, views)) return {nearest_edge(x, *v), v->x0, v->x1};
-    const gx::Anchor a = nearest_edge(x, kScreen);
+// stretch with it. An element whose mark was `last` the frame before holds last's edge in
+// last's rect, as nearest_edge says.
+inline Mark edge_mark(float x, float y, const std::vector<Rect>& views, const Mark& last = {}) {
+    const auto edge = [&](const Rect& r) {
+        return last.x0 == r.x0 && last.x1 == r.x1 ? nearest_edge(x, r, last.a) : nearest_edge(x, r);
+    };
+    if (const Rect* v = view_holding(x, y, views)) return {edge(*v), v->x0, v->x1};
+    const gx::Anchor a = edge(kScreen);
     if (a == gx::Anchor::Center && !views.empty()) return {};
     return {a, kScreen.x0, kScreen.x1};
 }
@@ -97,18 +126,24 @@ inline Mark most_called(const std::vector<Mark>& marks) {
     return best;
 }
 
-// The marks Edge trees chose, each kept for as long as its tree keeps showing, as a port keeps
-// one edge for each element. Chosen again each frame, an element moving across a third's line
-// would jump to another edge, as would a tree whose vote turns when a joint hides. A tree that
-// misses a frame chooses again when it shows. A tree whose joints have no place yet keeps
-// nothing, so it chooses from them once they have one. Trees are told apart by their root, and
-// a root shown more than once in a frame by which time it is.
+// A point on screen, in the game's 640 by 480.
+struct Point {
+    float x = 0.0f, y = 0.0f;
+};
+
+// The marks Edge trees had the frame before, which their joints near a third's line keep
+// calling for (edge_mark). Without them an element moving 2 pixels across a line would jump to
+// another edge, as would a tree whose joints straddle a line in near-equal numbers when one of
+// them hides. A tree that misses a frame chooses afresh when it shows. A tree whose joints have
+// no place yet has nothing to keep, so it chooses from them once they have one. Trees are told
+// apart by their root, and a root shown more than once in a frame by which time it is.
 class KeptMarks {
 public:
-    // The mark of the tree at `root`, shown in `frame` with the marks its joints call for: the
-    // one it kept when it showed in the frame before, or else the one most of them call for,
-    // which it keeps. None when it has neither.
-    std::optional<Mark> place(uint32_t frame, uint32_t root, const std::vector<Mark>& joints) {
+    // The mark of the tree at `root`, shown in `frame` with its joints at `joints` on screen
+    // among `views`: the one most of them call for, holding the tree's mark from the frame
+    // before. With no joint placed, the mark from the frame before, or none.
+    std::optional<Mark> place(uint32_t frame, uint32_t root, const std::vector<Point>& joints,
+                              const std::vector<Rect>& views) {
         if (frame != frame_) {
             if (frame == frame_ + 1)
                 last_.swap(now_);
@@ -122,7 +157,11 @@ public:
         std::optional<Mark> m;
         for (const Kept& k : last_)
             if (k.root == root && k.time == time) m = k.mark;
-        if (!m && !joints.empty()) m = most_called(joints);
+        if (!joints.empty()) {
+            marks_.clear();
+            for (const Point& p : joints) marks_.push_back(edge_mark(p.x, p.y, views, m.value_or(Mark{})));
+            m = most_called(marks_);
+        }
         now_.push_back({root, time, m});
         return m;
     }
@@ -135,6 +174,7 @@ private:
     };
     uint32_t frame_ = 0;
     std::vector<Kept> last_, now_;  // the trees shown in the frame before and in this one
+    std::vector<Mark> marks_;       // the marks the joints call for
 };
 
 // Whether a joint's matrix, three rows of four, has been made: the game leaves a new joint's

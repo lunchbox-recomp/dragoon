@@ -5,10 +5,10 @@
 // (0x8042A0B4) around each object's render callback. recomp/hle.txt lists HSD_JObjDispAll
 // (0x8040A7B8), so its calls come here, and a HUD callback's joint tree is placed as it's
 // displayed. An Edge tree chooses by where its joints drew their shapes on screen last frame,
-// through the current camera, and keeps that while it shows. An Own tree goes by where its root
-// sits. src/cameras.cpp passes
-// each world camera as the game sets its aspect, and a split view's HUD anchors in the
-// viewport of the one it sits in. At 4:3 every anchor is the identity and nothing moves.
+// through the current camera, holding its edge from the frame before near a third's line. An
+// Own tree goes by where its root sits. src/cameras.cpp passes each world camera as the game
+// sets its aspect, and a split view's HUD anchors in the viewport of the one it sits in. At 4:3
+// every anchor is the identity and nothing moves.
 //
 // Addresses are this disc's (GKYE01), from analysis/symbols.txt. The HSD_CObj and HSD_JObj
 // layouts are the decomp's (sysdolphin's cobj.h and jobj.h).
@@ -112,24 +112,23 @@ bool joint_last_place(uint32_t jobj, float p[3]) {
     return dragoon::matrix_made(m);
 }
 
-// The marks the joints of the tree at `jobj` that draw shapes call for, from where each drew
-// them last, depth first and at most kMaxJoints. HSD_JObjDispAll draws a joint's shapes when it
-// has some and isn't hidden, particles and splines being something else, then its children's.
+// Where on screen the joints of the tree at `jobj` that draw shapes drew them last, depth first
+// and at most kMaxJoints. HSD_JObjDispAll draws a joint's shapes when it has some and isn't
+// hidden, particles and splines being something else, then its children's.
 constexpr uint32_t kJObjNext = 0x08, kJObjChild = 0x10, kJObjFlags = 0x14, kJObjShapes = 0x18;
 constexpr uint32_t kHidden = 1u << 4, kNotShapes = (1u << 5) | (1u << 14);
 constexpr size_t kMaxJoints = 256;
 constexpr int kMaxDepth = 32;
 
-void joint_marks(uint32_t jobj, const dragoon::Lens& lens, const std::vector<dragoon::Rect>& views,
-                 std::vector<dragoon::Mark>& out, int depth) {
+void joint_places(uint32_t jobj, const dragoon::Lens& lens, std::vector<dragoon::Point>& out, int depth) {
     if (!in_ram(jobj) || depth > kMaxDepth || out.size() >= kMaxJoints) return;
     const uint32_t flags = mem_r32(jobj + kJObjFlags);
     float p[3], x, y;
     if (!(flags & (kHidden | kNotShapes)) && mem_r32(jobj + kJObjShapes) != 0 &&
         joint_last_place(jobj, p) && dragoon::to_screen(lens, p, &x, &y))
-        out.push_back(dragoon::edge_mark(x, y, views));
+        out.push_back({x, y});
     for (uint32_t c = mem_r32(jobj + kJObjChild); in_ram(c) && out.size() < kMaxJoints; c = mem_r32(c + kJObjNext))
-        joint_marks(c, lens, views, out, depth + 1);
+        joint_places(c, lens, out, depth + 1);
 }
 
 void send(const dragoon::Mark& m) {
@@ -138,21 +137,21 @@ void send(const dragoon::Mark& m) {
     dragoon::mark_anchor(m.a, m.x0, m.x1);
 }
 
-// A HUD callback displays the joint tree at `jobj`. An Edge element keeps the mark it chose
-// while it keeps showing, and chooses by where most of its joints drew their shapes last frame,
-// or goes by its root's place when none has drawn yet. An Own element is centered on its root,
-// which the game has just put over what it follows.
+// A HUD callback displays the joint tree at `jobj`. An Edge element goes by where most of its
+// joints drew their shapes last frame, holding its edge from then near a third's line, or by
+// its root's place when none has drawn yet. An Own element is centered on its root, which the
+// game has just put over what it follows.
 void place_tree(uint32_t jobj) {
     const uint32_t cobj = mem_r32(kCObjCurrent);
     if (!in_ram(cobj) || !in_ram(jobj)) return;
     const dragoon::Lens lens = lens_of(cobj);
     const std::vector<dragoon::Rect>& views = g_views.at(this_frame());
-    static std::vector<dragoon::Mark> marks;
-    marks.clear();
+    static std::vector<dragoon::Point> places;
+    places.clear();
     std::optional<dragoon::Mark> m;
     if (g_hud.placement() == Placement::Edge) {
-        joint_marks(jobj, lens, views, marks, 0);
-        m = g_kept.place(this_frame(), jobj, marks);
+        joint_places(jobj, lens, places, 0);
+        m = g_kept.place(this_frame(), jobj, places, views);
     }
     if (!m) {
         float p[3], x, y;
