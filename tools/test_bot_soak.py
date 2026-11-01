@@ -818,15 +818,50 @@ class TimeLimitTest(unittest.TestCase):
         self.assertEqual(len(errors), 1, errors)
         self.assertIn("Outer.test_waits ran past its 1 s limit", errors[0])
 
-    def test_the_old_handler_comes_back_when_an_alarm_lands_as_the_limit_ends(self) -> None:
+    def nested(self, outer: float, inner_takes: float) -> tuple[list[str], float]:
+        """The outcome of a test under an OUTER limit that runs a test taking INNER_TAKES seconds
+        under a limit of its own, then waits."""
+        class Inner(SoakCase):
+            limit = 30.0
+
+            def test_slow(self) -> None:
+                time.sleep(inner_takes)
+
+        class Outer(unittest.TestCase):
+            def test_waits(self) -> None:
+                time_limit(self, outer)
+                inner = unittest.TestResult()
+                Inner("test_slow").run(inner)
+                self.assertTrue(inner.wasSuccessful(), inner.errors)
+                time.sleep(10)
+
+        errors, took = self.outcome(Outer("test_waits"))
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn(f"Outer.test_waits ran past its {outer:g} s limit", errors[0])
+        return errors, took
+
+    def test_an_outer_limit_counts_the_time_an_inner_one_ran(self) -> None:
+        _, took = self.nested(2.0, 1.5)
+        self.assertLess(took, 3)
+
+    def test_an_outer_limit_an_inner_one_outlasts_fires_as_the_inner_ends(self) -> None:
+        _, took = self.nested(1.0, 2.5)
+        self.assertLess(took, 3.2)
+
+    def alarm_at_the_end(self, after: bool) -> None:
+        """Runs a test under a limit with an alarm landing in the limit's end, just after its
+        first timer call there when AFTER and just before it otherwise."""
+        self.addCleanup(signal.setitimer, signal.ITIMER_REAL, 0)  # a timer the end leaves running
         real = signal.setitimer
         calls: list[tuple] = []
 
         def setitimer(which: int, *args: float) -> tuple[float, float]:
             calls.append(args)
+            if len(calls) == 2 and not after:
+                raise TimeLimit("an alarm in the limit's end")
             got = real(which, *args)
-            if len(calls) == 2:  # the limit's end, with an alarm just after it puts the timer back
-                raise TimeLimit("an alarm as the limit ends")
+            if len(calls) == 2:
+                raise TimeLimit("an alarm in the limit's end")
             return got
 
         class Quick(unittest.TestCase):
@@ -835,9 +870,14 @@ class TimeLimitTest(unittest.TestCase):
 
         with mock.patch.object(signal, "setitimer", side_effect=setitimer):
             errors, _ = self.outcome(Quick("test_quick"))
-        self.assertEqual(len(calls), 2)
         self.assertEqual(len(errors), 1, errors)
-        self.assertIn("an alarm as the limit ends", errors[0])
+        self.assertIn("an alarm in the limit's end", errors[0])
+
+    def test_the_old_handler_comes_back_when_an_alarm_lands_as_the_limit_ends(self) -> None:
+        self.alarm_at_the_end(after=True)
+
+    def test_the_timer_and_the_old_handler_come_back_when_an_alarm_lands_before_the_end_stops_the_timer(self) -> None:
+        self.alarm_at_the_end(after=False)
 
 
 if __name__ == "__main__":

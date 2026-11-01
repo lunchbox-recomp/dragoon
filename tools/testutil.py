@@ -11,6 +11,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import wave
 from array import array
@@ -74,8 +75,9 @@ def time_limit(test: unittest.TestCase, seconds: float) -> None:
     """Raises TimeLimit in TEST wherever it waits, once it has run SECONDS of wall time and again
     each SECONDS after that, so a cleanup that waits too can't hold it. A cleanup ends the limit,
     and since cleanups run last first, the ones TEST adds later run under it. TEST can't use
-    SIGALRM or the real-time interval timer while it holds them. The end gives back the timer and
-    the handler it found, so a limit around this one still fires."""
+    SIGALRM or the real-time interval timer while it holds them. The end gives back the handler
+    it found and the timer, less the time this limit ran, so a limit around this one still fires
+    when it would have, or at once when that has passed."""
     def expired(signum: int, frame: Optional[FrameType]) -> None:
         raise TimeLimit(f"{test.id()} ran past its {seconds:g} s limit")
 
@@ -83,11 +85,16 @@ def time_limit(test: unittest.TestCase, seconds: float) -> None:
 
     def end() -> None:
         try:
-            signal.setitimer(signal.ITIMER_REAL, *outer)
-        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+        finally:  # also when an alarm lands before the timer stops
             signal.signal(signal.SIGALRM, before)
+            value, interval = outer
+            if value:
+                value = max(value - (time.monotonic() - began), 0.001)
+            signal.setitimer(signal.ITIMER_REAL, value, interval)
 
     test.addCleanup(end)
+    began = time.monotonic()
     outer = signal.setitimer(signal.ITIMER_REAL, seconds, seconds)
 
 
