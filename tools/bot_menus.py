@@ -68,7 +68,6 @@ CLIMB_UPS = 3  # presses of UP on a mode's menu that leave menu.item alone befor
 BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to its menu, which took 47 in the game
 
 UNCONFIRMED = {
-    "boot": "A while the game boots (minor 38). The routes press A at frames 120 and 300 only.",
     "title": "A and START in turn on the opening movie and the title (minor 0). The routes press A "
              "at 900 and START at 1000.",
     "back to the mode select": "B on a mode's own menu, to change mode. No route presses it.",
@@ -299,7 +298,6 @@ class Menus:
         return Tap(BUTTONS[button], tuple(range(1, self.ports + 1)), settle=settle)
 
     def _boot(self, link: Link) -> Tap:
-        self._unconfirmed("boot")
         return Tap(BUTTONS["A"])
 
     def _title(self, link: Link) -> Tap:
