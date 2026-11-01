@@ -424,6 +424,14 @@ class NewSampleTest(unittest.TestCase):
         tracker.add(state(20, "set", looping=1, stream=0, loop=MUSIC, end=MUSIC_END, cur=MUSIC))
         self.assertEqual([(v.start, v.how) for v in tracker.voices], [(10, "still running")])
 
+    def test_a_set_back_on_the_addresses_the_last_set_gave_with_cur_on_the_loop_is_not_a_new_sample(self):
+        v = one(state(10, "run", pb="80579650", looping=0, stream=0, loop="00D00000", end="00D0FFFF", cur="00D00000"),
+                state(20, "set", pb="80579650", looping=0, stream=0, loop="00D10000", end="00D1FFFF", cur="00D0F000"),
+                state(30, "set", pb="80579650", looping=0, stream=0, loop="00D10000", end="00D1FFFF", cur="00D10000"),
+                state(40, "end", pb="80579650", run=0, looping=0, stream=0, loop="00D10000", end="00D1FFFF",
+                      cur="00D1FFFF"))
+        self.assertEqual((v.start, v.at, v.how, v.end_list, v.why), (10, "00D00000", EARLY, 40, [stream_voices.MOVED]))
+
     def test_a_music_voice_the_game_gives_an_effect_while_its_pair_plays_on_is_the_games_stop(self):
         # Soak 544282's lines without the partner's stop. A set is the game's own write to the
         # block, so re-pointing one voice of the pair is the game's choice, and a fault that cuts
