@@ -45,6 +45,7 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #   "connect_fails"  the game's failed connect, without one
 #   "connect_after"  seconds to wait before it connects
 #   "boot_says"      a line it prints after its [session] line and before it connects
+#   "last_says"      text it prints once its frames are done, before what "after" says
 #   "die_at"         exits just after sending that frame, without waiting for the answer
 #   "partial_data"   answers the first read with half a line and exits
 #   "bad_data"       answers a read with what isn't a data line
@@ -234,6 +235,8 @@ if plan.get("refuse"):
     print(plan["refuse"], file=sys.stderr)
     sys.exit(2)
 play(plan["frames"], plan.get("forever", False), plan.get("connect_after", 0))
+if plan.get("last_says"):
+    say(plan["last_says"])
 after = plan.get("after", "exit")
 if after == "linger":
     time.sleep(int(seconds))
@@ -305,6 +308,14 @@ def neutral(link: Link) -> dict[int, Pad]:
 def read_one(link: Link) -> dict[int, Pad]:
     link.read(0x80000000, 4)
     return {1: Pad()}
+
+
+# A frame line as a session's GCN_FRAMETIME gives each frame, a made-up assertion of the kind a
+# game reports before it halts, and more than TAIL of what the engine goes on logging after.
+FT = "[ft] f{} guest   1.00ms  fe   0.50ms (tex  0.01)\n"
+ASSERTS = '[OS] assertion "made_up != 0" failed\n[OS]  in made_up.cpp on line 7.\n'
+SAID = '\'[OS] assertion "made_up != 0" failed\', \'[OS]  in made_up.cpp on line 7.\''
+AFTER = "[audio] underrun at output frame 0 frames=512\n" * 3000
 
 
 class FakeProbeCase(unittest.TestCase):
@@ -768,6 +779,17 @@ class OutcomeTest(FakeProbeCase):
         self.assertEqual(self.record()["link_at_term"], "open")
         self.assertNotIn("hung up", (outcome.run_dir / "stdout.txt").read_text())
 
+    def test_a_hang_after_the_game_asserted_names_the_assertion(self):
+        self.plan([0, 1, 2], after="linger", last_says=FT.format(2) + ASSERTS + "[OS] - STACK ---\n" + AFTER)
+        outcome = self.go(neutral, hang=0.5)
+        self.assertEqual((outcome.reason, outcome.detail),
+                         (bot_link.HANG, f"no frame for 0.5 s after frame 2; the game asserted: {SAID}"))
+
+    def test_an_assertion_before_the_last_frame_is_not_the_hangs(self):
+        self.plan([0, 1, 2], after="linger", last_says=ASSERTS + FT.format(2))
+        outcome = self.go(neutral, hang=0.5)
+        self.assertEqual((outcome.reason, outcome.detail), (bot_link.HANG, "no frame for 0.5 s after frame 2"))
+
     def test_the_hang_clock_starts_at_the_connect(self):
         self.plan([], after="linger")
         outcome = self.go(neutral, hang=0.5)
@@ -966,6 +988,32 @@ class WaitClosedTest(unittest.TestCase):
         with mock.patch.object(bot_link, "CLOSE_WAIT", 0.3):
             bot_link._wait_closed(link)
         self.assertLess(time.monotonic() - began, 2)
+
+
+class AssertionTest(unittest.TestCase):
+    def log(self, text: str) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        return write_file(Path(tmp.name), "stdout.txt", text)
+
+    def test_it_is_the_assertion_line_and_the_line_that_says_where(self):
+        self.assertEqual(bot_link._assertion(self.log(FT.format(9) + ASSERTS + AFTER)), SAID)
+
+    def test_a_next_line_that_does_not_say_where_is_left_out(self):
+        log = self.log(FT.format(9) + '[OS] assertion "made_up != 0" failed\n[OS] - STACK ---\n')
+        self.assertEqual(bot_link._assertion(log), '\'[OS] assertion "made_up != 0" failed\'')
+
+    def test_with_no_frame_line_every_line_is_after_the_last_frame(self):
+        self.assertEqual(bot_link._assertion(self.log("[session] s\n" + ASSERTS)), SAID)
+
+    def test_nothing_after_the_last_frame_or_no_log_is_no_assertion(self):
+        self.assertIsNone(bot_link._assertion(self.log(ASSERTS + FT.format(9) + AFTER)))
+        self.assertIsNone(bot_link._assertion(self.log(FT.format(9)).parent / "gone.txt"))
+
+    def test_the_look_back_goes_no_further_than_hang_tail(self):
+        log = self.log(FT.format(9) + ASSERTS + AFTER)
+        with mock.patch.object(bot_link, "HANG_TAIL", bot_link.TAIL):
+            self.assertIsNone(bot_link._assertion(log))
 
 
 class ReadTest(unittest.TestCase):

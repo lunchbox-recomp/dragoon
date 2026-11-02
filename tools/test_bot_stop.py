@@ -171,6 +171,12 @@ class ClassifyTest(unittest.TestCase):
         assert stop is not None
         self.assertEqual((stop.kind, stop.detail), (bot_stop.HANG, detail))
 
+    def test_a_hang_on_the_games_assertion_after_a_slow_restart_is_not_blamed_on_it(self) -> None:
+        detail = "no frame for 30 s after frame 3; the game asserted: '[OS] assertion \"made_up != 0\" failed'"
+        stop = classify(outcome(bot_link.HANG, detail), resets(RESET, SHADERS.format(24500)), hang=30)
+        assert stop is not None
+        self.assertEqual((stop.kind, stop.detail), (bot_stop.HANG, detail))
+
     def test_a_hang_after_a_quick_restart_is_just_a_hang(self) -> None:
         stop = classify(outcome(bot_link.HANG, "no frame"), resets(RESET, SHADERS.format(2500)), hang=30)
         assert stop is not None

@@ -73,7 +73,7 @@ Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, h
 | `shutdown` | The game shut the console down by itself | Its `[reset]` line |
 | `game_exited` | The game ended some other way and left its input log whole | The frame it ended at |
 | `game_died` | The game ended and its input log has no `# end` line, or it reset the console and the new process began no session | The last line of `stdout.txt`, or the `[reset]` line |
-| `hang` | No frame or no answer to a read for `hang` seconds, or no new connection that long after a reset | How long, and the last frame or the frame of the unanswered read, or after a reset the game's last line |
+| `hang` | No frame or no answer to a read for `hang` seconds, or no new connection that long after a reset | How long, and the last frame or the frame of the unanswered read, or after a reset the game's last line. When the game reported an assertion after its last frame, its `[OS] assertion ... failed` line and the line after it that says where |
 | `engine_stop` | The engine stopped the game | Its `[bot] frame N: ...` line from `stdout.txt` |
 | `connect_failed` | The engine couldn't connect | Its `--bot PATH: ...` line |
 | `panic` | The game crashed | The first line of `panic.txt`, or the `FATAL` or `FAULT` line |
@@ -213,7 +213,7 @@ What does the soak watch for while the bots play? `Frozen` watches the picture a
 
 How did the run end, and was that a fault? `classify` turns a `bot_link.run` result into a `Stop` whose kind is `game_exit`, `panic`, `engine_stop`, `hang`, `frozen_picture`, `music_cut` or `menus_stuck`. It returns None for a run that reached its time limit, or an `--exit-after` it was given. A game that never connected, a bad link or a bot that raised an error says nothing about the game, so those are a `SoakError`.
 
-A hang with no frame after a reset whose shader rebuild took two thirds of the hang limit or more says so in its detail. It has no command line.
+A hang with no frame and no assertion from the game after a reset whose shader rebuild took two thirds of the hang limit or more says so in its detail. It has no command line.
 
 ## bot_record.py
 

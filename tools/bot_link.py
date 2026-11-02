@@ -65,6 +65,9 @@ CLOSE_WAIT = 10
 # thing the game says, and `# end` is the last line of an input log.
 TAIL = 1 << 17
 LOG_TAIL = 1 << 12
+# How far from a log's end a hang looks for the game's assertion. A game halted on one goes on
+# logging its audio until it's ended, which in a 30 s hang was twice TAIL.
+HANG_TAIL = 1 << 26
 # probe.sh always takes a dump interval, so a run that dumps no frames gets one no run reaches.
 NO_DUMPS = 1_000_000_000
 # Where a session the run makes records its audio. The engine fills an empty GCN_WAV or GCN_AIDWAV
@@ -101,6 +104,12 @@ END_LINE = re.compile(r"^# end (\d+) (\d+)$", re.M)
 FRAME_LINE = re.compile(rb"frame (\d+)\n")
 DATA_LINE = re.compile(rb"data ((?:[0-9a-fA-F]{2})*)\n")
 EXIT_AFTER_ARG = re.compile(r"--exit-after=(\d+)")
+# The line GCN_FRAMETIME, which a session turns on, gives each frame, and the two lines of an
+# assertion the game reports through OSReport before it halts.
+FRAME_TIME_LINE = re.compile(r"^\[ft\] f\d+ ")
+ASSERTION_LINE = re.compile(r"^\[OS\] assertion .* failed$")
+WHERE_LINE = re.compile(r"^\[OS\]\s+in \S.* on line \d+\.?$")
+ASSERTED = "the game asserted"
 
 
 @dataclass(frozen=True)
@@ -417,6 +426,38 @@ def _last_line(path: Path) -> str | None:
     return lines[-1] if lines else None
 
 
+def _after_last_frame(log: Path) -> list[str]:
+    """The lines of LOG after its last frame line. The read starts TAIL bytes from the end and
+    grows until it holds a frame line, the whole log or HANG_TAIL bytes; with no frame line,
+    every line it read is after."""
+    try:
+        with open(log, "rb") as f:
+            end = f.seek(0, os.SEEK_END)
+            size = TAIL
+            while True:
+                f.seek(max(0, end - size))
+                lines = f.read().decode("utf-8", "replace").splitlines()
+                for i in range(len(lines) - 1, -1, -1):
+                    if FRAME_TIME_LINE.match(lines[i]):
+                        return lines[i + 1:]
+                if size >= min(end, HANG_TAIL):
+                    return lines
+                size *= 4
+    except OSError:
+        return []
+
+
+def _assertion(log: Path) -> str | None:
+    """The game's `[OS] assertion ... failed` line, and the `in FILE on line N` line after it,
+    when LOG has them after its last frame."""
+    lines = _after_last_frame(log)
+    for i, line in enumerate(lines):
+        if ASSERTION_LINE.match(line):
+            where = lines[i + 1] if i + 1 < len(lines) and WHERE_LINE.match(lines[i + 1]) else None
+            return repr(line) + (f", {where!r}" if where else "")
+    return None
+
+
 def _last(pattern: re.Pattern, text: str) -> str | None:
     found = pattern.findall(text)
     return found[-1] if found else None
@@ -661,6 +702,8 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
         else:
             after = "it connected" if state.last_frame is None else f"frame {state.last_frame}"
             detail = f"no frame for {hang:g} s after {after}"
+        if said := _assertion(run_dir / "stdout.txt"):
+            detail += f"; {ASSERTED}: {said}"
         reason = HANG
     else:
         reason, detail = _game_verdict(run_dir, link.starts, err, input_log, settings, restarted,
