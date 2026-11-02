@@ -435,6 +435,7 @@ def _after_last_frame(log: Path) -> list[str]:
             end = f.seek(0, os.SEEK_END)
             size = TAIL
             while True:
+                size = min(size, HANG_TAIL)
                 f.seek(max(0, end - size))
                 lines = f.read().decode("utf-8", "replace").splitlines()
                 for i in range(len(lines) - 1, -1, -1):

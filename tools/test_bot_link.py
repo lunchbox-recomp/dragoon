@@ -1015,6 +1015,12 @@ class AssertionTest(unittest.TestCase):
         with mock.patch.object(bot_link, "HANG_TAIL", bot_link.TAIL):
             self.assertIsNone(bot_link._assertion(log))
 
+    def test_no_read_goes_past_a_hang_tail_between_the_reads_sizes(self):
+        log = self.log(FT.format(9) + ASSERTS + AFTER * 2)  # 276,000 bytes after the assertion
+        with mock.patch.object(bot_link, "HANG_TAIL", 2 * bot_link.TAIL):  # 262,144
+            self.assertIsNone(bot_link._assertion(log))
+        self.assertEqual(bot_link._assertion(log), SAID)
+
 
 class ReadTest(unittest.TestCase):
     def test_a_link_outside_a_run_waits_for_a_late_answer(self):
