@@ -878,8 +878,9 @@ class SetupTest(FakeProbeCase):
         sock = socket_path(self.run_dir())
         self.assertEqual(self.record()["argv"],
                          ["t", str(17 + bot_link.DEADLINE_SLACK), "120:A:5", "30", "--exit-after=900",
-                          "GCN_FRAMETIME=1", f"GCN_SESSION={self.run_dir() / 'session'}", "GCN_WAV=",
-                          "GCN_AIDWAV=", "--pads=2", f"GCN_BOT={sock}"])
+                          "GCN_FRAMETIME=1", f"GCN_SESSION={self.run_dir() / 'session'}",
+                          f"GCN_WAV={bot_link.NO_RECORDING}", f"GCN_AIDWAV={bot_link.NO_RECORDING}", "--pads=2",
+                          f"GCN_BOT={sock}"])
 
     def test_every_none_is_an_interval_no_run_reaches(self):
         self.plan([0])
@@ -895,8 +896,11 @@ class SetupTest(FakeProbeCase):
 
     def test_a_session_the_run_makes_records_no_audio_unless_settings_say_where(self):
         self.plan([0])
-        for settings, expected in ((["GCN_WAV=/x/out.wav"], ["GCN_WAV=/x/out.wav", "GCN_AIDWAV="]),
-                                   (["GCN_AIDWAV=/x/aid.raw"], ["GCN_AIDWAV=/x/aid.raw", "GCN_WAV="]),
+        nowhere = bot_link.NO_RECORDING
+        with self.assertRaises(NotADirectoryError):  # what the engine's fopen meets, so it records nothing
+            open(nowhere, "wb")
+        for settings, expected in ((["GCN_WAV=/x/out.wav"], ["GCN_WAV=/x/out.wav", f"GCN_AIDWAV={nowhere}"]),
+                                   (["GCN_AIDWAV=/x/aid.raw"], ["GCN_AIDWAV=/x/aid.raw", f"GCN_WAV={nowhere}"]),
                                    (["GCN_WAV=/x/out.wav", "GCN_AIDWAV=/x/aid.raw"],
                                     ["GCN_WAV=/x/out.wav", "GCN_AIDWAV=/x/aid.raw"])):
             with self.subTest(settings=settings):
@@ -929,7 +933,7 @@ class SetupTest(FakeProbeCase):
         self.assertEqual(outcome.input_log, self.run_dir() / "session" / "inputs")
         argv = self.record()["argv"]
         self.assertIn(f"GCN_SESSION={self.run_dir() / 'session'}", argv)
-        self.assertIn("GCN_WAV=", argv)  # the run's own session, so it records no audio
+        self.assertIn(f"GCN_WAV={bot_link.NO_RECORDING}", argv)  # the run's own session, so it records no audio
 
     def test_arguments_the_run_sets_itself_are_refused(self):
         for settings in (["GCN_BOT=/x"], ["--pads=2"]):
@@ -1053,7 +1057,8 @@ class RealProbeTest(unittest.TestCase):
         self.assertEqual(record["env"]["GCN_SESSION"], str(root / "build" / "probe" / "t" / "session"))
         self.assertEqual(record["env"]["GCN_INPUT"], "120:A:5")
         self.assertEqual(record["env"]["GCN_FRAMETIME"], "1")
-        self.assertEqual((record["env"]["GCN_WAV"], record["env"]["GCN_AIDWAV"]), ("", ""))  # set, and empty
+        self.assertEqual((record["env"]["GCN_WAV"], record["env"]["GCN_AIDWAV"]),
+                         (bot_link.NO_RECORDING, bot_link.NO_RECORDING))
         self.assertIn("--pads=2", record["argv"])
         self.assertIn("--exit-after=1500", record["argv"])
         self.assertIn("--dump-every=30", record["argv"])

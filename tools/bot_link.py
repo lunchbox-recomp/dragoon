@@ -67,6 +67,10 @@ TAIL = 1 << 17
 LOG_TAIL = 1 << 12
 # probe.sh always takes a dump interval, so a run that dumps no frames gets one no run reaches.
 NO_DUMPS = 1_000_000_000
+# Where a session the run makes records its audio. The engine fills an empty GCN_WAV or GCN_AIDWAV
+# with a file in the session, and /dev/null isn't a directory, so no file under it can be opened
+# and the engine records nothing.
+NO_RECORDING = "/dev/null/none"
 # The PADStatus button bits that are buttons (gcn-recomp's runtime/hw/pad.h), as the engine takes them.
 BUTTON_MASK = 0x1F7F
 
@@ -518,8 +522,8 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
                 pass
         if not ours and session.exists():
             remove_run(session)
-        # An empty GCN_WAV or GCN_AIDWAV is a recording the engine can't open, so it makes none.
-        silent = [f"{var}=" for var in ("GCN_WAV", "GCN_AIDWAV") if not any(s.startswith(f"{var}=") for s in settings)]
+        silent = [f"{var}={NO_RECORDING}" for var in ("GCN_WAV", "GCN_AIDWAV")
+                  if not any(s.startswith(f"{var}=") for s in settings)]
         argv = [str(probe_path), name, str(seconds + DEADLINE_SLACK), script,
                 str(every if every is not None else NO_DUMPS), *settings,
                 *([] if ours else [f"GCN_SESSION={session}", *silent]), f"--pads={pads}", f"GCN_BOT={sock}"]
