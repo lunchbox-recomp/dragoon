@@ -462,15 +462,17 @@ import Testing
 
     @Test func aSurvivorOfSigtermThatHoldsNoPipeStillGetsTheSigkillBeforeTheStreamEnds() async throws {
         let fixture = try RecipeFixture()
-        // The recipe dies of the SIGTERM, and the helper it leaves ignores it and holds no pipe.
-        // The helper is forked with SIGTERM already ignored, before the step goes out, so the
-        // cancel can't reach it first. A trap set inside it after the fork could lose that race.
+        // The recipe notes the SIGTERM and exits, and the helper it leaves ignores it and holds
+        // no pipe. The helper is forked with SIGTERM already ignored, before the step goes out,
+        // so the cancel can't reach it first. A trap set inside it after the fork could lose
+        // that race.
         try fixture.install(
             #"""
             echo $$ > \#(shellWord(fixture.pidFile))
             trap '' TERM
             /bin/sleep 30 > /dev/null 2>&1 &
-            trap - TERM
+            note=\#(shellWord(fixture.noteFile))
+            trap 'echo got term > "$note"; exit 143' TERM
             echo $! > \#(shellWord(fixture.helperFile))
             echo '{"event": "step", "step": "compile"}'
             wait
@@ -489,6 +491,8 @@ import Testing
         await #expect(throws: BuildFailure.cancelled) {
             while try await iterator.next() != nil {}
         }
+        // The recipe left at the SIGTERM, so only the helper held the group until the SIGKILL.
+        #expect(try lines(of: fixture.noteFile) == ["got term"])
         // The stream waited for the SIGKILL, and the group is gone by the time it ends.
         #expect(ContinuousClock.now - cancelled >= .milliseconds(1400))
         #expect(await Processes.eventually(timeout: 2) { !Processes.groupExists(pgid) })

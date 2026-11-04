@@ -190,20 +190,21 @@ import Testing
     @Test func aSurvivorOfSigtermThatHoldsNoPipeStillGetsTheSigkillBeforeTheRunEnds() async throws {
         let files = try scratch()
         defer { try? FileManager.default.removeItem(atPath: files.directory) }
-        // The shell dies of the SIGTERM, and the helper it leaves ignores it and holds no pipe.
-        // The helper is forked with SIGTERM already ignored, before its pid is written, so the
-        // cancel can't reach it first. A trap set inside it after the fork could lose that race.
+        // The shell notes the SIGTERM and exits, and the helper it leaves ignores it and holds
+        // no pipe. The helper is forked with SIGTERM already ignored, before its pid is written,
+        // so the cancel can't reach it first. A trap set inside it after the fork could lose
+        // that race.
         let script = """
             echo $$ > "$1"
             trap '' TERM
             /bin/sleep 30 > /dev/null 2>&1 &
-            trap - TERM
+            trap 'echo got term > "$3"; exit 143' TERM
             echo $! > "$2"
             wait
             """
         let task = Task {
             try await SystemProcessRunner(killGrace: 1.5).run(
-                "/bin/sh", ["-c", script, "sh", files.pid, files.helper])
+                "/bin/sh", ["-c", script, "sh", files.pid, files.helper, files.note])
         }
         let helper = try #require(await Processes.waitForPid(inFile: files.helper))
         let pgid = try #require(Processes.pid(inFile: files.pid))
@@ -212,6 +213,8 @@ import Testing
         let cancelled = ContinuousClock.now
         task.cancel()
         await #expect(throws: CancellationError.self) { try await task.value }
+        // The shell left at the SIGTERM, so only the helper held the group until the SIGKILL.
+        #expect(try String(contentsOfFile: files.note, encoding: .utf8) == "got term\n")
         #expect(ContinuousClock.now - cancelled >= .milliseconds(1400))
         #expect(await Processes.eventually(timeout: 2) { !Processes.groupExists(pgid) })
         #expect(await Processes.eventually(timeout: 2) { !Processes.exists(helper) })
