@@ -1092,16 +1092,22 @@ With the drive code `b5ec329` has, every route ran once at each speed under `GCN
 
 ## gcn-recomp `782d7fa`
 
-The pin moved from `b11ebc6` to `782d7fa`, 146 commits. Of them, 76 change the interpreter's
-or the recompiler's code, tests or docs. The interpreter runs a function whose words in RAM no
-longer match the ones it was recompiled from, and code in RAM that no table knows, so each
-recompiled function now tests a guard bit on entry and the guest's `icbi` recounts the words
-it flushes.
+The pin moved from `b11ebc6` to `782d7fa`, 146 commits. Of them, 79 change the interpreter's
+or the recompiler's code, tests, docs or compile flags. The interpreter runs a function whose
+words in RAM no longer match the ones it was recompiled from, and code in RAM that no table
+knows, so each recompiled function now tests a guard bit on entry and the guest's `icbi`
+recounts the words it flushes.
 
-The other 70 include Riivolution RAM patches applied at boot, `disc_overlay` and `ram_patches`
-paths read from `settings.txt` and an overlay menu that pauses the game. Empty number, on/off
-and diagnostic path switches now read as unset. A route's run directory starts with no
-`settings.txt`, and no route names a patch list.
+The other 67 include Riivolution RAM patches applied at boot, a `disc_overlay` path read from
+`settings.txt` and an overlay menu that pauses the game. A `ram_patches` key in `settings.txt`
+is loaded but not applied at this pin, which takes patches only from `GCN_RAM_PATCHES` or
+`--ram-patches=`. A route's run directory starts with no `settings.txt`, and no route names a
+patch list.
+
+Empty number and on/off switches and most diagnostic paths now read as unset. An empty
+`GCN_DISC_OVERLAY` means no overlay even over a `disc_overlay` key, and an empty
+`GCN_RAM_PATCHES` means no patches. An empty `GCN_REPLAY` still stops the bench, which finds no
+input log there.
 
 Built on Dragoon `30a3ca3`, `tools/frame_hashes.py check` matched all twenty-four routes and
 1,906 frames in 14 min 37 s. `tools/audio_hashes.py check` then matched all 48 rows in 14 min
@@ -1109,8 +1115,9 @@ Built on Dragoon `30a3ca3`, `tools/frame_hashes.py check` matched all twenty-fou
 and 8.4 and 5.7 at the audio check's.
 
 None of the 24 bench logs has an `[interp]` line. So on those routes the text in RAM at boot
-matched what the build was recompiled from, no HLE'd function's code changed and no unknown
-code ran.
+matched what the build was recompiled from, no `icbi` or code write the engine saw changed an
+HLE'd function and no unknown code ran. `GCN_INTERPRET_STATS` was off, so the logs don't say
+whether any function ran interpreted.
 
 ## Fixes on the way
 
