@@ -910,6 +910,11 @@ class SetupTest(FakeProbeCase):
                                  sorted(expected))
                 self.assertEqual(len([a for a in argv if a.startswith("GCN_WAV=")]), 1)  # the caller's, not both
                 self.assertEqual(len([a for a in argv if a.startswith("GCN_AIDWAV=")]), 1)
+        for var in ("GCN_WAV", "GCN_AIDWAV"):
+            with self.subTest(empty=var):  # the session would fill an empty one with a file of its own
+                self.go(neutral, settings=[f"{var}="])
+                given = [a for a in self.record()["argv"] if a.startswith(f"{var}=")]
+                self.assertEqual(given[-1], f"{var}={nowhere}")  # env takes the last one
 
     def test_a_session_the_caller_names_is_left_to_the_engine_to_record_as_it_does(self):
         self.plan([0])
@@ -1064,6 +1069,14 @@ class RealProbeTest(unittest.TestCase):
         self.assertIn("--dump-every=30", record["argv"])
         self.assertNotIn("--no-input-log", record["argv"])  # a session keeps the log probe.sh otherwise drops
         self.assertNotIn("--bot", " ".join(record["argv"]))
+
+    def test_an_empty_recording_in_settings_reaches_the_game_as_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, probe = self.tree(tmp)
+            run("t", 20, neutral, settings=["--exit-after=1500", "GCN_WAV=", "GCN_AIDWAV="], probe=probe)
+            record = json.loads((root / "build" / "probe" / "t" / "record.json").read_text())
+        self.assertEqual((record["env"]["GCN_WAV"], record["env"]["GCN_AIDWAV"]),
+                         (bot_link.NO_RECORDING, bot_link.NO_RECORDING))
 
 
 class CommandTest(FakeProbeCase):

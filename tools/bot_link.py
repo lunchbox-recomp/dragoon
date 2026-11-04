@@ -480,7 +480,7 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
 
     The run is a session, build/probe/NAME/session unless `settings` names a GCN_SESSION, so
     its input log replays with no bot. A session the run makes records no audio, unless
-    `settings` sets GCN_WAV or GCN_AIDWAV. At `seconds`, and at a hang, the game is ended with
+    `settings` gives GCN_WAV or GCN_AIDWAV a path. At `seconds`, and at a hang, the game is ended with
     the link still open, so the engine doesn't log that the bot hung up. The game connects again
     after it resets the console, and the bot goes on with it; `hang` counts the wait for that
     too, but not the wait after a game that exited, nor the wait for the first connection, which
@@ -523,7 +523,7 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
         if not ours and session.exists():
             remove_run(session)
         silent = [f"{var}={NO_RECORDING}" for var in ("GCN_WAV", "GCN_AIDWAV")
-                  if not any(s.startswith(f"{var}=") for s in settings)]
+                  if not any(s.startswith(f"{var}=") and len(s) > len(f"{var}=") for s in settings)]
         argv = [str(probe_path), name, str(seconds + DEADLINE_SLACK), script,
                 str(every if every is not None else NO_DUMPS), *settings,
                 *([] if ours else [f"GCN_SESSION={session}", *silent]), f"--pads={pads}", f"GCN_BOT={sock}"]

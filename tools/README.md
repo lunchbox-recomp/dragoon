@@ -93,7 +93,9 @@ The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when 
 
 A `stdout.txt`, a `panic.txt` or a `session/` that an earlier run of NAME left is deleted first, but its frames stay, so give each run a new NAME. A `GCN_SESSION` in `settings` is used in place of `session/`, and a relative one is taken from `build/probe/NAME/`.
 
-The session `run` makes keeps the input log and records no audio. A session fills an empty `GCN_WAV` or `GCN_AIDWAV` with a file of its own, so the run passes both as `/dev/null/none`, which the engine can't open because `/dev/null` isn't a folder. The run's directory gets no empty file named `.txt`, which an empty `GCN_AIDWAV` left there before gcn-recomp `1efabb5`. A `GCN_WAV` or `GCN_AIDWAV` in `settings` is used as given, and a session of your own records what the engine records by default.
+The session `run` makes keeps the input log and records no audio. A session fills an empty `GCN_WAV` or `GCN_AIDWAV` with a file of its own, so the run passes both as `/dev/null/none`, which the engine can't open because `/dev/null` isn't a folder. The run's directory gets no empty file named `.txt`, which an empty `GCN_AIDWAV` left there before gcn-recomp `1efabb5`.
+
+A `GCN_WAV` or `GCN_AIDWAV` path in `settings` is used as given, and an empty one still gets `/dev/null/none`. A session of your own records what the engine records by default.
 
 A game that resets the console connects again and the bot goes on with it, with `Link.starts` counting the connections. The tests stand a fake probe.sh in for the game, so they need no disc.
 
