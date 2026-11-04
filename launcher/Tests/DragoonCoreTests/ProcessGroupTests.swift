@@ -191,9 +191,13 @@ import Testing
         let files = try scratch()
         defer { try? FileManager.default.removeItem(atPath: files.directory) }
         // The shell dies of the SIGTERM, and the helper it leaves ignores it and holds no pipe.
+        // The helper is forked with SIGTERM already ignored, before its pid is written, so the
+        // cancel can't reach it first. A trap set inside it after the fork could lose that race.
         let script = """
             echo $$ > "$1"
-            ( trap '' TERM; exec /bin/sleep 30 ) > /dev/null 2>&1 &
+            trap '' TERM
+            /bin/sleep 30 > /dev/null 2>&1 &
+            trap - TERM
             echo $! > "$2"
             wait
             """

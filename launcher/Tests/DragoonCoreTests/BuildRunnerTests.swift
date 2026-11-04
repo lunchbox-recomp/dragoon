@@ -463,10 +463,14 @@ import Testing
     @Test func aSurvivorOfSigtermThatHoldsNoPipeStillGetsTheSigkillBeforeTheStreamEnds() async throws {
         let fixture = try RecipeFixture()
         // The recipe dies of the SIGTERM, and the helper it leaves ignores it and holds no pipe.
+        // The helper is forked with SIGTERM already ignored, before the step goes out, so the
+        // cancel can't reach it first. A trap set inside it after the fork could lose that race.
         try fixture.install(
             #"""
             echo $$ > \#(shellWord(fixture.pidFile))
-            ( trap '' TERM; exec /bin/sleep 30 ) > /dev/null 2>&1 &
+            trap '' TERM
+            /bin/sleep 30 > /dev/null 2>&1 &
+            trap - TERM
             echo $! > \#(shellWord(fixture.helperFile))
             echo '{"event": "step", "step": "compile"}'
             wait
