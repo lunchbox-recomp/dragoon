@@ -145,6 +145,8 @@ tools/playtest.sh
 
 That's all a playtester runs. It runs from the repository's root, so it plays on the card and shader cache in `saves/` as `build/dragoon` does. Nothing needs sending back.
 
+When the overlay menu's Display page changes the picture, it writes `settings.txt` in the current folder, which for playtest.sh is the repository's root. Later runs started there read it, and `.gitignore` ignores it.
+
 The session stays in `build/playtest/`, and session_report.py, pad_report.py and replay_session.py read it there. The recordings, the input log and the card snapshot are the player's own game data. `.gitignore` ignores them, and check_no_game_data.py fails on any that's tracked.
 
 `--pads=N` plugs in more controllers and `--scale=N` sets the render scale. `GCN_*=value` sets any other switch, and one the session sets itself, like `GCN_WAV`, takes the value given instead. An empty value counts as unset, so the session fills in its own. To record no audio, give `GCN_WAV` and `GCN_AIDWAV` a path that can't be opened, such as the `/dev/null/none` that bot_link.py passes. `--dry-run` prints the directory and the command without running anything, which is how its tests check it.

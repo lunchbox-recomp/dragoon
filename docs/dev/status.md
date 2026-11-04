@@ -47,7 +47,7 @@ gcn-recomp `782d7fa` below).
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
 | Disc path with spaces | Works | Configures, and its `dragoon_bench` builds and runs |
-| Running from another directory | Works | The configured disc path is compiled in. The memory card and shader cache are in `saves/` in the current folder, so a run from another folder starts with a blank card and compiles shaders as it goes |
+| Running from another directory | Works | The configured disc path is compiled in. The memory card and shader cache are in `saves/` in the current folder, so a run from another folder starts with a blank card and compiles shaders as it goes. Since gcn-recomp `782d7fa` the overlay menu's Display page writes `settings.txt` in the current folder when it changes the picture, and later runs started there read it |
 | Network during the build | SDL and Dear ImGui | The first configure in a build directory downloads SDL 3.4.18's source release (15.7 MB) and Dear ImGui 1.92.9b's (2.1 MB), and checks the SHA-256 of each. `-DGCN_SYSTEM_SDL=ON` uses an installed SDL3 instead. Dear ImGui draws the overlay menu gcn-recomp brought with the pin's move to `782d7fa`. `-DGCN_OVERLAY=OFF` builds the game with no menu and doesn't download Dear ImGui |
 | Idle loop | Works | `recomp/idle.txt` 803D9FCC is the `IDLE_CHECK` branch in the generated C |
 
