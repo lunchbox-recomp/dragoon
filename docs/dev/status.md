@@ -158,7 +158,7 @@ as `GAME_ISO`, `recomp/extract_dol.py` prints this and CMake stops.
 ```
 error: .../Super Mario Sunshine (USA, Canada).gcm is disc b'GMSE01', not b'GKYE01'.
 Note: only uncompressed .iso and .ciso images are supported; convert .rvz/.gcz first (see README).
-CMake Error at gcn-recomp/CMakeLists.txt:280 (message):
+CMake Error at gcn-recomp/CMakeLists.txt:472 (message):
   could not extract main.dol from
 ```
 
@@ -589,7 +589,7 @@ could measure.
 
 Hitches are the frames after frame 300 whose `[rt]` time is over 16.7 ms. These are first launches
 with an empty shader cache, one run of each route at `--real-time --scale=2` with nothing warmed,
-at Dragoon `d3c9c15` and gcn-recomp `caf12a2`. These runs started with no `saves/shaders.bin`.
+at Dragoon `d4de05d` and gcn-recomp `caf12a2`. These runs started with no `saves/shaders.bin`.
 macOS GL keeps no program binaries, so the cache holds keys only. The warmed numbers are in the
 Player targets table below. Each run was `tools/probe.sh cold-ROUTE SECONDS tests/routes/ROUTE.txt 60
 GCN_FRAMETIME=1 --real-time --scale=2` (plus `--pads=4` for the four-player route), and the rows
@@ -656,7 +656,7 @@ Dragoon `e52dce1`, here and below, is #46's commit that became `fe88e8a`.
 With the default dump every 60 frames, the dumped frames themselves go over 33 ms, so these runs set
 `DUMP_EVERY` to 100,000.
 
-How these were measured, at Dragoon `62b114b` and gcn-recomp `caf12a2`, on a Mac with an M4 Max.
+How these were measured, at Dragoon `3db7f2e` and gcn-recomp `caf12a2`, on a Mac with an M4 Max.
 Each route ran as
 `tools/probe.sh NAME SECONDS tests/routes/ROUTE.txt 100000 GCN_FRAMETIME=1 --real-time --scale=2`
 (plus `--pads=4` for the four-player route). SECONDS was the route's last required frame over 60,
@@ -665,7 +665,7 @@ and race routes. Each run started from a copy of the cache of one warm-up, not f
 Stalls are the frames `tools/frametime.py build/probe/NAME/stdout.txt --slow 33` lists after frame
 300. Compiles are the `[shaders] compiled program` lines, counted with `grep -c`. The boot time is
 read from the `[shaders] ... programs from cache ... in N ms` line the game prints at startup. The
-row's earlier figure, 42.6 s at `62b114b`, was one warm-up timed with `/usr/bin/time -p`.
+row's earlier figure, 42.6 s at `3db7f2e`, was one warm-up timed with `/usr/bin/time -p`.
 Apple's own shader cache was warm from earlier runs. Whether the warm-up fills it on a fresh Mac
 wasn't checked.
 
