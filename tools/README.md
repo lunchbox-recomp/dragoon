@@ -342,7 +342,7 @@ tools/interp_bisect.py air-ride-race --slow=20 --audio
 
 It prints each function that changes ROUTE on its own with its name, and writes them to the found file. Each check but the first takes ROUTE's seconds times N. One function among the 20,003 starts in `symbols.txt` takes at most 19 checks, and each further one takes at most 18 more.
 
-It exits 0 when interpreting every function leaves ROUTE matching, 1 when it names functions and 2 when it can't run or can't narrow the change. A ROUTE that changes with nothing interpreted does that, and so does a change that needs several functions together or one that takes more than 16. A build that doesn't read `GCN_INTERPRET` runs every list natively, so it exits 0.
+It exits 0 when interpreting every function leaves ROUTE matching, 1 when it names functions and 2 when it can't run or can't narrow the change. A ROUTE that changes with nothing interpreted does that, and so does a change that needs several functions together or one that takes more than 16. The build has read `GCN_INTERPRET` since the pin moved to gcn-recomp `782d7fa`. A build on an older pin runs every list natively, so it exits 0.
 
 ## audio_clicks.py
 
