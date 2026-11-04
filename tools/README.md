@@ -145,7 +145,7 @@ That's all a playtester runs. It runs from the repository's root, so it plays on
 
 The session stays in `build/playtest/`, and session_report.py, pad_report.py and replay_session.py read it there. The recordings, the input log and the card snapshot are the player's own game data. `.gitignore` ignores them, and check_no_game_data.py fails on any that's tracked.
 
-`--pads=N` plugs in more controllers and `--scale=N` sets the render scale. `GCN_*=value` sets any other switch, and one the session sets itself, like `GCN_WAV`, takes the value given instead. `--dry-run` prints the directory and the command without running anything, which is how its tests check it.
+`--pads=N` plugs in more controllers and `--scale=N` sets the render scale. `GCN_*=value` sets any other switch, and one the session sets itself, like `GCN_WAV`, takes the value given instead. An empty value counts as unset, so the session fills in its own. To record no audio, give `GCN_WAV` and `GCN_AIDWAV` a path that can't be opened, such as the `/dev/null/none` that bot_link.py passes. `--dry-run` prints the directory and the command without running anything, which is how its tests check it.
 
 It exits with the game's status, or 2 when `GCN_SESSION` is already set or the game isn't built. Without `GCN_SESSION` the game records none of this.
 

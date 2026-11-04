@@ -5,7 +5,7 @@
 #     --pads=N      controllers plugged in on ports 1 to N, 1 to 4 (default 1)
 #     --scale=N     render at N times 640x480, 1 to 9 (default the game's own, 2)
 #     GCN_*=value   any of gcn-recomp's GCN_* diagnostics (its docs/diagnostics.md). One the
-#                   session sets itself, like GCN_WAV, takes the value given here instead
+#                   session sets itself, like GCN_WAV, takes a value given here, but not an empty one
 #     --dry-run     print the session directory and the command, and run nothing
 # The game opens in a window with sound, as it does for players, with GCN_SESSION set to
 # build/playtest/<date>-<time>/. That directory gets what went to the sound device
