@@ -43,7 +43,7 @@ gcn-recomp `782d7fa` below).
 | Controllers | Four ports, live | Each gamepad takes the port of its SDL player number if that port is free, and otherwise the lowest free port. Its player number is then set to the port. A gamepad pulled out frees its port. The game then sees that port unplugged, unless the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in. A gamepad gets no port when none is free. Since gcn-recomp `0e6c9a7` each gamepad's port is saved in `saves/ports.txt`, and it takes that port again at the next launch when it's free. A device's `port <n>` line in `controls.txt` keeps that port from gamepads. A `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N for routes, as in `2/2100:A:5`. Since gcn-recomp `b5ec329` the GameCube's A, B, X and Y are the face buttons with those labels (`29ce20e`). A pad whose faces carry no letters has them where an Xbox pad does. On a Nintendo-layout pad such as an 8BitDo in Switch mode GameCube A moved from the south button to the east one, while on an Xbox pad B and X traded places. Checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`, and a recording replayed with no gamepad), not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with Air Ride's and City Trial's HUD anchored | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD keeps its 4:3 shape at the race, City Trial, 2P and 4P checkpoints, anchored to the edges of the screen or of its player's view, as all four showed on Dragoon `1ff85c8`. Top Ride's HUD and the menus stretch with the picture (`widescreen.md`) |
 | Speed | See below | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
-| Build from the disc | Works | 23 s from an empty build directory: 3.5 s to configure, 19.5 s for Ninja |
+| Build from the disc | Works | 23 s from an empty build directory: 3.5 s to configure, 19.5 s for Ninja, timed before the default target also ran the shader warm-up (`CMakeLists.txt:69-77`) |
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
 | Disc path with spaces | Works | Configures, and its `dragoon_bench` builds and runs |
@@ -53,15 +53,20 @@ gcn-recomp `782d7fa` below).
 
 ## The build
 
-Measured on an Apple M4 Max (16 cores, 48 GB) on macOS 26.6.2 with the Command Line Tools
-SDK 26.5, Apple clang 21.0.0, CMake 4.4.4, Ninja 1.13.2, Python 3.14.7 and SDL2 2.32.72.
+Measured at gcn-recomp `67a7e30` on an Apple M4 Max (16 cores, 48 GB) on macOS 26.6.2 with the
+Command Line Tools SDK 26.5, Apple clang 21.0.0, CMake 4.4.4, Ninja 1.13.2, Python 3.14.7 and
+Homebrew's SDL2 2.32.72. Since gcn-recomp `642187a` the configure downloads SDL3 3.4.18 and the
+build compiles it, so these times leave out building SDL.
 
 ```sh
 ln -s "/path/to/Kirby Air Ride (USA).gcm" rom/game.iso
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ninja -C build
 ```
+
+The timed configure also passed
+`-DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`. On the same Mac
+a plain configure with no sysroot linked the game at gcn-recomp `782d7fa` on 2026-11-04.
 
 | Step | Wall | CPU | Peak memory |
 |---|---|---|---|
