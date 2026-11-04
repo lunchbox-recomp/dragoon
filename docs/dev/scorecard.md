@@ -7,7 +7,9 @@ baseline is gcn-recomp `caf12a2`, with none of the audio work. Current is gcn-re
 Next is gcn-recomp `b97c019`.
 
 The pin moved from `e1016b8` (under Pass 5), which changes no audio file after `b97c019`,
-through `3a8d154` to `dac449e` (under Pass 6), which changes `runtime/audio.cpp`.
+through `3a8d154` to `dac449e` (under Pass 6), which changes `runtime/audio.cpp`. The newest
+numbers here are from `dac449e`, and the scorecard hasn't been rerun on the five pins since,
+which end at `782d7fa`.
 
 The tool scores the two stages from different runs. The mixer stage, every block the DMA
 delivered, comes from an unpaced run, whose game time doesn't wait on the host. Each pair of

@@ -6,7 +6,7 @@ the PB mixer control word with the 2001 layout for that hash only. Every other h
 included, gets the later layout. The compressor command runs on the same hash test, so at the
 pinned gcn-recomp (since `b839cf6`) it follows the ucode hash alone and `GCN_AX_LAYOUT` leaves
 it be. The newer build's low-pass filter still isn't applied. The `ax.cpp` line numbers below
-are at gcn-recomp `fd1f6a8`. The pin is now `b5ec329`, where `compress` still starts at line
+are at gcn-recomp `fd1f6a8`. The pin is now `782d7fa`, where `compress` still starts at line
 573 and `ax_init` at 617.
 
 ## The ucode
