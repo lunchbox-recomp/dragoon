@@ -95,6 +95,29 @@ renderer.
 runtime/gx/render_gl.cpp:3189:13: warning: enumeration value 'Screen' not handled in switch [-Wswitch]
 ```
 
+### What the build downloads
+
+The first configure downloads two source archives. gcn-recomp's `CMakeLists.txt` pins each by
+SHA-256, so CMake stops at one that doesn't match. Both were read in `build/_deps/` at
+gcn-recomp `782d7fa`, and nothing in them was run by hand.
+
+| | SDL3 | Dear ImGui |
+|---|---|---|
+| Archive | `SDL3-3.4.18.tar.gz` from the `release-3.4.18` release of `libsdl-org/SDL` on GitHub, 15,651,004 bytes | `v1.92.9b.tar.gz`, GitHub's archive of the `v1.92.9b` tag of `ocornut/imgui`, 2,123,074 bytes |
+| SHA-256, pinned and as downloaded | `9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3` | `21d8a0a565e85dce943e375db00812c2f3f0ab21f3f0f7964e364a63422d7f99` |
+| Version inside | `REVISION.txt` reads `release-3.4.18-0-g829a65d76` | `imgui.h:32` defines `IMGUI_VERSION` as `"1.92.9b"` |
+| At configure | `FetchContent_MakeAvailable` runs SDL's own `CMakeLists.txt` with its shared library, tests, examples and install off. Its feature checks compile test programs and run none. It takes its revision from `REVISION.txt` rather than git, and on macOS its only `execute_process` calls are `cmake -E make_directory` and `cmake -E copy_if_different` | The archive has no `CMakeLists.txt` at its top, so `FetchContent_MakeAvailable` only unpacks it |
+| At build | `libSDL3.a`. `build.ninja` has no custom command from SDL's scripts | Six files go into `libgcn_imgui.a`: `imgui.cpp`, `imgui_draw.cpp`, `imgui_tables.cpp`, `imgui_widgets.cpp`, `backends/imgui_impl_sdl3.cpp` and `backends/imgui_impl_opengl3.cpp`. No script or custom command from the archive runs |
+
+In the game, Dear ImGui's OpenGL 3 backend opens the system's OpenGL framework with `dlopen`
+(`imgui_impl_opengl3_loader.h:677`). It opens a link by forking `open -- <path>`
+(`imgui.cpp:16320`), and the SDL3 backend swaps that for `SDL_OpenURL`
+(`imgui_impl_sdl3.cpp:541`).
+
+Only `TextLinkOpenURL` opens a link (`imgui_widgets.cpp:1578`), and gcn-recomp's overlay calls
+no `TextLink` function. The overlay also sets `IniFilename` and `LogFilename` to null, so Dear
+ImGui writes no file (`runtime/overlay/overlay.cpp:405`).
+
 ## Disc inputs
 
 gcn-recomp looks only for `rom/*.iso` and `rom/*.ciso`. A `.gcm` is the same format as an
