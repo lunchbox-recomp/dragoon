@@ -18,6 +18,10 @@ help any game goes to the fork.
 | `tests/hashes/` | Frame and audio goldens for those routes |
 | `tests/src/` | GoogleTest tests of the parts of `src/` that don't need the game |
 | `tools/` | Python tools that run the game hidden and read what it leaves behind |
+| `launcher/` | The macOS launcher, a SwiftPM package of the `Dragoon` app and `DragoonCore`. Beside it are the Makefile that links the game from the engine kit and Python tools that run its tests and assemble and sign `Dragoon.app` |
+| `docs/` | This page, the design in `docs/specs/` and notes in `docs/dev/` on status, audio, the audio scorecard and widescreen |
+| `build.sh` | Configures `build/` the first time and runs Ninja there. It fetches the submodule if it's missing, and on a Mac with Xcode it uses Xcode's toolchain |
+| `rom/` | Where the player's disc image goes, as `rom/game.iso` or a `.ciso`. Git ignores everything in it but its README |
 | `gcn-recomp/` | The engine, pinned to our fork's `dragoon` branch |
 
 ## The boundary
@@ -46,6 +50,14 @@ The hooks read guest memory through the runtime's `mem_r32` and friends, and the
 aspect through `gx::output_aspect()`. The census hooks do nothing unless `DRAGOON_CENSUS` is
 set. The world camera widening is always on, and at 4:3 it leaves every aspect as the game
 set it, so the game runs there as it always has.
+
+The HUD anchors in `src/hud_anchors.cpp` are always on too. Each HUD element that a render
+callback in its table draws keeps its 4:3 shape, held to an edge or the middle of the screen or
+of its player's view, and a marker stays centered on the kart or item it follows. At 4:3 every
+anchor leaves its draw where the game put it.
+
+`src/draw_marks.cpp` pads the write-gather pipe to the end of its line before each mark, so the
+mark lands after every draw the game has written. The census's draw tags go through it too.
 
 `tools/probe.sh` passes `DRAGOON_*=value` settings through to the game.
 `docs/dev/widescreen.md` covers the one that exists, `DRAGOON_CENSUS`.
