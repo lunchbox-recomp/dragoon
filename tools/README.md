@@ -297,7 +297,9 @@ tools/shader_cache.py diff build/old-keys.bin build/probe/demo/saves/shaders.bin
 
 Did a change alter what the renderer draws? It runs each route in `tests/hashes/manifest.txt` through probe.sh and compares the SHA-1 of every dumped frame with the golden in `tests/hashes/gl/<route>.txt`. `check` reports each frame that changed or wasn't reached. `record` rewrites the goldens, so use it only when a change to the output is on purpose. The frames are deleted once hashed and are never committed.
 
-The manifest has one route per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those. A `check` of all twelve routes took 302 s while other copies of the game ran on the same machine.
+The manifest holds 24 routes, one per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those.
+
+On 2026-10-22, when the manifest held twelve routes, a `check` of all twelve took 302 s while other copies of the game ran on the same machine.
 
 `check --slow=N` gives each route N times its seconds, for a build that runs slower than the one the goldens came from. N is a whole number from 1, the default. With N above 1 the game quits one dump interval past the route's last frame (probe.sh `--exit-after`), so a fast build doesn't spend the extra seconds.
 
@@ -317,7 +319,9 @@ tools/audio_hashes.py check air-ride-race
 tools/audio_hashes.py record title --lists 7200,20000
 ```
 
-A `check` of all twelve routes took 300 s while other copies of the game ran on the same machine. Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is deleted first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
+On 2026-10-22, when the manifest held twelve routes, a `check` of all twelve took 300 s while other copies of the game ran on the same machine.
+
+Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is deleted first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
 
 As in frame_hashes.py, `check --slow=N` gives each route N times its seconds, and `record` refuses it. The rows are list counts, not times, so a slower build is held to the same ones. A bench takes no `--exit-after`, so a fast build spends all of the seconds.
 
