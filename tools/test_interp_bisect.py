@@ -3,14 +3,13 @@ import json
 import math
 import os
 import re
-import tempfile
 import unittest
 from collections.abc import Callable
 from pathlib import Path
 from unittest import mock
 
 import interp_bisect
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 FIRST = 0x80001000
 
@@ -46,9 +45,7 @@ def fails_together(*indexes: int) -> str:
 
 class StartsTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def test_reads_the_function_starts_and_their_names_in_address_order(self):
         path = write_file(self.dir, "symbols.txt", "\n".join([
@@ -221,9 +218,7 @@ class MainTest(unittest.TestCase):
     """The bisect against a stand-in for the hash tools that fails any list holding a bad function."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         self.records = self.dir / "records.jsonl"
         self.bisect = self.dir / "build" / "bisect"
         self.tools = self.dir / "tools"

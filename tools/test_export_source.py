@@ -2,14 +2,13 @@ import hashlib
 import os
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import export_source
 import source_info
-from testutil import GIT_ENV, commit, git, run_main, write_file
+from testutil import GIT_ENV, commit, git, run_main, temp_dir, write_file
 
 SHA1 = "0123456789abcdef0123456789abcdef01234567"
 CMAKE = f"""add_subdirectory(gcn-recomp)
@@ -38,12 +37,10 @@ class ExportTestCase(unittest.TestCase):
     with the ignored files a developer's tree has, all under paths with spaces."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
+        self.dir = temp_dir(self)
         patch = mock.patch.dict(os.environ, GIT_ENV)
         patch.start()
         self.addCleanup(patch.stop)
-        self.dir = Path(tmp.name)
         self.repo = self.dir / "Dragoon repo"
         self.engine = self.repo / "gcn-recomp"
         self.pin = commit(self.engine, {"CMakeLists.txt": "engine one\n", "runtime/a file.cpp": "int a;\n"})
@@ -239,9 +236,7 @@ class GameIdsTest(unittest.TestCase):
 
 class ManifestTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = temp_dir(self)
 
     def test_sorted_relative_paths_with_symlinks_unfollowed(self):
         (self.root / "a dir").mkdir()
@@ -258,9 +253,7 @@ class ManifestTest(unittest.TestCase):
 
 class SrcDigestTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = temp_dir(self)
         (self.root / "src" / "a dir").mkdir(parents=True)
         write_file(self.root / "src", "hooks.cpp", b"hooks")
         write_file(self.root / "src" / "a dir", "b.h", b"bee")

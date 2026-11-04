@@ -11,7 +11,7 @@ from unittest import mock
 import audio_scorecard
 from scorecard_measure import Score, Stage
 from scorecard_runs import Build, Commits, Run, Runs
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 MANIFEST = "title 20 60 60,960\nmenu 20 60 1200\n"
 
@@ -77,9 +77,7 @@ class TableTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         manifest = write_file(self.dir, "manifest.txt", MANIFEST)
         self.order = []
         self.events = []  # every describe and every run, in the order they happened

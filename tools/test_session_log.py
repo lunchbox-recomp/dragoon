@@ -1,10 +1,8 @@
-import tempfile
 import unittest
-from pathlib import Path
 
 import session_log
 from session_log import Callbacks, Device
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 LOG = """\
 [session] build/playtest/20261022-160000
@@ -82,9 +80,7 @@ class RunsTest(unittest.TestCase):
 
 class FindLogTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         write_file(self.dir, "stdout.txt", "[session] one\nfirst\n[session] one/run-2\nsecond\n")
         (self.dir / "run-2").mkdir()
         (self.dir / "run-5").mkdir()

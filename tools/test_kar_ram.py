@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 import struct
-import tempfile
 import unittest
 from pathlib import Path
 
 import kar_ram
 from kar_ram import Entry, decode, follow, in_ram, load, read
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 ROUTES = Path(__file__).resolve().parent.parent / "tests" / "routes"
 
@@ -52,11 +51,7 @@ GOOD = {
 
 class TableCase(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        self.dir = Path(self.tmp.name)
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
+        self.dir = temp_dir(self)
 
     def table(self, entries: dict[str, object]) -> Path:
         return write_file(self.dir, "table.json", json.dumps(entries))

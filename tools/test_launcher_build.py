@@ -21,7 +21,7 @@ from unittest import mock
 import export_source
 import launcher_build
 import source_info
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 ROOT = Path(__file__).resolve().parents[1]
 MAKE = "/usr/bin/make"
@@ -169,9 +169,7 @@ class RecipeTestCase(unittest.TestCase):
     as the launcher's are."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         self.records = self.dir / "records.jsonl"
         self.tools = self.dir / "fake tools"
         self.tools.mkdir()

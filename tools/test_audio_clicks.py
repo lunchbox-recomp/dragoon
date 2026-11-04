@@ -3,7 +3,6 @@ import math
 import random
 import struct
 import sys
-import tempfile
 import unittest
 import wave
 from array import array
@@ -12,7 +11,7 @@ from unittest import mock
 
 import audio_clicks
 from audio_clicks import Recording
-from testutil import pcm, run_main, write_file
+from testutil import pcm, run_main, temp_dir, write_file
 
 RATE = 48000
 
@@ -204,9 +203,7 @@ class AnalyseFileTest(unittest.TestCase):
     """analyse_file must find what one pass finds, with every event near a part's edge."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def check(self, *channels: list[int], part_s: float) -> audio_clicks.Report:
         """What analyse_file finds in the channels (one is both sides) at part_s, which has to be
@@ -399,9 +396,7 @@ class AnalyseFileTest(unittest.TestCase):
 
 class ReadTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def test_reads_each_channel_apart(self):
         got = audio_clicks.read_wav(write_wav(self.dir, "a.wav", [1, 2, 3], [-1, -2, -3]))
@@ -452,11 +447,9 @@ class ReadTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
         x = tone(440, 1)
         x[30000] += 15000
-        self.path = write_wav(Path(tmp.name), "out.wav", x, tone(440, 1))
+        self.path = write_wav(temp_dir(self), "out.wav", x, tone(440, 1))
 
     def test_prints_the_length_and_each_count_with_its_times(self):
         code, out, _ = run_main(audio_clicks.main, str(self.path))

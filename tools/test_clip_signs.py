@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import tempfile
 import unittest
 from array import array
 from pathlib import Path
@@ -8,7 +7,7 @@ from unittest import mock
 
 import clip_signs
 from audio_clicks import Recording
-from testutil import pcm, run_main, write_file, write_wav
+from testutil import pcm, run_main, temp_dir, write_file, write_wav
 
 MANIFEST = "title 1 60 60\nmenu 1 60 120\n"
 LOG = ("[ax] frames=400 voices(running, last frame)=3 peak=33396 out=80571E00\n"
@@ -73,9 +72,7 @@ class SignsTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         manifest = write_file(self.dir, "manifest.txt", MANIFEST)
         patch = mock.patch.object(clip_signs, "MANIFEST", manifest)
         patch.start()

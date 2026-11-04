@@ -3,15 +3,13 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import tempfile
 import unittest
 from array import array
-from pathlib import Path
 from unittest import mock
 
 import click_diff
 from audio_clicks import Recording
-from testutil import pcm, run_main, spliced, tone, write_file
+from testutil import pcm, run_main, spliced, temp_dir, tone, write_file
 
 RATE = 32000
 
@@ -22,9 +20,7 @@ def rec(*channels: list[int]) -> Recording:
 
 class DiffTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def diff(self, a: list[int], b: list[int], seconds: float | None = None) -> click_diff.Diff:
         return click_diff.diff(write_file(self.dir, "a.raw", pcm(a, a)), write_file(self.dir, "b.raw", pcm(b, b)),
@@ -179,9 +175,7 @@ class DescribeTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         a = [0] * 32000
         b = [0] * 16000 + tone(16018, RATE)[18:]
         self.a = write_file(self.dir, "a.raw", pcm(a, a))

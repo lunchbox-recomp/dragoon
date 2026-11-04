@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-import tempfile
 import unittest
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -16,7 +15,7 @@ import noise_blocks
 import session_report
 import session_text
 from aid_blocks import BLOCK
-from testutil import noise, pcm, run_main, tone, write_file, write_wav
+from testutil import noise, pcm, run_main, temp_dir, tone, write_file, write_wav
 
 OUT, DMA = 48000, 32000
 EPOCH = 1792710000
@@ -93,9 +92,7 @@ class Fake:
 
 class Session(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.tmp = Path(tmp.name)
+        self.tmp = temp_dir(self)
         self.dir = make_session(self.tmp / "20261022-160000")
 
     def report(self, *args: str, run=None) -> tuple[int, dict, str]:

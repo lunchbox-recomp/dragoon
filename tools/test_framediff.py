@@ -1,10 +1,9 @@
-import tempfile
 import unittest
 import zlib
 from pathlib import Path
 
 import framediff
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 JUNK = object()
 SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -46,9 +45,7 @@ def write_png(path, w, h, ch, pixels, filters, split=False, depth=8, rows=None):
 
 class TempDirTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
 
 class ReadPngTest(TempDirTest):

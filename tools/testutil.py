@@ -8,6 +8,8 @@ import os
 import random
 import subprocess
 import sys
+import tempfile
+import unittest
 import wave
 from array import array
 from pathlib import Path
@@ -34,6 +36,13 @@ def run_main(main: Callable[[list[str]], int], *argv: str) -> tuple[int, str, st
         except SystemExit as e:
             code = e.code
     return code, out.getvalue(), err.getvalue()
+
+
+def temp_dir(test: unittest.TestCase, prefix: str | None = None) -> Path:
+    """A new temporary directory, removed when TEST ends."""
+    tmp = tempfile.TemporaryDirectory(prefix=prefix)
+    test.addCleanup(tmp.cleanup)
+    return Path(tmp.name)
 
 
 def write_file(directory: Path, name: str, data: bytes | str) -> Path:

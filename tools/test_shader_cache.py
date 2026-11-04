@@ -1,10 +1,9 @@
 import struct
-import tempfile
 import unittest
 from pathlib import Path
 
 import shader_cache
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 KEY_SIZE = 8
 FORMAT = 3 << 16 | KEY_SIZE
@@ -35,9 +34,7 @@ def list_bytes(keys, fmt: int = FORMAT) -> bytes:
 
 class ShaderCacheTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def write(self, name: str, data: bytes) -> Path:
         return write_file(self.dir, name, data)

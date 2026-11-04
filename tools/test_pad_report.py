@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import shutil
-import tempfile
 import unittest
 from pathlib import Path
 
 import pad_report
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 HEADER = ["# gcn-recomp input log v4", "# game TEST01  started 2026-01-02T03:04:05",
           "# poll frame chan connected buttons stick_x stick_y cstick_x cstick_y trig_l trig_r"]
@@ -129,8 +127,7 @@ class WhenTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        self.dir = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.dir)
+        self.dir = temp_dir(self)
 
     def session(self, lines: list[str], stdout: str | None = None) -> Path:
         (self.dir / "inputs").mkdir()

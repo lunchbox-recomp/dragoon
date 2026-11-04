@@ -2,14 +2,13 @@ import contextlib
 import io
 import os
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import audio_hashes
 import routes
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 A, B, C = "A" * 16, "B" * 16, "C" * 16
 MANIFEST = "title 20 60 120\n"
@@ -39,9 +38,7 @@ class ParseTest(unittest.TestCase):
 
 class GoldenTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def test_round_trip_keeps_the_chosen_lists_in_order(self):
         text = audio_hashes.format_golden("title", {400: A, 800: B, 1200: C}, [1200, 400])
@@ -103,9 +100,7 @@ class HashRouteTest(unittest.TestCase):
     route = audio_hashes.Route("title", 20, 60, [120], ["--pads=4"])
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = temp_dir(self)
         self.out = self.root / "build" / "probe" / "audio-title"
         self.out.mkdir(parents=True)
         write_file(self.out, "stdout.txt", BENCH_OUT)
@@ -204,9 +199,7 @@ class CrashedBenchTest(unittest.TestCase):
     """main on a bench whose probe.sh exits with a status, after the hashes it printed first."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = temp_dir(self)
         out = self.root / "build" / "probe" / "audio-title"
         out.mkdir(parents=True)
         write_file(out, "stdout.txt", f"[ax] hash list=400 fnv={A}\n")
@@ -259,9 +252,7 @@ class CrashedBenchTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.hashes = Path(tmp.name)
+        self.hashes = temp_dir(self)
         write_file(self.hashes, "manifest.txt", MANIFEST)
         (self.hashes / "audio").mkdir()
         for patch in (mock.patch.object(audio_hashes, "HASHES", self.hashes),

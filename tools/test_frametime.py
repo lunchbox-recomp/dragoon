@@ -1,10 +1,8 @@
 import json
-import tempfile
 import unittest
-from pathlib import Path
 
 import frametime
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 
 def ft_line(n: int, ms: float = 16.67, shape: str = "draws  462/ 167  verts  12419  idx  33993") -> str:
@@ -97,9 +95,7 @@ class StatsTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def test_prints_the_summary_and_slow_frames(self):
         log = write_file(self.dir, "stdout.txt", "\n".join([ft_line(9), rt_line(10, 40.0)]) + "\n")

@@ -9,7 +9,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -18,7 +17,7 @@ from unittest import mock
 import engine_kit
 import export_source
 import launcher_build
-from testutil import GIT_ENV, archive, commit, compile_c, run_main, write_file
+from testutil import GIT_ENV, archive, commit, compile_c, run_main, temp_dir, write_file
 
 NM = "/usr/bin/nm"
 MAKE = "/usr/bin/make"
@@ -81,9 +80,7 @@ def engine_sha(build: Path, sha: str) -> None:
 
 class EngineKitTest(unittest.TestCase):
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name).resolve()
+        self.root = temp_dir(self).resolve()
         self.out = self.root / "the kit"
         # engine_kit.py's git status, like the fixture's commit, reads none of the user's config.
         patch = mock.patch.dict(os.environ, GIT_ENV)
@@ -279,9 +276,7 @@ class KitMakefileTest(unittest.TestCase):
     """A kit engine_kit.py made, used where a player's would be: under paths with spaces."""
 
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        root = Path(tmp.name).resolve()
+        root = temp_dir(self).resolve()
         self.kit, self.work, self.records = root / "the kit", root / "Application Support", root / "records"
         code, _, err = run_main(engine_kit.main, "--build", str(fake_build(root)), "--out", str(self.kit))
         self.assertEqual((code, err), (0, ""))

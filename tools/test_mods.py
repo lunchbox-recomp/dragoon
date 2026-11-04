@@ -11,7 +11,6 @@ import os
 import struct
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -19,7 +18,7 @@ from unittest import mock
 import clone_file
 import mods
 import tool_env
-from testutil import run_main
+from testutil import run_main, temp_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 FORK = ROOT / "gcn-recomp" / "recomp"
@@ -33,9 +32,7 @@ class ModsCase(unittest.TestCase):
     """A mods folder at a path with spaces, as Application Support has."""
 
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory(prefix="mods test ")
-        self.addCleanup(tmp.cleanup)
-        self.tmp = Path(tmp.name).resolve()
+        self.tmp = temp_dir(self, prefix="mods test ").resolve()
         self.mods = self.tmp / "Application Support" / "Dragoon" / "mods"
         self.mods.mkdir(parents=True)
         self.made = 0

@@ -3,20 +3,17 @@ import os
 import tempfile
 import time
 import unittest
-from pathlib import Path
 from unittest import mock
 
 import bundle_dmg
-from testutil import fake_hdiutil, write_file
+from testutil import fake_hdiutil, temp_dir, write_file
 
 
 class MountedTest(unittest.TestCase):
     """The mounts are fake: attach copies <dmg>.contents into the mount point."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         self.records = self.dir / "records.jsonl"
         self.tools = self.dir / "fake tools"
         self.tools.mkdir()

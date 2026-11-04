@@ -1,19 +1,15 @@
 import json
-import tempfile
 import unittest
-from pathlib import Path
 
 import source_info
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 GOOD = {"dragoon": "d" * 40, "gcn-recomp": "e" * 40, "disc_id": "GKYE01", "dol_sha1": "a" * 40}
 
 
 class ReadTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def test_gives_the_four_fields(self):
         path = write_file(self.dir, source_info.NAME, json.dumps({**GOOD, "extra": 1}))

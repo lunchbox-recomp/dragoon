@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import errno
 import os
-import tempfile
 import unittest
-from pathlib import Path
 from unittest import mock
 
 import clone_file
+from testutil import temp_dir
 
 
 def failing_clonefile(src: bytes, dst: bytes, flags: int) -> int:
@@ -16,9 +15,7 @@ def failing_clonefile(src: bytes, dst: bytes, flags: int) -> int:
 
 class CloneTest(unittest.TestCase):
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory(prefix="clone test ")
-        self.addCleanup(tmp.cleanup)
-        self.tmp = Path(tmp.name)
+        self.tmp = temp_dir(self, prefix="clone test ")
         self.src = self.tmp / "a mod file é.bin"
         self.src.write_bytes(bytes(range(256)) * 9)
         self.dst = self.tmp / "the build's copy.bin"

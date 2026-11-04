@@ -1,10 +1,9 @@
-import tempfile
 import unittest
 from pathlib import Path
 
 import aid_blocks
 from aid_blocks import Block
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 LOG = """\
 0 160 21223426 0 00571E00 1
@@ -15,9 +14,7 @@ LOG = """\
 
 class ReadBlocksTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def test_each_line_is_a_block(self):
         self.assertEqual(aid_blocks.read_blocks(write_file(self.dir, "aid.raw.txt", LOG)), [

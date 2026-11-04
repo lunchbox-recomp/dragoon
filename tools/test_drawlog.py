@@ -1,9 +1,7 @@
-import tempfile
 import unittest
-from pathlib import Path
 
 import drawlog
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 # A world draw, a HUD draw in a 64 by 48 frame and a minimap draw, as GCN_DRAWLOG with
 # GCN_DRAWLOG_VERBOSE=1 prints them. The viewport line follows its draw.
@@ -131,9 +129,7 @@ class MatchTest(unittest.TestCase):
 
 class CamerasCommandTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def log(self, *lines: str) -> str:
         return str(write_file(self.dir, "stdout.txt", "\n".join(lines) + "\n"))
@@ -215,9 +211,7 @@ class CamerasCommandTest(unittest.TestCase):
 
 class AspectsCommandTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def log(self, *lines: str) -> str:
         return str(write_file(self.dir, "stdout.txt", "\n".join(lines) + "\n"))
@@ -275,9 +269,7 @@ def setter(frame: int, cam: str = "81424A80", lr: str = "800C2884", lr2: str = "
 
 class SettersCommandTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def log(self, *lines: str) -> str:
         return str(write_file(self.dir, "stdout.txt", "\n".join(lines) + "\n"))

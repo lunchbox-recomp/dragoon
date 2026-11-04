@@ -1,19 +1,16 @@
 import os
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import probe_dirs
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 
 class RemoveRunTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = temp_dir(self)
         self.home = self.root / "home"
         (self.home / ".Trash").mkdir(parents=True)
         home = mock.patch.object(probe_dirs.Path, "home", return_value=self.home)

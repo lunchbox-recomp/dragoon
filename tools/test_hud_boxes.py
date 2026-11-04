@@ -1,11 +1,10 @@
 import re
-import tempfile
 import unittest
 from pathlib import Path
 
 import drawlog
 import hud_boxes
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 HEADER = Path(__file__).resolve().parents[1] / "src" / "hud_anchors.h"
 
@@ -51,9 +50,7 @@ def world_4p(proj: str) -> list[str]:
 
 class HudCommandTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def hud(self, old: list[str], new: list[str], *args: str) -> tuple[int, str, str]:
         old_log = write_file(self.dir, "old.txt", "\n".join(old) + "\n")

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import tempfile
 import unittest
-from pathlib import Path
 from unittest import mock
 
 import scorecard_measure
 from scorecard_measure import Score, Stage, measure, total
 from scorecard_runs import Run, Runs
-from testutil import pcm, spliced, tone, write_file, write_wav
+from testutil import pcm, spliced, temp_dir, tone, write_file, write_wav
 
 BASE_LOG = """\
 [ax] frames=400 voices(running, last frame)=0 peak=0 out=80571E00
@@ -86,10 +84,8 @@ class LogTest(unittest.TestCase):
 
 class MeasureTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name) / "scorecard-title"
-        self.unpaced_dir = Path(tmp.name) / "scorecard-unpaced-title"
+        self.dir = temp_dir(self) / "scorecard-title"
+        self.unpaced_dir = self.dir.parent / "scorecard-unpaced-title"
         self.dir.mkdir()
         self.unpaced_dir.mkdir()
         self.log = write_file(self.dir, "stdout.txt", CURRENT_LOG)

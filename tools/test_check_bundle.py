@@ -15,7 +15,7 @@ import bundle_dmg
 import bundle_tree
 import check_bundle
 import export_source
-from testutil import GIT_ENV, archive, commit, compile_c, fake_hdiutil, git, run_main, write_file
+from testutil import GIT_ENV, archive, commit, compile_c, fake_hdiutil, git, run_main, temp_dir, write_file
 
 MACHO = bytes.fromhex("cffaedfe")
 AR_MAGIC = b"!<arch>\n"
@@ -191,9 +191,7 @@ class BundleTestCase(unittest.TestCase):
         build_app(cls.template, cls.snapshot, cls.objects)
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         self.dist = self.dir / "dist dir"
         self.dist.mkdir()
         self.app = self.dist / APP
@@ -566,9 +564,7 @@ class ContentTest(BundleTestCase):
 
 class OccurrencesTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def test_counts_each_needle_once_across_block_boundaries(self):
         for offset in range(0, 20):

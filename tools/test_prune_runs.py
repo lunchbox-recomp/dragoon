@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import os
-import tempfile
 import time
 import unittest
 from pathlib import Path
 
 import prune_runs
-from testutil import run_main
+from testutil import run_main, temp_dir
 
 HOUR = 3600
 IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
@@ -15,9 +14,7 @@ IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
 
 class PruneTestCase(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name).resolve()
+        self.root = temp_dir(self).resolve()
         # A whole second, so a time set with os.utime reads back exactly.
         self.now = float(int(time.time()))
         self.clone = self.make_clone("clone")

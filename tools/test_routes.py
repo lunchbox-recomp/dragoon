@@ -1,10 +1,8 @@
-import tempfile
 import unittest
-from pathlib import Path
 
 import routes
 import warm_shaders
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 
 class ManifestTest(unittest.TestCase):
@@ -141,9 +139,7 @@ class RealManifestTest(unittest.TestCase):
 
 class SelectRoutesTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.manifest = write_file(Path(tmp.name), "manifest.txt", "title 20 60 120\nmenu 20 60 1200\n")
+        self.manifest = write_file(temp_dir(self), "manifest.txt", "title 20 60 120\nmenu 20 60 1200\n")
 
     def test_no_names_gives_every_route_in_manifest_order(self):
         self.assertEqual([r.name for r in routes.select_routes([], self.manifest)], ["title", "menu"])

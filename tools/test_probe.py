@@ -4,12 +4,11 @@ import os
 import shutil
 import stat
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
 import warm_shaders
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "tools" / "probe.sh"
@@ -67,9 +66,7 @@ class ProbeTreeTest(unittest.TestCase):
     """probe.sh copied into a temp tree, so the game it runs is whatever the test puts in build/."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name).resolve()  # as $PWD gives it
+        self.root = temp_dir(self).resolve()  # as $PWD gives it
         (self.root / "tools").mkdir()
         self.script = self.root / "tools" / "probe.sh"
         shutil.copy(PROBE, self.script)

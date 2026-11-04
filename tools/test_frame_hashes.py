@@ -8,7 +8,7 @@ from unittest import mock
 
 import frame_hashes
 import routes
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 A, B, C = "a" * 40, "b" * 40, "c" * 40
 MANIFEST = "title 20 60 120\n"
@@ -24,9 +24,7 @@ class HashTest(unittest.TestCase):
 
 class GoldenTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def test_round_trip_drops_frames_past_last(self):
         text = frame_hashes.format_golden({60: A, 120: B, 180: C}, 120)
@@ -121,9 +119,8 @@ class HashRouteTest(unittest.TestCase):
 
 
     def test_the_real_remove_run_deletes_the_run_before_and_after(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        out = Path(tmp.name) / "build" / "probe" / "hashes-title"
+        root = temp_dir(self)
+        out = root / "build" / "probe" / "hashes-title"
         out.mkdir(parents=True)
         (out / "old.png").write_bytes(b"old")
 
@@ -132,7 +129,7 @@ class HashRouteTest(unittest.TestCase):
             out.mkdir()
             (out / "new.png").write_bytes(b"new")
 
-        with (mock.patch.object(frame_hashes, "ROOT", Path(tmp.name)),
+        with (mock.patch.object(frame_hashes, "ROOT", root),
               mock.patch.object(subprocess, "run", probe),
               mock.patch.object(frame_hashes, "hash_frames", return_value={60: A})):
             self.assertEqual(frame_hashes.hash_route(self.route), {60: A})
@@ -143,9 +140,7 @@ class HashRouteTest(unittest.TestCase):
 class EnvironmentTest(unittest.TestCase):
     def test_probe_runs_in_the_callers_environment(self):
         # interp_bisect.py hands the game its GCN_INTERPRET list this way
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        root = Path(tmp.name)
+        root = temp_dir(self)
         seen = root / "seen.txt"
         probe = write_file(root, "probe.sh", f"#!/bin/sh\nprintf '%s' \"$GCN_INTERPRET\" > '{seen}'\n")
         probe.chmod(0o755)
@@ -184,9 +179,7 @@ class SlowRunTest(unittest.TestCase):
     route = frame_hashes.Route("title", 20, 60, [60, 120], [])
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name).resolve()
+        self.root = temp_dir(self).resolve()
         (self.root / "tools").mkdir()
         (self.root / "build").mkdir()
         shutil.copy(frame_hashes.PROBE, self.root / "tools" / "probe.sh")
@@ -209,9 +202,7 @@ class SlowRunTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.hashes = Path(tmp.name)
+        self.hashes = temp_dir(self)
         write_file(self.hashes, "manifest.txt", MANIFEST)
         (self.hashes / "gl").mkdir()
         for patch in (mock.patch.object(frame_hashes, "HASHES", self.hashes),

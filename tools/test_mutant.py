@@ -13,7 +13,7 @@ from unittest import mock
 
 import launcher_build
 import mutant
-from testutil import GIT_ENV, commit, git, run_main, write_file
+from testutil import GIT_ENV, commit, git, run_main, temp_dir, write_file
 
 CALC_PATH = "lib dir/calc.py"
 CALC = """\
@@ -173,12 +173,10 @@ class MutantTestCase(unittest.TestCase):
     that fail, hang or check the environment, with a space in every path."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
+        self.dir = temp_dir(self)
         patch = mock.patch.dict(os.environ, GIT_ENV)
         patch.start()
         self.addCleanup(patch.stop)
-        self.dir = Path(tmp.name)
         self.repo = self.dir / "the repo"
         self.first = commit(self.repo, FILES)
         self.dest = self.dir / "the copies"

@@ -1,11 +1,10 @@
 import json
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import replay_session
-from testutil import pcm, run_main, tone, write_file
+from testutil import pcm, run_main, temp_dir, tone, write_file
 
 DMA = 32000
 PARTED = ("[input] the replay has parted from its recording: a clock jump at poll 90 (frame 12), "
@@ -39,9 +38,7 @@ class FakeProbe:
 
 class ReplayTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.tmp = Path(tmp.name)
+        self.tmp = temp_dir(self)
         self.probe_root = self.tmp / "probe"
         self.session = self.tmp / "20261022-160000"
         (self.session / "inputs").mkdir(parents=True)
@@ -166,9 +163,7 @@ class ReplayTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.tmp = Path(tmp.name)
+        self.tmp = temp_dir(self)
         self.session = self.tmp / "s"
         (self.session / "inputs").mkdir(parents=True)
         self.sound = mixer_sound(1)

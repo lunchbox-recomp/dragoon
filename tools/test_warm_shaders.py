@@ -13,7 +13,7 @@ import routes
 import shader_cache
 import source_info
 import warm_shaders
-from testutil import GIT_ENV, commit, run_main, write_file
+from testutil import GIT_ENV, commit, run_main, temp_dir, write_file
 
 ENGINE_REV = warm_shaders.engine_rev
 MANIFEST = "# comment\ntitle 20 60 60,960\ncity-trial-4p 30 60 2700,3480 --pads=4\n"
@@ -97,9 +97,7 @@ class WarmTestCase(unittest.TestCase):
     """A fake game, two routes, a player's saves/ and a patched engine revision, all in a temp dir."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         self.game = write_file(self.dir, "fake_game", FAKE_GAME)
         self.game.chmod(self.game.stat().st_mode | stat.S_IXUSR)
         self.manifest = write_file(self.dir, "manifest.txt", MANIFEST)
@@ -201,9 +199,7 @@ class EngineRevTest(unittest.TestCase):
     """engine_rev() in a tree that's a git checkout, a source snapshot, both or neither."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = temp_dir(self)
         (self.root / "gcn-recomp").mkdir()
         for patch in (mock.patch.object(warm_shaders, "ROOT", self.root),
                       mock.patch.dict(os.environ, GIT_ENV)):
@@ -638,9 +634,7 @@ class WriteReportTest(unittest.TestCase):
     """write_report on two passes whose logs and seconds the test picks."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def report(self, seconds: list[float]) -> list[str]:
         plan, scratch = [], []

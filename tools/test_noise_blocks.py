@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
 from array import array
-from pathlib import Path
 
 import noise_blocks
 from audio_clicks import Recording, Source
 from aid_blocks import BLOCK, RATE
-from testutil import noise, pcm, run_main, tone, write_file
+from testutil import noise, pcm, run_main, temp_dir, tone, write_file
 
 
 def interpolated(x: list[int], rate: int) -> list[int]:
@@ -164,9 +162,7 @@ class FindSourceTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         self.left = tone(RATE // 2, RATE) + noise(RATE // 2, 32767, 1)
         self.right = tone(RATE, RATE)
 

@@ -3,9 +3,7 @@ from __future__ import annotations
 import io
 import json
 import struct
-import tempfile
 import unittest
-from pathlib import Path
 from unittest import mock
 
 import bot_link
@@ -13,7 +11,7 @@ import kar_ram
 import ram_peek
 from bot_link import Outcome, Pad
 from ram_peek import Sampler, main, parse_frames, parse_item, show
-from testutil import run_main, write_file
+from testutil import run_main, temp_dir, write_file
 
 
 class FakeLink:
@@ -59,11 +57,7 @@ class ParseFramesTest(unittest.TestCase):
 class ItemTest(unittest.TestCase):
     def setUp(self) -> None:
         self.link = FakeLink()
-        self.tmp = tempfile.TemporaryDirectory()
-        self.table = kar_ram.load(write_file(Path(self.tmp.name), "table.json", json.dumps(TABLE)))
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
+        self.table = kar_ram.load(write_file(temp_dir(self), "table.json", json.dumps(TABLE)))
 
     def test_bytes_print_as_hex(self) -> None:
         self.link.put(0x80000010, b"\x01\xab")
@@ -140,8 +134,7 @@ class SamplerTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        self.dir = Path(self.tmp.name)
+        self.dir = temp_dir(self)
         self.table = write_file(self.dir, "table.json", json.dumps(TABLE))
         self.probe = self.dir / "tools" / "probe.sh"  # never run, since bot_link.run is a fake
         self.link = FakeLink()
@@ -149,9 +142,6 @@ class MainTest(unittest.TestCase):
         self.frames = [1, 2, 3, 5]
         self.reason = bot_link.EXIT_AFTER
         self.calls: list[tuple] = []
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
 
     def fake_run(self, name, seconds, bot, **kw) -> Outcome:
         self.calls.append((name, seconds, kw))

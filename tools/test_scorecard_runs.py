@@ -1,6 +1,5 @@
 import json
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -9,7 +8,7 @@ import routes
 import scorecard_runs
 from routes import Route
 from scorecard_runs import Build, Commits, Run
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 RACE = Route("air-ride-race", 30, 60, [4200, 6000], ["--pads=4"])
 COMMITS = Commits("6b81b6e-dirty", "caf12a2")
@@ -23,9 +22,7 @@ def executable(directory: Path, name: str) -> Path:
 
 class Clone(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.clone = Path(tmp.name).resolve()
+        self.clone = temp_dir(self).resolve()
         (self.clone / "tools").mkdir()
         (self.clone / "build").mkdir()
         executable(self.clone / "tools", "probe.sh")

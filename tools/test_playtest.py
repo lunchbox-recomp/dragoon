@@ -5,11 +5,10 @@ import re
 import shutil
 import stat
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
-from testutil import write_file
+from testutil import temp_dir, write_file
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAYTEST = ROOT / "tools" / "playtest.sh"
@@ -20,9 +19,7 @@ class PlaytestTest(unittest.TestCase):
     in build/. The real game is never run."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = temp_dir(self)
         (self.root / "tools").mkdir()
         self.script = self.root / "tools" / "playtest.sh"
         shutil.copy(PLAYTEST, self.script)

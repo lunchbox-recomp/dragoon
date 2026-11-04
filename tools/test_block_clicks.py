@@ -1,11 +1,10 @@
 import json
-import tempfile
 import unittest
 from pathlib import Path
 
 import block_clicks
 from aid_blocks import Block
-from testutil import pcm, run_main, tone, write_file
+from testutil import pcm, run_main, temp_dir, tone, write_file
 
 RATE, BLOCK = 32000, 160
 ADDRESSES = ("00571E00", "00572080")  # the guest's two buffers
@@ -28,9 +27,7 @@ def dma(blocks: int, replays: set[int] = frozenset(), caught_up: set[int] = froz
 
 class PlaceTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
 
     def write(self, samples: list[int], log: str) -> Path:
         write_file(self.dir, "mixer.raw.txt", log)
@@ -191,9 +188,7 @@ class PlaceTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
+        self.dir = temp_dir(self)
         x, log = dma(100, replays={40}, caught_up={41})
         write_file(self.dir, "mixer.raw.txt", log)
         self.path = write_file(self.dir, "mixer.raw", pcm(x, x))
