@@ -25,8 +25,10 @@ and the three `-courses` routes' goldens were recorded on it just before.
 Then it was `5e49451`, and on Dragoon `35a4d3a` with the pin moved all twenty-four frame-hash
 routes still matched (under gcn-recomp `5e49451` below). At `bad7160` all twenty-four routes'
 frames and audio matched the goldens recorded at `f11c013` (under gcn-recomp `bad7160` below).
-It's now `b5ec329`, which reads the disc fast by default and where the goldens were recorded
-again at fast reads (under gcn-recomp `b5ec329` below).
+At `b5ec329`, which reads the disc fast by default, the goldens were recorded again at fast
+reads (under gcn-recomp `b5ec329` below), and the pin went on to `b11ebc6`. It's now
+`782d7fa`, where all twenty-four routes' frames and audio still match those goldens (under
+gcn-recomp `782d7fa` below).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -1064,6 +1066,28 @@ where it showed 3.62 s.
 With the drive code `b5ec329` has, every route ran once at each speed under `GCN_AXVOICES=1`.
 `tools/stream_voices.py` found no music stream that ended early in any of the 48 runs
 (`audio.md`).
+
+## gcn-recomp `782d7fa`
+
+The pin moved from `b11ebc6` to `782d7fa`, 146 commits. Of them, 76 change the interpreter's
+or the recompiler's code, tests or docs. The interpreter runs a function whose words in RAM no
+longer match the ones it was recompiled from, and code in RAM that no table knows, so each
+recompiled function now tests a guard bit on entry and the guest's `icbi` recounts the words
+it flushes.
+
+The other 70 include Riivolution RAM patches applied at boot, `disc_overlay` and `ram_patches`
+paths read from `settings.txt` and an overlay menu that pauses the game. Empty number, on/off
+and diagnostic path switches now read as unset. A route's run directory starts with no
+`settings.txt`, and no route names a patch list.
+
+Built on Dragoon `30a3ca3`, `tools/frame_hashes.py check` matched all twenty-four routes and
+1,906 frames in 14 min 37 s. `tools/audio_hashes.py check` then matched all 48 rows in 14 min
+27 s, so no golden was recorded. The load was 9.4 and 9.3 at the frame check's start and end,
+and 8.4 and 5.7 at the audio check's.
+
+None of the 24 bench logs has an `[interp]` line. So on those routes the text in RAM at boot
+matched what the build was recompiled from, no HLE'd function's code changed and no unknown
+code ran.
 
 ## Fixes on the way
 
