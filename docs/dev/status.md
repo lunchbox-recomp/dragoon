@@ -844,19 +844,21 @@ manifest's `warm-from=` setting.
 
 | Bar | Before | After |
 |---|---|---|
-| Warm-up, five passes at once (55 s or less) | 75.2 s, 77.0 s and 76.8 s at loads of 0.85, 9.77 and 11.84 | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 |
+| Warm-up, five passes at once (90 s or less) | 75.2 s, 77.0 s and 76.8 s at loads of 0.85, 9.77 and 11.84 | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 |
 | Keys the warm-up's cache lost, by `shader_cache.py diff` (0) | | 0 of 328. It gained 6, so it holds 334 |
 | Compiles on the eight course routes, unpaced to 16,000 frames (0) | 0 | 0 on all eight |
 | Compiles in 130 s real-time runs of those routes (0) | 0 | 0 on all eight, to frames 7,673 to 7,676 |
 | Goldens for the new routes | | Frames and audio for all three, each matched by a check run after the record |
 
-The 55 s bar isn't met. The eight passes add up to 291.4 pass-seconds in the `--report` run
-below, which is 58.3 s for five at once even if none ever waits for another. The four-player
-stadium pass ends last at 62.7 s in that run and can't be dropped, since 15 of its keys come
-from no other pass.
+Both columns meet the Player targets bar of 90 s for the time added to the first build, which
+dates from the first warm-up's numbers (`c1a300d`). This table first held the chaining to 55 s
+of its own (`3eb2006`), and the chained warm-up missed that. The eight passes add up to 291.4
+pass-seconds in the `--report` run below, which is 58.3 s for five at once even if none ever
+waits for another.
 
-That pass builds its last key at frame 20,604 and plays on to 21,900, 900 frames past its
-route's last required frame, the margin every pass keeps.
+The four-player stadium pass ends last at 62.7 s in that run and can't be dropped, since 15 of
+its keys come from no other pass. That pass builds its last key at frame 20,604 and plays on to
+21,900, 900 frames past its route's last required frame, the margin every pass keeps.
 
 A race that follows another starts from another state of the game. In the first order tried,
 Sky Sands, Magma Flows and Frozen Hillside each missed one key their own passes built late, and
