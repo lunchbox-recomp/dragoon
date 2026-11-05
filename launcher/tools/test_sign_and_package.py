@@ -5,11 +5,11 @@ import io
 import os
 import plistlib
 import shlex
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+import fake_tools
 import sign_and_package
 import sign_plan
 
@@ -19,13 +19,11 @@ KEY_ID, ISSUER = "KEY1234567", "11111111-2222-3333-4444-555555555555"
 SECRET = "-----BEGIN PRIVATE KEY----- not a real key"
 APP = "Dragoon.app"
 
-# The fakes are shell scripts that all the tests share. macOS scans a new executable the first
-# time it runs, which costs more than a script does, so each test gets its own records file
-# and switches through the environment instead of writing new fakes. A fake appends a record
-# of its call to $FAKE_RECORDS as lines: "tool NAME", one "arg X" per argument, "exists" if its
-# last argument was there as it ran, what a -srcfolder held as "listing X" lines and its
-# Applications link as "applications X", and "end". A file named after a failure in
-# $FAKE_SWITCHES turns that failure on.
+# The fakes are shell scripts that all the tests share. A fake appends a record of its call to
+# $FAKE_RECORDS as lines: "tool NAME", one "arg X" per argument, "exists" if its last argument
+# was there as it ran, what a -srcfolder held as "listing X" lines and its Applications link as
+# "applications X", and "end". A file named after a failure in $FAKE_SWITCHES turns that
+# failure on.
 HEAD = r"""#!/bin/sh
 marker() { [ -e "$FAKE_SWITCHES/$1" ]; }
 {
@@ -112,49 +110,24 @@ FAKES: dict[str, str] = {}
 
 
 def setUpModule() -> None:
-    tmp = tempfile.TemporaryDirectory()
-    unittest.addModuleCleanup(tmp.cleanup)
-    directory = Path(tmp.name) / "fake tools"
-    directory.mkdir()
-    for tool, body in BODIES.items():
-        path = directory / tool
-        path.write_text(HEAD.replace("@TOOL@", tool) + body)
-        path.chmod(0o755)
-        FAKES[tool] = str(path)
+    FAKES.update(fake_tools.write({tool: HEAD.replace("@TOOL@", tool) + body
+                                   for tool, body in BODIES.items()}))
 
 
-class SignTestCase(unittest.TestCase):
+class SignTestCase(fake_tools.FakeToolsTest):
     """The shared fake codesign, ditto, hdiutil, xcrun and spctl, a records file and a switches
     directory of this test's own, and an app, all at paths with spaces."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
-        self.records = self.dir / "records.txt"
-        self.switches = self.dir / "fake switches"
-        self.switches.mkdir()
-        env = mock.patch.dict(os.environ, {"FAKE_RECORDS": str(self.records),
-                                           "FAKE_SWITCHES": str(self.switches)})
-        env.start()
-        self.addCleanup(env.stop)
+        super().setUp()
         self.fakes = FAKES
         for tool, path in FAKES.items():
-            patch = mock.patch.object(sign_plan, tool.upper(), path)
-            patch.start()
-            self.addCleanup(patch.stop)
-        pause = mock.patch.object(sign_and_package, "RETRY_PAUSE_SECONDS", 0)
-        pause.start()
-        self.addCleanup(pause.stop)
+            self.patch(mock.patch.object(sign_plan, tool.upper(), path))
+        self.patch(mock.patch.object(sign_and_package, "RETRY_PAUSE_SECONDS", 0))
         self.app = make_app(self.dir / "dist dir" / "Dragoon Dev.app")
         self.out = self.dir / "release out"
         self.key = self.dir / "AuthKey.p8"
         self.key.write_text(SECRET)
-
-    def switch(self, *names: str) -> None:
-        """Turn on the failures NAMES."""
-        for name in names:
-            (self.switches / name).write_text("")
 
     def run_tool(self, *extra: str, notary: bool = True, identity: str = IDENTITY
                  ) -> tuple[int, str, str]:
@@ -162,21 +135,12 @@ class SignTestCase(unittest.TestCase):
         if notary:
             argv += ["--notary-key", str(self.key), "--notary-key-id", KEY_ID,
                      "--notary-issuer", ISSUER]
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            try:
-                code = sign_and_package.main(argv + list(extra))
-            except SystemExit as e:
-                code = e.code
-        return code, out.getvalue(), err.getvalue()
+        return fake_tools.run_main(sign_and_package.main, *argv, *extra)
 
     def calls(self) -> list[dict]:
         """What the fakes recorded: tool, argv, exists and for hdiutil listing and applications."""
         calls, call = [], {}
-        if not self.records.exists():
-            return calls
-        for line in self.records.read_text().splitlines():
-            key, _, value = line.partition(" ")
+        for key, value in self.recorded():
             if key == "tool":
                 call = {"tool": value, "argv": [], "exists": False}
             elif key == "arg":

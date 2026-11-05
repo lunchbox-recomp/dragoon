@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import contextlib
-import io
 import os
 import shlex
 import subprocess
@@ -11,21 +9,20 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import fake_tools
 import swift_test
 
 FRAMEWORKS = "Library/Developer/Frameworks"
 TESTING = f"{FRAMEWORKS}/Testing.framework"
 LIBS = "Library/Developer/usr/lib"
 
-# The fakes are two shell scripts that all the tests share. macOS scans a new executable the
-# first time it runs, which costs more than a script does, so each test gets its own records
-# file and switches through the environment. The fake xcode-select records "select" and its
-# arguments to $FAKE_RECORDS and prints $FAKE_DEVELOPER_DIR, or fails with nothing on stdout
-# when that isn't set. $FAKE_SELECT_STATUS makes it exit with that status after printing. The
-# fake swift records "call" and one "arg X" per argument, prints one line on stdout and one on
-# stderr when $FAKE_SWIFT_SAYS is set (a test that runs the tool in-process would otherwise
-# print them on the real descriptors), ends itself with SIGTERM when $FAKE_SWIFT_KILL is set
-# and otherwise exits with $FAKE_SWIFT_STATUS (0 if unset).
+# The fakes are two shell scripts that all the tests share. The fake xcode-select records
+# "select" and its arguments to $FAKE_RECORDS and prints $FAKE_DEVELOPER_DIR, or fails with
+# nothing on stdout when that isn't set. $FAKE_SELECT_STATUS makes it exit with that status
+# after printing. The fake swift records "call" and one "arg X" per argument, prints one line on
+# stdout and one on stderr when $FAKE_SWIFT_SAYS is set (a test that runs the tool in-process
+# would otherwise print them on the real descriptors), ends itself with SIGTERM when
+# $FAKE_SWIFT_KILL is set and otherwise exits with $FAKE_SWIFT_STATUS (0 if unset).
 FAKE_SELECT = r"""#!/bin/sh
 printf 'select %s\n' "$*" >> "$FAKE_RECORDS"
 if [ -z "${FAKE_DEVELOPER_DIR+x}" ]; then
@@ -55,15 +52,7 @@ FAKES: dict[str, str] = {}
 
 
 def setUpModule() -> None:
-    tmp = tempfile.TemporaryDirectory()
-    unittest.addModuleCleanup(tmp.cleanup)
-    directory = Path(tmp.name) / "fake tools"
-    directory.mkdir()
-    for name, text in (("xcode-select", FAKE_SELECT), ("swift", FAKE_SWIFT)):
-        path = directory / name
-        path.write_text(text)
-        path.chmod(0o755)
-        FAKES[name] = str(path)
+    FAKES.update(fake_tools.write({"xcode-select": FAKE_SELECT, "swift": FAKE_SWIFT}))
 
 
 def make_tools(path: Path, testing: bool = True) -> Path:
@@ -93,24 +82,16 @@ def testing_flags(developer: Path) -> list[str]:
             "-Xlinker", "-rpath", "-Xlinker", f"{developer}/{LIBS}"]
 
 
-class SwiftTestCase(unittest.TestCase):
+class SwiftTestCase(fake_tools.FakeToolsTest):
     """The fake tools, a records file of this test's own and a place for developer directories,
     at paths with spaces."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
-        self.records = self.dir / "records.txt"
-        env = mock.patch.dict(os.environ, {"FAKE_RECORDS": str(self.records)})
-        env.start()
-        self.addCleanup(env.stop)
+        super().setUp()
         for name in ("FAKE_DEVELOPER_DIR", "FAKE_SELECT_STATUS", "FAKE_SWIFT_KILL", "FAKE_SWIFT_STATUS"):
             os.environ.pop(name, None)
         for name, constant in (("swift", "SWIFT"), ("xcode-select", "XCODE_SELECT")):
-            patch = mock.patch.object(swift_test, constant, FAKES[name])
-            patch.start()
-            self.addCleanup(patch.stop)
+            self.patch(mock.patch.object(swift_test, constant, FAKES[name]))
         self.tools = make_tools(self.dir / "a dir" / "CommandLineTools")
         self.xcode = make_xcode(self.dir / "Applications" / "Xcode 26.app" / "Contents" / "Developer")
 
@@ -119,21 +100,11 @@ class SwiftTestCase(unittest.TestCase):
         os.environ["FAKE_DEVELOPER_DIR"] = str(developer)
 
     def run_tool(self, *args: str) -> tuple[int, str, str]:
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = swift_test.main(list(args))
-        return code, out.getvalue(), err.getvalue()
+        return fake_tools.run_main(swift_test.main, *args)
 
     def records_of(self, key: str) -> list[str]:
         """The values the fakes recorded under KEY, in order."""
-        if not self.records.exists():
-            return []
-        found = []
-        for line in self.records.read_text().splitlines():
-            name, _, value = line.partition(" ")
-            if name == key:
-                found.append(value)
-        return found
+        return [value for name, value in self.recorded() if name == key]
 
     def swift_args(self) -> list[str]:
         """What the one call to swift was given."""

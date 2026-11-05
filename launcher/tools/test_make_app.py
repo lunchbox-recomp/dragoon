@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import contextlib
-import io
 import os
 import plistlib
 import stat
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+import fake_tools
 import make_app
 # make_app puts the repo's tools/ on the path. The modules below live there.
 import bundle_manifest
@@ -31,14 +29,12 @@ MANIFEST = bundle_manifest.read(make_app.MANIFEST)
 # What the manifest says the kit holds, read here so the fake kit can't drift from it.
 KIT_FILES = sorted(p[len(KIT_DIR):] for p in MANIFEST.files | MANIFEST.objects if p.startswith(KIT_DIR))
 
-# The fake codesign is one shell script that all the tests share. macOS scans a new executable
-# the first time it runs, which costs more than the script does, so each test gets its own
-# records file and switches through the environment. A call is recorded to $FAKE_RECORDS as
-# "call", one "arg X" per argument, one "file X" per file under its last argument as it ran,
-# and "end". A file named "fail codesign" in $FAKE_SWITCHES makes it fail. A file named "another
-# run" makes it write a finished Dragoon.app into the output directory first, as a second run
-# sharing that directory would. Otherwise it seals the app the way codesign does, with
-# Contents/_CodeSignature/CodeResources.
+# The fake codesign is one shell script that all the tests share. A call is recorded to
+# $FAKE_RECORDS as "call", one "arg X" per argument, one "file X" per file under its last
+# argument as it ran, and "end". A file named "fail codesign" in $FAKE_SWITCHES makes it fail.
+# A file named "another run" makes it write a finished Dragoon.app into the output directory
+# first, as a second run sharing that directory would. Otherwise it seals the app the way
+# codesign does, with Contents/_CodeSignature/CodeResources.
 FAKE_CODESIGN = r"""#!/bin/sh
 last=
 {
@@ -67,14 +63,7 @@ FAKES: dict[str, str] = {}
 
 
 def setUpModule() -> None:
-    tmp = tempfile.TemporaryDirectory()
-    unittest.addModuleCleanup(tmp.cleanup)
-    directory = Path(tmp.name) / "fake tools"
-    directory.mkdir()
-    path = directory / "codesign"
-    path.write_text(FAKE_CODESIGN)
-    path.chmod(0o755)
-    FAKES["codesign"] = str(path)
+    FAKES.update(fake_tools.write({"codesign": FAKE_CODESIGN}))
 
 
 def tree(root: Path) -> dict[str, object]:
@@ -135,24 +124,13 @@ def write_listing(path: Path) -> None:
     (path / export_source.MANIFEST).write_text(export_source.format_manifest(export_source.manifest(path)))
 
 
-class AppTestCase(unittest.TestCase):
+class AppTestCase(fake_tools.FakeToolsTest):
     """The fake codesign, a records file and a switches directory of this test's own, and
     inputs for a good run, all at paths with spaces."""
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.dir = Path(tmp.name)
-        self.records = self.dir / "records.txt"
-        self.switches = self.dir / "fake switches"
-        self.switches.mkdir()
-        env = mock.patch.dict(os.environ, {"FAKE_RECORDS": str(self.records),
-                                           "FAKE_SWITCHES": str(self.switches)})
-        env.start()
-        self.addCleanup(env.stop)
-        patch = mock.patch.object(make_app, "CODESIGN", FAKES["codesign"])
-        patch.start()
-        self.addCleanup(patch.stop)
+        super().setUp()
+        self.patch(mock.patch.object(make_app, "CODESIGN", FAKES["codesign"]))
         self.out = self.dir / "out dir"
         self.out.mkdir()
         self.version = VERSION
@@ -162,23 +140,13 @@ class AppTestCase(unittest.TestCase):
         self.source = make_source(self.dir / "dragoon source")
         self.kit = make_kit(self.dir / "engine kit", src_sha=export_source.src_digest(self.source))
 
-    def switch(self, *names: str) -> None:
-        for name in names:
-            (self.switches / name).write_text("")
-
     def run_tool(self, without: str = "", extra: tuple[str, ...] = ()) -> tuple[int, str, str]:
         """Run the tool on the inputs, leaving out the flag WITHOUT and adding EXTRA words."""
         flags = {"--out": str(self.out), "--version": self.version, "--launcher": str(self.launcher),
                  "--kit": str(self.kit), "--source": str(self.source)}
         flags.pop(without, None)
         argv = [word for pair in flags.items() for word in pair] + list(extra)
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            try:
-                code = make_app.main(argv)
-            except SystemExit as e:
-                code = e.code
-        return code, out.getvalue(), err.getvalue()
+        return fake_tools.run_main(make_app.main, *argv)
 
     def build(self) -> Path:
         """A good run, which prints the app's path."""
@@ -190,10 +158,7 @@ class AppTestCase(unittest.TestCase):
     def calls(self) -> list[dict]:
         """What the fake codesign recorded: argv and the files it found under the app."""
         calls: list[dict] = []
-        if not self.records.exists():
-            return calls
-        for line in self.records.read_text().splitlines():
-            key, _, value = line.partition(" ")
+        for key, value in self.recorded():
             if key == "call":
                 calls.append({"argv": [], "files": []})
             elif key == "arg":
