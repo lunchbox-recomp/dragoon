@@ -785,6 +785,19 @@ class OutcomeTest(FakeProbeCase):
         self.assertEqual((outcome.reason, outcome.detail),
                          (bot_link.HANG, f"no frame for 0.5 s after frame 2; the game asserted: {SAID}"))
 
+    def test_a_hang_waiting_for_a_new_connection_after_the_game_asserted_names_the_assertion(self):
+        self.plan([0, 1], last_says=FT.format(1) + ASSERTS, after="reset", then={"frames": [0], "connect_after": 20})
+        outcome = self.go(neutral, hang=0.5)
+        self.assertEqual((outcome.reason, outcome.detail),
+                         (bot_link.HANG, "no new connection for 0.5 s after the link closed, and its last line is "
+                                         f"'[session] {self.run_dir() / 'session' / 'run-2'}'; the game asserted: {SAID}"))
+
+    def test_a_read_with_no_answer_after_the_game_asserted_names_the_assertion(self):
+        self.plan([0], mute_reads=True, boot_says=FT.format(0) + ASSERTS)
+        outcome = self.go(read_one, hang=0.5)
+        self.assertEqual((outcome.reason, outcome.detail),
+                         (bot_link.HANG, f"no answer to a read for 0.5 s at frame 0; the game asserted: {SAID}"))
+
     def test_an_assertion_before_the_last_frame_is_not_the_hangs(self):
         self.plan([0, 1, 2], after="linger", last_says=ASSERTS + FT.format(2))
         outcome = self.go(neutral, hang=0.5)
