@@ -115,7 +115,7 @@ A `game.pid` that's garbled is removed and ignored, and so is one whose process 
 
 ## Why a wrapper runs the tests
 
-`swift_test.py` asks `xcode-select -p` which developer directory is selected. If that directory holds `Library/Developer/Frameworks/Testing.framework` and has no `Platforms` directory, whatever it's called, it runs `swift test --package-path launcher` with these added, for that directory:
+The Command Line Tools keep `Testing.framework` and `lib_TestingInterop.dylib` where neither the compiler nor the test runner looks. `swift_test.py` asks `xcode-select -p` which developer directory is selected. If that directory holds `Library/Developer/Frameworks/Testing.framework` and has no `Platforms` directory, whatever it's called, it runs `swift test --package-path launcher` with these added, for that directory:
 
 ```
 -Xswiftc -F -Xswiftc DEV/Library/Developer/Frameworks
