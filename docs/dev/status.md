@@ -132,11 +132,11 @@ timeout (`Modules/GoogleTest.cmake:580-582`), and a nonzero exit stops the build
 `Modules/GoogleTestAddTests.cmake:226-241`). Only `gtest` and `gtest_main` were built here,
 and the discovery and CTest steps were read from CMake's files, not run.
 
-CI's macOS job runs `ninja unit` (`tools/ci.py:82`), which builds `dragoon_tests` and runs it
-once to list its tests and once per test under CTest with
-`--no-tests=error --timeout 300 --output-on-failure` (Dragoon's `CMakeLists.txt:60-61`,
-`gcn-recomp/CMakeLists.txt:1190-1193`, CMake 4.4.4's `Modules/GoogleTestAddTests.cmake:63-67`).
-So CI runs code compiled from this archive.
+CI's macOS job runs `ninja unit` (`tools/ci.py:82`), which builds the engine's own unit tests
+and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
+(`gcn-recomp/CMakeLists.txt:1190-1194`). It builds `dragoon_tests` too and runs it once to list
+its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's
+`Modules/GoogleTestAddTests.cmake:63-67`). So CI runs code compiled from this archive.
 
 In the game, SDL opens `libusb-1.0.dylib` with `dlopen` for controllers over USB
 (`SDL_LIBUSB_DYNAMIC` in this build's `SDL_build_config.h:333`). Dear ImGui's OpenGL 3 backend
@@ -206,7 +206,7 @@ need `--pads=4`.
 | Four-player City Trial | `city-trial-4p.txt` | 3480 | Four views, 4:51 left, ports 1 and 3 steering left and 2 and 4 right |
 | Three-minute City Trial | `city-trial-stadium.txt` | 4800 | The city, 2:55 left. The entry screen before it read "Time: 3 min [Drag Race]" |
 | Time up | `city-trial-stadium.txt` | 15600 | `TIME!` at 0:00:00, with Kirby seen from behind and the speedometer at the lower right. Each player's machine stats follow and wait for A |
-| Machine stats | `city-trial-stadium.txt` | 15900 | Four quarters on a dim green background, each a list from Boost to HP beside a machine. P1 is at the top left with every value 0 and the other three are marked CPU. PRESS A sits in the middle |
+| Machine stats | `city-trial-stadium.txt` | 15900 | Four quarters on a dim green background with PRESS A in the middle, each a list from Boost to HP beside a machine. P1 is at the top left with every value 0 and the other three are marked CPU. The four-player route's stats frames haven't been looked at |
 | Drag Race 3 | `city-trial-stadium.txt` | 17100 | Under way, 0:06 on the clock, P1 fourth behind three CPUs |
 | Stadium results | `city-trial-stadium.txt` | 20400 | P1 fourth in 0:50.87 behind CPUs on 0:35.83, 0:47.36 and 0:47.62, waiting for START |
 | Four-player stadium | `city-trial-stadium-4p.txt` | 17100 | Drag Race 3 in four views, 0:06 on the clock |
@@ -295,9 +295,10 @@ line's time for 318 programs.
 Every course averaged 16.68 ms a guest frame with its 99th percentile under 17.0 ms. The worst
 guest frame on any course was 18.06 ms, and no course had a guest interval over 25 ms.
 
-Six of the eight had an sd of 0.064 to 0.071 ms, and Celestial Valley's 0.092 ms and Checker
-Knights' 0.106 ms stayed wide in repeat runs in a later session, at 0.107 ms and at 0.105 and
-0.097 ms. The log doesn't say what widened them.
+Six of the eight had an sd of 0.064 to 0.071 ms. Celestial Valley's 0.092 ms and Checker
+Knights' 0.106 ms stayed wide in a later session's repeat runs, Celestial Valley at 0.107 ms and
+Checker Knights at 0.105 and 0.097 ms, while Machine Passage's repeat read 0.072 ms against the
+table's 0.065 ms. The log doesn't say what widened them.
 
 The `[rt]` columns didn't repeat. The four repeat runs, one of them Machine Passage's, read 0.79
 to 0.86 ms mean and 2.20 to 2.51 ms at the 99th, where this table reads 0.52 to 0.62 ms and 0.92
@@ -577,8 +578,10 @@ not all of it.
 The command is
 `tools/probe.sh ct4p-scale2 130 tests/routes/city-trial-4p.txt 600 --pads=4 --real-time --scale=2 GCN_FRAMETIME=1`,
 and the table is a second run of it with a frame dump every 100,000 frames instead of every 600.
-The first run, with the dumps, read 3.64 ms at the 99th percentile and 41.15 ms at worst for the
-renderer. Its 7 worst frames were the dumps, and the rest of the gap wasn't explained.
+
+The first run, with the dumps, read 1.45 ms mean and 2.42 ms at the 95th percentile for the
+renderer, with 3.64 ms at the 99th and 41.15 ms at worst. Its 7 worst frames were the dumps, and
+the rest of the gap wasn't explained. No control run was made.
 
 No guest interval ran over 20 ms in either run, and the same route at 640x480 averaged 1.40 ms
 (under Four players), so doubling each side cost the renderer's issue time nothing it could
@@ -674,9 +677,14 @@ played at once.
 | 6 | 67.1 s | 352.5 s | 66.7 s |
 | 8 | 71.4 s | 417.1 s | 71.0 s |
 
-Playing is the cost, not compiling. One pass at a time, 245.4 s of 252.7 s went to playing
-129,840 frames and starting the game 21 times, and the 318 programs compiled in play took
-0.6 s.
+Playing is the cost, not compiling. In a 252.7 s run that played one pass at a time, each from
+the last one's cache, 245.4 s went to playing 129,840 frames and starting the game 21 times. The
+318 programs compiled in play took 0.6 s, and building the cache's programs at 20 of those starts
+took 6.8 s.
+
+The table's row for 1 is `--jobs 1`, which gives each pass a cache of its own. Scale and pacing
+didn't change City Trial's keys. A pass at scale 1 or 2 with `--fast` built the same 107 as one
+at scale 2 with `--real-time`.
 
 ### Longer course passes
 
