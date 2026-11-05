@@ -28,6 +28,6 @@ python3 tools/audio_hashes.py record title --lists 7200,20000
 
 `check` takes an optional list of route names. It plays each as a bench run of `tools/probe.sh` and reports every row that changed. A run that stops short of a row's list count fails.
 
-`record` rewrites a route's golden at the `--lists` counts or at the ones it already has, and writes nothing for a route that didn't reach one. Use it only when a change to the sound is on purpose. For a new route, pick multiples of 400 past the list where its hash first differs from every other route's, at counts where two bench runs give the same hash.
+`record` rewrites a route's golden at the `--lists` counts or at the ones it already has, and writes nothing for a route that misses any of them. Use it only when a change to the sound is on purpose. For a new route, pick multiples of 400 past the list where its hash first differs from every other route's, at counts where two bench runs give the same hash.
 
 The goldens hold only for unpaced runs, which `--bench` is, since a paced run makes catch-up jumps. The committed ones were recorded on an M4 Max under macOS 26 and held across repeated runs there, and no other machine has been checked. No audio is captured or committed, only the counts and hashes.
