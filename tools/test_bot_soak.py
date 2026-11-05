@@ -197,7 +197,8 @@ class CleanRunTest(SoakCase):
 
     def test_it_says_when_a_detector_had_nothing_to_read(self) -> None:
         _, out, _ = self.soak("--seed", SEED, "--minutes", "1", settings=("--exit-after=30",))
-        self.assertIn("the frozen-picture check saw no frame hash, so it did not run", out)
+        self.assertRegex(out, r"(?m)^the frozen-picture check saw no frame hash, so it did not run; "
+                              r"the engine gives a bot none$")
         self.assertIn("the music check saw no [axv] lines, so it did not run", out)
 
     def test_it_is_quiet_about_a_detector_that_had_input(self) -> None:

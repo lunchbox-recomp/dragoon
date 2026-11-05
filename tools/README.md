@@ -183,7 +183,7 @@ It stops at the first of these.
 
 A console reset rebuilds the shader cache before the bot connects again, and that time counts against the hang limit. The soak keeps the first reset's `[shaders] ... in Z ms` line, and warns when Z reaches two thirds of the limit. `--hang` raises the limit for the next run, since a run can't change it once it has started.
 
-The frozen-picture check needs a picture hash that the link doesn't give yet, so it doesn't run.
+The frozen-picture check needs a picture hash, which the link doesn't give, so it doesn't run.
 
 A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the process the stop was in, which is the last process's unless a console reset came after the stop (`before_reset`) and then the earlier one's. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from the card as it stood at the last reset.
 

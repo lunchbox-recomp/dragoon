@@ -25,7 +25,7 @@ It stops at the first of these:
   city for 600 (a minute past --round when that's more), or the menus go on for five times
   --stuck with no race or city
 
-The frozen-picture check needs a picture hash the link doesn't give yet, so it doesn't run, and
+The frozen-picture check needs a picture hash, which the link doesn't give, so it doesn't run, and
 the soak says so. A stop keeps the run's input log, writes bot.json beside it with the seed, the
 arguments, the Dragoon and engine commits and how the run stopped, and prints the probe.sh line
 that plays the input log back. bot.json says when the stop came after a console reset, since a
@@ -120,7 +120,7 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
          out: Callable[[str], None] = say, err: Callable[[str], None] = complain,
          clock: Callable[[], float] = time.time, run=bot_link.run) -> int:
     """Plays the soak ARGS names and returns the exit code. PICTURE gives the frozen-picture check
-    its hash, which the engine doesn't yet, and OUT and ERR take the lines to print."""
+    its hash, which the engine doesn't give, and OUT and ERR take the lines to print."""
     probe = Path(os.path.abspath(args.probe if args.probe is not None else bot_link.PROBE))
     name = bot_record.new_name(args.seed, clock(), lambda n: bot_link.run_directory(n, probe).exists())
     run_dir = bot_link.run_directory(name, probe)
@@ -163,7 +163,7 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
         return 2
     watched = {"picture_hashes": frozen.hashes > 0, "axv_lines": log.axv}
     if not watched["picture_hashes"]:
-        out("the frozen-picture check saw no frame hash, so it did not run; the engine gives a bot none yet")
+        out("the frozen-picture check saw no frame hash, so it did not run; the engine gives a bot none")
     if not watched["axv_lines"]:
         out("the music check saw no [axv] lines, so it did not run; was GCN_AXVOICES=1 turned off?")
     if stop is None:
