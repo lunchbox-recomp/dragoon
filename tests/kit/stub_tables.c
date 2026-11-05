@@ -9,7 +9,7 @@ const RecompModule g_recomp_modules[1];
 const uint32_t g_recomp_module_count = 0;
 const RecompRel g_recomp_rels[1];
 const uint32_t g_recomp_rel_count = 0;
-/* The interpreter's tables. The hash is 64-bit FNV-1a's of no bytes, as recomp.py writes it. */
+/* The interpreter's tables. */
 const RecompRange g_recomp_ranges[1];
 const uint32_t g_recomp_range_count = 0;
 uint8_t g_code_changed_bits[1];
@@ -21,6 +21,7 @@ const RecompSpecial g_recomp_specials[1];
 const uint32_t g_recomp_special_count = 0;
 const RecompText g_recomp_text[1];
 const uint32_t g_recomp_text_count = 0;
+/* The 64-bit FNV-1a of no bytes, which is its offset basis, as recomp/interp_tables.py takes it. */
 const uint64_t g_recomp_text_fnv = 0xCBF29CE484222325ull;
 
 void orig_OSSaveContext(CPU* c) { (void)c; }
