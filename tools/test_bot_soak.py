@@ -842,6 +842,7 @@ class TimeLimitTest(unittest.TestCase):
 
     def test_an_outer_limit_counts_the_time_an_inner_one_ran(self) -> None:
         _, took = self.nested(2.0, 1.5)
+        self.assertGreaterEqual(took, 1.9)  # the outer's last half second, not at once
         self.assertLess(took, 3)
 
     def test_an_outer_limit_an_inner_one_outlasts_fires_as_the_inner_ends(self) -> None:
