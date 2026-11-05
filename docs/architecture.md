@@ -4,9 +4,6 @@ Dragoon is the Kirby Air Ride side of a static recompilation. gcn-recomp, the su
 `gcn-recomp/`, reads the DOL from the player's disc at build time, translates each function
 to C and links it with a runtime that stands in for the GameCube.
 
-Everything that knows about Kirby Air Ride lives in this repository. Everything that would
-help any game goes to the fork.
-
 ## Where things live
 
 | Path | Holds |
@@ -17,11 +14,12 @@ help any game goes to the fork.
 | `tests/routes/` | Input scripts from a blank memory card to a checkpoint |
 | `tests/hashes/` | Frame and audio goldens for those routes |
 | `tests/src/` | GoogleTest tests of the parts of `src/` that don't need the game |
-| `tools/` | Python tools that run the game hidden and read what it leaves behind |
-| `launcher/` | The macOS launcher, a SwiftPM package of the `Dragoon` app and `DragoonCore`. Beside it are the Makefile that links the game from the engine kit and Python tools that run its tests and assemble and sign `Dragoon.app` |
+| `tests/kit/` | Stub tables that CI's kit job links the engine kit against |
+| `tools/` | Python and shell tools that run the game hidden and read what it leaves. Others build the engine kit and the launcher's game or run CI's steps (`tools/README.md`) |
+| `launcher/` | The macOS launcher, a SwiftPM package of the `Dragoon` app and `DragoonCore`. Its `kit/Makefile` links the game from the engine kit, and the scripts in its `tools/` run its tests and assemble and sign `Dragoon.app` |
 | `docs/` | This page, the design in `docs/specs/` and notes in `docs/dev/` on status, audio, the audio scorecard and widescreen |
 | `build.sh` | Configures `build/` the first time and runs Ninja there. It fetches the submodule if it's missing, and on a Mac with Xcode it uses Xcode's toolchain |
-| `rom/` | Where the player's disc image goes, as `rom/game.iso` or a `.ciso`. Git ignores everything in it but its README |
+| `rom/` | Where the player's disc image goes, as an `.iso` or `.ciso` such as `rom/game.iso`. Git ignores everything in it but its README |
 | `gcn-recomp/` | The engine, pinned to our fork's `dragoon` branch |
 
 ## The boundary
