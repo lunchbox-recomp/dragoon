@@ -17,6 +17,11 @@ TOOL = Path(__file__).with_name('mod_choices.py')
 
 
 class ModChoicesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not mod_choices.RIIVOLUTION.is_file():
+            raise unittest.SkipTest('the engine submodule is not checked out')
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory(prefix='mod choices test ')
         self.addCleanup(tmp.cleanup)
