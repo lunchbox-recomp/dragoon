@@ -255,7 +255,7 @@ Generic runtime work in `runtime/`.
 | Polyphase resampling through worked-out coefficient sets | `ax.cpp:332-384` | Done in `cce9fbc` and `795ccc4` |
 | A bus the setup command starts at zero stays silent | `ax.cpp:552-566` | Done in `84471cc` |
 | Mixing, `0E` and the ADPCM decoder clamp at -32,768 | `ax.cpp:230`, `:604`, `:163` | Done in `2b7ae75`, `3d4fe9b` and `6def94c` |
-| An AI DMA block ends once the guest queues after it, or after a quarter block of the guest's own running with the clock's jumps left out | `dsp.cpp:191`, `:236-243` | Done in `a87ab06` and `3c55458` |
+| An AI DMA block that comes due before the guest has run a quarter block since it started, not counting clock jumps, waits until the guest has run that long or has queued the next buffer. A block comes due that early only while the DMA catches up or after the clock jumps. Otherwise it ends when due, queued or not | `dsp.cpp:185-193`, `:236-243`, `:326` | Done in `a87ab06` and `3c55458` |
 | Loop counter and signed envelope | `ax.cpp:198-216`, `:474-479` | Not done |
 | Loop or stop a voice only on the sample at its end address | `ax.cpp:198-216` | Done in `1f5e5a3` |
 | Wrap an ADPCM voice whose end is on a frame's header to its loop address | `ax.cpp:167-179` | Done in `ac8a1f4`, logged as a loop since `545c784` |
