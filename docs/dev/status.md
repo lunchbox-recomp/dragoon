@@ -55,8 +55,8 @@ gcn-recomp `782d7fa` below).
 
 Measured at gcn-recomp `67a7e30` on an Apple M4 Max (16 cores, 48 GB) on macOS 26.6.2 with the
 Command Line Tools SDK 26.5, Apple clang 21.0.0, CMake 4.4.4, Ninja 1.13.2, Python 3.14.7 and
-Homebrew's SDL2 2.32.72. Since gcn-recomp `642187a` the configure downloads SDL3 3.4.18 and the
-build compiles it, so these times leave out building SDL.
+Homebrew's SDL2 2.32.72. Since gcn-recomp `642187a` the build also compiles SDL3 3.4.18, and
+since `782d7fa` Dear ImGui, so these times leave out both.
 
 ```sh
 ln -s "/path/to/Kirby Air Ride (USA).gcm" rom/game.iso
