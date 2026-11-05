@@ -58,4 +58,4 @@ The tool exits 0 when the command succeeds, including an apply that leaves a fai
 - `set` being refused
 - Riivolution refusing a disc or package after the retry
 
-It exits 2 on a bad argument, and when a data folder it can't read or a tool error stops it.
+It exits 2 on a bad argument, such as a data folder it can't read, or a file operation that fails. Riivolution failing to run or list the packages exits 2 too, as do an `apply` with no disc image and a `mods.txt` that isn't UTF-8.

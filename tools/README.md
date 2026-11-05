@@ -30,7 +30,7 @@ A run keeps no input log unless `GCN_SESSION=DIR` records a session. A relative 
 tools/probe.sh demo 20 tests/routes/title.txt 60 GCN_FRAMETIME=1
 ```
 
-That prints the run's directory as an absolute path, then a frame count (140 on an M4 Max). It exits 2 when the game isn't built. Run it again with a different NAME to get a second run to compare. Runs pile up in `build/probe/`, and prune_runs.py clears the old ones.
+That prints the run's directory as an absolute path, then a frame count (140 on an M4 Max), which leaves out any `--output` dumps. It exits 2 when the game isn't built, and a different NAME gives a second run to compare. Runs pile up in `build/probe/`, and prune_runs.py clears the old ones.
 
 ## bot_link.py
 
@@ -48,7 +48,7 @@ That plays the menu route with a bot that presses nothing. It prints the four by
 
 Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, hang=)`, which calls `bot(link)` once a frame. The bot reads 1 to 256 bytes of RAM at a time through `link.read(addr, length)` and returns `{port: Pad(...)}`, where a port it leaves out stops the game. `run` returns an `Outcome`, whose `reason` is one of those below and whose `input_log` is the directory `--replay=` takes.
 
-The rules for the deadline and a hang are in the docstrings of `run` and `Link`, and `Pad`'s says which values it refuses. ram_peek.py shows the module's argument helpers in use.
+The rules for the deadline and a hang are in the docstrings of `run` and `Link`, and `Pad` raises `ValueError` on a value the engine would refuse. ram_peek.py shows the module's argument helpers in use.
 
 | Reason | Means | Detail |
 |---|---|---|
@@ -69,7 +69,7 @@ The engine writes `# end` in its input log on the ways out it chooses, and that 
 
 An `exit_after` needs the end line's frame to reach the `--exit-after` count, and a `shutdown` wins over it.
 
-The command exits 0 for `time_limit`, `exit_after` and `shutdown`. It exits 2 for `never_linked`, as it does for a socket another bot holds or a probe.sh that won't run. Every other reason exits 1, `game_exited` included, since only a SIGTERM from outside ends a bot run's game that way.
+The command exits 0 for `time_limit`, `exit_after` and `shutdown`. It exits 2 for `never_linked`, as it does for a socket another bot holds or a probe.sh that won't run. Every other reason exits 1, `game_exited` included, since in a bot run only a quit signal from outside, such as a SIGTERM, ends the game that way.
 
 The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when that path passes the 103 bytes a Unix socket takes, and a lock beside it refuses a second bot on the same socket. A run deletes the `stdout.txt`, `panic.txt` and `session/` an earlier run of NAME left but keeps its frames, so give each run a new NAME. The session the run makes records no audio unless `settings` gives `GCN_WAV` or `GCN_AIDWAV` a path, and a `GCN_SESSION` of your own records what the engine records by default.
 
@@ -180,7 +180,7 @@ What does the soak watch for while the bots play? `Frozen` watches the picture a
 
 How did the run end, and was that a fault? `classify` turns a `bot_link.run` result into a `Stop` whose kind is `game_exit`, `panic`, `engine_stop`, `hang`, `frozen_picture`, `music_cut` or `menus_stuck`. It returns None for a run that reached its time limit, or an `--exit-after` it was given. A game that never connected, a bad link or a bot that raised an error says nothing about the game, so those are a `SoakError`.
 
-When the first console reset's shader rebuild took two thirds of the hang limit or more, a hang that isn't an unanswered read or an assertion says in its detail that the rebuild may be the cause. It has no command line.
+When the first console reset's shader rebuild took two thirds of the hang limit or more, a hang with no unanswered read and no assertion from the game says in its detail that the rebuild may be the cause. It has no command line.
 
 ## bot_record.py
 
@@ -334,6 +334,8 @@ Did a change alter what the renderer draws? It runs each route in `tests/hashes/
 
 The manifest holds 24 routes, one per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach, any extra probe settings and any `warm=` or `warm-from=` setting. Pass route names to run only those.
 
+On 2026-10-22, when the manifest held twelve routes, a `check` of all twelve took 302 s while other copies of the game ran on the same machine.
+
 `check --slow=N` gives each route N times its seconds, for a build that runs slower than the one the goldens came from. N is a whole number from 1, the default. With N above 1 the game quits one dump interval past the route's last frame (probe.sh `--exit-after`), so a fast build doesn't spend the extra seconds.
 
 The dump interval and the frames a route must reach don't change, and `record` refuses `--slow`.
@@ -351,6 +353,8 @@ Did a change alter what the AX mixer outputs? It runs each route in `tests/hashe
 tools/audio_hashes.py check air-ride-race
 tools/audio_hashes.py record title --lists 7200,20000
 ```
+
+On 2026-10-22, when the manifest held twelve routes, a `check` of all twelve took 300 s while other copies of the game ran on the same machine.
 
 Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is deleted first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
 
@@ -401,7 +405,9 @@ tools/audio_clicks.py build/probe/title-cuts/out.wav --marks build/probe/title-c
 
 ## audio_scorecard.py
 
-How does each build's sound measure, route by route? It plays every route in `tests/hashes/manifest.txt` on one or more Dragoon builds and counts clicks, gaps and clipping at two stages, with nobody listening. Each build is a clone's `build/` directory with a label. A route plays on each build in turn before the next route starts, through that clone's own probe.sh, hidden, with SDL's dummy audio driver and `GCN_AXSTATS=1`. It plays twice on each build, once `--real-time` and once unpaced. The route files come from this clone, so every build plays the same presses.
+How does each build's sound measure, route by route? It plays every route in `tests/hashes/manifest.txt` on one or more Dragoon builds and counts clicks, gaps and clipping at two stages through audio_clicks.py, with nobody listening. Each build is a clone's `build/` directory with a label.
+
+A route plays on each build in turn before the next route starts, through that clone's own probe.sh, hidden, with SDL's dummy audio driver and `GCN_AXSTATS=1`. It plays twice on each build, once `--real-time` and once unpaced. The route files come from this clone, so every build plays the same presses.
 
 ```
 tools/audio_scorecard.py base=/path/to/old-clone/build current=build
@@ -410,7 +416,7 @@ tools/audio_scorecard.py base=/path/to/old-clone/build current=build --routes ti
 
 The five routes `docs/dev/scorecard.md` scores (`--routes title,menu,air-ride-race,city-trial,city-trial-4p`) take about 11 minutes a build. An unpaced run's game time doesn't follow the host's, so two unpaced runs of one build should give the same blocks, and the pairs compared did, byte for byte (`docs/dev/scorecard.md`). `--help` gives each stage's measures, where each run and its `commits.json` go, how `--no-run` reads them and what `not logged` and `not recorded` mean.
 
-A real-time run's clock catches up when the host falls behind, so presses land on other frames and sounds move, and its blocks say as much about the host's timing as about the build. At gcn-recomp `b848158` a catch-up jump could end a block before the guest had queued the next buffer and make the DMA play that buffer twice, which `a87ab06` stops. A guest that fills its buffers from its main loop can still miss the owed blocks a catch-up delivers close together, and then the DMA plays a buffer again ("The clock" in `gcn-recomp/docs/diagnostics.md`).
+A real-time run's clock catches up when the host falls behind, so presses land on other frames and sounds move, and its blocks say as much about the host's timing as about the build. At gcn-recomp `b848158` a catch-up jump could end a block before the guest had queued the next buffer and make the DMA play that buffer twice, which `a87ab06` stops. A guest that fills its buffers from its main loop can still fail to refill in time when a catch-up delivers the owed blocks close together, and then the DMA plays a buffer again ("The clock" in `gcn-recomp/docs/diagnostics.md`).
 
 The real-time run records `GCN_AIDWAV` too, for block_clicks.py. scorecard_runs.py plays a route on a build and scorecard_measure.py scores a route's two runs. Neither has a command line.
 
@@ -421,6 +427,8 @@ Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivere
 ```
 tools/block_clicks.py build/probe/scorecard-menu/mixer.raw
 ```
+
+The baseline's real-time title recording paired with current's title log printed counts and exited 0.
 
 ## click_diff.py
 
@@ -467,7 +475,7 @@ tools/ax_stats.py before/stdout.txt build/probe/audio-title/stdout.txt --until 2
 
 Which voices did the mixer stop that the game didn't? It reads the `[axv]` lines of a run made with `GCN_AXVOICES=1` and lists each voice that ran with `stream=1` or `looping=1`, or that ended early, by parameter block address. A block that runs again after it stopped or ended, or that gets a new sample, counts as a voice for each run.
 
-`--help` gives the columns and the rules for `ended early`. The music streams start at an address in `018xxxxx`, and some scenes play a PCM16 ring at `0062A280` and `0062A780` instead, so filter the `at` column for those.
+`--help` gives the columns and the rules for `ended early`. A run lists hundreds of voices, because sound effects start with the loop flag set too. The music streams start at an address in `018xxxxx`, and some scenes play a PCM16 ring at `0062A280` and `0062A780` instead, so filter the `at` column for those.
 
 ```
 tools/probe.sh voices 60 tests/routes/menu.txt 100000 GCN_AXVOICES=1
@@ -484,6 +492,8 @@ Will a player's first session stall on shader compiles? It plays the game once s
 A pass plays to 900 frames past its route's last required frame, or to frame N when the route has a `warm=N` setting in the manifest. N has to be a whole number past that frame, and a route gets one at most, or the warm-up exits 2 naming the route and the manifest line.
 
 A route with a `warm-from=ROUTE` setting gets no pass, because ROUTE's pass plays what the route does. The comment at the top of `tests/hashes/manifest.txt` says why some routes open a `-courses` route or keep a pass of their own, and how a change to a pass has to be checked. `test_routes.py` checks that the four courses that compile late open their passes and race past their last compiles.
+
+`air-ride-race`, `air-ride-celestial-valley` and `air-ride-beanstalk-park` get the programs they first draw past their own stretches, at frames 5,649 to 12,068 of their own routes, from Sky Sands, which draws them by frame 14,186.
 
 The merged cache replaces `saves/shaders.bin` only once every pass has succeeded, and nothing else in `saves/` is touched, so the memory card stays as it is. `saves/.shader-warmup` stamps what the warm-up played, and a run with a current stamp does nothing unless `--force` is given. `--help` gives what the stamp holds and the pass timeout.
 
@@ -508,7 +518,7 @@ tools/prune_runs.py /path/to/clone
 tools/prune_runs.py --hours 6 --delete /path/to/clone /path/to/old-clone
 ```
 
-Names listed in `build/probe/keep`, one a line, stay, compared ignoring case. A run you mean to read later, such as the last `audio-ROUTE` directory or the `scorecard-ROUTE` ones `--no-run` reads back, needs its name there. `--help` gives the link and refusal rules and the exit codes.
+Names listed in `build/probe/keep`, one a line, stay, compared ignoring case. A run you mean to read later, such as the last `audio-ROUTE` directory audio_hashes.py leaves or the `scorecard-ROUTE` ones audio_scorecard.py `--no-run` reads back, needs its name there. `--help` gives the link and refusal rules and the exit codes.
 
 ## routes.py
 
@@ -603,7 +613,7 @@ tools/mutant.py build/probe/mutant/spec.json /tmp/dragoon-mutants
 
 This spec sits in `build/probe/`, which git ignores, so it stays on your machine.
 
-It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it finishes, then `total N, killed K, survived S, timeout T`. A kill that isn't unittest's exit 1 says how the run ended, as in `killed NAME (exit -9)` for a signal or `(exit 5)` for no tests.
+It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it finishes, then `total N, killed K, survived S, timeout T`. A kill that isn't unittest's exit 1 says how the run ended, as in `killed NAME (exit -9)` for a signal or `(exit 5)` for no tests. A crash in the tool exits 2, so it can't read as a survivor.
 
 Each run is `PYTHON -B -m unittest discover -s COPY/DIR -p PATTERN`, run from the copy, PYTHON being `--python` (the Python running the tool unless you give another). With the default pattern a mutant on `tools` takes about a minute. The example above runs one test file and takes seconds.
 
@@ -753,7 +763,7 @@ make -f "$KIT/Makefile" -j16 KIT="$KIT" SDK=/Library/Developer/CommandLineTools/
   CC=/Library/Developer/CommandLineTools/usr/bin/clang CXX=/Library/Developer/CommandLineTools/usr/bin/clang++
 ```
 
-The Makefile's header lists the characters that `KIT`, `SDK`, `CC` and `CXX` can't hold. A new `kit.mk` or kit header rebuilds every object. It exits 1 when ld or strip fails and 2 on a build it can't make a kit from.
+The Makefile's header lists the characters that `KIT`, `SDK`, `CC` and `CXX` can't hold. A new `kit.mk` or kit header rebuilds every object. engine_kit.py exits 1 when ld or strip fails and 2 on a build it can't make a kit from.
 
 ## check_bundle.py
 
