@@ -543,7 +543,7 @@ no file.
 | 555018 | City Trial | 4 | 60 | `16e67cd` | 60.0 min | 42 | Time limit |
 | 558640 | All three | 1 | 60 | `16e67cd` | 60.0 min | 119 | Time limit |
 | 575543 | City Trial | 4 | 60 | `4ae7a22` | 60.0 min | 42 | Time limit |
-| 579174 | All three | 1 | 60 | `4ae7a22` | 3,256 s | 107 | Stop at frame 1,473,710: an assertion in the game's audio code |
+| 579174 | All three | 1 | 60 | `4ae7a22` | 3,256 s | 107 | Stop at frame 1,473,710: a hang, after an assertion in the game's audio code |
 | 835686 | City Trial | 2 | 20 | `a92d317` | 20.0 min | 22 | Time limit |
 
 The first three stops were the walker's, and the next soak of that mode ran with the fix. After
@@ -559,8 +559,8 @@ START on port 1 only. It has pressed START on every port since `ee88df6`. With f
 stadium's pause menu has Return to Game and End Game side by side, so the walker's DOWN left the
 cursor on Return to Game and its A went back to a Single Race, 48 times over. Frames 130,550 to
 130,650 of 513333's replay show it once. Since `457b37b` it presses RIGHT there instead. A scratch
-copy of `city-trial-stadium-4p.txt` went to End Game on Drag Race 3. Its log shows RIGHT at frame
-18,125 and A at 18,150, and the START at 18,000 and a RIGHT at 18,100 come from the scratch route.
+copy of `city-trial-stadium-4p.txt` that presses START at frame 18,000, RIGHT at 18,100 and A at
+18,150 went to End Game on Drag Race 3. At frame 18,125 the pause menu's cursor was on End Game.
 
 The two music stops came from `tools/stream_voices.py`'s rule. In each, the music's two voices
 changed in the same command list, in a City Trial round's city. The game stopped one with a
@@ -576,20 +576,21 @@ never had a loop flag carries into the new sample its block gets. With that rule
 `stream_voices.py` finds no voice that ended early in 575543's, 579174's or 835686's log, so none
 for a move and none at a stream address.
 
-579174 stopped at frame 1,473,710, 1,369 frames after its 107th round, a Top Ride one, began.
+579174 stopped at frame 1,473,710, after the walker chose its 107th round, a Top Ride one.
 The game reported a failed assertion in its audio code and made no frame after it, and the soak
 called it a hang after 30 s. Its replay stopped on the same assertion at the same frame. The stop
 hasn't been compared with a console. Since `18657c8` a hang's detail names an assertion the game
 reports after its last frame.
 
 Each stop's replay line ran with `GCN_SESSION` and `GCN_AXVOICES=1` added, so the replay kept
-its own input log and voice lines. Each replay's input log matched the soak's up to the stop
+its own input log and voice lines. 579174's ran with a 4,200 s limit in place of the line's
+24,622, since a hang's replay line has no `--exit-after` and the halted game makes no more
+frames, so a replay waits out its seconds. Each replay's input log matched the soak's up to the stop
 apart from the header's start time and epoch. Its `[axv]` lines matched the soak's byte for
 byte. There were 292,085 of them for 507330, 35,964 for 512035, 227,595 for 513333, 282,093 for
 544282, 982,893 for 545590 and 2,760,648 for 579174. A replay has no bot, so a screen limit can't
 fire in one. On the two music stops' replays `stream_voices.py` found the same single early end
-as on their soaks. 579174's replay ran for 4,200 wall seconds instead of its replay line's
-24,622, since the game makes no frame after the assertion for `--exit-after` to count.
+as on their soaks.
 
 Replaying 512035's input log with `--pads=1` gave the same game as `--pads=4`. Its input log
 matched the soak's apart from the header, and its 35,964 `[axv]` lines matched byte for byte. In
