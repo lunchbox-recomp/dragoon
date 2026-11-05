@@ -149,10 +149,12 @@ Implementation plans are written one milestone at a time.
 ## Safety and legal
 
 - Nothing runs before it's audited, including gcn-recomp's source, its CMake fetches and
-  anything it downloads at build time. On macOS the build downloads SDL3 3.4.18 and Dear ImGui
-  1.92.9b, each pinned by SHA-256 in gcn-recomp's `CMakeLists.txt`, and "What the build
-  downloads" in `docs/dev/status.md` records their audit. Its `.githooks` stay disabled and
-  `tools/fetch_dtk.sh` is never run. `--telemetry` and `--record` stay off.
+  anything it downloads at build time. By default the build on macOS downloads SDL3 3.4.18 and
+  Dear ImGui 1.92.9b, each pinned by SHA-256 in gcn-recomp's `CMakeLists.txt`, and "What the
+  build downloads" in `docs/dev/status.md` records their audit. `-DDRAGOON_TESTS=ON` also
+  downloads GoogleTest 1.17.0, pinned in Dragoon's own `CMakeLists.txt`, which that record
+  doesn't cover yet. gcn-recomp's `.githooks` stay disabled and `tools/fetch_dtk.sh` is never
+  run. `--telemetry` and `--record` stay off.
 - The disc, the DOL, the C generated from it, extracted assets, saves and replays that embed
   game data are never committed or published.
 - Players bring their own disc. We use no Nintendo trademarks or art, license our code MIT

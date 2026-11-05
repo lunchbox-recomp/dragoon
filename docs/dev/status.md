@@ -97,26 +97,46 @@ runtime/gx/render_gl.cpp:3189:13: warning: enumeration value 'Screen' not handle
 
 ### What the build downloads
 
-The first configure downloads two source archives. gcn-recomp's `CMakeLists.txt` pins each by
-SHA-256, so CMake stops at one that doesn't match. Both were read in `build/_deps/` at
-gcn-recomp `782d7fa`, and nothing in them was run by hand.
+By default the first configure downloads two source archives. gcn-recomp's `CMakeLists.txt`
+pins each by SHA-256, so CMake stops at one that doesn't match. Nothing in either was run by
+hand, only read in `build/_deps/` after a configure at gcn-recomp `782d7fa` with CMake 4.4.4.
 
 | | SDL3 | Dear ImGui |
 |---|---|---|
 | Archive | `SDL3-3.4.18.tar.gz` from the `release-3.4.18` release of `libsdl-org/SDL` on GitHub, 15,651,004 bytes | `v1.92.9b.tar.gz`, GitHub's archive of the `v1.92.9b` tag of `ocornut/imgui`, 2,123,074 bytes |
 | SHA-256, pinned and as downloaded | `9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3` | `21d8a0a565e85dce943e375db00812c2f3f0ab21f3f0f7964e364a63422d7f99` |
 | Version inside | `REVISION.txt` reads `release-3.4.18-0-g829a65d76` | `imgui.h:32` defines `IMGUI_VERSION` as `"1.92.9b"` |
-| At configure | `FetchContent_MakeAvailable` runs SDL's own `CMakeLists.txt` with its shared library, tests, examples and install off. Its feature checks compile test programs and run none. It takes its revision from `REVISION.txt` rather than git, and on macOS its only `execute_process` calls are `cmake -E make_directory` and `cmake -E copy_if_different` | The archive has no `CMakeLists.txt` at its top, so `FetchContent_MakeAvailable` only unpacks it |
+| At configure | `FetchContent_MakeAvailable` runs SDL's own `CMakeLists.txt` with its shared library, tests, examples and install off. Its feature checks compile test programs and run none, and it takes its revision from `REVISION.txt` rather than git. The programs it does run are below the table | The archive has no `CMakeLists.txt` at its top, so `FetchContent_MakeAvailable` only unpacks it |
 | At build | `libSDL3.a`. `build.ninja` has no custom command from SDL's scripts | Six files go into `libgcn_imgui.a`: `imgui.cpp`, `imgui_draw.cpp`, `imgui_tables.cpp`, `imgui_widgets.cpp`, `backends/imgui_impl_sdl3.cpp` and `backends/imgui_impl_opengl3.cpp`. No script or custom command from the archive runs |
 
-In the game, Dear ImGui's OpenGL 3 backend opens the system's OpenGL framework with `dlopen`
-(`imgui_impl_opengl3_loader.h:677`). It opens a link by forking `open -- <path>`
-(`imgui.cpp:16320`), and the SDL3 backend swaps that for `SDL_OpenURL`
-(`imgui_impl_sdl3.cpp:541`).
+At CMake 4.4.4, SDL's configure runs `cmake -E make_directory` and `cmake -E copy_if_different`
+through `execute_process` on macOS, and nothing else. Before CMake 3.29, which the build's
+minimum of 3.20 allows, it also runs the linker with `-v` (`CMakeLists.txt:521`,
+`cmake/macros.cmake:88`).
+
+On any CMake, SDL's `cmake/FindLibUSB.cmake:6-9` runs the system's pkg-config, if it finds one,
+for `libusb-1.0>=1.0.16`. Here that was `/opt/homebrew/bin/pkg-config`, which found 1.0.29
+(`PC_LibUSB_VERSION` in `build/CMakeCache.txt`).
+
+`-DDRAGOON_TESTS=ON` adds a third download, GoogleTest 1.17.0's source release, which Dragoon's
+own `CMakeLists.txt:41-45` pins by SHA-256 and CI's macOS job turns on (`tools/ci.py:79-80`).
+No build directory here has fetched it, so this record doesn't cover it yet.
+
+In the game, SDL opens `libusb-1.0.dylib` with `dlopen` for controllers over USB
+(`SDL_LIBUSB_DYNAMIC` in this build's `SDL_build_config.h:333`). Dear ImGui's OpenGL 3 backend
+opens the system's OpenGL framework the same way (`imgui_impl_opengl3_loader.h:677`). Dear
+ImGui opens a link by forking `open -- <path>` (`imgui.cpp:16320`), and its SDL3 backend swaps
+that for `SDL_OpenURL` (`imgui_impl_sdl3.cpp:541`).
 
 Only `TextLinkOpenURL` opens a link (`imgui_widgets.cpp:1578`), and gcn-recomp's overlay calls
-no `TextLink` function. The overlay also sets `IniFilename` and `LogFilename` to null, so Dear
-ImGui writes no file (`runtime/overlay/overlay.cpp:405`).
+no `TextLink` function. Dear ImGui's own tooltip for items with a duplicate ID does, with a link
+to its FAQ on GitHub (`imgui.cpp:11380`). Holding Ctrl pins that tooltip so the link can be
+clicked, which hands the URL to `SDL_OpenURL` (`imgui.cpp:11408`).
+
+`io.ConfigDebugHighlightIdConflicts` turns that tooltip on by default (`imgui.cpp:1712`), and
+the overlay leaves it on (`runtime/overlay/overlay.cpp:403-407`). So the link opens only through
+a duplicate-ID bug in the overlay. The overlay also sets `IniFilename` and `LogFilename` to
+null, so Dear ImGui writes no file (`runtime/overlay/overlay.cpp:405`).
 
 ## Disc inputs
 
