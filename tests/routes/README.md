@@ -78,19 +78,15 @@ save, which skips the card prompts and puts every later press in the wrong place
 
 A route gives byte-identical frames from run to run on the same build, because gcn-recomp
 applies each press where the game reads the controller, at the frame the game has reached.
-Frames 4200 and 6000 of `air-ride-race.txt` matched across three runs in a row. Frames 3300
-and 4500 of `city-trial.txt` matched across two runs nine minutes apart, and frames 2700 and
-3300 of `city-trial-4p.txt` across two runs. Every dumped frame of the seven Top Ride routes
-and the two stadium routes matched between a `tools/frame_hashes.py record` run and the
-`check` run after it.
 
-Frame 3480 of `city-trial-2p.txt` matched across two runs in a row.
+| Route | Frames | Runs that matched |
+|---|---|---|
+| `air-ride-race.txt` | 4200 and 6000 | Three in a row |
+| `city-trial.txt` | 3300 and 4500 | Two, nine minutes apart |
+| `city-trial-4p.txt` | 2700 and 3300 | Two |
+| `city-trial-2p.txt` | 3480 | Two in a row |
+| The seven other Air Ride course routes | Every 60th to 4200, 70 frames | A `tools/frame_hashes.py record` and the `check` straight after it |
+| The seven Top Ride routes and the two stadium routes | Every dumped frame | A `record` and the `check` after it |
 
-Before gcn-recomp fda6926 they didn't. Each press landed wherever the game was when the
-frontend's loop next looked, and two runs of `city-trial.txt` showed 4:54:10 and 4:54:11
-on the clock at frame 3300, from different spots. The RTC starts at the host's time on
-every run that isn't a replay, but it doesn't move the start. The two runs nine minutes
-apart start in the same place.
-
-Each of the seven other course routes drew the same 70 frames, every 60th up to 4200, in a
-`tools/frame_hashes.py record` run and in the `check` run straight after it.
+The RTC starts at the host's time on every run that isn't a replay, and it didn't change where
+`city-trial.txt` started in the two runs nine minutes apart.
