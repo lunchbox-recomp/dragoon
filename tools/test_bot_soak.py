@@ -820,22 +820,25 @@ class TimeLimitTest(unittest.TestCase):
 
     def nested(self, outer: float, inner_takes: float) -> tuple[list[str], float]:
         """The outcome of a test under an OUTER limit that runs a test taking INNER_TAKES seconds
-        under a limit of its own, then waits."""
+        under a limit of its own, then waits. An outer alarm that lands in the inner test's end,
+        where unittest's own except takes it, is that test's error, and the outer stops waiting."""
         class Inner(SoakCase):
             limit = 30.0
 
             def test_slow(self) -> None:
                 time.sleep(inner_takes)
 
+        inner = unittest.TestResult()
+
         class Outer(unittest.TestCase):
             def test_waits(self) -> None:
                 time_limit(self, outer)
-                inner = unittest.TestResult()
                 Inner("test_slow").run(inner)
-                self.assertTrue(inner.wasSuccessful(), inner.errors)
-                time.sleep(10)
+                if not inner.errors:
+                    time.sleep(10)
 
         errors, took = self.outcome(Outer("test_waits"))
+        errors += [text for _, text in inner.errors + inner.failures]
         self.assertEqual(len(errors), 1, errors)
         self.assertIn(f"Outer.test_waits ran past its {outer:g} s limit", errors[0])
         return errors, took
