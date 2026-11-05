@@ -10,9 +10,7 @@
 
 <!-- What you ran or played to check it, and on which Mac -->
 
-- [ ] Ran `python3 tools/check_no_game_data.py`.
-- [ ] Ran `python3 -m unittest discover -s tools -p 'test_*.py'`.
-- [ ] Ran `cmake -S . -B build-tests -G Ninja -DDRAGOON_TESTS=ON -DGAME_ISO=` and `ninja -C build-tests unit` for changes in `src/`.
+- [ ] Ran `python3 tools/ci.py`.
 - [ ] Added a route in `tests/routes/` or a test that fails without this change.
 - [ ] Ran the change on my own disc.
 

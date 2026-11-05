@@ -1,6 +1,6 @@
 # Contributing
 
-Bug reports from people who know this game are the most useful thing right now. For anything bigger than a small fix, open an issue before you start.
+Bug reports from people who know this game are the most useful thing. For anything bigger than a small fix, open an issue before you start.
 
 ## Bugs
 
@@ -19,14 +19,13 @@ Never attach the disc, its DOL, the generated C, saves or memory cards. They com
 - Keep PRs under about 400 hand-written lines. Split anything bigger.
 - Commit messages are one short line saying what changed, with no prefix like `fix:`.
 
-Run these before opening a PR.
+Run all four of CI's jobs before opening a PR. Naming jobs runs only those, as in `python3 tools/ci.py tools launcher`, the two that need no CMake build.
 
 ```sh
-python3 tools/check_no_game_data.py
-python3 -m unittest discover -s tools -p 'test_*.py'
+python3 tools/ci.py
 ```
 
-The C++ in `src/` has unit tests too. They need no disc, and the configure downloads GoogleTest the first time. `ninja unit` builds and runs them with gcn-recomp's own checks.
+The `macos` job builds and runs `src/`'s unit tests beside gcn-recomp's own. To run just those with no disc, use the block below, whose first configure downloads GoogleTest beside the engine's own copy of SDL and Dear ImGui.
 
 ```sh
 cmake -S . -B build-tests -G Ninja -DDRAGOON_TESTS=ON -DGAME_ISO=
@@ -35,4 +34,4 @@ ninja -C build-tests unit
 
 ## AI
 
-AI help is fine. Say which tools you used in the PR description. Leave AI co-author lines out of commits, since the README's AI section covers the project. Only send what you've run on your own disc.
+AI help is fine if the PR description says which tools you used. We'd rather commits left out AI co-author lines, since the README's AI section covers the project, but one won't hold up a PR. Only send what you've run on your own disc.

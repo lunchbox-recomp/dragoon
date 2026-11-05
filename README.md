@@ -16,8 +16,8 @@ Tested on one Mac, an M4 Max on macOS 26.
 | Stadium | Reached from City Trial. Drag Race plays out to its results with one player or four. Target Flight and Destruction Derby haven't been played |
 | Top Ride | All seven courses a fresh save offers race past the countdown, with one player and three CPUs |
 | Audio | Partial. Voices send to the effect buses and the game's compressor runs. Voices resample through a polyphase filter for nearly all of their playing time, but the low-pass filter isn't applied. Nobody has compared it with a real console ([details](docs/dev/audio.md)) |
-| Controllers | Up to four gamepads, one per port. Each takes the port of its player number when that port is free, and otherwise the lowest free one. Pulling one out frees its port. Each one's port is saved in `saves/ports.txt` and taken again at the next launch when it's free. The keyboard is on port 1. Tested with simulated gamepads, not with four real ones or Steam Input |
-| Picture | 4:3 by default. `--aspect=16:9` widens the world in the race, City Trial and Top Ride routes it was measured on, but the HUD and menus stretch with it |
+| Controllers | Up to four gamepads, one per port. Each takes the port `saves/ports.txt` last gave it when that port is free. One the file doesn't name takes its player number's port when that's free, and any other takes the lowest free one. Pulling one out frees its port. The keyboard is on port 1. Tested with simulated gamepads, not with four real ones or Steam Input |
+| Picture | 4:3 by default. `--aspect=16:9` or the in-game menu's Display page widens the world in the race, City Trial and Top Ride routes it was measured on. Air Ride's and City Trial's HUD keeps its 4:3 shape, while Top Ride's HUD and the menus stretch |
 | Other platforms | Not tested |
 
 Full numbers are in [docs/dev/status.md](docs/dev/status.md).
@@ -30,7 +30,7 @@ You need:
 - a Mac with Apple Silicon and the Xcode Command Line Tools
 - CMake and Ninja (`brew install cmake ninja`)
 
-The first configure downloads SDL 3.4.18's source (15.7 MB) and checks its hash. To use an SDL3 you already have, add `-DGCN_SYSTEM_SDL=ON`.
+The first configure downloads the source of SDL 3.4.18 (15.7 MB) and Dear ImGui 1.92.9b (2.1 MB) and checks their hashes. `-DGCN_SYSTEM_SDL=ON` uses an SDL3 you already have, and `-DGCN_OVERLAY=OFF` builds without the in-game menu and skips Dear ImGui.
 
 ```sh
 git clone --recursive https://github.com/lunchbox-recomp/dragoon
@@ -46,8 +46,6 @@ The first build also runs the game hidden and silent, for about a minute on an M
 The game keeps its memory card and shader cache in `saves/`, in the folder you start it from. The build's warm-up puts its shaders in the clone's own `saves/`, so start `build/dragoon` from the clone's top folder. Started anywhere else, it begins with a blank card and compiles shaders as it goes.
 
 The wrong disc stops the configure step and prints the disc ID it found.
-
-If linking fails over an unknown `arm64e.x1` architecture, your Command Line Tools are older than your default SDK. Add `-DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk` to the `cmake` line.
 
 ## How it works
 
