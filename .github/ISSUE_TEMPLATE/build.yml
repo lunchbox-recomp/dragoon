@@ -1,0 +1,89 @@
+name: Build problem
+description: Report a stopped configure or build, or a failed first launch.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never attach or paste the disc or its DOL, and leave out the generated C. Keep everything in `saves/` out too. The memory card is there, and each input log in `saves/inputs/` holds a copy of it.
+  - type: dropdown
+    id: step
+    attributes:
+      label: Failed step
+      description: Select where the process stopped.
+      options:
+        - Configure
+        - Build
+        - Build warm-up run
+        - First launch
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command run
+      description: Paste the command that failed.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Paste the output from the first error on, but cut the code lines the compiler quotes from `gen/` files.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and chip
+      description: Give your Mac model and chip.
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: macOS version
+      description: Give your macOS version.
+    validations:
+      required: true
+  - type: input
+    id: cmake-version
+    attributes:
+      label: CMake version
+      description: Paste the first line of `cmake --version`.
+    validations:
+      required: true
+  - type: input
+    id: tools-version
+    attributes:
+      label: Command Line Tools version
+      description: Paste the version line from `pkgutil --pkg-info=com.apple.pkg.CLTools_Executables`.
+    validations:
+      required: true
+  - type: dropdown
+    id: disc-format
+    attributes:
+      label: Disc image format
+      description: Select the format of your own disc image.
+      options:
+        - .iso
+        - .ciso
+        - .gcm
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Dragoon commit
+      description: Give the commit you built.
+      placeholder: git rev-parse --short HEAD
+    validations:
+      required: true
+  - type: checkboxes
+    id: no-game-data
+    attributes:
+      label: Game data
+      options:
+        - label: I haven't attached or pasted anything from my disc or from `saves/`.
+          required: true

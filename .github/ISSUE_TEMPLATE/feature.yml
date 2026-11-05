@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest a change to Dragoon.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What it's for
+      description: Explain the problem or need.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What it should do
+      description: Describe the behavior you want.
+    validations:
+      required: true
+  - type: textarea
+    id: comparison
+    attributes:
+      label: Existing behavior elsewhere
+      description: Describe how Dolphin or another port handles it, or the console itself.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe other approaches you considered.
+    validations:
+      required: true

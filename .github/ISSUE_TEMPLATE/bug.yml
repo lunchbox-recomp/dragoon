@@ -1,0 +1,75 @@
+name: Bug
+description: Report game behavior that differs from a console or Dolphin.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never attach or paste the disc or its DOL, and leave out the generated C. Keep everything in `saves/` out too. The memory card is there, and each input log in `saves/inputs/` holds a copy of it.
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: Describe what doesn't work or plays differently.
+    validations:
+      required: true
+  - type: textarea
+    id: reference-behavior
+    attributes:
+      label: Console or Dolphin behavior
+      description: Describe what the game does on a console or in Dolphin.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to get there
+      description: Give the mode and course, plus the machine you rode and how many players.
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and chip
+      description: Give your Mac model and chip.
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: macOS version
+      description: Give your macOS version.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Dragoon commit
+      description: Give the commit you built.
+      placeholder: git rev-parse --short HEAD
+    validations:
+      required: true
+  - type: input
+    id: launch-options
+    attributes:
+      label: Launch options and settings
+      description: Include launch options and changed settings if relevant.
+      placeholder: --aspect=16:9
+  - type: textarea
+    id: terminal-output
+    attributes:
+      label: Terminal output
+      description: Paste the terminal output from around the problem, without any lines of generated C.
+      render: shell
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or short clip
+      description: Add a screenshot or short clip if the problem is visual.
+  - type: checkboxes
+    id: no-game-data
+    attributes:
+      label: Game data
+      options:
+        - label: I haven't attached or pasted anything from my disc or from `saves/`.
+          required: true
