@@ -1,16 +1,10 @@
 # Widescreen
 
-This page covers which cameras Kirby Air Ride draws through, how Dragoon widens the world
-cameras and anchors the HUD for a wider output and what a 16:9 picture still gets wrong. Every number here comes
-from runs of the routes in `tests/routes/` through `tools/probe.sh`, read with
-`tools/drawlog.py`.
-
-The numbers were taken against gcn-recomp `deac351` with `--aspect` and `--dump-output`
-added, the change `6575c67` makes on the fork's `dragoon` branch. At `3a8d154`, the
-race's census at 4:3 and the kept widening's aspects and draws in the race, City Trial, 2P
-and 4P came out the same. The section "Measured on Dragoon `45c52c5`" has them again at
-gcn-recomp `5e49451`, with the race's cameras after the finish and Top Ride's camera widened
-too.
+Every number here comes from runs of the routes in `tests/routes/` through `tools/probe.sh`,
+read with `tools/drawlog.py`. The census and the three candidates were measured on gcn-recomp
+`deac351` with `6575c67`'s `--aspect` and `--dump-output` on top. At `3a8d154` the race's
+census at 4:3 and the kept widening's aspects and draws in the race, City Trial, 2P and 4P came
+out the same.
 
 ## Taking the census
 
@@ -99,9 +93,7 @@ The HUD's calls to the library come from `fn_801158C0`, `fn_801159C0`, `fn_80115
 four of the library are the rule `src/cameras.h` keys on.
 
 After the race's finish line the world camera that's drawn gets its aspect from the library
-alone. At gcn-recomp `3a8d154`, from frame 8,183 to 13,062, the full-screen world cameras
-stored 1.25538 at 16:9. On Dragoon `45c52c5` at a load of about 4.5, `drawlog.py setters`
-showed the camera drawn at frame 8,400 getting its aspect only at frame 8,092 from the first
+alone. On Dragoon `45c52c5` at a load of about 4.5, `drawlog.py setters` showed the camera drawn at frame 8,400 getting its aspect only at frame 8,092 from the first
 two calls in the table, never from the module.
 
 A camera's address won't do as a rule, because one address can hold different cameras over a
@@ -133,11 +125,10 @@ Three places were tried at `--aspect=16:9 --output`, each behind its own switch.
 were these four.
 
 1. Every world camera's projection reads 4/3 times its 4:3 aspect in one player, 2P and 4P,
-   and no HUD or menu camera changes. Before Dragoon `b307f49` widened the library's four
-   calls as well, the kept widening met this only until the race's finish. Top Ride's camera
-   met it only once `06d27b1` widened it as it loads.
+   and no HUD or menu camera changes.
 2. The stored aspect holds steady over 600 frames, so nothing widens twice.
-3. The race finishes in the same time as at 4:3.
+3. The race finishes in the same time as at 4:3, 1:14.68, with the CPUs at 1:15.40, 1:15.57
+   and 1:16.36.
 4. It takes the fewest patch lines.
 
 The candidates were `HSD_CObjSetAspect` (`0x80402C94`) as an HLE function that widens only
@@ -160,40 +151,26 @@ a perspective camera's aspect, widened when the object drawing is
 | Race time | 1:14.68, results frame identical to 4:3 | 1:14.68, results frame identical to 4:3 | Not run |
 | Patch lines | 1 in `hle.txt` | 2 in `patches.txt` | 15 in `patches.txt` |
 
-`HSD_CObjSetAspect` is the one kept. It met the last three bars in one line, and the first
-until the race's finish. Since the game stores the wider aspect, whatever reads it sees the
-wider view.
+`HSD_CObjSetAspect` is the one kept. It met the last three bars in one line, and it meets the
+first with the library's four calls and Top Ride's load widened as well. Since the game stores
+the wider aspect, whatever reads it sees the wider view.
 
 Top Ride's world camera never goes through `HSD_CObjSetAspect`, so `HSD_CObjLoadDesc` is an HLE
 function as well. It widens the camera it returns when the pair under "Top Ride" above matches,
-and the census logs each perspective camera it loads.
+and the census logs each perspective camera it loads. On Dragoon `45c52c5` at 16:9, Top Ride's
+output dump shows the player's and the CPUs' markers over their karts.
 
-On Dragoon `45c52c5` at 16:9, at loads of 4.3 to 6.3, Top Ride's camera stored 1.57333 from
-its load at frame 3,234 to frame 3,833. At frame 3,600 it made 198 draws as at 4:3, and the fov
-25 cameras kept 1.25538. In the output dump the player's and the CPUs' markers sit over their
-karts.
-
-The world drew more at 16:9 than at 4:3 at all four checkpoints that have one, and in the
-race's output dump the CPU marker sits over its kart. The projection patch leaves the stored
-aspect at 4:3, so draws stay at their 4:3 count and the markers drift outward from the karts.
-The constant loads widen the HUD and the menus along with the world.
+With `HSD_CObjSetAspect` the world drew more at 16:9 than at 4:3 at all four checkpoints in the
+table, and the CPU markers sit over their karts in the output dumps of the race and of City
+Trial at 3300. The projection patch leaves the stored aspect at 4:3, so draws stay at their 4:3
+count and the markers drift outward from the karts. The constant loads widen the HUD and the
+menus along with the world.
 
 The widened aspect doesn't compound, because the camera module works it out from the
-viewport before each call to the setter. `drawlog.py aspects` showed 1.67383 for every frame
-from 3600 to 4199 of the race and from 3300 to 3899 of City Trial, and 1.85892 and 2.97524
-for frames 2880 to 3479 in 4P and 2P.
+viewport before each call to the setter.
 
 The two calls set the aspect of cameras that aren't drawn as well, and those widen too. The
 race result didn't change.
-
-The race time bar was written as 1:12.60, which `docs/dev/status.md` recorded at gcn-recomp
-`7d30377`. At `deac351` with the aspect change the race finished in 1:14.68 at 4:3 too, with
-the CPUs at 1:15.40, 1:15.57 and 1:16.36, so the bar here is the 4:3 time.
-
-At `3a8d154` every frame dump from 8,400 to 66,900 was the same at 4:3 and at 16:9 with the
-widening. Those frames, the results screen's at 25,800 among them, all come after the finish,
-where the world cameras were back at 4:3 then, so they only show that the race ended the same
-way.
 
 ```sh
 tools/probe.sh wide 30 tests/routes/air-ride-race.txt 4200 --aspect=16:9 --output
@@ -354,30 +331,11 @@ show at the other once it missed a frame. So one that stops there shows the edge
 A tie in a tree's vote goes to the edge it held while it moves. Once it has rested, the tie goes
 to the first of those tied in the order the tree draws its joints.
 
-On Dragoon `fb8cf35`, which gave a rested tree's tie to its held edge too, the speedometer's
-frame held the middle it first showed in, in the race at 4200 and City Trial at 3300. Its joints
-split evenly between the middle and the right.
-
-Keeping each tree's first mark for as long as it showed doesn't work for this game's HUD. On
-Dragoon `34a24f5`, which did, every tree `fn_80114F1C` draws held C(0..640) in the race at 4200
-and the minimap's karts held L(0..640), away from their edges at 16:9. Chosen afresh each frame,
-the position went to the left and the rest to the right.
-
 A tree that misses a frame chooses afresh when it next shows, and holds nothing from that
 showing, since its joints sit where they last drew, before the frame it missed. One shown for the
 first time does the same, as its joints sit where the game made them, which for every tree
 `fn_80114F1C` draws in the race and City Trial is the screen's middle. One whose joints haven't
 drawn holds the mark it had the frame before, or goes by its root when it had none.
-
-The speedometer's frame never moves at the start. Dragoon `751c981` held a first showing's mark,
-so the frame held the middle from its first frame, 3241 in the race and 2852 in City Trial,
-through a tie between a joint at the right and a joint at the middle. It took the right once it
-had rested, at 3271 and 2882, a jump of 107 display pixels at 16:9.
-
-Holding nothing from its first showing, it takes the right on its second frame, 3242 and 2853,
-the first its joints draw where it sits. In 2P the screen's middle is on the bar between the
-views, so there each view's frame stretches for its first frame at 2852. On `751c981` it already
-sat at the right from the next.
 
 The rect is the screen in one player. In 2P and 4P it's the view the tree sits in, from the
 viewports of the frame's world cameras, which `src/cameras.cpp` passes as the game sets their
@@ -421,16 +379,13 @@ time at loads of 1.5 to 3.1, every checkpoint passed. `e52dce1`, here and below,
 
 Two of 4P's anchored draws are markers with no match, both in player 3's view. At 4:3 player 4
 is past that view's left edge and shows as an icon there, and at 16:9 player 4 is in view and
-shows as a marker over their kart.
+shows as a marker over their kart. In the 4P dump each of the other markers sits over the same
+scenery as at 4:3.
 
-On Dragoon `701a2dd` at gcn-recomp `b11ebc6`, with `drawlog.py hud` also failing a draw anchored
-to the edge across its rect, the race at 4200 and 4P at 3480 gave the same counts, one run at a
-time.
-
-On Dragoon `8e6bc30` at gcn-recomp `b11ebc6`, with `drawlog.py hud` also failing a centered draw
-past the band at a side, all four checkpoints gave the same counts, one run at a time. They
-gave them again on `1ff85c8`, which holds nothing from a tree's first showing. These four
-callbacks' trees took these anchors on both.
+On Dragoon `8e6bc30` and `1ff85c8` at gcn-recomp `b11ebc6`, with `drawlog.py hud` also failing
+a draw anchored to the edge across its rect and a centered draw past the band at a side, all
+four checkpoints gave the same counts, one run at a time. These four callbacks' trees took these
+anchors on both.
 
 | Callback | Race, 4200 | City Trial, 3300 | 2P, 3480 | 4P, 3480 |
 |---|---|---|---|---|
@@ -479,11 +434,5 @@ loads of 4.2 to 5.0.
   it shows. No dump caught either.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
-- No object is cut off at a side edge in these dumps, and the world drew at least as much at
-  16:9 at every checkpoint. The test that culls the world wasn't found, so pop-in while moving
-  still needs a person to watch.
-
-The markers sit where they should. The CPU markers sit over their karts in the race at 4200
-and in City Trial at 3300. In 4P at 3480 each marker sits over the same scenery as at 4:3,
-and player 4's marker shows in player 3's view at 16:9 where at 4:3 it's an icon at the view's
-edge.
+- The test that culls the world wasn't found, so pop-in at the sides while moving needs a person
+  to watch.
