@@ -1,7 +1,7 @@
 # Status
 
-What's true of Dragoon, measured on one Mac. Each section names the Dragoon and gcn-recomp
-commits it was measured at. The pin is gcn-recomp `782d7fa`, where all twenty-four routes'
+What's true of Dragoon, measured on one Mac. Most sections name the Dragoon or gcn-recomp
+commits they were measured at. The pin is gcn-recomp `782d7fa`, where all twenty-four routes'
 frames and audio match the goldens recorded at `b5ec329` (under Goldens).
 
 | Feature | Status | Note |
@@ -13,10 +13,10 @@ frames and audio match the goldens recorded at `b5ec329` (under Goldens).
 | Air Ride race | Runs | All eight courses a blank memory card can pick load and race past the countdown, one route each in `tests/routes/`, with no crash and nothing seen drawn wrong. Fantasy Meadows (`air-ride-race.txt`) has three laps and the other seven two. With nobody steering, six reach the results screen and Kirby stays stopped against a wall on the other two (table under How far it gets). Nebula Belt, the ninth course, is locked on a blank card behind an Air Ride checklist box that counts 100 laps |
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. With the clock cut to three minutes and the stadium set to Drag Race in Game Settings, one player (`city-trial-stadium.txt`) or four (`city-trial-stadium-4p.txt`) play out the clock and reach Drag Race 3 and its results. A fresh save offers only Drag Race, Target Flight and Destruction Derby besides Shuffle, and no route plays the last two, though a bot soak reached Destruction Derby's results (under Bot soak) |
 | Top Ride | Runs | All seven courses a fresh save offers (Grass, Sand, Sky, Fire, Light, Water and Metal) race past the countdown with one player and three CPUs (`top-ride-<course>.txt`) |
-| Audio | Partial | The mixer runs the commands of the game's ucode (`07F88145`) with its compressor among them, and ten runs' 484,400 command lists held no unknown or skipped one (under Audio). Source type 0 voices, 98.9% of the voice time, resample through a polyphase filter whose coefficients the runtime works out because the console's are in the DSP's ROM, and the low-pass filter isn't applied. Nobody has listened since the source type 2 fix or compared the sound with a console, and the click counts are in [`scorecard.md`](scorecard.md), last scored at gcn-recomp `dac449e` (`audio.md`) |
-| Controllers | Four ports, live | Each gamepad takes the port of its SDL player number when that port is free and the lowest free one otherwise, and keeps it in `saves/ports.txt` (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
+| Audio | Partial | The mixer runs the commands of the game's ucode (`07F88145`) with its compressor among them, and ten runs' 484,400 command lists held no unknown or skipped one (under Audio). Source type 0 voices, 98.9% of the voice time, resample through a polyphase filter whose coefficients the runtime works out because the console's are in the DSP's ROM, and the low-pass filter isn't applied. Nobody has listened for the sound's quality since the source type 2 fix or compared it with a console, and the click counts are in [`scorecard.md`](scorecard.md), last scored at gcn-recomp `dac449e` (`audio.md`) |
+| Controllers | Four ports, live | Each gamepad takes the port `saves/ports.txt` says it was last on, or else its SDL player number's or the lowest free one (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with Air Ride's and City Trial's HUD anchored | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD keeps its 4:3 shape at the race, City Trial, 2P and 4P checkpoints, anchored to the edges of the screen or of its player's view, as all four showed on Dragoon `1ff85c8`. Top Ride's HUD and the menus stretch with the picture (`widescreen.md`) |
-| Speed | Holds 60 fps | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed |
+| Speed | Holds 60 fps | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed. The stadium's scene changes stall the guest for up to 135 ms (under Top Ride and the stadium at the game's speed) |
 | Build from the disc | Works | 23 s at gcn-recomp `67a7e30` (3.5 s to configure, 19.5 s for Ninja). That's before the build compiled SDL3 and Dear ImGui and before the default target ran the shader warm-up, which adds about 64 s (`CMakeLists.txt:69-78`, Player targets) |
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
@@ -215,8 +215,8 @@ need `--pads=4`.
 | Top Ride courses in turn | `top-ride-courses.txt` | 6100 to 18600 | Sand, Sky, Metal, Water, Light and then Fire, every 2,500 frames, each race under way after the one before |
 
 Left alone at gcn-recomp `5e49451`, the race route finished three laps in 1:14.68 and reached
-the results screen by frame 25,800, at 16:9 as at 4:3. It hasn't been run since fast disc
-reads (`b5ec329`).
+the results screen by frame 25,800, at 16:9 as at 4:3. No run since has played it to the
+finish, under the console-timed reads of `bad7160` or the fast ones of `b5ec329`.
 
 City Trial with nobody steering drives into the sea and stays there while the clock runs. The
 opening movie, when it isn't skipped, plays to the end and hands over to the title and the
@@ -345,21 +345,25 @@ has been run since `b848158`.
 
 ## Controllers
 
-Each gamepad takes the port of its SDL player number if that port is free, and otherwise the
-lowest free port, and its player number is then set to the port. A gamepad gets no port when
-none is free, and one pulled out frees its port. The game then sees that port unplugged, unless
-the keyboard (port 1), `--pads=N` or a `controls.txt` line keeps it plugged in.
+The runtime keeps the port each gamepad was last on in `saves/ports.txt`. A gamepad the file
+names takes that port again when it's free and the lowest free one when it isn't. Any other
+takes the port of its SDL player number if that's free and otherwise the lowest free one
+(gcn-recomp `runtime/port_memory.h:47-58`).
 
-Each gamepad's port is saved in `saves/ports.txt`, and it takes that port again at the next
-launch when it's free. A device's `port <n>` line in `controls.txt` keeps that port from
-gamepads, and a `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in
-ports 1 to N for routes, as in `2/2100:A:5`.
+Once a gamepad has a port, its player number is set to the port (`runtime/gamepads.cpp:136-143`).
+A gamepad gets no port when none is free, and one pulled out frees its port. The game then sees
+that port unplugged, though the keyboard keeps port 1 plugged in and so does a port that
+`--pads=N` or a `controls.txt` line covers.
 
-The GameCube's A, B, X and Y are the face buttons with those labels (gcn-recomp `29ce20e`), or
-where an Xbox pad has them on a pad with no letters. So GameCube A is the east button on a
-Nintendo-layout pad such as an 8BitDo in Switch mode. All of this was checked with SDL's virtual
-gamepads (`gcn-recomp/tools/test_ports.sh`, and a recording replayed with no gamepad), not with
-four real controllers or under Steam Input.
+A device's `port <n>` line in `controls.txt` keeps that port from gamepads, and a
+`gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N
+for routes, as in `2/2100:A:5`.
+
+The GameCube's A, B, X and Y are the face buttons with those labels (gcn-recomp `29ce20e`), so
+GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. A pad
+whose faces carry no letters, as PlayStation's don't, has them where an Xbox pad does. All of
+this was checked with SDL's virtual gamepads (`gcn-recomp/tools/test_ports.sh`, and a recording
+replayed with no gamepad), not with four real controllers or under Steam Input.
 
 ## Four players
 
@@ -419,8 +423,8 @@ four scene changes. The rest of the slow intervals were between 20 and 50 ms.
 
 `tools/bot_soak.py` played the game with bots at gcn-recomp `b11ebc6`, unpaced in a hidden
 window with no gamepads and `GCN_AXVOICES=1`. The walker in `tools/bot_menus.py` takes the
-menus, and in a race, the city or a stadium each bot holds the stick toward a walk drawn from
-the seed and taps A. A race or a City Trial stadium still on after 120 s of game time is left
+menus, and once a round is under way each bot holds the stick toward a walk drawn from the seed
+and taps A. A race or a City Trial stadium still on after 120 s of game time is left
 through its pause menu.
 
 The frozen-picture check didn't run, since the link gives a bot no picture hash. No soak had a
@@ -449,12 +453,14 @@ main, at gcn-recomp `b11ebc6`, while the landed commit pins `782d7fa`.
 The first three stops were the walker's, each fixed before the next soak of that mode
 (`tools/README.md` has its steps).
 
-The two music stops were `tools/stream_voices.py`'s rule, at list 608,157 of 544282 and
+The two music stops came from `tools/stream_voices.py`'s rule, at list 608,157 of 544282 and
 1,691,796 of 545590. In each the game stopped one of the music's two voices in a City Trial
-round's city and gave the other a sound effect's sample in the same list, and the rule called
-the mixer's end of that sample an early end. Since `2cc5864` and `e35b777` the rule counts it as
-the game's and finds no early end in the five later soaks' logs, and neither point was compared
-with a console.
+round's city and gave the other a sound effect's sample in the same list. The rule called the
+mixer's end of that sample an early end, and neither point was compared with a console.
+
+Since `2cc5864` that end counts as the game's, and `stream_voices.py` found no early end in
+555018's or 558640's log. Since `e35b777` a move on a voice that never had a loop flag carries
+into its block's new sample, and with that rule it found none in the last three soaks' logs.
 
 579174 stopped at frame 1,473,710 in its 107th round, a Top Ride one, when the game reported a
 failed assertion in its audio code and made no frame after it. The soak called it a hang after
@@ -627,7 +633,7 @@ route.
 ## Player targets
 
 What a player's first session looks like after the warm-up, against the bars set for it.
-Dragoon `e52dce1`, here and below, landed rebased as `fe88e8a`.
+Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 
 | Target | Bar | Measured | Result |
 |---|---|---|---|
