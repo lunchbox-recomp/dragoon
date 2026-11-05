@@ -5,4 +5,5 @@ a `.ciso`. A `.gcm` dump is the same format as an `.iso`, so rename it or link i
 `rom/game.iso`.
 
 Everything in this folder except this README is ignored by git. Never commit or share disc
-images. `docs/BUILDING.md` covers dumping your disc.
+images. The [Building](../README.md#building) section of the README lists the image formats the
+build takes.
