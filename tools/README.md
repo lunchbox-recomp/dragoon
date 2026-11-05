@@ -44,7 +44,7 @@ That prints the run's directory as an absolute path, then a frame count (140 on 
 
 Can a program play the game one frame at a time? It listens on a Unix socket first and then runs probe.sh with `GCN_BOT` set to that socket, so the game connects with nothing left to chance. The bot is called once for each frame the engine steps it at.
 
-The bot reads guest RAM and returns the pad for each port it drives. The pads go in below the input log, and the run is a session (`GCN_SESSION`), which is what makes probe.sh keep a log, so every run leaves an input log that replays with no bot. The protocol is the engine's, under "Bots" in `gcn-recomp/docs/diagnostics.md`.
+The bot reads guest RAM and returns the pad for each port it drives. The input log records the bot's pads, and the run is a session (`GCN_SESSION`), so every run leaves an input log that replays with no bot. The protocol is the engine's, under "Bots" in `gcn-recomp/docs/diagnostics.md`.
 
 ```
 tools/bot_link.py --script tests/routes/menu.txt --watch 80000000:4 menu-bot 60 -- --exit-after=1500
@@ -54,17 +54,9 @@ That plays the menu route with a bot that presses nothing. It prints the four by
 
 `--every N` sets the dump interval, and everything after `--` is more probe.sh settings. `--hang SECONDS` ends the run when the game sends no frame, or answers no read, for that long (30 by default, 0 for never). `--send N` makes the bot send ports 1 to N whatever `--pads` says, to see the engine refuse a port the game doesn't have or one the bot left out.
 
-Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, hang=)`. `bot(link)` gets a `Link` whose `frame` is the last frame number and whose `read(addr, length)` returns 1 to 256 bytes of RAM. A read the game doesn't answer within `hang` seconds ends the run as a hang, or at SECONDS as the time limit when that comes first, and outside a run a read waits for ever. The bot returns `{port: Pad(...)}`, and a port it leaves out stays out, so the engine stops the game and names the port.
+Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, hang=)`, which calls `bot(link)` once a frame. The bot reads 1 to 256 bytes of RAM at a time through `link.read(addr, length)` and returns `{port: Pad(...)}`, where a port it leaves out stops the game. `run` returns an `Outcome`, whose `reason` is one of those below and whose `input_log` is the directory `--replay=` takes.
 
-`every=None` dumps no frames, since probe.sh then gets an interval no run reaches. `split_settings`, `add_play_arguments`, `add_run_arguments`, `run_options` and `print_outcome` give another tool this command's `--` split, its run arguments and its outcome lines, as ram_peek.py does. `run_directory(name)` is the `build/probe/NAME/` a run of NAME keeps its output in, and `is_reset(line)` says whether a `[reset]` line is a restart or a hot reset, which a shutdown isn't.
-
-`Pad()` is a pad at rest and `BUTTONS` holds the PADStatus bits. A `Pad` value the engine would refuse is a `ValueError`, so a bot that computes one raises.
-
-`run` owns the deadline. It gives probe.sh a few seconds more than SECONDS and ends the game itself at SECONDS, or at a hang, with the link open until the game has exited. The engine then doesn't log that the bot hung up, and its input log is whole.
-
-`hang` also counts the wait for the game to connect again after it resets the console, which the `[reset]` line in `stdout.txt` shows. It doesn't count the first connection, so a game that hasn't connected when SECONDS are up is `never_linked`. Nor does it count the wait after a game that exited, since probe.sh notices that only at its next one-second tick.
-
-`run` returns an `Outcome` with `frames`, `last_frame`, `reason`, `detail`, `run_dir`, `input_log` and `error`. `input_log` is the directory `tools/probe.sh NAME SECONDS "" 60 --replay=DIR` takes. It comes from the last `[session]` line in `stdout.txt`, so after a console reset it's the last process's. The reason comes from the link's own end, what the game wrote to `build/probe/NAME/` and that input log, never from probe.sh's exit status, which is 0 whatever the game did.
+The rules for the deadline and a hang are in the docstrings of `run` and `Link`, and `Pad`'s says which values it refuses. ram_peek.py shows the module's argument helpers in use.
 
 | Reason | Means | Detail |
 |---|---|---|
@@ -83,19 +75,11 @@ Other tools import `run(name, seconds, bot, pads=, script=, every=, settings=, h
 
 The engine writes `# end` in its input log on the ways out it chooses, and that includes the signals that ask it to quit, such as a SIGTERM from outside. A game that left none was killed with SIGKILL or hit a signal the engine doesn't catch, such as SIGABRT. Its 2 second watchdog leaves none either, when the engine's own exit hangs.
 
-A game that left no `# end` is `game_died`, and so is one that resets the console and starts again but never begins a session. The input log is then the first process's, which ends with the reset, so a `[session]` line has to follow the `[reset]` line in `stdout.txt`. An `exit_after` needs the end line's frame to reach the `--exit-after` count, and a `shutdown` wins over it.
+An `exit_after` needs the end line's frame to reach the `--exit-after` count, and a `shutdown` wins over it.
 
-The command exits 0 for `time_limit`, `exit_after` and `shutdown`. It exits 1 for the reasons that mean something went wrong, and `game_exited` is one of them. Nothing in a bot run asks for the game to end some other way, and a SIGTERM from outside does it.
+The command exits 0 for `time_limit`, `exit_after` and `shutdown`. It exits 2 for `never_linked`, as it does for a socket another bot holds or a probe.sh that won't run. Every other reason exits 1, `game_exited` included, since only a SIGTERM from outside ends a bot run's game that way.
 
-`never_linked` is a run that couldn't start, so it exits 2 like a bad argument, a socket another bot is listening on or a probe.sh that won't run.
-
-The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when that would pass the 103 bytes a Unix socket takes. Its lock is the same path with `.lock` on the end, and a second run on the same socket is refused while the first holds it. A run removes its lock file as it stops, while it still holds the lock, so none is left behind. A socket file an earlier run left is replaced.
-
-A `stdout.txt`, a `panic.txt` or a `session/` that an earlier run of NAME left is deleted first, but its frames stay, so give each run a new NAME. A `GCN_SESSION` in `settings` is used in place of `session/`, and a relative one is taken from `build/probe/NAME/`.
-
-The session `run` makes keeps the input log and records no audio. A session fills an empty `GCN_WAV` or `GCN_AIDWAV` with a file of its own, so the run passes both as `/dev/null/none`, which the engine can't open because `/dev/null` isn't a folder. The run's directory gets no empty file named `.txt`, which an empty `GCN_AIDWAV` left there before gcn-recomp `1efabb5`.
-
-A `GCN_WAV` or `GCN_AIDWAV` path in `settings` is used as given, and in the session the run makes an empty one still gets `/dev/null/none`. A session of your own records what the engine records by default.
+The socket is `build/probe/NAME/bot.sock`, or `/tmp/dragoon-bot-HASH.sock` when that path passes the 103 bytes a Unix socket takes, and a lock beside it refuses a second bot on the same socket. A run deletes the `stdout.txt`, `panic.txt` and `session/` an earlier run of NAME left but keeps its frames, so give each run a new NAME. The session the run makes records no audio unless `settings` gives `GCN_WAV` or `GCN_AIDWAV` a path, and a `GCN_SESSION` of your own records what the engine records by default.
 
 A game that resets the console connects again and the bot goes on with it, with `Link.starts` counting the connections. The tests stand a fake probe.sh in for the game, so they need no disc.
 
@@ -107,15 +91,9 @@ What does guest RAM hold at the frames I name, along a route? It plays the game 
 tools/ram_peek.py --script tests/routes/air-ride-race.txt --at 3200,3400-3600/100 race-peek 100 scene.minor player1.speed player1.x 8053627C:f32x4 -- --exit-after=3610
 ```
 
-An item is a name from kar_ram.json, which prints with what its value means when the table says. Or it's a raw read, where `ADDR:LEN` prints LEN bytes as hex and `ADDR:TYPE` or `ADDR:TYPExN` prints one or N values of u8, s8, u16, s16, u32, s32 or f32. ADDR can go on with `/OFF` for each pointer to follow as the table's paths do, and a value behind a null pointer prints as `none`.
+An item is a name from kar_ram.json or a raw read at an address, and `--help` gives the syntax of both and of `--at`. NAME has to be new, since a run in an old `build/probe/NAME/` starts from that run's memory card. `--script`, `--pads`, `--hang` and the settings after `--` are bot_link.py's, and so are its outcome lines.
 
-`--at` takes frames and ranges, `A-B` for each frame from A to B and `A-B/S` for every Sth. The engine's frame numbers can jump, so a frame is read at the first one the engine steps the bot at from then on, and the line names that frame. `--script`, `--pads`, `--hang` and the settings after `--` are bot_link.py's, and `--table PATH` reads another table.
-
-NAME has to be new. A run in a `build/probe/NAME/` an earlier run left starts from that run's memory card, while every route starts from a blank one, so ram_peek.py refuses such a NAME. The run dumps no frames unless `--every N` asks for every Nth.
-
-It prints how the run ended as bot_link.py does, with a line naming any frame it never reached. It exits 0 when the run ended as a bot run is meant to and every frame was read, and 1 when the run ended another way or a frame was never reached.
-
-A bad argument, a NAME that isn't new, an unknown name, a table that won't load or a game that never connected exits 2. The tests stand a fake link in for the game, so they need no disc.
+The tests stand a fake link in for the game, so they need no disc.
 
 ## kar_ram.py
 
@@ -143,7 +121,7 @@ The walk reads no RAM, so a seed gives the same pads whatever the game does. Por
 
 How does a bot get from the boot to a race and back to the menus? `Menus(ports, Schedule(seed, modes))` reads which screen is up and where its cursor is. It presses a button as libmelee's menu helper does, down for 5 frames and then up for 45 while the screen answers.
 
-A menu value keeps its last value off its own screen, so `Menus` reads `scene.minor` first and a cursor only on the screen that owns it. `step(link)` is for a `bot_link.run` callback. It gives the pads for the frame, or None while a race or the city plays, which is the race bots' turn (bot_walk.py). It reads the screen on every frame of a race too, so the race bots never press on City Trial's stats or the card that follows them. A soak saw their A pass both before the walker looked, when it looked every 60 frames.
+A menu value keeps its last value off its own screen, so `Menus` reads `scene.minor` first and a cursor only on the screen that owns it. `step(link)`, for a `bot_link.run` callback, gives the pads for the frame, or None while a race or the city plays, which is the race bots' turn (bot_walk.py). It reads the screen on every frame of a race too, so the race bots never press on City Trial's stats or the card that follows them.
 
 The schedule picks each round's mode and the Air Ride course from the seed, and the modes come round in a shuffled order each time through. `Menus` says what it's doing to the `say` it was given. It has no command line.
 
@@ -155,8 +133,10 @@ The paths come from the routes in `tests/routes/` and the values in kar_ram.json
 | Mode select | B on another mode's own menu to go back to the mode select, then DOWN or UP to the mode, A, then UP until `menu.item` reads 0 and A on the mode's own menu for Start Game, then A to skip its movie. A row that 3 UPs leave alone gets A | |
 | Air Ride | The cursor along its row and then down or up to the course, A, then A to join, A for OK and START | |
 | Top Ride | A on the course select, then A and START in turn on the machine select | |
-| City Trial, 1 to 4 players | A on every port at the movie, A on each port not yet in at the player select, START once all are in and OK | |
-| Back to the menus | A race is left through the pause menu with START, DOWN, DOWN and A once `round_seconds` of game time are up. A race that ends first goes through its results with START. The city goes through its stats and card with A, then the stadium, then its results with START on every port. A four-player soak's Destruction Derby results waited for each player's. The checklist that comes next when the round checked a box takes A. City Trial then comes back to its player entry, where B held for 90 frames goes back to its own menu. The game took 47. A stadium still on after `round_seconds` is left through its pause menu with START, DOWN and A for End Game, which goes to City Trial's own menu. The menu has two rows and DOWN wraps. With more than one player RIGHT takes the place of DOWN, since four players' rows sit side by side | RIGHT on a stadium's pause menu with three players, so leaving a three-player stadium is unconfirmed. A two-player soak left 12 stadiums with it. One player's and four players' menus have been watched, and the fake game in testgame.py lays out every count above one side by side |
+| City Trial, 1 to 4 players | A on every port at the movie, A on each port that isn't in at the player select, START once all are in and OK | |
+| Leaving a race | START, DOWN, DOWN and A on the pause menu once `round_seconds` of game time are up, or START through the results of a race that ends first | |
+| Leaving the city | A through its stats and card, then the stadium, then START on every port through its results, which wait for each player's. A on the checklist when the round checked a box. B held 90 frames at the player entry goes back to City Trial's own menu (the game took 47) | |
+| Leaving a stadium | After `round_seconds`, START, DOWN and A pick End Game on its two-row pause menu, where DOWN wraps. End Game goes back to City Trial's own menu. With more than one player the rows sit side by side, so RIGHT takes DOWN's place | RIGHT on a stadium's pause menu with three players, so leaving a three-player stadium is unconfirmed. A two-player soak left 12 stadiums with it. One player's and four players' menus have been watched, and the fake game in testgame.py lays out every count above one side by side |
 | Most presses | 5 frames down and 45 up, so the screen is looked at again 50 frames after a press. The title waits 100 frames and a race's START 305. The pause menu waits 100 after START and 305 after its last A | The routes usually wait about 300 frames after a press that changes the screen. A press made during the change may land on the next screen |
 
 The walker says `unconfirmed step` the first time it takes each step in the right-hand column, and `screen N isn't in kar_ram.json` for a screen the table doesn't name, which it presses A on. A screen that stays up past `stuck_seconds` of game time raises `Stuck`. So does a race that goes past `play_seconds`, 600 s by default, which the soak's `Player` raises to `round_seconds` and 60 when that's more. The menus going on for five times `stuck_seconds` with no race or city raise it too, as when two screens take turns. After a console reset the walker forgets the press under way and the screen, and starts over from the boot.
@@ -169,23 +149,20 @@ Does the game hold up when bots play it for a long time? `bot_soak.py` plays it 
 tools/bot_soak.py --seed 7 --minutes 60 --modes city-trial --ports 4
 ```
 
-The seed is a whole number from 0. It's printed, and it defaults to one made from the clock. Each run gets a new NAME, since a run in an old `build/probe/NAME/` starts from the memory card that run left. The soak adds `GCN_AXVOICES=1`, makes no frame dumps and gives `bot_link.run` the settings after `--` as they are.
-
-`--minutes` is at most a week, and `--round`, `--stuck` and `--hang` are at most a day. A bigger number is a usage error.
+The seed is printed, and the soak adds `GCN_AXVOICES=1` to the settings after `--` and makes no frame dumps. `--minutes` is wall time (10 by default), and `--round` is the game seconds the walker lets a race or a City Trial stadium run before it leaves through the pause menu (120 by default). `--help` gives the other defaults and the limits, and `--hang` here has to be above 0.
 
 It stops at the first of these.
 
 - The game exits, shuts itself down, panics or is stopped by the engine.
-- The game sends no frame, or no answer to a read, for `--hang` seconds of wall time, 30 by default.
-- The picture's hash stays the same for 10 s of game time while the race bots' input changes.
+- The game sends no frame, or no answer to a read, for `--hang` seconds of wall time.
 - A music stream ends early, by stream_voices.py's rule on the run's `[axv]` lines.
-- A menu screen stays up for `--stuck` seconds of game time, 120 by default and 30 at least, or a race or the city for 600 (or `--round` and 60 when that's more), or the menus go on for five times `--stuck` with no race or city.
+- The menus or a race outlast the walker's limits, which follow `--stuck` and `--round` (bot_menus.py).
 
-A console reset rebuilds the shader cache before the bot connects again, and that time counts against the hang limit. The soak keeps the first reset's `[shaders] ... in Z ms` line, and warns when Z reaches two thirds of the limit. `--hang` raises the limit for the next run, since a run can't change it once it has started.
+The frozen-picture check never runs, since the link gives no picture hash.
 
-The frozen-picture check needs a picture hash, which the link doesn't give, so it doesn't run.
+A console reset rebuilds the shader cache before the bot connects again, and that time counts against `--hang`. The soak prints the first reset's `[shaders] ... in Z ms` line and warns when Z reaches two thirds of the limit, so the next run can raise `--hang`.
 
-A stop keeps the run's input log and writes `bot.json` beside it, in the session directory of the process the stop was in, which is the last process's unless a console reset came after the stop (`before_reset`) and then the earlier one's. It holds the seed, the arguments, the Dragoon and engine commits, how the run stopped and what the resets were. It says whether the stop came after a console reset, because a replay plays only the process after the last one, from the card as it stood at the last reset.
+A stop keeps the run's input log and writes `bot.json` beside it, with the seed, the arguments, the Dragoon and engine commits, how the run stopped and the console resets. It says whether the stop came after a reset, since a replay plays only the process after the last reset, from the card as it stood then.
 
 When the stop's process kept no input log, `bot.json` goes to `build/probe/NAME/` instead and the stop says it has no input log to replay.
 
@@ -193,7 +170,7 @@ The commits are the checkout's HEAD, which may not be what was built. `engine_bu
 
 A music cut is read from the log, and the log can hold a console reset after it. The last process's replay can't show that cut, so the stop and `bot.json` say so (`before_reset`) and name the input log and replay line of the process it happened in. That replay ends with `--exit-after` at the frame of the `# end` line closing the log, and has none when the line is missing.
 
-The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The line carries the settings after `--`, so the replay runs the run's build and disc with the run's switches. Their `--disc` and `--bin` paths are made absolute, since probe.sh reads a relative one from where it was run, and `--pads` plugs in the ports `--ports` drove. The replay doesn't depend on it, since the engine sets every port from the input log during a replay. A four-port soak's log replayed the same with `--pads=1`.
+The stop prints the `probe.sh --replay=` line that plays the input log back as `replay-NAME`. The line carries the settings after `--`, so the replay runs the run's build and disc with the run's switches. Their `--disc` and `--bin` paths are made absolute, since probe.sh reads a relative one from where it was run, and `--pads` plugs in the ports `--ports` drove, though a replay sets every port from the input log (a four-port soak's log replayed the same with `--pads=1`).
 
 The line leaves out what the soak sets for itself, and any `GCN_WAV` or `GCN_AIDWAV` recording, which a replay would write over. It ends at the stop's frame with `--exit-after`, except for a hang, whose last frame a replay isn't known to reach.
 
@@ -211,7 +188,7 @@ What does the soak watch for while the bots play? `Frozen` watches the picture a
 
 How did the run end, and was that a fault? `classify` turns a `bot_link.run` result into a `Stop` whose kind is `game_exit`, `panic`, `engine_stop`, `hang`, `frozen_picture`, `music_cut` or `menus_stuck`. It returns None for a run that reached its time limit, or an `--exit-after` it was given. A game that never connected, a bad link or a bot that raised an error says nothing about the game, so those are a `SoakError`.
 
-A hang with no frame and no assertion from the game after a reset whose shader rebuild took two thirds of the hang limit or more says so in its detail. It has no command line.
+When the first console reset's shader rebuild took two thirds of the hang limit or more, a hang that isn't an unanswered read or an assertion says in its detail that the rebuild may be the cause. It has no command line.
 
 ## bot_record.py
 
