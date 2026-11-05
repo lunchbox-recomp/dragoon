@@ -70,6 +70,11 @@ Every argument count in `ax.cpp` matches what the game writes, so no list is cut
 builder never writes `01`, `08`, `09` or `0A` to `0D`. In the ten runs in `status.md`, `04`
 and `05` came in every list (except two in the first window), and `12` in every list.
 
+In the twelve audio-hash runs at gcn-recomp `b97c019`, `tools/ax_stats.py` counts 46,540,374
+voice-milliseconds in 1,449 windows. Source type 0 with coefficient set 0, which goes through
+the polyphase filter, made 46,043,984 of them (98.9%) and type 2 the other 496,390. None of
+them had the low-pass filter's on word (93) set, and 25 setup commands started a bus off zero.
+
 ## The differences
 
 Dolphin's AX HLE (`AX.cpp`, `AXVoice.h` and `AXStructs.h`, GPL, read for facts and not
@@ -121,11 +126,11 @@ Dolphin leaves bit `4000` unmapped, with a TODO saying it selects Dolby Pro Logi
 The newer PB has a one-pole low-pass filter at words 93 to 96 (on, `yn1`, `a0`, `b0`), which
 moves the loop counter from word 93 to 97. When the filter is on, each sample after the
 volume envelope becomes `(a0 * x + b0 * yn1) >> 15` clamped to 16 bits, and that result is
-the next `yn1`. Since gcn-recomp `3056588` the runtime reads and writes all 97 words on every
-build but the 2001 one and takes parameter updates up to word 96, but it doesn't apply the
-filter. The game didn't turn it on in the twelve audio-hash runs at `b97c019`.
-`tools/ax_stats.py` over their logs counts 0 voice-milliseconds with word 93 set, out of
-46,540,374 in 1,449 windows.
+the next `yn1`.
+
+The runtime reads and writes all 97 words on every build but the 2001 one and takes parameter
+updates up to word 96 (`ax.cpp:42`, `:53`, `:504`), but it doesn't apply the filter. The game
+didn't turn it on in the twelve runs counted under "What the game sends".
 
 ### Compressor
 
@@ -168,51 +173,20 @@ Source type 2 (PB word 4) was the cause. It means no rate conversion, so the uco
 sample for every sample out and ignores the ratio, as Dolphin's `AXVoice.h` and
 `ax.cpp:448-453` do. `status.md` has the counts after.
 
-[`scorecard.md`](scorecard.md) measures the five routes at both stages on gcn-recomp `caf12a2`,
-which has none of this work, and on `b848158`, with `tools/audio_scorecard.py`. The tool
-scores the mixer stage from unpaced runs and the device stage from real-time ones, and has
-done so for both builds. Over the five routes, 324 s in all, the unpaced mixer stage made 132
-clicks at `caf12a2` and 136 at `b848158`, and its clipped runs fell from 208 to 25. The audio
-work didn't reduce the mixer stage's clicks over those seconds. Rescored with
-`audio_scorecard.py --no-run`, the title's first 91 s (`--margin 75`) went from 1,085 clicks to
-19 and the mode select's first 170 s (`--margin 150`) from 118 to 16, so on those two routes the
-clicks that fell are past the scored seconds, in the same recordings. In the scored seconds what
-it cut was clipping.
+[`scorecard.md`](scorecard.md) scores five routes with `tools/audio_scorecard.py` on later pins
+and on gcn-recomp `caf12a2`, from before the audio work. Unpaced, over 324 s, the mixer stage's
+clipped runs fell from 208 to 25 by `b848158` while its clicks went from 132 to 136. Its clicks
+fell to 94 at `b97c019`.
 
-## What the move to gcn-recomp `e1016b8` changed
+`scorecard.md` rescores the same recordings with `--no-run` and finds that on the title and the
+mode select the clicks that fell by `b848158` fell past the scored seconds.
 
-The pin moved from gcn-recomp `b848158` to `e1016b8`, 87 commits. These are the ones that
-change what the mixer or the AI DMA makes. All of them come by `b97c019`, 66 commits in, and
-none of the 21 after it touches the audio files under `runtime/`.
+## Stream music and disc timing
 
-| Commit | Change |
-|---|---|
-| `3056588` | `GCN_AXSTATS` counts voices with the filter on and ramped voices, and splits voice time by resampler type and coefficient set. The PB is 97 words on every build but the 2001 one |
-| `3b025ac` | Each bus a voice mixes into leaves the voice's last sample in the PB's depop words, 41 to 49 |
-| `cce9fbc`, `795ccc4` | Source type 0 resamples through a four-tap polyphase filter of 128 phases, from three sets worked out when AX starts |
-| `84471cc` | A bus the setup command starts at zero stays silent whatever its slope |
-| `2b7ae75` | A sample mixed into a bus clamps at -32,768 instead of -32,767 |
-| `3d4fe9b` | Command `0E` clamps its output at -32,768 instead of -32,767 |
-| `6def94c` | The ADPCM decoder saturates at -32,768 instead of -32,767, and the history the next sample reads carries it |
-| `a87ab06`, `3c55458` | A catch-up jump no longer ends a block the guest hasn't queued after, so the DMA doesn't play that buffer twice. A held block ends once the guest queues |
-
-`tools/audio_hashes.py check` at `b97c019`, against the goldens on `main`, failed every row
-of all twelve routes, 24 rows in all. The hashes cover the whole mix since boot, so they say
-each route's sound changed and not which commit changed it. The goldens were recorded again
-at `b97c019`, and at `e1016b8` the check matched them on all twelve routes (`status.md`).
-
-In those twelve runs `tools/ax_stats.py` counts 46,540,374 voice-milliseconds. 46,043,984 of
-them, 98.9%, were source type 0 with coefficient set 0, and the other 496,390 were type 2. So
-nearly all the voice time the game plays now goes through the polyphase filter. 25 setup
-commands started a bus off zero in the 1,449 windows.
-
-## Music that stopped
-
-In the playtest on 2026-10-27 the menu music played for a few seconds and stopped, while the
-sound effects carried on. The game streams music through HAL's sound library, the one Melee's
-decompilation calls `HSD_Synth`. Two ADPCM voices play 32 KB a channel from 64 KB slots in
-ARAM, and `HSD_SynthPStreamMasterClockCallback` moves their end and loop addresses from slot
-to slot as the music plays.
+The game streams music through HAL's sound library, the one Melee's decompilation calls
+`HSD_Synth`. Two ADPCM voices play 32 KB a channel from 64 KB slots in ARAM, and
+`HSD_SynthPStreamMasterClockCallback` moves their end and loop addresses from slot to slot as
+the music plays.
 
 The voices need the loop flag from the stream's header, which the header callback sets with
 `AXSetVoiceAddr`. The first data callback then sets the loop, end and current addresses one at
@@ -220,35 +194,19 @@ a time. The SDK's `__AXServiceVPB` copies those fields alone when any of them is
 copies the whole address with its loop flag only when none is, so the two callbacks have to
 land in different 5 ms audio frames.
 
-On a console the disc read between them takes tens of milliseconds. gcn-recomp read the disc
-at 64 MB/s, so both callbacks often landed in one frame, and the voices played their first
-slot (1.79 s) and ended. Replays of two playtest sessions showed it on every stream, not only
-the menu's.
-
-gcn-recomp `04c025f` times disc reads as a console's drive does, with Dolphin's model, and
-`f19f98d` moves DIMAR and DILENGTH when a read completes. `GCN_AXVOICES` (`1b25342`) logs each
-voice's start, changes, loops and end, which is how this was traced.
-
-Two more fixes came out of the trace. `1f5e5a3` loops or stops a voice only on the sample at
-its end address, which ends a 10 ms stall on a slot's first sample at some slot changes.
-`ac8a1f4` wraps an ADPCM voice whose end address is on a frame's header byte to its loop
-address, without stopping it or loading the loop's predictor, as Dolphin's hardware tests
-show the DSP does.
-
-The menu route was run at gcn-recomp `f11c013`, whose runtime differs from `bad7160`'s only
-in when `GCN_AXVOICES` prints a loop line. Its menu stream starts at list 4,476 with its loop
-flag set and is still playing at list 17,000, 85 s in, with peaks of 12,289 and 12,479. The
-Melee native port traced the same stop to the same merged address update, and fixed the same
-end check
+On a console the disc read between them takes tens of milliseconds. A much faster read lands
+both callbacks in one frame, and the voices play their first slot (1.79 s) and end, as the menu
+music did in the playtest on 2026-10-27. The Melee native port traced the same stop to the same
+merged address update
 ([its notes](https://github.com/HexDump0/melee/blob/main/native/AI/handoffs/2026-09-13-P-648-menu-bgm.md)).
 
 ## Music at fast reads
 
-Since gcn-recomp `b5ec329` the disc reads fast by default (`22bc2c8`, `7968abc`). Every block
-reads as one the drive has read ahead, so a read costs 600 us and its length at 32 MiB/s, as
+Since gcn-recomp `7968abc` the disc reads fast by default. At `fast` every block reads as one
+the drive has read ahead (`22bc2c8`), so a read costs 600 us and its length at 32 MiB/s, as
 Dolphin's "Speed up disc transfer rate" has it. `disc console` in `settings.txt` or
-`--disc=console` keeps the console's timing above, and `status.md` has the menu route's loads at
-both speeds.
+`--disc=console` keeps Dolphin's model of the console's drive (`04c025f`), and `status.md` has
+the menu route's loads at both speeds under "Disc reads".
 
 The two callbacks still land in different audio frames. With the drive code `b5ec329` has, each
 of the twenty-four routes in `tests/hashes/manifest.txt` ran once at each speed under
@@ -262,10 +220,10 @@ without its loop flag or that the mixer ended.
 | Loops, with no `end` | 52 | 50 |
 | 80579F88's `run` and `set` lines | 2 lists apart all 46 times through list 19,400 | 16 under 50 lists, from 2 to 44 |
 
-At `fast` the paired updates leave one audio frame more than the loop flag needs. Four-player
-City Trial, the Sand, Fire and Light Top Ride routes and `top-ride-courses` each had two more
-stream voices at `fast`, from a track change further along before the run's time ran out. The
-other nineteen matched, but the title and Top Ride's Sky course differed in the check's first
+At `fast` the header and data callbacks land 2 lists apart, one more than the loop flag needs.
+Four-player City Trial, the Sand, Fire and Light Top Ride routes and `top-ride-courses` each had
+two more stream voices at `fast`, because each fast run reached a later track change before its
+time ran out. The other nineteen matched, but the title and Top Ride's Sky course differed in the check's first
 pass and matched in this one, so some of the difference is from run to run.
 
 In the four-player City Trial run at `fast`, the stream pair 8057938C and 80579478 faded to a
@@ -274,8 +232,7 @@ peak of 0 by list 27,400 with `cur` frozen and its loop flag set. A new pair had
 never reached that scene.
 
 `tools/audio_hashes.py` plays the routes on `dragoon_bench`, which reads neither `settings.txt`
-nor `--disc`, so the audio goldens are recorded at fast reads. At `b5ec329` all 48 rows changed
-and were recorded again (`status.md`).
+nor `--disc`, so the audio goldens are recorded at fast reads.
 
 ## What was done and what is left
 
@@ -291,10 +248,13 @@ Generic runtime work in `runtime/`.
 | Low-pass filter | after the volume envelope, `ax.cpp:474-479` | Not done |
 | Depop words | `ax.cpp:225-236` | Done in `3b025ac` |
 | Polyphase resampling through worked-out coefficient sets | `ax.cpp:332-384` | Done in `cce9fbc` and `795ccc4` |
+| A bus the setup command starts at zero stays silent | `ax.cpp:552-566` | Done in `84471cc` |
+| Mixing, `0E` and the ADPCM decoder clamp at -32,768 | `ax.cpp:230`, `:604`, `:163` | Done in `2b7ae75`, `3d4fe9b` and `6def94c` |
+| An AI DMA catch-up jump ends a block only once the guest queues after it | `dsp.cpp` | Done in `a87ab06` and `3c55458` |
 | Loop counter and signed envelope | `ax.cpp:198-216`, `:474-479` | Not done |
 | Loop or stop a voice only on the sample at its end address | `ax.cpp:198-216` | Done in `1f5e5a3` |
 | Wrap an ADPCM voice whose end is on a frame's header to its loop address | `ax.cpp:167-179` | Done in `ac8a1f4`, logged as a loop since `545c784` |
-| Disc reads timed as a console's drive times them | `drive.h`, `di.cpp` | Done in `04c025f` and `f19f98d`. Since `b5ec329` it's `disc console` |
+| Disc reads timed as a console's drive times them | `drive.h`, `di.cpp` | Done in `04c025f` and `f19f98d`. Since `7968abc` it's `disc console` |
 | Disc reads at the read-ahead rate by default | `drive.h`, `di.cpp`, `main.cpp` | Done in `22bc2c8` and `7968abc` |
 | A log of each voice's start, changes, loops and end | `GCN_AXVOICES` | Done in `1b25342` |
 
