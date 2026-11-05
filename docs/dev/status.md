@@ -459,8 +459,8 @@ The two music stops came from `tools/stream_voices.py`'s rule, at list 608,157 o
 round's city and gave the other a sound effect's sample in the same list. The rule called the
 mixer's end of that sample an early end, and neither point was compared with a console.
 
-Since `2cc5864` that end counts as the game's, and `stream_voices.py` found no early end in
-555018's or 558640's log. Since `e35b777` a move on a voice that never had a loop flag carries
+Since `2cc5864` the `set` that gave the block a new sample ends the music voice as the game's
+doing, and `stream_voices.py` found no early end in 555018's or 558640's log. Since `e35b777` a move on a voice that never had a loop flag carries
 into its block's new sample, and with that rule it found none in the last three soaks' logs.
 
 579174 stopped at frame 1,473,710 in its 107th round, a Top Ride one, when the game reported a
@@ -830,8 +830,8 @@ KiB rounded down.
 | f1032 | under 100 ms | 149 ms (6 reads, 241 KiB, 169 ms drive) |
 | Route reads | 1,005, 31.4 MiB, 1,584 ms drive | 760, 27.4 MiB, 11,781 ms drive |
 
-A second fast run made the same reads in each interval with the same drive time, and its three
-intervals came within 2 ms of the first run's. gcn-recomp's diagnostics put the route's two scene
+A second fast run made the same number of reads in each interval with the same drive time, and
+its three intervals came within 2 ms of the first run's. gcn-recomp's diagnostics put the route's two scene
 changes at 400 ms and 213 ms at `fast` and 1,485 ms and 1,458 ms at `console`. A playtest's input
 log recorded at `bad7160`, with no disc line, replayed with a first read of 69,464 us, and the log
 the replay wrote says `# disc console`.
