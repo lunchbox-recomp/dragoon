@@ -524,10 +524,10 @@ menus. In a race, the city or a stadium each bot holds the stick toward a walk d
 seed and taps A. A race or a City Trial stadium still on after 120 s of game time is left
 through its pause menu. The frozen-picture check didn't run in any soak, since the link gives a
 bot no picture hash yet. No soak had a console reset, so none rebuilt the shader cache. Each
-soak's run directory holds an empty `.txt`. The engine before gcn-recomp `1efabb5` opened
-`GCN_AIDWAV`'s block index, its name with `.txt` added, even for the empty `GCN_AIDWAV=` that
-bot_link then set so no recording was made. bot_link now passes `/dev/null/none`, which leaves
-no file.
+soak below left an empty `.txt` in its run directory. The engine before gcn-recomp `1efabb5`
+opened `GCN_AIDWAV`'s block index, its name with `.txt` added, even for the empty `GCN_AIDWAV=`
+that bot_link then set so no recording was made. bot_link now passes `/dev/null/none`, which
+leaves no file.
 
 The Dragoon column is the commit each soak ran, on bot-soak before its rebases onto main.
 `525580e` became `569e994`, `0cb53f4` became `bd5ff15`, `c9bf0f9` became `acfb6c7`, `ee88df6`
