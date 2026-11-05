@@ -78,6 +78,14 @@ class ModChoicesTest(unittest.TestCase):
         self.run_tool('set', 'a.xml', 'opt', '2')
         self.assertEqual((self.data / 'mods.txt').read_text(), 'a.xml:opt=2\n')
 
+    def test_past_last_choice_alone_is_dropped(self):
+        self.package()
+        self.package('b.xml')
+        (self.data / 'mods.txt').write_text('a.xml:opt=3\n')
+        self.assertEqual(self.run_tool('list')['packages'][0]['options'][0]['choice'], 1)
+        self.run_tool('set', 'b.xml', 'opt', 'off')
+        self.assertEqual((self.data / 'mods.txt').read_text(), 'b.xml:opt=0\n')
+
     def test_last_equals_sign_and_cr_in_option_id(self):
         self.package()
         xml = (self.root / 'riivolution' / 'a.xml').read_text().replace('id="opt"',
@@ -156,12 +164,12 @@ class ModChoicesTest(unittest.TestCase):
     def test_dash_named_xml_and_disc(self):
         self.package('-a.xml')
         self.run_tool('set', '--', '-a.xml', 'opt', '1')
-        image = self.data / '-made up.iso'
+        image = self.data / '-made.iso'
         image.write_bytes(self.image.read_bytes())
         result = self.run_tool('apply', '--disc', str(image))
         self.assertEqual(result['ram_patches'], 'mods/.out/ram-patches.txt')
         done = subprocess.run([sys.executable, str(TOOL), 'apply', '--data',
-                               str(self.data), '--disc=-made up.iso'], cwd=self.data,
+                               str(self.data), '--disc=-made.iso'], cwd=self.data,
                               capture_output=True, text=True, timeout=15)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertEqual(json.loads(done.stdout)['ram_patches'],
@@ -255,6 +263,18 @@ class ModChoicesTest(unittest.TestCase):
         self.assertIn('UTF-8', self.run_tool('list', code=2)['error'])
         self.assertIn('Delete', self.run_tool('list', code=2)['error'])
 
+    def test_non_utf8_cache_names_cache(self):
+        self.package()
+        repo = self.data / 'fake repo'
+        (repo / 'build').mkdir(parents=True)
+        (repo / 'build' / 'CMakeCache.txt').write_bytes(b'\xff')
+        output = io.StringIO()
+        with mock.patch.object(mod_choices, 'REPO', repo), contextlib.redirect_stdout(output):
+            self.assertEqual(mod_choices.main(['apply', '--data', str(self.data)]), 2)
+        error = json.loads(output.getvalue())['error']
+        self.assertIn('CMakeCache.txt', error)
+        self.assertIn('--disc', error)
+
     def test_mods_txt_link_is_not_followed(self):
         self.package()
         target = self.data / 'target.txt'
@@ -262,6 +282,14 @@ class ModChoicesTest(unittest.TestCase):
         os.symlink(target, self.data / 'mods.txt')
         self.assertIn('error', self.run_tool('set', 'a.xml', 'opt', 'off', code=1))
         self.assertEqual(target.read_text(), 'unchanged')
+
+    def test_write_replaces_link_without_following_it(self):
+        target = self.data / 'other.txt'
+        target.write_text('unchanged')
+        os.symlink(target, self.data / 'mods.txt')
+        mod_choices.write_choices(self.data, [('a.xml', 'opt', 0)])
+        self.assertEqual(target.read_text(), 'unchanged')
+        self.assertEqual((self.data / 'mods.txt').read_text(), 'a.xml:opt=0\n')
 
 
 class FakeEngineTest(unittest.TestCase):
@@ -288,6 +316,39 @@ class FakeEngineTest(unittest.TestCase):
                                'list', '--data', str(self.data), code=2)
         self.assertIn('bad package folder', result['error'])
         self.assertIn('Check', result['error'])
+
+    def test_missing_engine_names_checkout_step(self):
+        missing = self.data / 'missing riivolution.py'
+        output = io.StringIO()
+        with mock.patch.object(mod_choices, 'RIIVOLUTION', missing), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(mod_choices.main(['list', '--data', str(self.data)]), 2)
+        error = json.loads(output.getvalue())['error']
+        self.assertIn('gcn-recomp', error)
+        self.assertIn('git submodule update --init', error)
+
+    def test_package_error_has_punctuation_and_action(self):
+        listing = ('{"packages":[{"xml":"bad.xml","error":'
+                   '"savegame does not redirect saves","options":[]}]}')
+        script = 'print(%r)\n' % listing
+        result = self.run_fake(script, 'list', '--data', str(self.data), code=0)
+        self.assertIn("saves. ", result['packages'][0]['error'])
+        self.assertIn('author', result['packages'][0]['error'])
+
+    def test_file_error_names_path_and_reason(self):
+        output = io.StringIO()
+        path = str(self.data / 'mods.txt')
+        found = [{'xml': 'a.xml', 'options': [{'id': 'opt', 'choices': ['one']}]}]
+        with mock.patch.object(mod_choices, 'packages', return_value=found), \
+                mock.patch.object(mod_choices, 'write_choices',
+                               side_effect=PermissionError(13, 'Permission denied', path)), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(mod_choices.main(['set', '--data', str(self.data),
+                                               'a.xml', 'opt', 'off']), 2)
+        error = json.loads(output.getvalue())['error']
+        self.assertIn(path, error)
+        self.assertIn('Permission denied', error)
+        self.assertIn('writable', error)
 
     def test_engine_bad_exit_and_no_json(self):
         for script, expected in [
@@ -322,13 +383,17 @@ class FakeEngineTest(unittest.TestCase):
         self.assertIsNone(result['overlay'])
 
     def test_apply_already_failed_culprit_stops(self):
-        listing = '{"packages":[{"xml":"a.xml","options":[{"id":"opt","default":1,"choices":["one"]}]}]}'
-        script = ('if sys.argv[1] == "list": print(%r)\n'
-                  'else: print(json.dumps({"error":"still fails","packages":["a.xml"]})); '
-                  'sys.exit(1)\n') % listing
-        result = self.run_fake(script, 'apply', '--data', str(self.data),
-                               '--disc', str(self.image), code=1)
-        self.assertIn('still fails', result['error'])
+        listing = {'packages': [{'xml': 'a.xml', 'options': [
+            {'id': 'opt', 'default': 1, 'choices': ['one']}]}]}
+        failure = {'error': 'still fails', 'packages': ['a.xml']}
+        output = io.StringIO()
+        with mock.patch.object(mod_choices, 'call_engine', side_effect=[
+                (0, listing), (1, failure), (1, failure), AssertionError('looped')]) as calls, \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(mod_choices.main(['apply', '--data', str(self.data),
+                                               '--disc', str(self.image)]), 1)
+        self.assertEqual(calls.call_count, 3)
+        self.assertIn('still fails', json.loads(output.getvalue())['error'])
 
     def test_apply_failure_without_package_stops(self):
         script = ('if sys.argv[1] == "list": print("{\\"packages\\":[]}")\n'

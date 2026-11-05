@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep Riivolution choices beside settings.txt and apply them to a disc image."""
+"""Save Riivolution choices and write overlay and RAM patch files for the game."""
 import argparse
 import json
 import os
@@ -30,6 +30,8 @@ class Parser(argparse.ArgumentParser):
 
 
 def call_engine(args):
+    if not RIIVOLUTION.is_file():
+        raise ArgumentError("gcn-recomp isn't checked out. Run git submodule update --init.")
     try:
         done = subprocess.run([sys.executable, str(RIIVOLUTION), *args],
                               capture_output=True, text=True, timeout=10)
@@ -52,8 +54,16 @@ def packages(root):
     code, result = call_engine(['list', str(root)])
     if code:
         detail = result.get('error', 'Riivolution could not list the packages.')
-        raise ArgumentError('%s Check the mods folder and try again.' % detail)
+        raise ArgumentError('%s Check the mods folder and try again.' % sentence(detail))
+    for package in result['packages']:
+        if 'error' in package:
+            package['error'] = ('%s This package was left off. Ask the package author to fix it '
+                                'or remove it from mods/riivolution.' % sentence(package['error']))
     return result['packages']
+
+
+def sentence(detail):
+    return detail.rstrip('.') + '.'
 
 
 def split_choice(line, found):
@@ -82,8 +92,11 @@ def read_choices(data, found):
     if not stat.S_ISREG(os.fstat(fd).st_mode):
         os.close(fd)
         raise ChoiceError('mods.txt is not a regular file. Replace it with a regular UTF-8 file.')
-    with os.fdopen(fd, 'r', encoding='utf-8', newline='') as file:
-        lines = file.read().split('\n')
+    try:
+        with os.fdopen(fd, 'r', encoding='utf-8', newline='') as file:
+            lines = file.read().split('\n')
+    except UnicodeDecodeError as exc:
+        raise ArgumentError("mods.txt isn't UTF-8. Delete it or save it as UTF-8.") from exc
     valid = {(p['xml'], o['id']): len(o['choices']) for p in found
              for o in p.get('options', [])}
     errored = {p['xml'] for p in found if 'error' in p}
@@ -116,12 +129,6 @@ def write_choices(data, choices):
             temp = file.name
             for xml, option, number in choices:
                 file.write('%s:%s=%d\n' % (xml, option, number))
-        try:
-            mode = target.lstat().st_mode
-            if not stat.S_ISREG(mode):
-                raise ChoiceError('mods.txt is not a regular file. Replace it with a regular UTF-8 file.')
-        except FileNotFoundError:
-            pass
         os.replace(temp, target)
     finally:
         if temp and os.path.exists(temp):
@@ -136,6 +143,8 @@ def disc_from_cache():
                 return line.split('=', 1)[1]
     except OSError:
         pass
+    except UnicodeDecodeError as exc:
+        raise ArgumentError('build/CMakeCache.txt is not UTF-8. Pass --disc IMAGE or fix the cache.') from exc
     raise ArgumentError('GAME_ISO is missing from build/CMakeCache.txt. Pass --disc IMAGE.')
 
 
@@ -167,10 +176,11 @@ def apply(data, found, disc, started):
         culprits = result.get('packages', [])
         if not culprits or all(xml in failed for xml in culprits):
             detail = result.get('error', 'Riivolution could not apply the packages.')
-            raise ChoiceError('%s Check the disc and mods folder, then try again.' % detail)
+            raise ChoiceError('%s Check the disc and mods folder, then try again.' % sentence(detail))
         for xml in culprits:
             detail = result.get('error', 'Riivolution refused a package.')
-            failed[xml] = '%s Check the package and try again.' % detail
+            failed[xml] = ('%s This package was left off. Ask the package author to fix it '
+                           'or remove it from mods/riivolution.' % sentence(detail))
     return {'overlay': 'mods/.out/disc-overlay.txt' if (output / 'disc-overlay.txt').is_file() else None,
             'ram_patches': 'mods/.out/ram-patches.txt' if (output / 'ram-patches.txt').is_file() else None,
             'failed': [{'xml': xml, 'error': failed[xml]} for xml in sorted(failed)],
@@ -232,11 +242,12 @@ def main(argv=None):
     except ChoiceError as exc:
         print(json.dumps({'error': str(exc)}))
         return 1
-    except UnicodeError:
-        print(json.dumps({'error': "mods.txt isn't UTF-8. Delete it or save it as UTF-8."}))
-        return 2
     except OSError as exc:
-        print(json.dumps({'error': 'A file operation failed. Check the data folder and try again.'}))
+        name = exc.filename or 'the data folder'
+        reason = exc.strerror or str(exc)
+        detail = ("Couldn't complete the file operation on %s (%s). "
+                  'Check that the data folder is writable.' % (name, reason))
+        print(json.dumps({'error': detail}))
         return 2
     except ArgumentError as exc:
         print(json.dumps({'error': str(exc)}))
