@@ -367,14 +367,19 @@ class FakeEngineTest(unittest.TestCase):
         self.assertIn('timed out', result['error'])
 
     def test_apply_missing_error_and_unknown_culprit(self):
-        listing = '{"packages":[{"xml":"a.xml","options":[{"id":"opt","default":1,"choices":["one"]}]}]}'
-        for failure in ['{"packages":["a.xml"]}',
-                        '{"error":"unknown package","packages":["gone.xml"]}']:
-            script = ('if sys.argv[1] == "list": print(%r)\n'
-                      'else: print(%r); sys.exit(1)\n') % (listing, failure)
-            result = self.run_fake(script, 'apply', '--data', str(self.data),
-                                   '--disc', str(self.image), code=1)
-            self.assertIn('error', result)
+        listing = {'packages': [{'xml': 'a.xml', 'options': [
+            {'id': 'opt', 'default': 1, 'choices': ['one']}]}]}
+        for failure in [{'packages': ['a.xml']},
+                        {'error': 'unknown package', 'packages': ['gone.xml']}]:
+            with self.subTest(failure=failure):
+                output = io.StringIO()
+                with mock.patch.object(mod_choices, 'call_engine', side_effect=[
+                        (0, listing), (1, failure), (1, failure),
+                        AssertionError('looped')]) as calls, contextlib.redirect_stdout(output):
+                    self.assertEqual(mod_choices.main(['apply', '--data', str(self.data),
+                                                       '--disc', str(self.image)]), 1)
+                self.assertEqual(calls.call_count, 3)
+                self.assertIn('error', json.loads(output.getvalue()))
 
     def test_apply_no_mods_never_calls_engine(self):
         (self.data / 'mods').rmdir()
