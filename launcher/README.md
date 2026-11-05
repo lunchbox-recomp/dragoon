@@ -1,6 +1,6 @@
 # Launcher
 
-The macOS launcher for Dragoon, as a SwiftPM package meant to build with the Command Line Tools alone. `Dragoon` is the SwiftUI app and stays thin, and `DragoonCore` holds everything that can be tested. That includes the `ProcessRunner` and `FileSystem` protocols, which each have a real version in `Sources/DragoonCore/` and a fake in `Tests/DragoonCoreTests/`, and one set of tests runs against both file systems.
+The macOS launcher for Dragoon, as a SwiftPM package that builds with the Command Line Tools alone. `Dragoon` is the SwiftUI app and stays thin, and `DragoonCore` holds everything that can be tested. That includes the `ProcessRunner` and `FileSystem` protocols, which each have a real version in `Sources/DragoonCore/` and a fake in `Tests/DragoonCoreTests/`, and one set of tests runs against both file systems.
 
 ```
 swift build --package-path launcher
@@ -9,7 +9,7 @@ launcher/tools/swift_test.py
 
 Every argument after `swift_test.py` goes to `swift test`, `--help` included, so `launcher/tools/swift_test.py --filter FileSystemTests` runs one suite and the wrapper has no help of its own. Its tests are in `launcher/tools/test_swift_test.py`, and the other launcher tools live beside it.
 
-## On this Mac
+## With only the Command Line Tools
 
 Measured on 2026-10-26 on macOS 26.6.2 with the Command Line Tools 26.6 (`CLTools_Executables` 26.6.0.0.1781586589) and Swift 6.3.3, with no Xcode.
 
@@ -70,7 +70,7 @@ A stdout line that isn't an event is logged and never counted as an error. Every
 
 The recipe's exit code decides how the stream ends.
 
-| Exit | The stream |
+| Exit or call | The stream |
 |---|---|
 | 0 | Ends normally, and the new game is current. A shader cache the recipe couldn't install after the swap is a `warning` line in the log, since that isn't a `BuildEvent` |
 | 1 | A step failed before the swap, so the old game is still current. Yields the recipe's `error` event, then throws `failed` with its step and message, or with the log's path when there was none |
