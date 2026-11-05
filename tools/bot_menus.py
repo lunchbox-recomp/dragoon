@@ -67,8 +67,8 @@ CLIMB_UPS = 3  # presses of UP on a mode's menu that leave menu.item alone befor
 BACK_HOLD = 90  # frames B is held on City Trial's player entry to go back to its menu, which took 47 in the game
 
 UNCONFIRMED = {
-    "split stadium pause": "RIGHT on a stadium's pause menu with two or three players, for End Game. Only one "
-                           "player's and four players' menus have been watched.",
+    "split stadium pause": "RIGHT on a stadium's pause menu with three players, for End Game. A two-player soak "
+                           "has left stadiums with it, and one player's and four players' menus have been watched.",
     "other screen": "A on a screen scene.minor has no name for here.",
     "press cadence": "Looks come 50 frames after most presses, even one that changes the screen. The title, a "
                      "race's START and the pause menu wait longer. The routes usually wait about 300 frames "
@@ -269,7 +269,7 @@ class Menus:
             what, way = self.mode, LEAVE
         elif self._stadium:
             what, way = "the stadium", STADIUM_LEAVE if self.ports == 1 else SPLIT_STADIUM_LEAVE
-            if self.ports in (2, 3):
+            if self.ports == 3:
                 self._unconfirmed("split stadium pause")
         else:
             return None

@@ -653,8 +653,8 @@ class UnconfirmedTest(unittest.TestCase):
     def test_every_unconfirmed_step_is_tested_here(self) -> None:
         self.assertEqual(set(bot_menus.UNCONFIRMED), {*self.CASES, "split stadium pause"})
 
-    def test_a_stadium_left_with_two_or_three_players_is_one_and_with_one_or_four_is_not(self) -> None:
-        for ports, said_so in ((1, False), (2, True), (3, True), (4, False)):
+    def test_a_stadium_left_with_three_players_is_one_and_with_one_two_or_four_is_not(self) -> None:
+        for ports, said_so in ((1, False), (2, False), (3, True), (4, False)):
             with self.subTest(ports=ports):
                 menus, link, said = make(ports, modes=(CITY_TRIAL,), round_seconds=10)
                 screen(link, bot_menus.CITY_PLAYERS)

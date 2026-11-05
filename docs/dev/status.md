@@ -601,12 +601,12 @@ makes a four-port replay play as its run. The replay line still carries it.
 
 Each step the soaks showed right came out of the walker's unconfirmed list, and three stay in
 it. A screen kar_ram.json doesn't name gets A. The press cadence stays because a log can't show
-which screen each press landed on. RIGHT on a stadium's pause menu with two or three players
-stays because no soak has played three. 835686 played two-player City Trial for 20 minutes and
-left 12 stadiums with it, each followed by its next round. 555018 and 575543 each played
-four-player City Trial for its full hour with no stop, 42 rounds with the menus between them.
-558640's 119 rounds were 40 of Air Ride, 39 of Top Ride and 40 of City Trial. 579174's 107 were
-35 of Air Ride, 36 of Top Ride and 36 of City Trial.
+which screen each press landed on. RIGHT on a stadium's pause menu with three players stays
+because no soak has played three. Two players' came out when 835686 played two-player City Trial
+for 20 minutes and left 12 stadiums with RIGHT, each followed by its next round. 555018 and
+575543 each played four-player City Trial for its full hour with no stop, 42 rounds with the
+menus between them. 558640's 119 rounds were 40 of Air Ride, 39 of Top Ride and 40 of City
+Trial. 579174's 107 were 35 of Air Ride, 36 of Top Ride and 36 of City Trial.
 
 ## Audio
 
