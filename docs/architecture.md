@@ -58,7 +58,9 @@ split views and what a callback draws outside a joint tree stretch, and at 4:3 e
 leaves its draw where the game put it.
 
 `src/draw_marks.cpp` pads the write-gather pipe to the end of its line before each mark, so the
-mark lands after every draw the game has written. The census's draw tags go through it too.
+mark lands after every draw the game has written. The HUD anchors' marks
+(`src/hud_anchors.cpp:137`) and the census's draw tags (`src/census.cpp:81` and `:87`) both go
+through it.
 
 `tools/probe.sh` passes `DRAGOON_*=value` settings through to the game.
 `docs/dev/widescreen.md` covers the one that exists, `DRAGOON_CENSUS`.
