@@ -66,7 +66,9 @@ CLOSE_WAIT = 10
 TAIL = 1 << 17
 LOG_TAIL = 1 << 12
 # How far from a log's end a hang looks for the game's assertion. A game halted on one goes on
-# logging its audio until it's ended, which in a 30 s hang was twice TAIL.
+# logging audio underruns until it's ended, and at the SIGTERM the engine dumps its FIFO and
+# threads. In 579174's 30 s hang the two came to 255,498 bytes after the last frame line, about
+# twice TAIL, and 152,334 of those were underruns.
 HANG_TAIL = 1 << 26
 # probe.sh always takes a dump interval, so a run that dumps no frames gets one no run reaches.
 NO_DUMPS = 1_000_000_000
@@ -433,21 +435,19 @@ def _after_last_frame(log: Path) -> list[str]:
     grows until it holds a frame line, the whole log or HANG_TAIL bytes; with no frame line,
     every line it read is after."""
     try:
-        with open(log, "rb") as f:
-            end = f.seek(0, os.SEEK_END)
-            size = TAIL
-            while True:
-                size = min(size, HANG_TAIL)
-                f.seek(max(0, end - size))
-                lines = f.read().decode("utf-8", "replace").splitlines()
-                for i in range(len(lines) - 1, -1, -1):
-                    if FRAME_TIME_LINE.match(lines[i]):
-                        return lines[i + 1:]
-                if size >= min(end, HANG_TAIL):
-                    return lines
-                size *= 4
+        end = log.stat().st_size
     except OSError:
         return []
+    size = TAIL
+    while True:
+        size = min(size, HANG_TAIL)
+        lines = _tail(log, size).splitlines()
+        for i in range(len(lines) - 1, -1, -1):
+            if FRAME_TIME_LINE.match(lines[i]):
+                return lines[i + 1:]
+        if size >= min(end, HANG_TAIL):
+            return lines
+        size *= 4
 
 
 def _assertion(log: Path) -> str | None:
