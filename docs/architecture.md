@@ -51,9 +51,9 @@ set it.
 
 The HUD anchors in `src/hud_anchors.cpp` are always on too. A joint tree drawn by one of the
 render callbacks in its `kTable` keeps its 4:3 shape, held to an edge or the middle of the
-screen or of its player's view, and a marker stays centered on the kart or item it follows. The bars between
-split views and what a callback draws outside a joint tree stretch, and at 4:3 every anchor
-leaves its draw where the game put it.
+screen or of its player's view, and a marker stays centered on the kart or item it follows.
+The bars between split views and what a callback draws outside a joint tree stretch, and at
+4:3 every anchor leaves its draw where the game put it.
 
 `src/draw_marks.cpp` pads the write-gather pipe to the end of its line before each mark, so the
 mark lands after every draw the game has written. The HUD anchors' marks
