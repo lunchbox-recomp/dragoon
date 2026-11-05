@@ -20,17 +20,9 @@ frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks
 
 How does the game behave when nobody is playing it? It runs the game in a hidden window for a number of seconds, feeds it a route of button presses and dumps every Nth frame as a PNG. A run leaves its frames (`frame_NNNNN.png`), its log (`stdout.txt`), its memory card (`saves/memcard_a.raw`), its shader cache (`saves/shaders.bin`) and, after a crash, `panic.txt` in `build/probe/NAME/`. A windowed run uses SDL's dummy audio driver and passes `--no-gamepads`, so it's silent and never opens a controller left on beside it. A `--bench` run leaves the driver to SDL and plays through the real device unless `SDL_AUDIO_DRIVER=dummy` is set, which audio_hashes.py does. Audio never paces the guest, so the dummy driver doesn't change timing. A new NAME starts from a blank memory card, and a NAME that's run again keeps the card its last run left behind.
 
-After the NAME and seconds come an input script or a route file from `tests/routes/`, the dump interval and any settings. A setting is `GCN_*=value` (the list is in `gcn-recomp/docs/diagnostics.md`), `DRAGOON_*=value` (Dragoon's own switches in `src/`, such as `DRAGOON_CENSUS=1` in `docs/dev/widescreen.md`), `--pads=N`, `--real-time`, `--scale=N`, `--bench`, `--log=LIST`, `--disc=PATH`, `--disc=fast|console`, `--aspect=W:H`, `--output`, `--replay=DIR`, `--exit-after=N` or `--bin=PATH`. `--log=dsp,ai` turns on those log categories in the game. It works in windowed runs only, because `dragoon_bench` takes no `--log`, so probe.sh refuses it with `--bench`. An unknown category stops the game at once, and `stdout.txt` names it. `--disc=PATH` names the disc image the game plays, which a game built from the engine kit needs, since it has no disc of its own. A relative path is taken from where probe.sh was run, and a value that's neither a file nor a speed exits 2. `tools/probe.sh --help` prints the settings. Route files are described in `tests/routes/README.md`.
+After the NAME and seconds come an input script or a route file from `tests/routes/` (its README describes them) and the dump interval, then any settings, which `tools/probe.sh --help` lists. `GCN_*` switches are in `gcn-recomp/docs/diagnostics.md`, and Dragoon's `DRAGOON_*` ones are in `src/`, such as `DRAGOON_CENSUS=1` in `docs/dev/widescreen.md`. `--log`, `--disc=fast|console`, `--aspect`, `--output`, `--replay` and `--exit-after` need a windowed run, so probe.sh refuses them with `--bench`.
 
-`--disc=fast` or `--disc=console` hands gcn-recomp's `--disc` to the game, which sets how it reads the disc (the two speeds are under "The disc drive" in `gcn-recomp/docs/diagnostics.md`). A disc file called `fast` or `console` goes in as `--disc=./fast`. Both speeds need a windowed run, so probe.sh refuses either with `--bench`, since `dragoon_bench` reads at one speed.
-
-`--aspect=16:9` stretches the picture to 16:9, and `--output` also writes `output_NNNNN.png` beside each frame, showing what the window shows. Both need a windowed run, so probe.sh refuses either with `--bench`. The frame count it prints leaves the output dumps out.
-
-`--replay=DIR` plays back the input log in `DIR/inputs.txt`, and `--exit-after=N` quits once N frames have been shown. A relative DIR is taken from where probe.sh was run, like a `--disc` path. A DIR with no `inputs.txt` exits 2.
-
-Both need a windowed run, so probe.sh refuses either with `--bench`. A run ends early when the game exits.
-
-`--bin=PATH` runs PATH in place of `build/dragoon`, or of `build/dragoon_bench` under `--bench`, so two builds can be benched in turn from one clone. A relative PATH is taken from where probe.sh was run, like a `--disc` path. A PATH that isn't an executable file, or has an `=` in it, exits 2, since `env` would read the `=` as a setting.
+A relative `--disc`, `--replay` or `--bin` path is taken from where probe.sh was run. `--bin=PATH` runs PATH in place of `build/dragoon`, or of `build/dragoon_bench` under `--bench`, so two builds can be benched in turn from one clone.
 
 A run keeps no input log unless `GCN_SESSION=DIR` records a session. A relative DIR is taken from the run's directory, `build/probe/NAME/`, for this one. The session's `inputs/` lands in that DIR.
 
@@ -236,19 +228,13 @@ It prints these:
 - the frame pacing from frame 300 through frametime.py, with the frames over 33 ms
 - the shaders compiled while it ran, and every `FATAL` or `FAULT` line, which a guest panic ends in
 
-A click is the mixer's when `aid.raw` clicks within 2 ms of the moment that output frame was made from. The `[audio] output frame F plays DMA frame D` lines find that moment to within about 1.3 ms. Otherwise it's the ring's when the ring cut, or a stretch of pulls it couldn't fill began or ended, within 5 ms of it.
+click_stages.py puts each device-stage click down to the mixer, the ring, the device or nothing, by the rules in its docstring. A late callback can starve the device without a mark in `out.wav`, so the late callbacks are listed on their own too.
 
-Failing that it's the device's when a callback came late within 5 ms, and if nothing explains it, it's unexplained. Music streamed from the disc is mixed in after the ring, so a click in that music is unexplained. So is a sharp onset that the click finder flags in the 48 kHz device stage and not in the 32 kHz mixer stage.
-
-A late callback can starve the device without a mark in `out.wav`, which holds what was handed over and not when, so the late callbacks are listed on their own too.
-
-The noise check reads `aid.raw` only, at the DMA's 32 kHz and 10 seconds at a time. The ring interpolates to 48 kHz for the device, so `out.wav` isn't a fair input, as the noise_blocks.py section says. A stretch is a place to look, since the game's own bright sounds make short ones too, and it never changes the exit code.
+The noise check reads only `aid.raw`, as noise_blocks.py explains, 10 seconds at a time. It never changes the exit code.
 
 In `--json` the stretches are under `noise` in noise_blocks.py's own `--json` shape, and the value is null when `aid.raw` is missing or empty. The text says `aid.raw missing` for that and `none in aid.raw` when it finds no stretch, and it gives a count with a line for each stretch otherwise.
 
-`--system-log` also counts the Core Audio overloads macOS logged from the session's start to 5 s past the end of `out.wav`. Core Audio logs one when an IO cycle misses its deadline. It runs `/usr/bin/log show --style compact` over that window with the predicate `subsystem == "com.apple.coreaudio" AND eventMessage CONTAINS[c] "overload"`, which only reads the log.
-
-It counts the lines from that subsystem whose message holds the word in any letter case, by process. The unified log doesn't keep messages long, so an old session's window can come back empty.
+`--system-log` also counts the Core Audio overloads macOS logged from the session's start to 5 s past the end of `out.wav`, through core_audio_log.py's read-only `log show`, by process. The unified log doesn't keep them long, so an old session's window can come back empty.
 
 `--json` prints the whole result, and `--list N` caps the times printed for each list (default 10). A file that's missing or empty leaves its sections out and is named on stderr. It exits 2 on a bad argument or a directory with no readable `session.json`.
 
@@ -276,24 +262,16 @@ Which of the pad's controls reached the game in a playtest, and on which port? I
 tools/pad_report.py build/playtest/20261022-161851
 ```
 
-For each port the game saw plugged in, it prints the gamepads put on it and taken off, from the session's `stdout.txt`. A gamepad line goes after the last frame `stdout.txt` timed before it, and times are given at 60 frames a second. Next come the buttons in the order they were first pressed, with how many times.
-
-Each stick gets how far it went from the middle and which of its eight directions it reached, and each trigger gets its highest value and how many levels it took. A trigger that only ever read 255 was on or off. Last come the controls nobody used on that port, where a stick counts once it reaches a direction.
-
-Under each gamepad come the engine's own lines about its port. As it lands they give its type, connection, USB IDs, rumble and face labels. As it leaves or the game quits they give every button it sent with each axis's raw range and how its rumble calls went, and a line said again straight after is counted, not repeated.
-
-A log of version 5 or later also records the game's rumble motor, so each port says how many times the game ran it and for how long. Comparing what the pad sent with what reached the game shows whether a control was pressed and lost, or never pressed. A run-N directory, made when the game reset the console, reads its own part of the session's `stdout.txt`.
-
-It also reads an input log's own directory, such as one in `saves/inputs/`, without the gamepad lines. Port 1 takes the keyboard as well, so its presses may be keys. It exits 2 on a bad argument, a directory without `inputs.txt` or `inputs/inputs.txt`, a log older than version 2 or one with no pad state.
+For each port the game saw plugged in, it prints the gamepads put on it and taken off, then each control's use and the controls nobody used, which `--help` details. Comparing what the pad sent with what reached the game shows whether a control was pressed and lost, or never pressed. It also reads an input log's own directory, such as one in `saves/inputs/`, without the gamepad lines.
 
 ## frametime.py
 
-How steady is the frame pacing, and what made the slow frames slow? It reads the log of a run made with `GCN_FRAMETIME=1`, prints the guest's and the renderer's mean, population standard deviation, p95, p99 and worst times from a given frame on, and lists each frame whose render time went over a limit with its batch shape and the shaders compiled in it. Then it lists each frame whose guest interval went over `--late` (25 ms unless you give it).
+How steady is the frame pacing, and what made the slow frames slow? It reads the log of a run made with `GCN_FRAMETIME=1` and prints the guest's and the renderer's mean, population standard deviation, p95, p99 and worst times from frame 300 unless `--from` says. It lists each frame whose render time went over `--slow` (16.7 ms unless you give it) with its batch shape and the shaders compiled in it, then each frame whose guest interval went over `--late` (25 ms unless you give it).
 
 ```
 tools/probe.sh pace 130 tests/routes/city-trial-4p.txt 100000 --pads=4 --real-time GCN_FRAMETIME=1
-tools/frametime.py build/probe/pace/stdout.txt --from 300 --slow 16.7
-tools/frametime.py build/probe/pace/stdout.txt --from 3400 --late 25
+tools/frametime.py build/probe/pace/stdout.txt
+tools/frametime.py build/probe/pace/stdout.txt --from 3400
 ```
 
 Add `--json` for machine output. Frame numbers are the `[rt]` lines'. A frame's batch is the `[ft]` line one lower.
@@ -328,15 +306,7 @@ Each line names a camera and where the call returns to, then where its caller re
 
 When no line is left, `setters` says so on stderr. A camera whose aspect the game sets some other way has none.
 
-`hud` checks that the HUD keeps its 4:3 shape at a wider output. It reads two runs of one route to one frame with `GCN_DRAWLOG=N` and `GCN_DRAWLOG_VERBOSE=1`, the first at 4:3 and the second at `--aspect` (16:9 by default). A HUD draw is one with an anchor or one whose projection both runs drew with, since the world's projections widen and the HUD's don't.
-
-The two runs' HUD draws pair by projection kind, textures and order. An anchored pair fails when its width, its height or its distance to its rect's anchored edge moves by more than 1 display pixel at 480 high. It also fails when it overhangs its view by more than it did at 4:3, its view being the world view its 4:3 box sits in or else the screen. One anchored to the left or right edge fails, too, when its 4:3 box's middle sits in the rect's third at the other side. One centered, other than a marker, fails when its whole 4:3 box sits in a side third past the band, the quarter of a third a held middle reaches into it (`kHeldBand` in `src/hud_anchors.h`). That catches an element held in the middle that should sit at a side, but it also fails the pieces of a wide centered element that sit at its sides, as three of the replay banner's do in the race at 8400.
-
-A marker over a kart or an item is centered on a rect of no width at its own place, which moves with the wider world, so its rect may differ between the runs. A marker with no match passes too, since the wider world shows a different set of karts and items.
-
-Each line gives both boxes in display pixels. With `DRAGOON_CENSUS=1` it also names the render callback that made the draw, from the census's draw tags. Pairs with no anchor at either aspect are listed as stretched and don't fail.
-
-`hud_boxes.py` holds the check, and `drawlines.py` reads the draw log's lines for both.
+`hud` checks that the HUD keeps its 4:3 box at a wider output. It reads two runs of one route to one frame with `GCN_DRAWLOG=N` and `GCN_DRAWLOG_VERBOSE=1`, the first at 4:3 and the second at `--aspect` (16:9 by default). The check is in hud_boxes.py, whose docstring gives how draws pair and when a pair fails, and drawlines.py reads the draw log's lines for both tools.
 
 ```
 tools/probe.sh race 30 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_DRAWLOG=4200 GCN_DRAWLOG_VERBOSE=1
@@ -392,26 +362,14 @@ A bench that crashes prints no report, and probe.sh exits 1. That counts as a ro
 
 Which functions change a route when the interpreter runs them? It reads every function start from `analysis/symbols.txt` and checks ROUTE with frame_hashes.py, or with audio_hashes.py under `--audio`. Each check sets `GCN_INTERPRET` to a list of starts, a file in `build/bisect/` with one hex address a line, named by absolute path.
 
-The first check sets nothing and runs at ROUTE's own seconds, since ROUTE has to match with nothing interpreted. Every other check passes `--slow=N` on.
-
-The bisect starts from the list of every function. It halves the list and follows the left half if that changes the route. When the left half matches, the change should be in the right half, so it goes there without a run.
-
-A function reached that way is checked alone before it's named. Once it finds a function, it checks the halves it left alone in one run, and goes on in them only if they change the route too.
-
-If a function reached that way doesn't change ROUTE alone, the change needs several functions together, or a list ran too slowly to reach ROUTE's checkpoints. The bisect stops there and writes the shortest list it ran that changes ROUTE to `build/bisect/ROUTE-KIND-smallest.txt`, where KIND is `frames` or `audio`. Any functions it found alone before that go to `build/bisect/ROUTE-KIND-found.txt`, and the functions after the one it stopped on aren't searched.
-
-It names at most 16 functions. If more would follow, it exits 2 with the 16 in the found file and shows what the run with every function printed. A build that fails every list looks like this, whether it refuses the list file or stops at start.
-
-A check that goes as expected prints one progress line. The hash tool's own output goes to stderr when a check exits 2 or the first check changes ROUTE. It goes there too when the functions found leave ROUTE matching together.
+Every check but the first passes `--slow=N` on and takes ROUTE's seconds times N. One function among the 20,003 starts in `symbols.txt` takes at most 19 checks, and each further one at most 18 more. `--help` gives the search, what goes to `build/bisect/ROUTE-KIND-found.txt` and `-smallest.txt`, the 16-function cap and the exit codes.
 
 ```
 tools/interp_bisect.py title --slow=20
 tools/interp_bisect.py air-ride-race --slow=20 --audio
 ```
 
-It prints each function that changes ROUTE on its own with its name, and writes them to the found file. Each check but the first takes ROUTE's seconds times N. One function among the 20,003 starts in `symbols.txt` takes at most 19 checks, and each further one takes at most 18 more.
-
-It exits 0 when interpreting every function leaves ROUTE matching, 1 when it names functions and 2 when it can't run or can't narrow the change. A ROUTE that changes with nothing interpreted does that, and so does a change that needs several functions together or one that takes more than 16. The build has read `GCN_INTERPRET` since the pin moved to gcn-recomp `782d7fa`. A build on an older pin runs every list natively, so it exits 0.
+A build reads `GCN_INTERPRET` from gcn-recomp `782d7fa` on. One on an older pin runs every list natively, so the bisect exits 0.
 
 ## audio_clicks.py
 
@@ -439,7 +397,7 @@ sed -n -E 's/^\[ring\] cut .* frame ([0-9]+)$/\1/p' build/probe/title-cuts/stdou
 tools/audio_clicks.py build/probe/title-cuts/out.wav --marks build/probe/title-cuts/cuts.txt
 ```
 
-`analyse_file`, for other tools to call, reads a recording from disk 10 seconds at a time instead of holding every sample's second difference at once, which at 48 kHz stereo is about 5.4 MiB a second, or about 19 GiB an hour. It finds what one pass would, and its tests check that. A gap or a clipped run that goes on past a part is followed to its end, and a WAV that ends before its header says is read as far as it goes.
+`analyse_file`, for other tools to call, reads a recording 10 seconds at a time and finds what one pass would.
 
 ## audio_scorecard.py
 
@@ -450,21 +408,15 @@ tools/audio_scorecard.py base=/path/to/old-clone/build current=build
 tools/audio_scorecard.py base=/path/to/old-clone/build current=build --routes title --json
 ```
 
-Each run lasts the route's last checkpoint at 60 frames a second plus 15 s of wall-clock time (`--margin` changes the 15). It dumps that one frame (`GCN_DUMP_RANGE`). A run that doesn't reach it stops the tool with exit 2. The real-time runs go to `build/probe/scorecard-ROUTE/` in each clone and the unpaced ones to `build/probe/scorecard-unpaced-ROUTE/`. An earlier run in that directory is deleted first, so every run starts from a blank memory card and an empty shader cache. `--no-run` measures the runs already there. The five routes `scorecard.md` scores (`--routes title,menu,air-ride-race,city-trial,city-trial-4p`) take about 11 minutes a build.
+The five routes `docs/dev/scorecard.md` scores (`--routes title,menu,air-ride-race,city-trial,city-trial-4p`) take about 11 minutes a build. An unpaced run's game time doesn't follow the host's, so two unpaced runs of one build should give the same blocks, and the pairs compared did, byte for byte (`docs/dev/scorecard.md`). `--help` gives each stage's measures, where each run and its `commits.json` go, how `--no-run` reads them and what `not logged` and `not recorded` mean.
 
-The mixer stage is the unpaced run's `GCN_AIDWAV`, the DMA's blocks before the audio ring, cut to the route's last checkpoint plus the margin and read with audio_clicks.py's `--raw 32000 --period 160`. An unpaced run's game time doesn't follow the host's, so two unpaced runs of one build should give the same blocks. The pairs compared so far did, byte for byte, as `scorecard.md` says. A real-time run's clock catches up when the host falls behind, so presses land on other frames and sounds move. Up to gcn-recomp `b848158` a catch-up also made the DMA play a block twice, and since `a87ab06` it doesn't. So a real-time run's blocks say as much about the host's timing as about the build. An unpaced run gets more of the game's time than the cut in its wall-clock seconds, and a recording shorter than the cut stops the tool with exit 2. The unpaced run's log gives the highest `[ax] frames` peak (main L before the output clamp) and the sum of the `[ax] bus` lines' `clipped`, from the lines whose list count is within the cut. A list is a 160-sample block.
-
-The device stage is the real-time run's `GCN_WAV`, which is what went to the device. That run's log gives the ring's cuts and underruns. The device stage also counts the clicks within 2 samples of a `[ring] cut` line's output frame, when the build logs cuts. Underruns are the last `[ring] fill` line's, which comes every 400 pulls of the device. The real-time run records `GCN_AIDWAV` too, for block_clicks.py.
-
-Each stage gets clicks a minute, gaps and clipped runs as audio_clicks.py counts them. An older build that doesn't print a log value reads `not logged`, and a missing recording reads `not recorded`. When `--no-run` finds no unpaced run, as for runs made before the scorecard played one, the mixer stage and its log values read `not recorded`. `--no-run` cuts the mixer stage at `--margin`, as a run would. A table per route prints as the route finishes, then the totals, where clicks a minute is over the summed seconds. `--json` prints it all at the end, with each clone's commit and its gcn-recomp commit. The tool reads those two before the first route plays and leaves them in each run's `commits.json`. `--no-run` prints what its runs recorded, or `not recorded` for a run made before that file existed. When a build's runs recorded different commits, it joins them with `and` (`a1b2c3d and e4f5a6b`), in the header and in the JSON. It only reports, so it never exits 1.
+A real-time run's clock catches up when the host falls behind, so presses land on other frames and sounds move, and its blocks say as much about the host's timing as about the build. Up to gcn-recomp `b848158` a catch-up also made the DMA play a block twice, and since `a87ab06` it doesn't. The real-time run records `GCN_AIDWAV` too, for block_clicks.py.
 
 scorecard_runs.py plays a route on a build and scorecard_measure.py scores a route's two runs. Neither has a command line.
 
 ## block_clicks.py
 
-Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivered catching up? It reads a `GCN_AIDWAV` recording and the block log gcn-recomp writes beside it (`<file>.txt`). A replayed block has the same address as the block before, because the guest hadn't queued the next buffer. A caught-up block came while the clock caught up with the host, which only a `--real-time` run does. For each kind and for the two together it prints the blocks, the clicks in them or within 2 samples of either end, and the count chance would put there. A block log whose last block ends more than a second from the recording's end can't be that recording's, and stops it with exit 2. That check tells logs apart by length only. A log from another run of the same route ends about where this recording does, so it passes. The baseline's real-time title recording paired with current's title log printed counts and exited 0.
-
-It also prints the stretches the marked blocks come in. A stretch is a run of marked blocks that follow one another in the log, so 5 caught-up blocks in a row are 1 stretch. A block past the recording's end is in no stretch, and a last log line a killed run cut short is skipped.
+Do a run's mixer-stage clicks sit on the blocks the DMA played twice or delivered catching up? It reads a `GCN_AIDWAV` recording and its block log (`<file>.txt`), and for each kind prints the marked blocks, their stretches, the clicks on them and the count chance would put there. A block log whose last block ends more than a second from the recording's end exits 2, and that check goes by length only, so another run's log of the same route passes.
 
 ```
 tools/block_clicks.py build/probe/scorecard-menu/mixer.raw
@@ -488,7 +440,7 @@ Where do the DMA's blocks turn to loud noise? It weighs each 160-sample block of
 tools/noise_blocks.py build/probe/scorecard-menu/mixer.raw
 ```
 
-session_report.py runs it on a playtest session's `aid.raw` through `find_source`, which reads 10 seconds at a time instead of holding the recording. It finds what one pass would, including a stretch that crosses a part's edge, and its tests check that. The command above still reads the whole file.
+session_report.py runs it on a session's `aid.raw` 10 seconds at a time, and the command above reads the whole file.
 
 ## clip_signs.py
 
@@ -503,7 +455,8 @@ A recording that isn't there reads `not recorded`, and a run that didn't reach i
 
 ## ax_stats.py
 
-What did the game's voices ask the AX mixer for over a run? It reads the `[ax] pb` and `[ax] bus` lines that a run with `GCN_AXSTATS=1` prints every 400 command lists, and prints a row per count with a column per run and a total. Counts are summed over the windows, and the bus peaks take the largest window. `src0_coef=a/b/c/d` becomes four rows, and the mixer's top eight values are left out. The fields are described in `gcn-recomp/docs/diagnostics.md`. `--until N` stops at the window that ends at list N. Two unpaced runs of one route reach different lists in the same time, so it lets them be compared over the same lists. A file with no such lines up to there exits 2, and so does an `--until` of 0 or less. A column is named by its run's directory. Two runs in directories of one name, such as two clones' `audio-title`, each take the shortest trailing path that no other run shares. The same file given twice exits 2.
+What did the game's voices ask the AX mixer for over a run? It sums the `[ax] pb` and `[ax] bus` lines of runs made with `GCN_AXSTATS=1` (their fields are in `gcn-recomp/docs/diagnostics.md`) into a row per count and a column per run. `--until N` stops at list N, so two unpaced runs that reached different lists compare over the same ones, and `--help` gives the rest.
+
 ```
 tools/audio_hashes.py check
 tools/ax_stats.py build/probe/audio-title/stdout.txt build/probe/audio-air-ride-race/stdout.txt
@@ -514,13 +467,7 @@ tools/ax_stats.py before/stdout.txt build/probe/audio-title/stdout.txt --until 2
 
 Which voices did the mixer stop that the game didn't? It reads the `[axv]` lines of a run made with `GCN_AXVOICES=1` and lists each voice that ran with `stream=1` or `looping=1`, or that ended early, by parameter block address. A block that runs again after it stopped or ended, or that gets a new sample, counts as a voice for each run.
 
-Each row gives the list the voice started at, the loop address it started with, how many times it looped and its last level peak, which reads `none` for a voice last mixed after the log's last level line. Then it says how the voice ended. That's `still running` at the end of the log, `stopped by the game` for a `stop` line or a `set` that gives the block a new sample, `ended by the mixer` or `ended early`.
-
-The mixer only ends a voice whose loop flag is clear, and the AX library can drop a stream's flag, so a clear flag proves nothing. A voice ended early when any of its lines had a stream's loop address, which is `018xxxxx` or the PCM16 ring at `0062A280` or `0062A780`, or when a `set` line moved its loop or end address while it ran and it never had `stream=1` or `looping=1`. Those rows come last, with the rule, the list and the time at 5 ms a list.
-
-The game starts new samples on blocks that still run an effect, so away from a stream address a voice that had a loop flag and lost it isn't called early. A `set` that puts `cur` on a new loop address gives the block a new sample, which ends the voice that ran there as the game's doing and starts another. That holds while the other voice of a music pair plays on, since a `set` is the game's own write to the block. A move on a voice that never had either flag carries into the new one. A failure outside the stream addresses with no `set` between its `run` and its `end` shows only in the count of other voices.
-
-A voice that never had either flag is listed only when it ended early, and a line of its own counts the other voices the mixer ended. A run lists hundreds of voices, because sound effects start with the loop flag set too. The music streams start at an address in `018xxxxx`, and some scenes play a PCM16 ring at `0062A280` and `0062A780` instead, so filter the `at` column for those.
+`--help` gives the columns and the rules for `ended early`. The music streams start at an address in `018xxxxx`, and some scenes play a PCM16 ring at `0062A280` and `0062A780` instead, so filter the `at` column for those.
 
 ```
 tools/probe.sh voices 60 tests/routes/menu.txt 100000 GCN_AXVOICES=1
@@ -536,15 +483,9 @@ Will a player's first session stall on shader compiles? It plays the game once s
 
 A pass plays to 900 frames past its route's last required frame, or to frame N when the route has a `warm=N` setting in the manifest. N has to be a whole number past that frame, and a route gets one at most, or the warm-up exits 2 naming the route and the manifest line.
 
-A route with a `warm-from=ROUTE` setting gets no pass, because ROUTE's pass plays what the route does. Every program the route's own pass built still has to come from one pass or another, and only a warm-up can show that, with `shader_cache.py diff` against one that played the route.
+A route with a `warm-from=ROUTE` setting gets no pass, because ROUTE's pass plays what the route does. The comment at the top of `tests/hashes/manifest.txt` says why some routes open a `-courses` route or keep a pass of their own, and how a change to a pass has to be checked. `test_routes.py` checks that the four courses that compile late open their passes and race past their last compiles.
 
-Most courses get their programs from the three `-courses` routes, which race one course after another (`tests/routes/README.md`). A race that follows another starts from another state of the game, and there Sky Sands, Magma Flows, Frozen Hillside and Checker Knights each missed programs their own passes built late. So `air-ride-courses-1` opens with Sky Sands to frame 14,400 and `air-ride-courses-2` with Magma Flows to 12,700, while Frozen Hillside plays a pass of its own to 6,000 and Checker Knights one of 5,100 frames.
-
-`air-ride-race`, `air-ride-celestial-valley` and `air-ride-beanstalk-park` get the programs they first draw past their own stretches, at frames 5,649 to 12,068 of their own routes, from Sky Sands, which draws them by frame 14,186. Of the keys `air-ride-race`'s own pass built, 8 come from passes other than `air-ride-courses-1`. `test_routes.py` checks that the four courses that compile late open their passes and race past those frames, but only a run can show the other routes still get their programs.
-
-So any change to a pass or the route it plays means diffing the new warm-up's cache against the last one, both ways, with `shader_cache.py diff`. A change to what the `-courses` routes race also means running the eight `air-ride-` routes unpaced to frame 16,000 again, as under "Chained course passes" in `docs/dev/status.md`.
-
-The merged cache is copied over `saves/shaders.bin` only once every pass has succeeded, and it only gains keys. No other file in `saves/` is touched, so the player's memory card stays as it is. A failed pass stops the ones still playing, exits 1 and leaves `saves/` as it was. `saves/.shader-warmup` holds the gcn-recomp commit and a SHA-1 each of the manifest (with the text of every route file it lists, a `warm-from=` route's too) and of warm_shaders.py. If all three match, the next run does nothing. A relink doesn't replay the game, but an edited route or tool does. A checkout asks git for the gcn-recomp commit. A source snapshot has no history, so it takes the commit from its `source-info.json`. A copy with neither exits 2. `--force` plays it anyway. A pass that outlasts twice its length at 60 fps plus 30 s is killed and counts as failed.
+The merged cache replaces `saves/shaders.bin` only once every pass has succeeded, and nothing else in `saves/` is touched, so the memory card stays as it is. `saves/.shader-warmup` stamps what the warm-up played, and a run with a current stamp does nothing unless `--force` is given. `--help` gives what the stamp holds and the pass timeout.
 
 `--report DIR` keeps each pass's output as `NAME.log` and the cache it left as `NAME.bin` in DIR, and prints `report.txt`. A row says how many programs the game built from the starting cache before its first frame and how long that took, how many keys the pass built itself and how many of those no other pass built. It also gives the keys and programs the pass added that the starting cache and the passes before it in the manifest lacked, and the merged cache's size so far. With `GCN_FRAMETIME=1` in the environment it gives the frame the pass built its last program in.
 
@@ -558,7 +499,7 @@ tools/shader_cache.py count saves/shaders.bin
 
 ## prune_runs.py
 
-Which runs in `build/probe/` are old enough to clear? probe.sh and the hash tools leave a directory per run, and their frames and recordings filled a disk once. Agents can't `rm`, so nothing else cleans them up. For each CLONE it looks at the direct children of `CLONE/build/probe/` and lists the ones with nothing newer than `--hours` (24 unless you give it). A child's age is the newest mtime of it and of anything under it, so a fresh file deep inside an old run keeps the run. A file's age is its own mtime.
+Which runs in `build/probe/` are old enough to clear? probe.sh and the hash tools leave a directory per run. For each CLONE it lists the direct children of `CLONE/build/probe/` with nothing newer than `--hours` (24 unless you give it).
 
 Without `--delete` it prints what would go, a line each with its size and age, then the total. With `--delete` it removes those and prints the same lines and the space freed. A size is the files' lengths, not the blocks they take.
 
@@ -567,11 +508,7 @@ tools/prune_runs.py /path/to/clone
 tools/prune_runs.py --hours 6 --delete /path/to/clone /path/to/old-clone
 ```
 
-Names listed in `build/probe/keep`, one a line, stay. Blank lines and lines that start with `#` are skipped, and `keep` itself is never touched. Names are compared ignoring case, as the default macOS volume does, so `Keep` is never touched and a line `case` protects `Case`. A run you mean to read later, such as the last `audio-ROUTE` directory that audio_hashes.py leaves for its `[ax]` lines or the `scorecard-ROUTE` directories that audio_scorecard.py `--no-run` reads back, is prunable after 24 hours unless its name is in `keep`.
-
-Links are never followed. A symlinked child is removed as a link and its target stays, and the age walk doesn't go through links.
-
-A CLONE is refused when it isn't a directory, when its `build/probe` isn't `CLONE/build/probe` once links are resolved (a link to elsewhere, say) or when its `keep` isn't a readable plain file. Nothing is removed from any CLONE then, and it exits 2. A CLONE with no `build/probe` is skipped with a note on stderr. A child it can't read or remove is named on stderr and the rest still go. That exits 1, and a child that failed to remove counts as nothing freed. Otherwise it exits 0.
+Names listed in `build/probe/keep`, one a line, stay, compared ignoring case. A run you mean to read later, such as the last `audio-ROUTE` directory or the `scorecard-ROUTE` ones `--no-run` reads back, needs its name there. `--help` gives the link and refusal rules and the exit codes.
 
 ## routes.py
 
@@ -601,7 +538,7 @@ It splits the log at its `[session]` lines, so a run-N directory gets its own pa
 
 ## click_stages.py
 
-Which stage made each click the sound device got? It puts each device-stage click down to the mixer, the ring, the device or nothing, by the rules under session_report.py. It has no command line.
+Which stage made each click the sound device got? It puts each device-stage click down to the mixer, the ring, the device or nothing, by the rules in its docstring. It has no command line.
 
 ## core_audio_log.py
 
@@ -643,7 +580,9 @@ tools/ci.py tools launcher
 
 ## mutant.py
 
-Do the tests notice when the code breaks? It changes a copy of a commit, runs a test directory there and reports whether the tests failed. A changed copy is a mutant. It's killed when the tests fail and survives when they pass, and a survivor is a gap in the tests. A spec file holds the changes, so someone checking a new test keeps it in place of a throwaway script. It can live anywhere, and it's worth committing when others should be able to run the same check.
+Do the tests notice when the code breaks? It runs a test directory on a changed copy of a commit and reports whether the tests failed. A changed copy is a mutant, which is killed when the tests fail and survives when they pass, so a survivor is a gap in the tests.
+
+A spec file holds the changes. It can live anywhere, and committing it lets others run the same check.
 
 The spec is a JSON list of mutants. Each has a `name` and a `dir` to discover tests in, relative to the repo (`tools` or `launcher/tools`). Its `replace` list holds `{file, old, new}` edits that are applied together, in order. Every `old` has to occur exactly once in its file, so a typo can't make a mutant that changes nothing. `new` may be empty. An optional `pattern` says which test files in `dir` to run. It's what `unittest discover -p` takes and it defaults to `test_*.py`. It matches file names, so it has no `/`. A `dir` and `pattern` that run no test are refused at their baseline.
 
@@ -668,30 +607,7 @@ It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it
 
 Each run is `PYTHON -B -m unittest discover -s COPY/DIR -p PATTERN`, run from the copy, PYTHON being `--python` (the Python running the tool unless you give another). With the default pattern a mutant on `tools` takes about a minute. The example above runs one test file and takes seconds.
 
-These keep a kill from meaning nothing.
-
-- Every copy is a `git archive` of `--rev` (HEAD unless you say otherwise). The repo's own files are never edited or run, and uncommitted changes aren't tested. `--repo` names a checkout other than the one holding the tool.
-- Each distinct `dir` and `pattern` gets a baseline on an unchanged copy first, and it has to pass and run at least one test. A selection that fails on its own would read every mutant as killed. One that runs nothing, such as a misspelled `pattern`, would read every mutant as a survivor, because Python 3.9 exits 0 for a run of no tests. The tool reads the count from unittest's `Ran N tests` line, so it doesn't depend on discover's rules or on the exit code, which is 5 on 3.12 and later.
-- Each mutant runs on a fresh copy, so no stale bytecode or leftover from an earlier run is tested in its place.
-- The tests get `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, as `launcher_build.py`'s tools do, your `HOME` and `TMPDIR`, `PYTHONDONTWRITEBYTECODE=1` and `PYTHONUNBUFFERED=1`. The last puts what a test prints while it runs ahead of unittest's summary and not after it, so a line that looks like the summary comes before the real one. Nothing else in your environment reaches them, so no key or token in it does.
-- Every copy is built and every edit applied before any test runs, so a bad edit costs no run. A `pattern` that runs no test costs its baseline.
-- A run that outlasts `--timeout` (600 s unless you say otherwise, for each run) is killed along with everything it started. Whatever a run leaves running is killed when the run ends, and so is a run still going when ^C, SIGTERM or SIGHUP ends the tool.
-
-A copy has no `.git` and, since `git archive` leaves submodules out, no gcn-recomp. A test that needs either has to skip itself, as `RealTreeTest` in `test_launcher_build.py` does. `--python FILE` picks the interpreter that runs the tests, and it defaults to the one running the tool.
-
-DEST is a new directory outside the repo. The tool refuses one that exists or is inside the repo or, with `--repo`, inside the checkout holding the tool. The copies are built there as `baseline-N` and `mutant-N`, counting from 1 in the order the spec first uses a dir and pattern and lists a mutant. Each has the last 64 KiB of its run's output beside it as a `.log`. A mutant that breaks an import counts as killed too, so read its log before you trust a kill that matters.
-
-When the run ends it removes the copies and keeps the logs. That holds however the run ends, even on a tool error or ^C. SIGTERM and SIGHUP are handled like ^C and end the tool with exit 143 and 129. One that was already ignored when the tool started stays ignored, so `nohup` keeps working. A signal that comes while it removes the copies is ignored, and the run ends with its usual code, so a second ^C can't leave the rest behind. DEST goes too when nothing's left in it, as when the tool stops before any test runs. It removes only what it made, so anything else that ends up in DEST stays and keeps DEST with it. The tool makes any missing parent of DEST and leaves it there, since only DEST itself is removed. A copy it can't remove is named on stderr and doesn't change the result. A signal the tool doesn't catch, such as SIGKILL or SIGQUIT, leaves the copies behind and any test still going. `--keep` keeps the copies, to read a mutant's files or run its tests by hand, and then DEST is yours to delete.
-
-It exits 0 when every mutant was killed and 1 when any survived or timed out. It exits 2, as the other tools do, with one `mutant:` line on stderr when it couldn't decide:
-
-- the spec or an argument is bad
-- an `old` isn't found exactly once
-- a file or dir isn't in the copy, or a link would take an edit outside it
-- DEST exists or is inside the repo or the checkout holding the tool
-- a baseline fails, times out or runs no test
-
-A crash in the tool exits 2 as well, so it can't read as a survivor. A SIGTERM or SIGHUP ends it with 143 or 129 and prints no message of its own.
+`tools/mutant.py --help` gives how each run is isolated (a fresh `git archive` copy of `--rev`, a baseline for each `dir` and `pattern` that has to pass and run a test, a bare environment and `--timeout`), what DEST keeps, how ^C and signals clean up and the exit codes. A copy has no `.git` and no gcn-recomp, so a test that needs either has to skip itself, as `RealTreeTest` in `test_launcher_build.py` does. A mutant that breaks an import counts as killed too, so read its log before you trust a kill that matters.
 
 ## export_source.py
 
@@ -832,11 +748,7 @@ It has no command line.
 
 ## engine_kit.py
 
-What does a player's Mac need to build the game without CMake, Ninja or SDL's source? engine_kit.py packs it from a build configured with no disc and a deployment target, once `runtime_check` and `SDL3-static` are built. The kit holds `engine.o` (runtime_check's objects joined by `ld -r`, so the link takes all of them), `libSDL3.a`, `recomp.h` and `compat.h`, `kit.mk`, the Makefile from `launcher/kit/` and the licenses of gcn-recomp, SDL and the hidapi inside SDL. `kit.mk` takes `GAME_CFLAGS` from the `game_cflags.txt` gcn-recomp's configure wrote to the build directory, `LINK_FLAGS` from its `game_ldflags.txt` and `GAME_LIBS`, the frameworks and libraries, from its `game_libs.txt`. It also holds `MACOSX_MIN`, the build's deployment target. Its `ENGINE_COMMIT` is the gcn-recomp commit in the `gcn_engine_sha.h` that runtime_check was compiled with. So every flag and framework the game gets comes from CMake, and launcher_build.py can tell which snapshots the kit builds.
-
-runtime_check compiles Dragoon's `src/` too, so `engine.o` has the hooks the generated C calls, and the player's Mac never compiles `src/`. The kit's `SRC_SHA256` is export_source.py's `src_digest` of the build's `src/`. launcher_build.py pairs a kit with a snapshot by both `ENGINE_COMMIT` and `SRC_SHA256`.
-
-That digest names what `engine.o` holds only when `src/` is a clean checkout that runtime_check compiled. So engine_kit.py refuses a `src/` where `git status --ignored` shows anything, and one with a file newer than runtime_check's objects of `src/`.
+What does a player's Mac need to build the game without CMake or SDL's source? engine_kit.py packs `engine.o` (runtime_check's objects, Dragoon's `src/` among them), `libSDL3.a`, the two runtime headers, `kit.mk`, the Makefile from `launcher/kit/` and the licenses, from a build configured with no disc and a deployment target. launcher_build.py pairs a kit with a snapshot by `kit.mk`'s `ENGINE_COMMIT` and `SRC_SHA256`, and `--help` lists the rest of `kit.mk` and the builds it refuses.
 
 ```
 cmake -S . -B build-kit -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DGAME_ISO=
@@ -853,9 +765,7 @@ make -f "$KIT/Makefile" -j16 KIT="$KIT" SDK=/Library/Developer/CommandLineTools/
   CC=/Library/Developer/CommandLineTools/usr/bin/clang CXX=/Library/Developer/CommandLineTools/usr/bin/clang++
 ```
 
-A `$`, `"`, `` ` ``, `:` or `;` in `KIT`, `SDK`, `CC` or `CXX` stops make with an error, since make or the shell would read it as its own. A space in any of the four is fine. Finder shows a `:` in a name as a `/`. The launcher passes paths it controls. A new `kit.mk` or kit header rebuilds every object.
-
-A build with a `GAME_ISO` is refused, since its `main.o` would carry the disc's path. So is a build with no deployment target, or one missing any of the three files. gcn-recomp's configure writes the two link files together, and neither when it can't write every library, with a warning saying why. A `game_libs.txt` that names a path is refused too, since a player's Mac may not have it. So is a `gcn_engine_sha.h` that names no commit, or one with `-dirty` after it, since the kit's headers and `engine.o` then match no commit a snapshot can name. `ld -r` turns the objects' DWARF into a debug map naming the build's own `.o` files, which a player doesn't have. `--strip-debug` drops that map and `libSDL3.a`'s DWARF. The kit is written under a temporary name and renamed into place, so a failed run leaves no OUT. It exits 1 when ld or strip fails and 2 on a build it can't make a kit from. The tests use objects compiled from one-line C, and compilers that only record their arguments under the real `make`, with the kit, the directory holding `gen/`, the SDK and the compilers at paths with spaces.
+The Makefile's header lists the characters that `KIT`, `SDK`, `CC` and `CXX` can't hold. A new `kit.mk` or kit header rebuilds every object. It exits 1 when ld or strip fails and 2 on a build it can't make a kit from.
 
 ## check_bundle.py
 
@@ -935,9 +845,7 @@ The tests fake codesign with a script that records its call, so they sign nothin
 
 ## sign_and_package.py
 
-Can one command sign the launcher, put it in a DMG and notarize it? It lives in `launcher/tools/`, with the commands it runs in `sign_plan.py` beside it. It copies the app to `OUT/dmg-root/Dragoon.app` next to an `Applications` link and signs the copy inside out, so the app you pass stays as it was. With a Developer ID identity every item gets `codesign -f -s IDENTITY -o runtime --timestamp`, as notarization requires. None gets `--deep`. Sparkle's `Autoupdate`, `Updater.app` and framework go first when the app has them, without the XPC services a launcher that isn't sandboxed doesn't ship. An app that still has them is refused. The app goes last, and the launcher claims no entitlements. The engine kit's files are sealed with the app as resources, and none is signed on its own.
-
-`codesign --verify --strict --deep` then checks the signed app before the DMG is made, so a broken signature costs no notarization round trip. `hdiutil create -format UDZO` makes `OUT/Dragoon.dmg`, tried up to three times because it sometimes fails with Resource busy, and `codesign -i` signs it with `--timestamp` for a Developer ID identity and `--timestamp=none` for ad hoc. With a Team API key, `xcrun notarytool submit --wait` notarizes the DMG and `xcrun stapler staple` staples it. A notarized DMG then gets `xcrun stapler validate` and the `spctl` assessments for an app and for a disk image.
+Can one command sign the launcher, put it in a DMG and notarize it? It lives in `launcher/tools/`, with the commands it runs in `sign_plan.py` beside it.
 
 ```
 launcher/tools/sign_and_package.py --app launcher/dist/Dragoon.app --identity - --out /tmp/dragoon-release
@@ -945,24 +853,20 @@ launcher/tools/sign_and_package.py --app launcher/dist/Dragoon.app --identity "D
   --out dist --notary-key AuthKey.p8 --notary-key-id KEYID --notary-issuer ISSUER --dry-run
 ```
 
-`--identity -` signs ad hoc, with `--timestamp=none` and without `-o runtime`. Apple's timestamp server wants an Apple identity and the internet, and the runtime's library validation would stop an ad hoc launcher loading an ad hoc Sparkle, since neither has a team ID. With no notary key the run stops after signing and says the DMG isn't notarized. Apple rejects an ad hoc signature, so `--identity -` with a notary option is refused. `--dry-run` prints every command and runs none. Each command prints as a `+` line as it runs, and the DMG's path is the last line of a finished run. The key file is only named to notarytool and never read. A rejected notarization stops the run and prints the submission ID with the `notarytool log` command that shows why. A notarization still running after `--notary-timeout MINUTES` (30 unless you give it) is cut off, and the run prints the `notarytool history` command that finds the submission. The timeout takes up to 1440 minutes, a day. A re-run needs an empty `OUT` and uploads again, so give a slow submission a longer timeout instead. `OUT` can't be inside the app, where `ditto` would copy the app into itself. It exits 0 when the DMG is made, 1 when a command failed and 2 on a bad argument.
+`--help` lists each signing step, why ad hoc signing skips the timestamp and the hardened runtime, the notarization cut-off (30 minutes unless `--notary-timeout` says, a day at most) and the exit codes. The engine kit's files are sealed with the app as resources, and none is signed on its own.
 
 The tests fake codesign, ditto, hdiutil, xcrun and spctl with scripts that record their calls, so they sign nothing.
 
 ## swift_test.py
 
-How do the launcher's Swift tests run on a Mac with the Command Line Tools and no Xcode? swift_test.py lives in `launcher/tools/` and runs `swift test --package-path launcher` with its own arguments passed on (`--filter NAME` works), exiting with swift's status. Plain `swift test` fails there with `no such module 'Testing'`, because the tools keep `Testing.framework` where neither the compiler nor the test runner looks.
-
-When `xcode-select -p` names a directory that holds `Library/Developer/Frameworks/Testing.framework` and has no `Platforms` directory, whatever the directory is called, the tool adds `-Xswiftc -F` for that `Frameworks` directory and `-Xlinker -rpath` for it and for `Library/Developer/usr/lib`, where `lib_TestingInterop.dylib` is. Xcode's developer directory has a `Platforms` directory, so with Xcode selected, or when `xcode-select` fails, it adds nothing. The flags stay out of `Package.swift`, because `unsafeFlags` there would bake one Mac's paths into the package.
+How do the launcher's Swift tests run on a Mac with the Command Line Tools and no Xcode? swift_test.py lives in `launcher/tools/` and runs `swift test --package-path launcher` with its own arguments passed on (`--filter NAME` works), exiting with swift's status.
 
 ```
 launcher/tools/swift_test.py
 launcher/tools/swift_test.py --filter FileSystemTests
 ```
 
-The swift command prints on stderr as a `+` line before it runs, and `xcode-select` prints nothing. A signal that ends swift counts as 128 plus its number, and exit 2 means swift couldn't be started. Every argument goes to swift, `--help` included, so the tool has no help of its own and `swift_test.py --help` prints swift's.
-
-The tests fake `xcode-select` and swift with scripts that record their calls, and they build fake developer directories at paths with spaces. Two of them run the tool as a script with the fake swift found on `PATH` and the real `xcode-select` answering from `DEVELOPER_DIR`, so they see what swift prints. CI's launcher job runs the tool, and with Xcode on GitHub's runner it adds nothing there.
+[Why a wrapper runs the tests](../launcher/README.md#why-a-wrapper-runs-the-tests) in the launcher's README gives the flags it adds and when. It adds none when `xcode-select` fails, and it prints the swift command on stderr as a `+` line before it runs. A signal that ends swift exits 128 plus its number, and exit 2 means swift couldn't be started.
 
 ## The engine's own tools
 
