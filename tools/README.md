@@ -6,7 +6,7 @@ Run the tests with `python3 -m unittest discover -s tools -p 'test_*.py'`. The l
 
 ## Conventions
 
-Every tool but `swift_test.py`, which hands it to swift, takes `--help` and prints its usage and what it reads. Results go to stdout, including the failures a tool checks for. Errors go to stderr as one line naming the file and what's wrong, and so do warnings that leave the exit code alone. A traceback means a bug in the tool.
+Every tool with a command line takes `--help` and prints its usage and what it reads, except `swift_test.py`, which hands `--help` to swift. Results go to stdout, including the failures a tool checks for. Errors go to stderr as one line naming the file and what's wrong, and so do warnings that leave the exit code alone, while a traceback means a bug in the tool.
 
 | Exit | Means |
 |---|---|
@@ -273,7 +273,7 @@ In `--json` the stretches are under `noise` in noise_blocks.py's own `--json` sh
 
 It counts the lines from that subsystem whose message holds the word in any letter case, by process. The unified log doesn't keep messages long, so an old session's window can come back empty.
 
-`--json` prints the whole result, and `--list N` caps the times printed for each list (default 10). A file that's missing or empty leaves its sections out and is named on stderr. It exits 2 only when the directory has no readable `session.json`.
+`--json` prints the whole result, and `--list N` caps the times printed for each list (default 10). A file that's missing or empty leaves its sections out and is named on stderr. It exits 2 on a bad argument or a directory with no readable `session.json`.
 
 A run-N directory, made when the game reset the console and started again, reads its own part of the session's `stdout.txt`. The report names the run that follows a reset, and says so when the game shut the console down instead.
 
@@ -387,8 +387,6 @@ Did a change alter what the renderer draws? It runs each route in `tests/hashes/
 
 The manifest holds 24 routes, one per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach, any extra probe settings and any `warm=` or `warm-from=` setting. Pass route names to run only those.
 
-On 2026-10-22, when the manifest held twelve routes, a `check` of all twelve took 302 s while other copies of the game ran on the same machine.
-
 `check --slow=N` gives each route N times its seconds, for a build that runs slower than the one the goldens came from. N is a whole number from 1, the default. With N above 1 the game quits one dump interval past the route's last frame (probe.sh `--exit-after`), so a fast build doesn't spend the extra seconds.
 
 The dump interval and the frames a route must reach don't change, and `record` refuses `--slow`.
@@ -406,8 +404,6 @@ Did a change alter what the AX mixer outputs? It runs each route in `tests/hashe
 tools/audio_hashes.py check air-ride-race
 tools/audio_hashes.py record title --lists 7200,20000
 ```
-
-On 2026-10-22, when the manifest held twelve routes, a `check` of all twelve took 300 s while other copies of the game ran on the same machine.
 
 Each route runs under the NAME `audio-ROUTE` in `build/probe/`. An earlier run's directory is deleted first, so the game starts from a blank memory card. The last run's directory stays, so its `[ax]` lines can explain a changed hash. List counts are multiples of 400, the interval the game prints at. It exits 0, 1 or 2 as frame_hashes.py does.
 
@@ -602,27 +598,27 @@ A CLONE is refused when it isn't a directory, when its `build/probe` isn't `CLON
 
 ## routes.py
 
-Which routes does the repository play? `tests/hashes/manifest.txt` lists them, and `tests/routes/` holds their files. routes.py reads the manifest into `Route` records and gives each route file's path, for frame_hashes.py, audio_hashes.py and warm_shaders.py. It also picks routes by name for the first two. It has no command line.
+Which routes does the repository play? `tests/hashes/manifest.txt` lists them, and routes.py reads it into `Route` records and picks routes by name. `route_file` gives a route's file in `tests/routes/`, and the module has no command line.
 
 A route's `warm=N` setting goes in its `warm` field and its `warm-from=ROUTE` in its `warm_from` field, and both stay out of its probe.sh settings, since probe.sh refuses a setting it doesn't know. A bad N, a second `warm=` or `warm-from=`, both on one route or a setting that looks like a misspelled one, such as `WARM=` or `warm:`, raises `ValueError` naming the route and the manifest line. So does a `warm-from=` that names the route itself, a route the manifest doesn't list or one with a `warm-from=` of its own.
 
 ## source_info.py
 
-What does a source snapshot hold? Its `source-info.json` names the Dragoon and gcn-recomp commits and the disc they build, as `disc_id` and `dol_sha1`. source_info.py reads and writes that file, and refuses one with a field missing or malformed, naming the file. export_source.py writes it, and warm_shaders.py reads the engine commit through it. It has no command line.
+What does a source snapshot hold? Its `source-info.json` names the Dragoon and gcn-recomp commits and the disc they build (`disc_id` and `dol_sha1`), and export_source.py writes it. source_info.py, which has no command line, reads and writes that file and refuses one with a field missing or malformed, naming the file.
 
 ## probe_dirs.py
 
 What happens to a probe run and its directory? It holds `remove_run`, which deletes a directory from `build/probe/` for good, and `run_probe`, which runs a probe.sh command line with its output dropped and turns a nonzero exit into a `ProbeFailed` error that keeps the status. `slow_factor` reads the N of a `--slow=N` and refuses anything but a whole number from 1.
 
-`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. frame_hashes.py, audio_hashes.py, replay_session.py and the scorecard use `remove_run` and `run_probe`, and the two hash tools and interp_bisect.py use `slow_factor`. It has no command line.
+`remove_run` unlinks a link inside the directory and leaves its target alone, and it refuses a directory that's itself a link. It has no command line.
 
 ## aid_blocks.py
 
-What does `GCN_AIDWAV` write? It holds the DMA's rate, its 160-sample block and the reader for the block log beside each recording, for block_clicks.py, click_diff.py, noise_blocks.py and scorecard_measure.py. It has no command line.
+What does `GCN_AIDWAV` write? It holds the DMA's rate and 160-sample block, with the reader for the block log beside each recording, for the audio tools. It has no command line.
 
 ## session_log.py
 
-What does a session's log say about its sound device, its ring and its crashes? It reads the `[audio]`, `[ring]`, `[shaders]` and `[session]` lines of a session's `stdout.txt`, with its `FATAL` and `FAULT` lines, for session_report.py. A guest panic ends in a `FATAL` line, so it counts once.
+What does a session's log say about its sound and its crashes? It reads the `[audio]`, `[ring]`, `[shaders]` and `[session]` lines of a session's `stdout.txt`, with its `FATAL` and `FAULT` lines.
 
 It splits the log at its `[session]` lines, so a run-N directory gets its own part. It has no command line.
 
@@ -691,7 +687,9 @@ tools/mutant.py build/probe/mutant/spec.json /tmp/dragoon-mutants
 
 This spec sits in `build/probe/`, which git ignores, so it stays on your machine.
 
-It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it finishes, then `total N, killed K, survived S, timeout T`. A kill that isn't unittest's exit 1 says how the run ended, as in `killed NAME (exit -9)` for a signal or `(exit 5)` for no tests. Each run is `python3 -B -m unittest discover -s COPY/DIR -p PATTERN`, run from the copy. With the default pattern a mutant on `tools` takes about a minute. The example above runs one test file and takes seconds.
+It prints `killed NAME`, `survived NAME` or `timeout NAME` for each mutant as it finishes, then `total N, killed K, survived S, timeout T`. A kill that isn't unittest's exit 1 says how the run ended, as in `killed NAME (exit -9)` for a signal or `(exit 5)` for no tests.
+
+Each run is `PYTHON -B -m unittest discover -s COPY/DIR -p PATTERN`, run from the copy, PYTHON being `--python` (the Python running the tool unless you give another). With the default pattern a mutant on `tools` takes about a minute. The example above runs one test file and takes seconds.
 
 These keep a kill from meaning nothing.
 
@@ -900,9 +898,11 @@ tools/check_bundle.py launcher/dist/Dragoon.app --commit SHA
 tools/check_bundle.py launcher/dist/Dragoon.dmg --commit SHA
 ```
 
-It prints one `kind: path (detail)` line per finding and nothing when the bundle is clean. Paths are relative to the app. It exits 0 when clean, 1 with findings and 2 when it couldn't check. A checkout that isn't at `--commit`, a manifest it can't read and a DMG that won't attach all exit 2. `--repo` names the Dragoon checkout the reference snapshot is exported from. It defaults to the one holding the tool. `--manifest` names another manifest.
+It prints one `kind: path (detail)` line per finding and nothing when the bundle is clean, and paths are relative to the app. It exits 0 when clean and 1 with findings. A checkout that isn't at `--commit` exits 2, and so do a manifest it can't read and a DMG that won't attach, or won't detach after a clean check.
 
-A path that no manifest line allows is a finding, so a new file in the app starts as a line in the manifest. The app's budget in the manifest is a placeholder until the launcher and Sparkle are built. The engine kit sits at `Contents/Resources/kit/`, beside the snapshot.
+`--repo` names the Dragoon checkout the reference snapshot is exported from, the one holding the tool unless you give another. `--manifest` names another manifest.
+
+A path that no manifest line allows is a finding, so a new file in the app starts as a line in the manifest. The app's budget in the manifest is an estimate, with a guess for the launcher and Sparkle. The engine kit sits at `Contents/Resources/kit/`, beside the snapshot.
 
 ## bundle_manifest.py
 
@@ -922,7 +922,9 @@ What does an app tree hold? It lists the regular files with their sizes, the sym
 
 ## bundle_dmg.py
 
-How does check_bundle.py look inside a DMG? It attaches the image with `hdiutil attach -readonly -nobrowse -mountpoint` at a fresh temporary directory and always detaches it, forcing the detach if the volume is busy or the plain one hangs. An attach gets two minutes and a detach one, so a stuck hdiutil can't hold a CI job until its own timeout. A detach that fails after the checks ran still prints their findings, with the error on stderr. The tests fake hdiutil. It has no command line.
+How does check_bundle.py look inside a DMG? It attaches the image with `hdiutil attach -readonly -nobrowse -mountpoint` at a fresh temporary directory and always detaches it, forcing the detach if the volume is busy or the plain one hangs. An attach gets two minutes and a detach one, so a stuck hdiutil can't hold a CI job until its own timeout.
+
+A detach that fails after checks that found something still prints the findings, with the error on stderr. The tests fake hdiutil, and the module has no command line.
 
 ## make_app.py
 
