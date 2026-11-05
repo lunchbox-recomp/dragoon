@@ -162,10 +162,10 @@ and the census logs each perspective camera it loads. On Dragoon `45c52c5` at 16
 output dump shows the player's and the CPUs' markers over their karts.
 
 With `HSD_CObjSetAspect` the world drew more at 16:9 than at 4:3 at all four checkpoints in the
-table, and the CPU markers sit over their karts in the output dumps of the race at 4200 and of
-City Trial at 3300. The projection patch leaves the stored aspect at 4:3, so draws stay at their 4:3
-count and the markers drift outward from the karts. The constant loads widen the HUD and the
-menus along with the world.
+table. In the output dumps on Dragoon `e52dce1` each CPU marker sits over its kart, in the race
+at 4200 and in City Trial at 3300. The projection patch leaves the stored aspect at 4:3, so
+draws stay at their 4:3 count and the markers drift outward from the karts, while the constant
+loads widen the HUD and the menus along with the world.
 
 The widened aspect doesn't compound, because the camera module works it out from the
 viewport before each call to the setter.
@@ -365,9 +365,10 @@ tools/drawlog.py hud build/probe/hud/stdout.txt build/probe/hud-wide/stdout.txt 
 ```
 
 `drawlog.py hud` pairs the two runs' HUD draws and checks each anchored one's box against its
-4:3 box, as `tools/README.md` says. On Dragoon `e52dce1` at gcn-recomp `5e49451`, one run at a
-time at loads of 1.5 to 3.1, every checkpoint passed. `e52dce1`, here and below, is on the
-`hud-anchors` branch, with the same `src/`, `recomp/` and `tools/drawlog.py` as `fe88e8a`.
+4:3 box, as the docstring of `tools/hud_boxes.py` says. On Dragoon `e52dce1` at gcn-recomp
+`5e49451`, one run at a time at loads of 1.5 to 3.1, every checkpoint passed. `e52dce1`, here
+and below, is on the `hud-anchors` branch, with the same `src/`, `recomp/` and
+`tools/drawlog.py` as `fe88e8a`.
 
 | Checkpoint | Anchored | Failed | Stretched |
 |---|---|---|---|
@@ -395,7 +396,7 @@ anchors on both.
 | `fn_8011F114` | None drawn | R | R in each view | R in each view |
 
 In the output dumps at 16:9 the race's position sits at the left and the timer in the middle.
-The minimap, the lap count and the speedometer sit at the right, and the CPU marker sits over
+The minimap, the lap count and the speedometer sit at the right, and each CPU marker sits over
 its kart. In 2P and 4P each player's name sits at the left of their view and the speedometer at
 its right, with the clock at the left of the bars.
 
@@ -411,10 +412,10 @@ but the mode select's are from Dragoon `e52dce1`, with the race at 8400 and Top 
 loads of 4.2 to 5.0.
 
 - After the finish `fn_8011500C` draws the replay's banner and buttons, and they keep their 4:3
-  shape in the middle of the screen. `drawlog.py hud` fails three of their 11 draws at 8400, the
-  banner's pieces at the sides, as centered draws past the band. The banner's dark stripe spans
-  the screen at 4:3 but is drawn within one of the callback's joint trees, so at 16:9 it takes
-  the tree's middle anchor and stops short of both sides.
+  shape in the middle of the screen. Since `ab50305` added the check of a centered draw past the
+  band, `drawlog.py hud` fails three of their 11 draws at 8400, the banner's pieces at the sides.
+  The banner's dark stripe spans the screen at 4:3 but is drawn within one of the callback's
+  joint trees, so at 16:9 it takes the tree's middle anchor and stops short of both sides.
 - In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide. At
   3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
   table draws them. Top Ride's census on Dragoon `701a2dd` has all 38 drawn by
@@ -426,9 +427,9 @@ loads of 4.2 to 5.0.
   at 2852, 107 display pixels from where it sits from the next, and in 2P at 2852 they stretch
   for theirs.
 - An element that slides across a third's line jumps to the other edge once it's a quarter of a
-  third past it. One that stops inside that band shows the edge it came from for 29 frames and
-  takes its nearest edge on the 30th, and a still element with a blinking joint never rests, so
-  it keeps the edge it came with. No dump caught any of these.
+  third past it. One that stops less than a quarter of a third past the line shows the edge it
+  came from for 29 frames and takes its nearest edge on the 30th, and a still element with a
+  blinking joint never rests, so it keeps the edge it came with. No dump caught any of these.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - The test that culls the world wasn't found, so pop-in at the sides while moving needs a person
