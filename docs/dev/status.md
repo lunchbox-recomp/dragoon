@@ -529,6 +529,11 @@ soak's run directory holds an empty `.txt`. The engine before gcn-recomp `1efabb
 bot_link then set so no recording was made. bot_link now passes `/dev/null/none`, which leaves
 no file.
 
+The Dragoon column is the commit each soak ran, on bot-soak before its rebases onto main.
+`525580e` became `569e994`, `0cb53f4` became `bd5ff15`, `c9bf0f9` became `acfb6c7`, `ee88df6`
+became `df6b2ba`, `63932c5` became `bd92d9d`, `16e67cd` became `e49464e`, `4ae7a22` became
+`5fcd62d` and `a92d317` became `7cf11f1`.
+
 | Seed | Modes | Ports | Minutes | Dragoon | Wall time | Rounds | End |
 |---|---|---|---|---|---|---|---|
 | 506028 | Air Ride | 1 | 10 | `525580e` | 10.0 min | 37 | Time limit |
@@ -549,16 +554,16 @@ no file.
 The first three stops were the walker's, and the next soak of that mode ran with the fix. After
 a stadium's results the game showed a checklist (screen 34) when the round had checked a box,
 and then City Trial's player entry with every port out. The walker joined again from there and
-never reached the menus, and a later stadium ran past 600 s. Since `b67fd1c` it presses A on the
-checklist. Since `3dd0176` it holds B on the player entry, which goes back to City Trial's own
-menu. Since `c4d608d` it ends a stadium after 120 s through its pause menu.
+never reached the menus, and a later stadium ran past 600 s. Since `319c0fb` it presses A on the
+checklist. Since `91cbf6c` it holds B on the player entry, which goes back to City Trial's own
+menu. Since `58144e1` it ends a stadium after 120 s through its pause menu.
 
 With four players a stadium's results wait for START from every player. Frame 32,000 of
 512035's replay shows Destruction Derby's results with P1 alone ready, since the walker pressed
-START on port 1 only. It has pressed START on every port since `ee88df6`. With four players a
+START on port 1 only. It has pressed START on every port since `df6b2ba`. With four players a
 stadium's pause menu has Return to Game and End Game side by side, so the walker's DOWN left the
 cursor on Return to Game and its A went back to a Single Race, 48 times over. Frames 130,550 to
-130,650 of 513333's replay show it once. Since `457b37b` it presses RIGHT there instead. A scratch
+130,650 of 513333's replay show it once. Since `1ab3b40` it presses RIGHT there instead. A scratch
 copy of `city-trial-stadium-4p.txt` that presses START at frame 18,000, RIGHT at 18,100 and A at
 18,150 went to End Game on Drag Race 3. At frame 18,125 the pause menu's cursor was on End Game.
 
@@ -568,10 +573,10 @@ changed in the same command list, in a City Trial round's city. The game stopped
 that sample when it ran out. The rule followed a parameter block across a `set`, so the block's
 earlier stream address made that end an early one. In 544282 it was list 608,157, about 7,100
 frames into the round, and in 545590 list 1,691,796, about 7,400 frames in. Neither point was
-compared with a console. Since `c82a688` a `set` that gives a block a new sample ends the voice
+compared with a console. Since `2cc5864` a `set` that gives a block a new sample ends the voice
 that ran there as the game's doing, and an end the mixer makes on a stream the game didn't stop
 or give a new sample is still an early one. With that rule 555018 and 558640 ran their hours,
-and `stream_voices.py` finds no early end in either log. Since `e9c059e` a move on a voice that
+and `stream_voices.py` finds no early end in either log. Since `e35b777` a move on a voice that
 never had a loop flag carries into the new sample its block gets. With that rule
 `stream_voices.py` finds no voice that ended early in 575543's, 579174's or 835686's log, so none
 for a move and none at a stream address.
@@ -579,7 +584,7 @@ for a move and none at a stream address.
 579174 stopped at frame 1,473,710, after the walker chose its 107th round, a Top Ride one.
 The game reported a failed assertion in its audio code and made no frame after it, and the soak
 called it a hang after 30 s. Its replay stopped on the same assertion at the same frame. The stop
-hasn't been compared with a console. Since `18657c8` a hang's detail names an assertion the game
+hasn't been compared with a console. Since `f3600ac` a hang's detail names an assertion the game
 reports after its last frame.
 
 Each stop's replay line ran with `GCN_SESSION` and `GCN_AXVOICES=1` added, so the replay kept
