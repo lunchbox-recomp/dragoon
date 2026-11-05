@@ -50,7 +50,7 @@ The pinned engine reads RAM patches only from `--ram-patches=mods/.out/ram-patch
 
 When `apply` prints null for `ram_patches`, drop the flag or variable. The game stops at start if it names a list that `apply` removed.
 
-gcn-recomp's `runtime/main.cpp` selects the paths. gcn-recomp's `runtime/ram_patches.cpp` opens the RAM patch list, and gcn-recomp's `runtime/hw/di.cpp` stops when an overlay manifest can't open.
+`gcn-recomp/runtime/main.cpp:451-467` selects the paths. `gcn-recomp/runtime/ram_patches.cpp:66-86` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:68-74` stops when an overlay manifest can't open.
 
 The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 for:
 
