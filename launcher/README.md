@@ -52,7 +52,7 @@ It reads a disc the way `gcn-recomp/recomp/extract_dol.py` does. The disc ID is 
 
 A CISO is a 0x8000-byte header followed by the blocks its map marks with a 1. Any other block reads as zeros.
 
-The magics come from Dolphin's `Source/Core/DiscIO/`.
+The magics that name a `needsConversion` format come from Dolphin's `Source/Core/DiscIO/`.
 
 `extract_dol.py` stops with a Python error when the file ends before the DOL offset or the DOL's section table, and hashes what it gets when the file ends later in the DOL. The check says `unreadable` for all of these, and for a CISO read past the blocks its map covers.
 
