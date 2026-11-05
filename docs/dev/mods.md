@@ -30,4 +30,13 @@ python3 tools/mod_choices.py apply --data DIR --disc IMAGE
 
 If one package fails, `apply` turns all its options off for that run and tries the others. Both packages are turned off when they conflict. The saved choices stay in `mods.txt`, and `failed` gives each affected XML name and its error. A package that `list` reports with an error is also left off and reported.
 
-`--disc` defaults to `GAME_ISO` in `build/CMakeCache.txt`. Pass `--disc IMAGE` when the cache has no image path. The game reads the output through the `disc_overlay` and `ram_patches` keys in `settings.txt`. Those paths are relative to the folder holding `settings.txt`.
+`--disc` defaults to `GAME_ISO` in `build/CMakeCache.txt`. Pass `--disc IMAGE` when the cache has no image path. The game reads the output through the `disc_overlay` and `ram_patches` keys in `settings.txt`.
+
+Both keys are empty by default. Add these lines to `settings.txt` to use the generated paths, which are relative to the folder holding that file.
+
+```text
+disc_overlay mods/.out/disc-overlay.txt
+ram_patches mods/.out/ram-patches.txt
+```
+
+The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 when a set is refused or Riivolution refuses a disc or package after the retry. It exits 2 for bad arguments, an unreadable data folder or a tool error.

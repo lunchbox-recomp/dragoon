@@ -788,6 +788,8 @@ python3 tools/mod_choices.py apply --data DIR --disc IMAGE
 
 `list` returns packages with each option's current `choice`. `set` writes `mods.txt`, where each line has the form `XML:OPTION=CHOICE` and 0 means off. `apply` writes under `mods/.out/` and returns the overlay path, RAM patch path, failed packages and elapsed milliseconds as JSON. It turns a failed package off for that run and keeps the saved choice. See [the Riivolution package guide](../docs/dev/mods.md) for the layout and the settings keys.
 
+The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 when a set is refused or Riivolution refuses a disc or package after the retry. It exits 2 for bad arguments, an unreadable data folder or a tool error.
+
 ## mods.py
 
 Which mods does a mods folder hold, and can the game be built with them? Each folder in it whose name doesn't start with a dot is one mod. A mod's `files/` mirrors the disc's root, and its `dol.txt` is a patch list in the format of gcn-recomp's `docs/dol-patches.md`.
