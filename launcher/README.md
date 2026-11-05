@@ -40,17 +40,23 @@ The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon
 
 `Dragoon --check-disc PATH` checks a disc image against the `source-info.json` in the app's source snapshot and prints the result as JSON. `--source-info FILE` names another one when the binary isn't inside the app, and it can come before or after `--check-disc`. The exit code is 0 for `ok`, 1 for any other result and 2 for a bad argument or a source-info it can't use.
 
-A matching disc is `ok`, and another game's is `wrongGame` with the disc ID it found. A different build of the right game is `wrongRevision` with the SHA-1 of the main.dol it found, and a format the build doesn't read is `needsConversion` with `RVZ`, `GCZ`, `WIA` or `WBFS`. A file that can't be opened, ends early or has a main.dol with no sections is `unreadable` with a reason.
+| Result | When | Carries |
+|---|---|---|
+| `ok` | The right game and revision | |
+| `wrongGame` | Another game | The disc ID found |
+| `wrongRevision` | Another build of the right game | The main.dol's SHA-1 |
+| `needsConversion` | An RVZ, GCZ, WIA or WBFS image | The format |
+| `unreadable` | It can't be opened, ends early or its main.dol has no sections | A reason |
 
 It reads a disc the way `gcn-recomp/recomp/extract_dol.py` does. The disc ID is the first 6 bytes, and main.dol starts at the big-endian word at 0x420. Its length is the largest offset plus size among the 18 sections in its header that have a size, and the SHA-1 covers that many bytes.
 
 A CISO is a 0x8000-byte header followed by the blocks its map marks with a 1. Any other block reads as zeros.
 
-An `RVZ`, `GCZ`, `WIA` or `WBFS` image is named by its magic and has to be converted first. The magics come from Dolphin's `Source/Core/DiscIO/`.
+The magics come from Dolphin's `Source/Core/DiscIO/`.
 
-The recipe's reader stops with a Python error when the file ends before the DOL offset or the DOL's section table, and it hashes what it gets when the file ends later in the DOL. The check says `unreadable` for all of these, and for a CISO read past the blocks its map covers.
+`extract_dol.py` stops with a Python error when the file ends before the DOL offset or the DOL's section table, and hashes what it gets when the file ends later in the DOL. The check says `unreadable` for all of these, and for a CISO read past the blocks its map covers.
 
-The image is read through a file handle a piece at a time, with no read over 1 MiB. A 1.4 GB disc doesn't cost 1.4 GB of memory.
+The image is read through a file handle at most 1 MiB at a time, so a 1.4 GB disc never costs 1.4 GB of memory.
 
 ## Running the recipe
 
