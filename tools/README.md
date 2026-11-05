@@ -297,7 +297,7 @@ tools/shader_cache.py diff build/old-keys.bin build/probe/demo/saves/shaders.bin
 
 Did a change alter what the renderer draws? It runs each route in `tests/hashes/manifest.txt` through probe.sh and compares the SHA-1 of every dumped frame with the golden in `tests/hashes/gl/<route>.txt`. `check` reports each frame that changed or wasn't reached. `record` rewrites the goldens, so use it only when a change to the output is on purpose. The frames are deleted once hashed and are never committed.
 
-The manifest holds 24 routes, one per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach and any extra probe settings. Pass route names to run only those.
+The manifest holds 24 routes, one per line. A line gives the name, the seconds to run, the dump interval, the frames the route must reach, any extra probe settings and any `warm=` or `warm-from=` setting. Pass route names to run only those.
 
 On 2026-10-22, when the manifest held twelve routes, a `check` of all twelve took 302 s while other copies of the game ran on the same machine.
 
