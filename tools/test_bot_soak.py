@@ -33,6 +33,39 @@ def at(do: list, *, frame: Optional[int] = None, race: Optional[int] = None, pro
     return event
 
 
+class HeldClock:
+    """A stand-in for bot_link's time module whose clock stands still until the game first
+    connects and then runs at the real rate, so a run's seconds all pass with the game linked."""
+
+    def __init__(self) -> None:
+        self.held: Optional[float] = None  # the real time it stood still at
+        self.lost: Optional[float] = None  # how long it stood still, once the game connected
+
+    def monotonic(self) -> float:
+        now = time.monotonic()
+        if self.lost is not None:
+            return now - self.lost
+        if self.held is None:
+            self.held = now
+        return self.held
+
+
+def count_from_the_connect(test: unittest.TestCase) -> None:
+    """Counts a bot_link run's seconds from the game's first connection for the rest of TEST,
+    however long a busy machine takes to start the fake game."""
+    clock, accept = HeldClock(), bot_link._accept
+
+    def accepted(*args, **kwargs):
+        conn = accept(*args, **kwargs)
+        if conn is not None and clock.lost is None:  # held, since _accept reads the clock first
+            clock.lost = time.monotonic() - clock.held
+        return conn
+
+    for patch in (mock.patch.object(bot_link, "time", clock), mock.patch.object(bot_link, "_accept", accepted)):
+        patch.start()
+        test.addCleanup(patch.stop)
+
+
 class SoakCase(unittest.TestCase):
     """A temp tree with the fake probe.sh of testengine.py, and the soak run against it, under a
     time limit of `limit` seconds."""
@@ -86,6 +119,7 @@ class SoakCase(unittest.TestCase):
 class CleanRunTest(SoakCase):
     def test_a_run_that_reaches_its_time_limit_has_no_stop(self) -> None:
         self.plan(race=100000, events=[at([["say", axv(1, "run")]], frame=10)])
+        count_from_the_connect(self)  # its 3 s, which a slow start of the fake game could use up
         code, out, err = self.soak("--seed", SEED, "--minutes", "0.05", "--round", "5", "--modes", "air-ride,top-ride")
         self.assertEqual((code, err), (0, ""), out)
         name = self.name(out)
