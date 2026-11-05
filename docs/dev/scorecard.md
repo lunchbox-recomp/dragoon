@@ -66,7 +66,8 @@ their routes' seconds. Passes 1 and 2 took 675 s and 674 s and pass 3 about 11.5
 A `--real-time` run's clock jumps to catch up wherever the host falls behind (gcn-recomp
 `docs/diagnostics.md`, The clock) and presses can land after dropped frames, so two real-time
 runs of a route needn't make the same sound. Up to `b848158` the DMA also played some blocks
-twice while the clock caught up, and since `a87ab06` it doesn't (`audio.md`). The bisect found
+twice while the clock caught up, and since `a87ab06` it doesn't (`audio.md`, What was done and
+what is left). The bisect found
 two unpaced title runs at `caf12a2` identical over 120 s, and in pass 3 `click_diff.py` found
 current's five unpaced recordings the same as the bisect's `b848158` ones over 1,250 s.
 
@@ -276,7 +277,8 @@ its 22 came after 31 s.
 Pass 5 ran on 2026-10-23 and took about 22 minutes, one run of the tool over both builds a
 route at a time. Current was a second clone's existing build at Dragoon `28fdb9b`, and next was
 this clone at gcn-recomp `b97c019` with `2b98e17`'s tools and routes. What `b97c019` changes in
-the mixer and the AI DMA is in `audio.md`.
+the mixer and the AI DMA is in the engine work table (`audio.md`, What was done and what is
+left).
 
 | Five routes, unpaced | Current | Next |
 |---|---|---|
@@ -300,9 +302,9 @@ Each cell below is current, then next.
 | City Trial, four players, 73 s | 44 (36.2), 35 (28.8) | 8 (1.4), 1 (1.1) | 2, 2 | 0 (0), 0 (0) | 28,982, 28,843 | 0, 0 |
 
 Current's unpaced runs scored as pass 3's did on every cell, a day later and with a newer tool.
-The clicks away from joins fell from 101 to 87, and this pass doesn't say which commit in
-`audio.md` took the clicks away. Next's mixer clamps at -32,768, so the race's clipped runs
-compare only split by sign (below).
+The clicks away from joins fell from 101 to 87, and this pass doesn't say which commit took the
+clicks away (`audio.md`, What was done and what is left). Next's mixer clamps at -32,768, so
+the race's clipped runs compare only split by sign (below).
 
 Past the cut, rescored with `--no-run` from the same unpaced recordings:
 
