@@ -1,6 +1,8 @@
 # Riivolution packages
 
-The game starts in the folder that holds `settings.txt`. This page calls that folder `DIR`. A release unzips into `DIR/mods/` as its readme directs for Dolphin's `Load/Riivolution` folder. Its XML files go in `DIR/mods/riivolution/`, with data folders beside `riivolution/`.
+The game starts in the folder that holds `settings.txt`. This page calls that folder `DIR`.
+
+A release unzips into `DIR/mods/` as its readme directs for Dolphin's `Load/Riivolution` folder. Its XML files go in `DIR/mods/riivolution/`, with data folders beside `riivolution/`.
 
 ```text
 DIR/
@@ -24,11 +26,17 @@ python3 tools/mod_choices.py apply --data DIR --disc IMAGE
 
 `list` prints one JSON object with `packages`. Each option has a `choice` number from `mods.txt` or its XML default. A missing `mods/riivolution/` gives an empty package list.
 
-`set` saves one choice in `DIR/mods.txt` and prints its XML name, option ID and choice number as JSON. The file holds one `XML:OPTION=CHOICE` entry per line. Choice 0 means off. Names that have disappeared are dropped when `set` writes the file.
+`set` saves one choice in `DIR/mods.txt` and prints its XML name, option ID and choice number as JSON. The file holds one `XML:OPTION=CHOICE` entry per line. Choice 0 means off.
 
-`apply` reads those choices and writes output under `DIR/mods/.out/`. Its JSON has `overlay`, `ram_patches`, `failed` and `ms`. Each path is relative to `DIR`, or null when there's no output. `ms` is the tool's elapsed time in milliseconds.
+Names that have disappeared are dropped when `set` writes the file.
 
-If one package fails, `apply` turns all its options off for that run and tries the others. Both packages are turned off when they conflict. The saved choices stay in `mods.txt`, and `failed` gives each affected XML name and its error. A package that `list` reports with an error is also left off and reported.
+`apply` reads those choices and writes output under `DIR/mods/.out/`. Its JSON has `overlay`, `ram_patches`, `failed` and `ms`. Each path is relative to `DIR`, or null when there's no output.
+
+`ms` is the tool's elapsed time in milliseconds.
+
+If one package fails, `apply` turns all its options off for that run and tries the others. Both packages are turned off when they conflict.
+
+The saved choices stay in `mods.txt`, and `failed` gives each affected XML name and its error. A package that `list` reports with an error is also left off and reported.
 
 `--disc` defaults to `GAME_ISO` in `build/CMakeCache.txt`. Pass `--disc IMAGE` when the cache has no image path. Put the overlay path that `apply` prints in the `disc_overlay` line of `settings.txt`.
 
@@ -44,4 +52,10 @@ When `apply` prints null for `ram_patches`, drop the flag or variable. The game 
 
 gcn-recomp's `runtime/main.cpp` selects the paths. gcn-recomp's `runtime/ram_patches.cpp` opens the RAM patch list, and gcn-recomp's `runtime/hw/di.cpp` stops when an overlay manifest can't open.
 
-The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 when `list` or `apply` refuses a linked or nonregular `mods.txt`, when `set` is refused, or when Riivolution refuses a disc or package after the retry. It exits 2 for bad arguments, an unreadable data folder or a tool error.
+The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 for:
+
+- `list` or `apply` refusing a linked or nonregular `mods.txt`
+- `set` being refused
+- Riivolution refusing a disc or package after the retry
+
+It exits 2 for bad arguments, an unreadable data folder or a tool error.

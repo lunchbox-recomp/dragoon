@@ -786,9 +786,17 @@ python3 tools/mod_choices.py set --data DIR pack.xml opt 1
 python3 tools/mod_choices.py apply --data DIR --disc IMAGE
 ```
 
-`list` returns packages with each option's current `choice`. `set` writes `mods.txt`, where each line has the form `XML:OPTION=CHOICE` and 0 means off. `apply` writes under `mods/.out/` and returns the overlay path, RAM patch path, failed packages and elapsed milliseconds as JSON. It turns a failed package off for that run and keeps the saved choice. See [the Riivolution package guide](../docs/dev/mods.md) for the layout, the `disc_overlay` setting and the RAM patch flag or environment variable.
+`list` returns packages with each option's current `choice`. `set` writes `mods.txt`, where each line has the form `XML:OPTION=CHOICE` and 0 means off. `apply` writes under `mods/.out/` and returns the overlay path, RAM patch path, failed packages and elapsed milliseconds as JSON.
 
-The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 when `list` or `apply` refuses a linked or nonregular `mods.txt`, when `set` is refused, or when Riivolution refuses a disc or package after the retry. It exits 2 for bad arguments, an unreadable data folder or a tool error.
+It turns a failed package off for that run and keeps the saved choice. See [the Riivolution package guide](../docs/dev/mods.md) for the layout, the `disc_overlay` setting and the RAM patch flag or environment variable.
+
+The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 for:
+
+- `list` or `apply` refusing a linked or nonregular `mods.txt`
+- `set` being refused
+- Riivolution refusing a disc or package after the retry
+
+It exits 2 for bad arguments, an unreadable data folder or a tool error.
 
 ## mods.py
 
