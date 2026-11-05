@@ -542,6 +542,9 @@ no file.
 | 545590 | All three | 1 | 60 | `63932c5` | 1,230 s | 37 | Stop at frame 505,140: a music stream ended early |
 | 555018 | City Trial | 4 | 60 | `16e67cd` | 60.0 min | 42 | Time limit |
 | 558640 | All three | 1 | 60 | `16e67cd` | 60.0 min | 119 | Time limit |
+| 575543 | City Trial | 4 | 60 | `4ae7a22` | 60.0 min | 42 | Time limit |
+| 579174 | All three | 1 | 60 | `4ae7a22` | 3,256 s | 107 | Stop at frame 1,473,710: an assertion in the game's audio code |
+| 835686 | City Trial | 2 | 20 | `a92d317` | 20.0 min | 22 | Time limit |
 
 The first three stops were the walker's, and the next soak of that mode ran with the fix. After
 a stadium's results the game showed a checklist (screen 34) when the round had checked a box,
@@ -559,7 +562,7 @@ cursor on Return to Game and its A went back to a Single Race, 48 times over. Fr
 copy of `city-trial-stadium-4p.txt` went to End Game on Drag Race 3. Its log shows RIGHT at frame
 18,125 and A at 18,150, and the START at 18,000 and a RIGHT at 18,100 come from the scratch route.
 
-The last two stops came from `tools/stream_voices.py`'s rule. In each, the music's two voices
+The two music stops came from `tools/stream_voices.py`'s rule. In each, the music's two voices
 changed in the same command list, in a City Trial round's city. The game stopped one with a
 `stop` line and gave the other a sound effect's sample with a `set` line, and the mixer ended
 that sample when it ran out. The rule followed a parameter block across a `set`, so the block's
@@ -568,14 +571,25 @@ frames into the round, and in 545590 list 1,691,796, about 7,400 frames in. Neit
 compared with a console. Since `c82a688` a `set` that gives a block a new sample ends the voice
 that ran there as the game's doing, and an end the mixer makes on a stream the game didn't stop
 or give a new sample is still an early one. With that rule 555018 and 558640 ran their hours,
-and `stream_voices.py` finds no early end in either log.
+and `stream_voices.py` finds no early end in either log. Since `e9c059e` a move on a voice that
+never had a loop flag carries into the new sample its block gets. With that rule
+`stream_voices.py` finds no voice that ended early in 575543's, 579174's or 835686's log, so none
+for a move and none at a stream address.
+
+579174 stopped at frame 1,473,710, 1,369 frames after its 107th round, a Top Ride one, began.
+The game reported a failed assertion in its audio code and made no frame after it, and the soak
+called it a hang after 30 s. Its replay stopped on the same assertion at the same frame. The stop
+hasn't been compared with a console. Since `18657c8` a hang's detail names an assertion the game
+reports after its last frame.
 
 Each stop's replay line ran with `GCN_SESSION` and `GCN_AXVOICES=1` added, so the replay kept
 its own input log and voice lines. Each replay's input log matched the soak's up to the stop
 apart from the header's start time and epoch. Its `[axv]` lines matched the soak's byte for
 byte. There were 292,085 of them for 507330, 35,964 for 512035, 227,595 for 513333, 282,093 for
-544282 and 982,893 for 545590. A replay has no bot, so a screen limit can't fire in one. On the two music
-stops' replays `stream_voices.py` found the same single early end as on their soaks.
+544282, 982,893 for 545590 and 2,760,648 for 579174. A replay has no bot, so a screen limit can't
+fire in one. On the two music stops' replays `stream_voices.py` found the same single early end
+as on their soaks. 579174's replay ran for 4,200 wall seconds instead of its replay line's
+24,622, since the game makes no frame after the assertion for `--exit-after` to count.
 
 Replaying 512035's input log with `--pads=1` gave the same game as `--pads=4`. Its input log
 matched the soak's apart from the header, and its 35,964 `[axv]` lines matched byte for byte. In
@@ -587,9 +601,11 @@ makes a four-port replay play as its run. The replay line still carries it.
 Each step the soaks showed right came out of the walker's unconfirmed list, and three stay in
 it. A screen kar_ram.json doesn't name gets A. The press cadence stays because a log can't show
 which screen each press landed on. RIGHT on a stadium's pause menu with two or three players
-stays because no soak has played two or three. 555018 played four-player City Trial for its
-full hour with no stop, 42 rounds with the menus between them. 558640's 119 rounds were 40 of
-Air Ride, 39 of Top Ride and 40 of City Trial.
+stays because no soak has played three. 835686 played two-player City Trial for 20 minutes and
+left 12 stadiums with it, each followed by its next round. 555018 and 575543 each played
+four-player City Trial for its full hour with no stop, 42 rounds with the menus between them.
+558640's 119 rounds were 40 of Air Ride, 39 of Top Ride and 40 of City Trial. 579174's 107 were
+35 of Air Ride, 36 of Top Ride and 36 of City Trial.
 
 ## Audio
 
