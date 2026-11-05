@@ -109,18 +109,19 @@ hand, only read in `build/_deps/` after a configure at gcn-recomp `782d7fa` with
 | At configure | `FetchContent_MakeAvailable` runs SDL's own `CMakeLists.txt` with its shared library, tests, examples and install off. Its feature checks compile test programs and run none, and it takes its revision from `REVISION.txt` rather than git. The programs it does run are below the table | The archive has no `CMakeLists.txt` at its top, so `FetchContent_MakeAvailable` only unpacks it |
 | At build | `libSDL3.a`. `build.ninja` has no custom command from SDL's scripts | Six files go into `libgcn_imgui.a`: `imgui.cpp`, `imgui_draw.cpp`, `imgui_tables.cpp`, `imgui_widgets.cpp`, `backends/imgui_impl_sdl3.cpp` and `backends/imgui_impl_opengl3.cpp`. No script or custom command from the archive runs |
 
-At CMake 4.4.4, SDL's configure runs `cmake -E make_directory` and `cmake -E copy_if_different`
-through `execute_process` on macOS, and nothing else. Before CMake 3.29, which the build's
-minimum of 3.20 allows, it also runs the linker with `-v` (`CMakeLists.txt:521`,
-`cmake/macros.cmake:88`).
+At CMake 4.4.4, SDL's own `execute_process` calls on macOS run `cmake -E make_directory` and
+`cmake -E copy_if_different`. Before CMake 3.29, which the build's minimum of 3.20 allows, one
+more runs the linker with `-v` (`CMakeLists.txt:521`, `cmake/macros.cmake:88`).
 
-On any CMake, SDL's `cmake/FindLibUSB.cmake:6-9` runs the system's pkg-config, if it finds one,
-for `libusb-1.0>=1.0.16`. Here that was `/opt/homebrew/bin/pkg-config`, which found 1.0.29
-(`PC_LibUSB_VERSION` in `build/CMakeCache.txt`).
+SDL's `CMakeLists.txt:66` calls `find_package(PkgConfig)` on any CMake. When that finds
+pkg-config, CMake's `FindPkgConfig.cmake:530` runs it with `--version` through
+`execute_process`, before SDL's `cmake/FindLibUSB.cmake:6-9` asks it for `libusb-1.0>=1.0.16`.
+Here that was `/opt/homebrew/bin/pkg-config`, which found 1.0.29 (`PC_LibUSB_VERSION` in
+`build/CMakeCache.txt`).
 
 `-DDRAGOON_TESTS=ON` adds a third download, GoogleTest 1.17.0's source release, which Dragoon's
 own `CMakeLists.txt:41-45` pins by SHA-256 and CI's macOS job turns on (`tools/ci.py:79-80`).
-No build directory here has fetched it, so this record doesn't cover it yet.
+No build directory here has fetched it, so this record doesn't cover it.
 
 In the game, SDL opens `libusb-1.0.dylib` with `dlopen` for controllers over USB
 (`SDL_LIBUSB_DYNAMIC` in this build's `SDL_build_config.h:333`). Dear ImGui's OpenGL 3 backend
