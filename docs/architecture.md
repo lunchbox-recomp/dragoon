@@ -47,11 +47,11 @@ with the same two.
 The hooks read guest memory through the runtime's `mem_r32` and friends, and the output
 aspect through `gx::output_aspect()`. The census hooks do nothing unless `DRAGOON_CENSUS` is
 set. The world camera widening is always on, and at 4:3 it leaves every aspect as the game
-set it, so the game runs there as it always has.
+set it.
 
-The HUD anchors in `src/hud_anchors.cpp` are always on too. Each joint tree a render callback in
-its table displays keeps its 4:3 shape, held to an edge or the middle of the screen or of its
-player's view, and a marker stays centered on the kart or item it follows. The bars between
+The HUD anchors in `src/hud_anchors.cpp` are always on too. A joint tree drawn by one of the
+render callbacks in its `kTable` keeps its 4:3 shape, held to an edge or the middle of the
+screen or of its player's view, and a marker stays centered on the kart or item it follows. The bars between
 split views and what a callback draws outside a joint tree stretch, and at 4:3 every anchor
 leaves its draw where the game put it.
 
