@@ -632,14 +632,14 @@ class ResetTest(SoakCase):
 class RefusalTest(SoakCase):
     def test_a_game_that_never_links_is_exit_2_with_no_bot_json(self) -> None:
         self.plan(refuse="usage: probe.sh NAME SECONDS")
-        code, out, err = self.soak("--seed", SEED, "--minutes", "0.1")
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1")
         self.assertEqual(code, 2)
         self.assertEqual(err.strip(), "bot_soak.py: never_linked: usage: probe.sh NAME SECONDS")
         self.assertFalse(list(self.run_dir(out).rglob("bot.json")))
 
     def test_a_game_whose_connect_fails_is_exit_2_with_the_engines_line(self) -> None:
         self.plan(connect_fails=True)
-        code, out, err = self.soak("--seed", SEED, "--minutes", "0.1")
+        code, out, err = self.soak("--seed", SEED, "--minutes", "1")
         self.assertEqual(code, 2)
         self.assertRegex(err, r"^bot_soak.py: connect_failed: --bot .*: can't connect: Connection refused$")
         self.assertFalse(list(self.run_dir(out).rglob("bot.json")))
