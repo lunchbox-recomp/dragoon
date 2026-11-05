@@ -1,4 +1,6 @@
-# Frame hashes
+# Hashes
+
+## Frame hashes
 
 Each golden in `gl/` holds the SHA-1 of every frame a scripted route dumps, up to the route's last checkpoint. A matching golden shows the renderer drew the same pixels in every dumped frame, on the machine that recorded it, so a renderer refactor that leaves the output alone shows up as all `OK`.
 
