@@ -34,7 +34,7 @@ The probe's source goes in `~/Library/Caches/Dragoon` and comes out again after 
 
 A check whose task is canceled stops the command it's waiting on and gives `cancelled`, so a cancel never reads as missing tools or an SDK that doesn't link. Only a `ready` answer survives a cancel, so a check that had found its tools already keeps them.
 
-The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon`. It's used only while the developer directory and the tool paths match and the first line of `clang --version` hasn't changed. A different developer directory or tool path forces a probe too, and so does an SDK that's gone.
+The choice is kept in `toolchain.json` in `~/Library/Application Support/Dragoon`. It's used only while the developer directory, the tool paths and the first line of `clang --version` match and its SDK is still there.
 
 ## The disc check
 
@@ -62,7 +62,7 @@ The image is read through a file handle at most 1 MiB at a time, so a 1.4 GB dis
 
 `BuildRunner.run(_:)` runs the build recipe with the tools the tools check found and gives its JSON lines back as `BuildEvent` values. The command is `<python3> -B -s <bundle>/Contents/Resources/source/tools/launcher_build.py` and then the recipe's options as a list, so a path with spaces stays one argument. `-B` keeps `__pycache__` out of the signed bundle, `-s` keeps the player's user site-packages off the path, and the kit comes from `Contents/Resources/kit`.
 
-The recipe gets an environment of its own with a fixed `PATH`, `HOME`, `TMPDIR`, `LANG`, `PYTHONDONTWRITEBYTECODE`, `PYTHONNOUSERSITE` and `DEVELOPER_DIR`. Nothing from the player's shell or their user site-packages reaches its Python.
+The recipe gets an environment of its own with a fixed `PATH`, `HOME`, `TMPDIR`, `LANG`, `PYTHONDONTWRITEBYTECODE`, `PYTHONNOUSERSITE` and `DEVELOPER_DIR`. Nothing from the player's shell reaches its Python.
 
 It starts as the leader of a new process group, so the recipe, make, clang and the warm-up's game stop together. `BuildRunner.cancel()` or dropping the stream sends that group SIGTERM, and SIGKILL 10 seconds later if anything is left. Every `SystemProcessRunner` call starts its process this way too, so canceling a task that waits on `Toolchain.detect` stops its command the same way.
 
@@ -99,7 +99,7 @@ Library offers a rebuild when `game/current/stamp.json` names other commits than
 
 ## Launching the game
 
-`GameLauncher.play(game:disc:data:)` starts `game/current/Dragoon.app/Contents/MacOS/dragoon` with `Process`. The disc image's path is its one argument and `<data>` is its working directory, since the runtime finds `saves/` and writes `panic.txt` relative to that. What the game prints on stdout and stderr goes to `~/Library/Logs/Dragoon/game-<time>.log`, and the newest 10 game logs stay, pruned by the same code as the build logs.
+`GameLauncher.play(game:disc:data:)` starts `<data>/game/current/Dragoon.app/Contents/MacOS/dragoon` with `Process`, where `<data>` is `~/Library/Application Support/Dragoon`. The disc image's path is its one argument and `<data>` is its working directory, since the runtime finds `saves/` and writes `panic.txt` relative to that. What the game prints on stdout and stderr goes to `~/Library/Logs/Dragoon/game-<time>.log`, and the newest 10 game logs stay, pruned by the same code as the build logs.
 
 Each launch ends in one result, which says how the game ended or why it couldn't start. After a nonzero exit or a signal, Library shows the code or the signal's number and name with the text of `panic.txt` when the runtime wrote one. A zero exit shows nothing.
 
@@ -114,8 +114,6 @@ While the game runs, `<data>/game.pid` holds its pid and the time its process st
 A `game.pid` that's garbled is removed and ignored, and so is one whose process has gone or isn't the game.
 
 ## Why a wrapper runs the tests
-
-The Command Line Tools ship Swift Testing, but not where `swift test` looks. `Testing.framework` is in `/Library/Developer/CommandLineTools/Library/Developer/Frameworks` and `lib_TestingInterop.dylib` is in `.../Library/Developer/usr/lib`. The compiler needs the first as a framework search path, and the test runner needs both as rpaths.
 
 `swift_test.py` asks `xcode-select -p` which developer directory is selected. If that directory holds `Library/Developer/Frameworks/Testing.framework` and has no `Platforms` directory, whatever it's called, it runs `swift test --package-path launcher` with these added, for that directory:
 
