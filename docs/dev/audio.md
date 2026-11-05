@@ -19,13 +19,12 @@ numbers are at the pin `782d7fa`.
 | Game build | Aug 18 2003, from the game's own boot banner |
 | Dolphin | `AXUCode`. `07f88145` sits in `UCodes.cpp` beside F-Zero GX, Ikaruga, Soul Calibur 2 and Viewtiful Joe, with no Kirby comment |
 
-It isn't a 2004 build, since the game itself was built in August 2003. Dolphin's AX HLE has
-two behaviors on GameCube, one for `4E8A8B21` and one for every other build, so the year
-doesn't matter for HLE purposes. This is the newer AX.
+Dolphin's AX HLE treats `4E8A8B21` one way and every other GameCube build another, so this
+one gets the newer behavior.
 
 The hash was taken over the 0x1F20 bytes at 0x804FEA00 in a DOL extracted with
-`gcn-recomp/recomp/extract_dol.py`. A 30-second run with `--hidden --no-input-log --log=dsp,ai` logs the
-same at boot.
+`gcn-recomp/recomp/extract_dol.py`. A 30-second run with `--hidden --no-input-log --log=dsp,ai`
+logs the same at boot.
 
 ```
 [DSP] boot ucode: iram mm=804FEA00 dsp=0000 len=1F20 dram=0 start=0010 hash=07F88145
@@ -43,9 +42,8 @@ same at boot.
   decode the mixer control word.
 - `ax.cpp` mixes with the decoder the layout picks (`:442-443`, `:485-487`). It runs command
   `12` for any hash but the 2001 one (`:673-679`).
-- In a 30-second run at an earlier gcn-recomp (`67a7e30`) the game sent 5,834 command lists,
-  about 29 seconds of 5 ms frames. Each got `DCD10002` back (`dsp_hle.cpp:98-99`). The ten
-  runs in `status.md` counted 484,400 lists and none had an unknown command.
+- Each command list gets `DCD10002` back (`dsp_hle.cpp:98-99`). The ten runs in `status.md`
+  counted 484,400 lists and none had an unknown command.
 - The sound crackled the one time it was listened to, before the source type 2 fix.
   `GCN_AXSTATS` counts levels and `GCN_WAV` captures the output. `status.md` has the levels
   measured on the race route.
@@ -79,8 +77,7 @@ them had the low-pass filter's on word (93) set, and 25 setup commands started a
 
 Dolphin's AX HLE (`AX.cpp`, `AXVoice.h` and `AXStructs.h`, GPL, read for facts and not
 copied) checks the ucode's hash in three places, each time `4E8A8B21` against everything
-else. Those three places were the gap. The mixer control and the compressor are now handled
-here. The low-pass filter isn't.
+else. The runtime handles the mixer control and the compressor, and not the low-pass filter.
 
 ### Mixer control
 
@@ -114,7 +111,7 @@ What that does to typical voices:
   groups.
 - On the 2001 layout a `0003` voice also goes to both aux buses at whatever aux volumes its
   PB holds, and a `0033` voice sets `0010`, so the runtime takes the DPL2 reading and the
-  send is lost. Before the layout was chosen by hash, this was what ran for `07F88145`.
+  send is lost.
 
 On the race route the later layout took AuxA sound from 22 of 257 windows to 97 and AuxB from
 none to 20 (`status.md`).
@@ -223,8 +220,8 @@ without its loop flag or that the mixer ended.
 At `fast` the header and data callbacks land 2 lists apart, one more than the loop flag needs.
 Four-player City Trial, the Sand, Fire and Light Top Ride routes and `top-ride-courses` each had
 two more stream voices at `fast`, because each fast run reached a later track change before its
-time ran out. The other nineteen matched, but the title and Top Ride's Sky course differed in the check's first
-pass and matched in this one, so some of the difference is from run to run.
+time ran out. The other nineteen matched, but the title and Top Ride's Sky course differed in
+the check's first pass and matched in this one, so some of the difference is from run to run.
 
 In the four-player City Trial run at `fast`, the stream pair 8057938C and 80579478 faded to a
 peak of 0 by list 27,400 with `cur` frozen and its loop flag set. A new pair had started at list
@@ -260,7 +257,7 @@ Generic runtime work in `runtime/`.
 
 The polyphase sets aren't the console's own, which need the DSP's ROM.
 
-The change is generic. It keys on the ucode hash the way `jaudio.cpp:68-69` keys on
-JAudio's, and it names no game. Metroid Prime boots `4E8A8B21` (upstream commit `ddc05c0`),
-so a switch on that hash leaves it as it is. gcn-recomp doesn't record which hash Metroid
-Prime 2 or Wave Race boots, and if either boots a newer build its aux routing changes too.
+The change keys on the ucode hash the way `jaudio.cpp:68-69` keys on JAudio's, and names no
+game. Metroid Prime boots `4E8A8B21` (upstream commit `ddc05c0`), so it's left as it was.
+gcn-recomp doesn't record which hash Metroid Prime 2 or Wave Race boots, and if either boots a
+newer build its aux routing changes too.
