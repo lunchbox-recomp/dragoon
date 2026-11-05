@@ -51,10 +51,11 @@ aspect through `gx::output_aspect()`. The census hooks do nothing unless `DRAGOO
 set. The world camera widening is always on, and at 4:3 it leaves every aspect as the game
 set it, so the game runs there as it always has.
 
-The HUD anchors in `src/hud_anchors.cpp` are always on too. Each HUD element that a render
-callback in its table draws keeps its 4:3 shape, held to an edge or the middle of the screen or
-of its player's view, and a marker stays centered on the kart or item it follows. At 4:3 every
-anchor leaves its draw where the game put it.
+The HUD anchors in `src/hud_anchors.cpp` are always on too. Each joint tree a render callback in
+its table displays keeps its 4:3 shape, held to an edge or the middle of the screen or of its
+player's view, and a marker stays centered on the kart or item it follows. The bars between
+split views and what a callback draws outside a joint tree stretch, and at 4:3 every anchor
+leaves its draw where the game put it.
 
 `src/draw_marks.cpp` pads the write-gather pipe to the end of its line before each mark, so the
 mark lands after every draw the game has written. The census's draw tags go through it too.
