@@ -179,8 +179,11 @@ def apply(data, found, disc, started):
             raise ChoiceError('%s Check the disc and mods folder, then try again.' % sentence(detail))
         for xml in culprits:
             detail = result.get('error', 'Riivolution refused a package.')
-            failed[xml] = ('%s This package was left off. Ask the package author to fix it '
-                           'or remove it from mods/riivolution.' % sentence(detail))
+            if len(culprits) > 1:
+                failed[xml] = '%s These packages conflict. Turn one off with set.' % sentence(detail)
+            else:
+                failed[xml] = ('%s This package was left off. Ask the package author to fix it '
+                               'or remove it from mods/riivolution.' % sentence(detail))
     return {'overlay': 'mods/.out/disc-overlay.txt' if (output / 'disc-overlay.txt').is_file() else None,
             'ram_patches': 'mods/.out/ram-patches.txt' if (output / 'ram-patches.txt').is_file() else None,
             'failed': [{'xml': xml, 'error': failed[xml]} for xml in sorted(failed)],

@@ -180,6 +180,9 @@ class ModChoicesTest(unittest.TestCase):
         self.package('b.xml')
         result = self.run_tool('apply', '--disc', str(self.image))
         self.assertEqual([x['xml'] for x in result['failed']], ['a.xml', 'b.xml'])
+        for package in result['failed']:
+            self.assertIn('These packages conflict. Turn one off with set.',
+                          package['error'])
         self.assertIsNone(result['ram_patches'])
         self.assertIsNone(result['overlay'])
 
