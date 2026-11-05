@@ -93,8 +93,9 @@ The HUD's calls to the library come from `fn_801158C0`, `fn_801159C0`, `fn_80115
 four of the library are the rule `src/cameras.h` keys on.
 
 After the race's finish line the world camera that's drawn gets its aspect from the library
-alone. On Dragoon `45c52c5` at a load of about 4.5, `drawlog.py setters` showed the camera drawn at frame 8,400 getting its aspect only at frame 8,092 from the first
-two calls in the table, never from the module.
+alone. On Dragoon `45c52c5` at a load of about 4.5, `drawlog.py setters` showed the camera
+drawn at frame 8,400 getting its aspect only at frame 8,092 from the first two calls in the
+table, never from the module.
 
 A camera's address won't do as a rule, because one address can hold different cameras over a
 run. In the race, the address of a HUD 3D camera at frame 4200 belonged to a world camera at
@@ -161,8 +162,8 @@ and the census logs each perspective camera it loads. On Dragoon `45c52c5` at 16
 output dump shows the player's and the CPUs' markers over their karts.
 
 With `HSD_CObjSetAspect` the world drew more at 16:9 than at 4:3 at all four checkpoints in the
-table, and the CPU markers sit over their karts in the output dumps of the race and of City
-Trial at 3300. The projection patch leaves the stored aspect at 4:3, so draws stay at their 4:3
+table, and the CPU markers sit over their karts in the output dumps of the race at 4200 and of
+City Trial at 3300. The projection patch leaves the stored aspect at 4:3, so draws stay at their 4:3
 count and the markers drift outward from the karts. The constant loads widen the HUD and the
 menus along with the world.
 
@@ -228,9 +229,10 @@ The world-to-screen helper reads both off the camera, so the markers it places f
 wider view. `kar_grcoll__near_800d7e78` loads neither itself. Every load of the aspect reads the
 widened value.
 
-The test that decides which objects the world draws wasn't identified. One that takes only the
-field of view wouldn't show up in this table, and neither would one in another mode or frame.
-So the table doesn't show that culling follows the wider view.
+The test that decides which objects the world draws wasn't identified. The table names the code
+that loads the two fields, not its callers, so a cull test that reads them through
+`HSD_CObjGetFov` or `HSD_CObjGetAspect`, or runs in another mode or frame, wouldn't show. So the
+table doesn't show that culling follows the wider view.
 
 The draws and the output dumps are what show it. At 16:9 the world drew at least as much as at
 4:3 at every checkpoint measured here, and no dump shows an object cut off at a side edge. Five
@@ -245,8 +247,8 @@ tools/probe.sh readers 300 tests/routes/air-ride-race.txt 100000 --aspect=16:9 G
 
 `ranges.txt` holds the range of the camera's field of view and aspect, its address from the
 `[census]` line plus `0x40` to plus `0x47`. The game runs in `build/probe/readers/`, so the
-path has to be absolute. Configure again with `-DCMAKE_C_FLAGS=` and `-DCMAKE_CXX_FLAGS=` for the
-usual build.
+path has to be absolute. Configure again with `-DCMAKE_C_FLAGS=` and `-DCMAKE_CXX_FLAGS=` for
+the usual build.
 
 ## Measured on Dragoon `45c52c5`
 
@@ -263,8 +265,8 @@ of 2.7 to 6.3. Each checkpoint ran at 4:3 and at 16:9 on the same build.
 | Top Ride on Grass, 3600 | 198 | 198 | 1.57333 | 3,234 to 3,833 |
 
 City Trial's world camera is made at frame 2,733 and Top Ride's is loaded at 3,234, so their
-windows start there. Each runs 600 frames, past the checkpoint, in runs at 16:9 to frames
-3,340 and 3,900.
+windows start there. Both windows run 600 frames, past their checkpoints, so those 16:9 runs
+went on to frames 3,340 and 3,900.
 
 Each world camera's aspect is its 4:3 one times 4/3 to five figures. Every HUD 3D, minimap
 and menu camera kept its 4:3 aspect. Every call of the six that widen was given its 4:3 aspect,
@@ -308,25 +310,24 @@ A tree's mark ends when its outermost `HSD_JObjDispAll` call returns. What the c
 itself after it, such as a stripe straight through GX, stretches as a callback outside the table
 does.
 
-A tree in a rect's left third anchors to its left edge, one in its right third to its right
-edge and one between to its middle. A tree goes by its root when none of its joints has drawn
-and it had no mark the frame before. A new joint's matrix is all zero until the game first draws
-it, as is one scaled to zero. So that can be the frame a tree first shows, each frame after
-while it stays scaled to nothing, and a frame it shows scaled to nothing after missing one.
+A joint has no place until the game first draws it and while it's scaled to zero, since its
+matrix's 3 by 3 part is all zero then. A tree with no joint placed holds the mark it had the
+frame before, or goes by its root when it had none. That can happen on the frame it first shows,
+each frame after while it stays scaled to nothing and a frame it shows scaled to nothing after
+missing one.
 
-A tree holds the edge it had the frame before for a quarter of a third past each of that edge's
-lines. Without that, an element moving 2 pixels across a line would jump about 109 display
-pixels at 16:9, and a tree whose joints straddle a line in near-equal numbers would turn each
-time one of them hid. Further past a line it takes the other edge, so an element that slides
-across one jumps there once.
+A tree in a rect's left third anchors to its left edge, one in its right third to its right
+edge and one between to its middle. It holds the edge it had the frame before until it's a
+quarter of a third past one of that edge's lines, and then takes the other edge. Without that,
+an element moving 2 pixels across a line would jump about 109 display pixels at 16:9, and a tree
+whose joints straddle a line in near-equal numbers would turn each time one of them hid.
 
 The edge holds only while the tree moves. Once the same joints have drawn in the same places
 for 30 frames in a row, it takes its nearest edge. A joint that moves, shows or hides starts the
 count again.
 
 Without that, an element that stopped inside the band would keep the edge it came from, then
-show at the other once it missed a frame. So one that stops there shows the edge it came from for
-29 frames from the one it stops in. It takes its nearest edge on the 30th.
+show at the other once it missed a frame.
 
 A tie in a tree's vote goes to the edge it held while it moves. Once it has rested, the tie goes
 to the first of those tied in the order the tree draws its joints.
@@ -334,16 +335,15 @@ to the first of those tied in the order the tree draws its joints.
 A tree that misses a frame chooses afresh when it next shows, and holds nothing from that
 showing, since its joints sit where they last drew, before the frame it missed. One shown for the
 first time does the same, as its joints sit where the game made them, which for every tree
-`fn_80114F1C` draws in the race and City Trial is the screen's middle. One whose joints haven't
-drawn holds the mark it had the frame before, or goes by its root when it had none.
+`fn_80114F1C` draws in the race and City Trial is the screen's middle.
 
 The rect is the screen in one player. In 2P and 4P it's the view the tree sits in, from the
 viewports of the frame's world cameras, which `src/cameras.cpp` passes as the game sets their
 aspect.
 
-In a 4P race on Dragoon `701a2dd` each player's camera was set every frame through all four
-finishes, so whether a split view ever draws through a camera the game sets only once, and drops
-out of the views, is still open.
+A split view drawn through a camera the game sets only once would drop out of the views after a
+frame. In a 4P race on Dragoon `701a2dd` every player's camera was set every frame through all
+four finishes, so no run has shown one.
 
 A tree outside every view sits on the bars between them and anchors to the screen, as the 4P
 clock does at the left. In the bars' middle third it's the bars themselves, which span the
@@ -411,10 +411,9 @@ but the mode select's are from Dragoon `e52dce1`, with the race at 8400 and Top 
 loads of 4.2 to 5.0.
 
 - After the finish `fn_8011500C` draws the replay's banner and buttons, and they keep their 4:3
-  shape in the middle of the screen. `drawlog.py hud` passed all 11 of their draws at 8400, as
-  it did again on Dragoon `701a2dd`. Its check of a centered draw past the band, added since,
-  fails three of them, the banner's pieces at the sides. The banner's dark stripe spans the
-  screen at 4:3, though. It's drawn within one of the callback's joint trees, so at 16:9 it takes
+  shape in the middle of the screen. `drawlog.py hud` fails three of their 11 draws at 8400, the
+  banner's pieces at the sides, as centered draws past the band. The banner's dark stripe spans
+  the screen at 4:3 but is drawn within one of the callback's joint trees, so at 16:9 it takes
   the tree's middle anchor and stops short of both sides.
 - In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide. At
   3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
@@ -427,11 +426,9 @@ loads of 4.2 to 5.0.
   at 2852, 107 display pixels from where it sits from the next, and in 2P at 2852 they stretch
   for theirs.
 - An element that slides across a third's line jumps to the other edge once it's a quarter of a
-  third past the line. No dump caught one.
-- An element that moves across a line and stops less than a quarter of a third past it shows at
-  the edge it came from for 29 frames, then jumps to its nearest edge on the 30th. A still
-  element with a joint that blinks never rests, so it keeps the edge it came with for as long as
-  it shows. No dump caught either.
+  third past it. One that stops inside that band shows the edge it came from for 29 frames and
+  takes its nearest edge on the 30th, and a still element with a blinking joint never rests, so
+  it keeps the edge it came with. No dump caught any of these.
 - The title and menus stretch with everything else. The mode select's frame dump at 16:9
   matches its 4:3 golden, so only presentation changes it.
 - The test that culls the world wasn't found, so pop-in at the sides while moving needs a person
