@@ -38,7 +38,7 @@ def call_engine(args):
     except subprocess.TimeoutExpired as exc:
         raise ArgumentError('Riivolution timed out. Check the mods folder and try again.') from exc
     except OSError as exc:
-        raise ArgumentError('Riivolution could not start. Check the engine script and try again.') from exc
+        raise ArgumentError("Riivolution couldn't start. Check the engine script and try again.") from exc
     if done.returncode not in (0, 1):
         raise ArgumentError('Riivolution rejected the arguments or crashed. Check the disc and mods folder.')
     try:
@@ -53,7 +53,7 @@ def packages(root):
         return []
     code, result = call_engine(['list', str(root)])
     if code:
-        detail = result.get('error', 'Riivolution could not list the packages.')
+        detail = result.get('error', "Riivolution couldn't list the packages.")
         raise ArgumentError('%s Check the mods folder and try again.' % sentence(detail))
     for package in result['packages']:
         if 'error' in package:
@@ -91,7 +91,7 @@ def read_choices(data, found):
         raise
     if not stat.S_ISREG(os.fstat(fd).st_mode):
         os.close(fd)
-        raise ChoiceError('mods.txt is not a regular file. Replace it with a regular UTF-8 file.')
+        raise ChoiceError("mods.txt isn't a regular file. Replace it with a regular UTF-8 file.")
     try:
         with os.fdopen(fd, 'r', encoding='utf-8', newline='') as file:
             lines = file.read().split('\n')
@@ -144,7 +144,7 @@ def disc_from_cache():
     except OSError:
         pass
     except UnicodeDecodeError as exc:
-        raise ArgumentError('build/CMakeCache.txt is not UTF-8. Pass --disc IMAGE or fix the cache.') from exc
+        raise ArgumentError("build/CMakeCache.txt isn't UTF-8. Pass --disc IMAGE or fix the cache.") from exc
     raise ArgumentError('GAME_ISO is missing from build/CMakeCache.txt. Pass --disc IMAGE.')
 
 
@@ -175,7 +175,7 @@ def apply(data, found, disc, started):
             break
         culprits = result.get('packages', [])
         if not culprits or all(xml in failed for xml in culprits):
-            detail = result.get('error', 'Riivolution could not apply the packages.')
+            detail = result.get('error', "Riivolution couldn't apply the packages.")
             raise ChoiceError('%s Check the disc and mods folder, then try again.' % sentence(detail))
         for xml in culprits:
             detail = result.get('error', 'Riivolution refused a package.')
@@ -207,7 +207,7 @@ def main(argv=None):
         args = parser.parse_args(argv)
         data = Path(args.data).absolute()
         if not data.is_dir() or not os.access(data, os.R_OK | os.X_OK):
-            raise ArgumentError('The data folder cannot be read. Pass --data with a readable folder.')
+            raise ArgumentError("The data folder can't be read. Pass --data with a readable folder.")
         root = data / 'mods'
         found = packages(root)
         if args.command == 'list':
@@ -218,13 +218,13 @@ def main(argv=None):
             elif re.fullmatch(r'[0-9]+', args.choice):
                 number = int(args.choice)
             else:
-                raise ChoiceError('The choice is not a number or off. Pass a choice number or off.')
+                raise ChoiceError("The choice isn't a number or off. Pass a choice number or off.")
             match = next((o for p in found if p['xml'] == args.xml
                           for o in p.get('options', []) if o['id'] == args.option), None)
             if match is None:
-                raise ChoiceError('The package or option is not listed. Run list and choose one shown there.')
+                raise ChoiceError("The package or option isn't listed. Run list and choose one shown there.")
             if '\n' in args.xml or '\n' in args.option:
-                raise ChoiceError('The package or option ID holds a line break, so it cannot be saved in mods.txt. Ask the package author to fix it.')
+                raise ChoiceError("The package or option ID holds a line break, so it can't be saved in mods.txt. Ask the package author to fix it.")
             if number > len(match['choices']):
                 raise ChoiceError('The choice is past the last one. Run list and choose a shown number.')
             old = read_choices(data, found)
@@ -238,7 +238,7 @@ def main(argv=None):
         else:
             disc = args.disc or disc_from_cache()
             if not Path(disc).is_file():
-                raise ArgumentError('The disc image is not a file. Pass --disc with a readable image.')
+                raise ArgumentError("The disc image isn't a file. Pass --disc with a readable image.")
             result = apply(data, found, disc, started)
         print(json.dumps(result, sort_keys=True))
         return 0
