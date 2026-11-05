@@ -205,12 +205,11 @@ side, and at least 128. A gap is 5 ms or more of digital silence on every channe
 after sound. A clipped run is two or more samples at 32,767 or -32,768 on one channel.
 
 A `--real-time` run's clock jumps to catch up wherever the host falls behind (gcn-recomp
-`docs/diagnostics.md`, The clock). While it catches up, the DMA plays some blocks twice and
-presses can land after dropped frames, as the bisect found, so two real-time runs of a route
-needn't make the same sound. An unpaced run's guest clock doesn't wait on the host. The bisect
-found two unpaced title runs at `caf12a2` gave identical recordings over 120 s. In pass 3,
-`click_diff.py` found current's five unpaced recordings the same as the bisect's `b848158`
-ones, sample for sample, over 1,250 s in all.
+`docs/diagnostics.md`, The clock) and presses can land after dropped frames, so two real-time
+runs of a route needn't make the same sound. Up to `b848158` the DMA also played some blocks
+twice while the clock caught up, and since `a87ab06` it doesn't (`audio.md`). The bisect found
+two unpaced title runs at `caf12a2` identical over 120 s, and in pass 3 `click_diff.py` found
+current's five unpaced recordings the same as the bisect's `b848158` ones over 1,250 s.
 
 The log gives the rest. The highest main L magnitude before the output clamp comes from
 `[ax] frames` lines and the L and R samples the clamp changed from `[ax] bus` lines, both from
@@ -287,12 +286,11 @@ The bisect traced what the work changed in the mixer stage.
   was digital silence before `fd1f6a8`. Its click at 10.139 s is in the music itself, not on a
   join. Its gap at 15.740 s is the game stopping the stream at the frame 900 press, which
   steps straight to zero.
-- The game's AX library depops stopped voices. `fn_803EDBA4`, called from `SortVoices`, sums PB
-  words 41 to 49 into nine accumulators that the setup command fades out. `b848158` never
-  writes those words. gcn-recomp `e6ce0a5` (PR #11) does, and its author found that no hash
-  moved, because in stereo mode command `07` replaces the main buses after setup, as the fork
-  has it. So the stop still steps to zero. Whether the console's `07` replaces the buses or
-  adds to them is open.
+- Stopping a voice still steps to zero on the main buses. The game's AX library fades a
+  stopped voice through the PB's depop words 41 to 49 (`fn_803EDBA4`, called from
+  `SortVoices`), which `b848158` never writes and gcn-recomp `3b025ac`, in `b97c019`, does. No
+  audio hash moved, because in stereo mode command `07` replaces the main buses after setup,
+  though whether the console's `07` replaces them or adds to them is open.
 
 ## Why the real-time mixer clicks rose
 
@@ -327,9 +325,9 @@ four things.
   caught up. The code that replays them is unchanged since upstream. Three more real-time menu
   runs a build had 2, 0 and 6 such clicks in current against 0, 0 and 6 in the baseline.
 - 6 clicks are two extra menu confirms, from presses landing after dropped frames.
-- In one real-time menu run the music became full-scale noise, independent on each channel,
-  from 17.59 s to the end. That's pass 2's mode select peak of 32,768. It didn't come back in 3
-  more runs a build.
+- In pass 2's real-time mode select run of current the music became full-scale noise,
+  independent on each channel, from 17.59 s to the end, with a peak of 32,768. It didn't come
+  back in 3 more runs a build.
 - The rest are the game's own sounds shifted in time.
 
 Pass 3 checked this with the new tools. Its real-time recordings of the mixer stage have 158
@@ -559,7 +557,7 @@ Plays 1 to 3 ran at Dragoon `3f0f8c3` and play 4 at `0b34199`, which differs fro
 tools only. Each play deletes the last one's recordings, so the stretch counts and the byte
 comparison come from play 4, which ran once the tools for them were in place.
 
-`3a8d154` is the engine pin before `8ef3887`, and `dac449e` is the pin since `8ef3887`. Both
+`3a8d154` was the pin before Dragoon `8ef3887`, and `dac449e` the pin it set. Both
 pace the guest's clock in `clock_pace`. The 27 commits between them change the pacer's wait to
 sleep in steps and then spin (gcn-recomp `2867e04` and `0131e4c`), and they add user-interactive
 QoS for the guest threads, a memory card write after a quiet period, port memory and DVD music
@@ -772,6 +770,9 @@ What pass 6 doesn't explain:
 
 ## What the numbers don't show
 
+- Every pass ran on an engine where music streams often ended after their first 1.79 s slot.
+  gcn-recomp `04c025f`, in `bad7160`, times disc reads as a console's drive does, which fixed
+  that (`audio.md`, Stream music and disc timing).
 - The mixer stage's before and after is one unpaced run of each build, pass 4 and pass 3, made
   a day apart. Pass 4's tool was at `3698f16` and pass 3's at `5ff734e`, which score the same.
   The bisect, cut at passes 1 and 2's lengths rather than the routes' seconds, agrees with
@@ -842,8 +843,7 @@ The baseline is a second clone at Dragoon `6b81b6e`, whose gcn-recomp is `caf12a
 the same way as current. Pass 4 used that clone's existing build at that commit.
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk -DDRAGOON_WARMUP=OFF
+cmake -S . -B build -G Ninja -DDRAGOON_WARMUP=OFF
 ninja -C build
 tools/audio_scorecard.py base=/path/to/dragoon-base/build current=build \
   --routes title,menu,air-ride-race,city-trial,city-trial-4p
@@ -902,18 +902,17 @@ md5 /path/to/dragoon-current/build/probe/scorecard-air-ride-race/frame_06000.png
   build/probe/scorecard-unpaced-air-ride-race/frame_06000.png
 ```
 
-Pass 6 kept both builds inside this clone's `build/`. The `3a8d154` build is a copy of the
-sources in `build/current/` with the engine checked out there as a worktree, and the tool takes
-it as `current=build/current/build`. Removing `build/current/` and running
+Pass 6 ran from this clone checked out at Dragoon `3f0f8c3`, whose `build/` is `dac449e`, and
+kept the `3a8d154` build inside it. The `3a8d154` build is a copy of the sources in
+`build/current/` with the engine checked out there as a worktree, and the tool takes it as
+`current=build/current/build`. Removing `build/current/` and running
 `git -C gcn-recomp worktree prune` puts the clone back as it was.
 
 ```sh
 mkdir build/current
-cp CMakeLists.txt build/current/
-cp -R src analysis recomp tools build/current/
+git archive 3f0f8c3 CMakeLists.txt src analysis recomp tools | tar -x -C build/current
 git -C gcn-recomp worktree add --detach "$PWD/build/current/gcn-recomp" 3a8d154
-cmake -S build/current -B build/current/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk -DDRAGOON_WARMUP=OFF \
+cmake -S build/current -B build/current/build -G Ninja -DDRAGOON_WARMUP=OFF \
   -DFETCHCONTENT_SOURCE_DIR_SDL3="$PWD/build/_deps/sdl3-src" -DGAME_ISO=/path/to/game.iso
 ninja -C build/current/build
 tools/audio_scorecard.py current=build/current/build next=build \
