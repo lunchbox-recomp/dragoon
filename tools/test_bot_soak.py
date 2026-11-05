@@ -197,7 +197,7 @@ class CleanRunTest(SoakCase):
 
     def test_it_says_when_a_detector_had_nothing_to_read(self) -> None:
         _, out, _ = self.soak("--seed", SEED, "--minutes", "1", settings=("--exit-after=30",))
-        self.assertRegex(out, r"(?m)^the frozen-picture check saw no frame hash, so it did not run; "
+        self.assertRegex(out, r"(?m)^the frozen-picture check saw no picture hash, so it did not run; "
                               r"the engine gives a bot none$")
         self.assertIn("the music check saw no [axv] lines, so it did not run", out)
 
@@ -320,7 +320,7 @@ class StopTest(SoakCase):
                                                  r"to frame \d+, 10.0 s of game time, while the bots' input changed")
         self.assertTrue(data["watched"]["picture_hashes"])
         self.assertIn("STOP frozen_picture:", out)
-        self.assertNotIn("saw no frame hash", out)
+        self.assertNotIn("saw no picture hash", out)
 
     def test_a_picture_that_keeps_changing_does_not_stop_the_run(self) -> None:
         self.plan(race=100000)

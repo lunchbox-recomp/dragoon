@@ -163,7 +163,7 @@ def soak(args: argparse.Namespace, settings: list[str], *, picture: Picture = en
         return 2
     watched = {"picture_hashes": frozen.hashes > 0, "axv_lines": log.axv}
     if not watched["picture_hashes"]:
-        out("the frozen-picture check saw no frame hash, so it did not run; the engine gives a bot none")
+        out("the frozen-picture check saw no picture hash, so it did not run; the engine gives a bot none")
     if not watched["axv_lines"]:
         out("the music check saw no [axv] lines, so it did not run; was GCN_AXVOICES=1 turned off?")
     if stop is None:
