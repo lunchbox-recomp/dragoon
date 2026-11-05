@@ -426,27 +426,25 @@ through its pause menu.
 The frozen-picture check didn't run, since the link gives a bot no picture hash. No soak had a
 console reset, so none rebuilt the shader cache.
 
-The Dragoon column is the commit each soak ran, on bot-soak before its rebases onto main.
-`525580e` became `569e994`, `0cb53f4` became `bd5ff15`, `c9bf0f9` became `acfb6c7`, `ee88df6`
-became `df6b2ba`, `63932c5` became `bd92d9d`, `16e67cd` became `e49464e`, `4ae7a22` became
-`5fcd62d` and `a92d317` became `7cf11f1`.
+The Dragoon column is each soak's commit as it landed. The soak ran it before a rebase onto
+main, at gcn-recomp `b11ebc6`, while the landed commit pins `782d7fa`.
 
-| Seed | Modes | Ports | Minutes | Dragoon | Wall time | Rounds | End |
+| Seed | Modes | Ports | Limit | Dragoon | Wall time | Rounds | End |
 |---|---|---|---|---|---|---|---|
-| 506028 | Air Ride | 1 | 10 | `525580e` | 10.0 min | 37 | Time limit |
-| 506694 | Top Ride | 1 | 10 | `525580e` | 10.0 min | 39 | Time limit |
-| 507330 | City Trial | 1 | 10 | `525580e` | 420 s | 1 | Stop at frame 192,620: a stadium up for 601 s |
-| 511308 | City Trial | 1 | 10 | `0cb53f4` | 10.0 min | 11 | Time limit |
-| 512002 | Air Ride, `-- --exit-after=12000` | 1 | 10 | `c9bf0f9` | 0.4 min | 2 | `exit_after`, exit 0 |
-| 512035 | City Trial | 4 | 60 | `c9bf0f9` | 91 s | 1 | Stop at frame 32,471: Destruction Derby's results up for 121 s |
-| 513333 | City Trial | 4 | 60 | `ee88df6` | 518 s | 5 | Stop at frame 159,374: a stadium up for 602 s |
-| 544282 | City Trial | 4 | 60 | `63932c5` | 645 s | 8 | Stop at frame 181,800: a music stream ended early |
-| 545590 | All three | 1 | 60 | `63932c5` | 1,230 s | 37 | Stop at frame 505,140: a music stream ended early |
-| 555018 | City Trial | 4 | 60 | `16e67cd` | 60.0 min | 42 | Time limit |
-| 558640 | All three | 1 | 60 | `16e67cd` | 60.0 min | 119 (40 Air Ride, 39 Top Ride, 40 City Trial) | Time limit |
-| 575543 | City Trial | 4 | 60 | `4ae7a22` | 60.0 min | 42 | Time limit |
-| 579174 | All three | 1 | 60 | `4ae7a22` | 3,256 s | 107 (35 Air Ride, 36 Top Ride, 36 City Trial) | Stop at frame 1,473,710: a hang, after an assertion in the game's audio code |
-| 835686 | City Trial | 2 | 20 | `a92d317` | 20.0 min | 22 | Time limit |
+| 506028 | Air Ride | 1 | 10 min | `569e994` | 10.0 min | 37 | Time limit |
+| 506694 | Top Ride | 1 | 10 min | `569e994` | 10.0 min | 39 | Time limit |
+| 507330 | City Trial | 1 | 10 min | `569e994` | 7.0 min | 1 | Stop at frame 192,620: a stadium up for 601 s |
+| 511308 | City Trial | 1 | 10 min | `bd5ff15` | 10.0 min | 11 | Time limit |
+| 512002 | Air Ride, `-- --exit-after=12000` | 1 | 10 min | `acfb6c7` | 0.4 min | 2 | `exit_after`, exit 0 |
+| 512035 | City Trial | 4 | 60 min | `acfb6c7` | 1.5 min | 1 | Stop at frame 32,471: Destruction Derby's results up for 121 s |
+| 513333 | City Trial | 4 | 60 min | `df6b2ba` | 8.6 min | 5 | Stop at frame 159,374: a stadium up for 602 s |
+| 544282 | City Trial | 4 | 60 min | `bd92d9d` | 10.8 min | 8 | Stop at frame 181,800: a music stream ended early |
+| 545590 | All three | 1 | 60 min | `bd92d9d` | 20.5 min | 37 | Stop at frame 505,140: a music stream ended early |
+| 555018 | City Trial | 4 | 60 min | `e49464e` | 60.0 min | 42 | Time limit |
+| 558640 | All three | 1 | 60 min | `e49464e` | 60.0 min | 119 (40 Air Ride, 39 Top Ride, 40 City Trial) | Time limit |
+| 575543 | City Trial | 4 | 60 min | `5fcd62d` | 60.0 min | 42 | Time limit |
+| 579174 | All three | 1 | 60 min | `5fcd62d` | 54.3 min | 107 (35 Air Ride, 36 Top Ride, 36 City Trial) | Stop at frame 1,473,710: a hang, after an assertion in the game's audio code |
+| 835686 | City Trial | 2 | 20 min | `7cf11f1` | 20.0 min | 22 | Time limit |
 
 The first three stops were the walker's, each fixed before the next soak of that mode
 (`tools/README.md` has its steps).
