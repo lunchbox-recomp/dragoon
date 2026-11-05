@@ -14,7 +14,7 @@ doesn't wait on the host. The device stage, what the ring handed the device, is 
 real-time run, since the ring's pace is part of what it measures. Passes 1 and 2 scored both
 stages from real-time runs, and the later passes scored them this way.
 
-| Five routes, 324 s unpaced | `caf12a2` | `b848158` | `b97c019` | `3a8d154` | `dac449e` |
+| Five routes | `caf12a2` | `b848158` | `b97c019` | `3a8d154` | `dac449e` |
 |---|---|---|---|---|---|
 | Pass | 4 | 3 | 5 | 6 | 6 |
 | Mixer clicks (a minute) | 132 (24.4) | 136 (25.2) | 94 (17.4) | 94 (17.4) | 94 (17.4) |
@@ -24,13 +24,14 @@ stages from real-time runs, and the later passes scored them this way.
 | Device clicks a minute, real-time | 57.9, 45.1 | 36.3, 33.1, 32.2, 35.5 | 13.0 | 13.6 to 17.7 | 11.6 to 14.9 |
 
 The device row is passes 1 and 2 for `caf12a2` and passes 1, 2, 3 and 5 for `b848158`.
-Pass 6's device cells span its four plays.
+Pass 6's device cells span its four plays. `b97c019`'s clipped runs include negative clipping
+that `b848158`'s clamp at -32,767 kept out of the count (Pass 5).
 
-Up to `b848158` the audio work cut clipping but not clicks in the scored seconds. Past them
-the title's first 91 s went from 1,085 clicks to 19 and the mode select's first 170 s from 118
-to 16. `b97c019` took the clicks on block joins from 35 to 7, and between `3a8d154` and
-`dac449e` the real-time blocks delivered while the clock caught up fell from 247 to 255 a play
-to 51 to 67.
+Up to `b848158` the audio work cut clipping but not clicks in the scored seconds. Past them, in
+the same unpaced recordings rescored with `--no-run`, the title's first 91 s went from 1,085
+clicks to 19 and the mode select's first 170 s from 118 to 16. `b97c019` took the clicks on
+block joins from 35 to 7, and between `3a8d154` and `dac449e` the real-time blocks delivered
+while the clock caught up fell from 247 to 255 a play to 51 to 67.
 
 ## The audio work, `caf12a2..b848158`
 
@@ -66,9 +67,9 @@ their routes' seconds. Passes 1 and 2 took 675 s and 674 s and pass 3 about 11.5
 A `--real-time` run's clock jumps to catch up wherever the host falls behind (gcn-recomp
 `docs/diagnostics.md`, The clock) and presses can land after dropped frames, so two real-time
 runs of a route needn't make the same sound. Up to `b848158` the DMA also played some blocks
-twice while the clock caught up, and since `a87ab06` it doesn't (`audio.md`, What was done and
-what is left). The bisect found
-two unpaced title runs at `caf12a2` identical over 120 s, and in pass 3 `click_diff.py` found
+twice while the clock caught up, and from `b97c019` on, with `a87ab06`, none of the runs here
+has a replayed block (`audio.md`, What was done and what is left). The bisect found two
+unpaced title runs at `caf12a2` identical over 120 s, and in pass 3 `click_diff.py` found
 current's five unpaced recordings the same as the bisect's `b848158` ones over 1,250 s.
 
 The baseline prints `[ax] frames` lines but no `[ax] bus` lines, and its `[ring]` lines carry
@@ -243,10 +244,10 @@ Each baseline cell is pass 1, then pass 2. Each current cell is passes 1, 2 and 
 
 ## The title route at 91 s
 
-`status.md`'s source type 2 counts come from 90-second title runs, and the five-route pass
-plays the title for 31 s. `--routes title --margin 75` plays the same route for 91 s. It ran
-twice on each build in real time, with the tool at `13acaf4`, before the tool scored the mixer
-stage unpaced.
+The source type 2 counts under Clicks in `status.md` come from 90-second title runs, and the
+five-route pass plays the title for 31 s. `--routes title --margin 75` plays the same route for
+91 s. It ran twice on each build in real time, with the tool at `13acaf4`, before the tool
+scored the mixer stage unpaced.
 
 | Title route, 91 s, real-time | Baseline | Current |
 |---|---|---|
@@ -276,9 +277,10 @@ its 22 came after 31 s.
 
 Pass 5 ran on 2026-10-23 and took about 22 minutes, one run of the tool over both builds a
 route at a time. Current was a second clone's existing build at Dragoon `28fdb9b`, and next was
-this clone at gcn-recomp `b97c019` with `2b98e17`'s tools and routes. What `b97c019` changes in
-the mixer and the AI DMA is in the engine work table (`audio.md`, What was done and what is
-left).
+this clone at gcn-recomp `b97c019` with `2b98e17`'s tools and routes. `b97c019` adds `3056588`,
+`cce9fbc`, `795ccc4`, `3b025ac`, `84471cc`, `2b7ae75`, `3d4fe9b`, `6def94c`, `a87ab06` and
+`3c55458` to the mixer and the AI DMA, and `audio.md`'s What was done and what is left says
+what each does.
 
 | Five routes, unpaced | Current | Next |
 |---|---|---|
@@ -302,9 +304,9 @@ Each cell below is current, then next.
 | City Trial, four players, 73 s | 44 (36.2), 35 (28.8) | 8 (1.4), 1 (1.1) | 2, 2 | 0 (0), 0 (0) | 28,982, 28,843 | 0, 0 |
 
 Current's unpaced runs scored as pass 3's did on every cell, a day later and with a newer tool.
-The clicks away from joins fell from 101 to 87, and this pass doesn't say which commit took the
-clicks away (`audio.md`, What was done and what is left). Next's mixer clamps at -32,768, so
-the race's clipped runs compare only split by sign (below).
+The clicks away from joins fell from 101 to 87, and this pass doesn't say which of those
+commits took them away. Next's mixer clamps at -32,768, so the race's clipped runs compare only
+split by sign (below).
 
 Past the cut, rescored with `--no-run` from the same unpaced recordings:
 
@@ -361,8 +363,9 @@ The device rows don't compare. Current's real-time race never reached the loud s
 sample at full scale and a log peak of 33,396 against next's 61,359. The race's frame 6000 dump
 differs between the two real-time runs, while the two unpaced runs' dumps match.
 
-Current's device stage clipped 27, 23 and 14 runs on the race in passes 1 to 3, so pass 5 sets
-a race that clipped against one that didn't. Why current's race went differently wasn't checked.
+Current's device stage clipped 27, 23 and 14 runs on the race in passes 1 to 3, and pass 5's is
+the only one of its real-time races with none. Why current's race went differently wasn't
+checked.
 
 `tools/block_clicks.py` over the real-time runs' mixer recordings finds 13 blocks the DMA
 played twice at current with 2 clicks on them. It finds none at next.
@@ -390,7 +393,8 @@ play 4 alone.
 
 The `3a8d154` build is in `build/current/` (Running it again), and its generated C and DOL
 match `build/`'s file for file. Its runs' `commits.json` name the clone's commit, since
-`build/current/` isn't a clone.
+`build/current/` isn't a clone. Dragoon `3f0f8c3` differs from `5d01033`, the last commit on
+the `3a8d154` pin, only in the pin and two docs, `status.md` and `widescreen.md`.
 
 The unpaced mixer stage scored the same at both builds in every play. It also matches pass 5's
 next on every cell below, which pass 5 scored on gcn-recomp `b97c019` with its own tool.
@@ -469,7 +473,8 @@ The device stage is one real-time run a route, so each cell below is plays 1 to 
 | City Trial, four players | 25.3, 28.6, 21.2, 17.9 | 14.7, 19.6, 15.5, 18.0 |
 
 The device totals overlap. `dac449e` made fewer clicks than `3a8d154` in plays 1, 2 and 4 and
-more in play 3, and every route but four players changed order between plays.
+more in play 3. Every route but four players changed order between plays, and four players made
+fewer clicks at `dac449e` in plays 1 to 3 and 22 at both in play 4.
 
 The real-time mixer stage is each real-time run's whole `GCN_AIDWAV` recording, read with
 `block_clicks.py`, which also counts the blocks the DMA played twice and the blocks delivered
@@ -569,7 +574,8 @@ What pass 6 doesn't explain:
   The bisect, cut at passes 1 and 2's lengths rather than the routes' seconds, agrees with
   both, but its notes aren't in this repository.
 - Pass 5 played each build once. Current's unpaced runs scored the same as pass 3's, but the
-  tool didn't play next twice. Next's audio hashes matched across three bench runs at `b97c019`.
+  tool didn't play next twice. At `b97c019`, `tools/audio_hashes.py` gave the same audio rows on
+  all twelve routes in three runs, a record between two checks.
 - Real-time runs move from pass to pass. The baseline's title route clipped 4,009 samples in the
   mixer stage in one pass and 485 in the other.
 
@@ -674,9 +680,9 @@ md5 /path/to/dragoon-current/build/probe/scorecard-air-ride-race/frame_06000.png
   build/probe/scorecard-unpaced-air-ride-race/frame_06000.png
 ```
 
-Pass 6 ran from this clone checked out at Dragoon `3f0f8c3`, whose `build/` is `dac449e`, and
-kept the `3a8d154` build inside it. The `3a8d154` build is a copy of the sources in
-`build/current/` with the engine checked out there as a worktree, and the tool takes it as
+Pass 6 ran from this clone checked out at Dragoon `3f0f8c3` (whose pin, and so its `build/`, is
+`dac449e`) and kept the `3a8d154` build inside it. The `3a8d154` build is a copy of the sources
+in `build/current/` with the engine checked out there as a worktree, and the tool takes it as
 `current=build/current/build`. Removing `build/current/` and running
 `git -C gcn-recomp worktree prune` puts the clone back as it was.
 
@@ -713,11 +719,11 @@ in.
 
 | Pass | Date | gcn-recomp | Dragoon clone | Tool |
 |---|---|---|---|---|
-| 1 and 2 | 2026-10-22 | `caf12a2`, `b848158` | `6b81b6e`, `43ceba4` | `43ceba4` |
+| 1 and 2 | 2026-10-22 | `caf12a2`, `b848158` | `6b81b6e`, `43ceba4` (`788571c` plus `tools/`) | `43ceba4` |
 | Title at 91 s | 2026-10-22 | `caf12a2`, `b848158` | `6b81b6e`, `13acaf4` | `13acaf4` |
-| Bisect | 2026-10-22 | `caf12a2` to `b848158`, with the six audio commits between | Notes not in this repository | Prototypes |
-| 3 | 2026-10-22 | `b848158` | `5ff734e`'s code | `5ff734e` |
+| Bisect | 2026-10-22 | `caf12a2` and `b848158`, with six of the audio commits between | Notes not in this repository | Prototypes |
+| 3 | 2026-10-22 | `b848158` | `5ff734e`'s code, the game code of `788571c` | `5ff734e` |
 | 4 | 2026-10-23 | `caf12a2` | `6b81b6e` | `3698f16` |
-| Past the cut, passes 3 and 4 | 2026-10-23 | No game | | `8aaae9a` |
+| Past the cut, passes 3 and 4 | 2026-10-23 | `caf12a2`, `b848158`, from passes 4 and 3 | No game played | `8aaae9a` |
 | 5 and its rescoring | 2026-10-23 | `b848158`, `b97c019` | `28fdb9b`, `2b98e17`'s tools and routes | `2b98e17`, `clip_signs.py` at `0268d8a` |
 | 6 and its readings | 2026-10-25 | `3a8d154`, `dac449e` | `3f0f8c3` in plays 1 to 3, `0b34199` in play 4 | The clone's |
