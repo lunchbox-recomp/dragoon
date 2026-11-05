@@ -523,7 +523,11 @@ window with no gamepads and `GCN_AXVOICES=1`. The walker in `tools/bot_menus.py`
 menus. In a race, the city or a stadium each bot holds the stick toward a walk drawn from the
 seed and taps A. A race or a City Trial stadium still on after 120 s of game time is left
 through its pause menu. The frozen-picture check didn't run in any soak, since the link gives a
-bot no picture hash yet. No soak had a console reset, so none rebuilt the shader cache.
+bot no picture hash yet. No soak had a console reset, so none rebuilt the shader cache. Each
+soak's run directory holds an empty `.txt`. The engine before gcn-recomp `1efabb5` opened
+`GCN_AIDWAV`'s block index, its name with `.txt` added, even for the empty `GCN_AIDWAV=` that
+bot_link then set so no recording was made. bot_link now passes `/dev/null/none`, which leaves
+no file.
 
 | Seed | Modes | Ports | Minutes | Dragoon | Wall time | Rounds | End |
 |---|---|---|---|---|---|---|---|
