@@ -410,9 +410,9 @@ tools/audio_scorecard.py base=/path/to/old-clone/build current=build --routes ti
 
 The five routes `docs/dev/scorecard.md` scores (`--routes title,menu,air-ride-race,city-trial,city-trial-4p`) take about 11 minutes a build. An unpaced run's game time doesn't follow the host's, so two unpaced runs of one build should give the same blocks, and the pairs compared did, byte for byte (`docs/dev/scorecard.md`). `--help` gives each stage's measures, where each run and its `commits.json` go, how `--no-run` reads them and what `not logged` and `not recorded` mean.
 
-A real-time run's clock catches up when the host falls behind, so presses land on other frames and sounds move, and its blocks say as much about the host's timing as about the build. Up to gcn-recomp `b848158` a catch-up also made the DMA play a block twice, and since `a87ab06` it doesn't. The real-time run records `GCN_AIDWAV` too, for block_clicks.py.
+A real-time run's clock catches up when the host falls behind, so presses land on other frames and sounds move, and its blocks say as much about the host's timing as about the build. At gcn-recomp `b848158` a catch-up jump could end a block before the guest had queued the next buffer and make the DMA play that buffer twice, which `a87ab06` stops. A guest that fills its buffers from its main loop can still miss the owed blocks a catch-up delivers close together, and then the DMA plays a buffer again ("The clock" in `gcn-recomp/docs/diagnostics.md`).
 
-scorecard_runs.py plays a route on a build and scorecard_measure.py scores a route's two runs. Neither has a command line.
+The real-time run records `GCN_AIDWAV` too, for block_clicks.py. scorecard_runs.py plays a route on a build and scorecard_measure.py scores a route's two runs. Neither has a command line.
 
 ## block_clicks.py
 
