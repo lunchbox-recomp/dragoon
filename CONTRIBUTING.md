@@ -25,7 +25,7 @@ Run all four of CI's jobs before opening a PR. Naming jobs runs only those, as i
 python3 tools/ci.py
 ```
 
-For a change in `src/`, also run its unit tests with no disc. `ninja unit` runs them beside gcn-recomp's own, and the first configure downloads GoogleTest beside the engine's own copy of SDL and Dear ImGui.
+The `macos` job builds and runs `src/`'s unit tests beside gcn-recomp's own. To run just those with no disc, use the block below, whose first configure downloads GoogleTest beside the engine's own copy of SDL and Dear ImGui.
 
 ```sh
 cmake -S . -B build-tests -G Ninja -DDRAGOON_TESTS=ON -DGAME_ISO=
