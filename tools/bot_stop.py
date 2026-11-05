@@ -94,7 +94,7 @@ def classify(outcome: bot_link.Outcome, resets: Optional[Resets] = None, hang: O
         stop.resets_before = resets.count
         # A shader rebuild holds back frames, but the engine answers a read within a frame's
         # step, so a rebuild can't leave a read unanswered. Nor is it a hang the game asserted on.
-        if (stop.kind == HANG and not stop.detail.startswith("no answer to a read")
+        if (stop.kind == HANG and not stop.detail.startswith(bot_link.UNANSWERED)
                 and bot_link.ASSERTED not in stop.detail
                 and resets.shaders_ms is not None and near_hang(resets.shaders_ms, hang)):
             stop.detail += (f". The first reset's shader rebuild took {resets.shaders_ms / 1000:.1f} s of the "

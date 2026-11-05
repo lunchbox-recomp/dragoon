@@ -109,6 +109,8 @@ EXIT_AFTER_ARG = re.compile(r"--exit-after=(\d+)")
 FRAME_TIME_LINE = re.compile(r"^\[ft\] f\d+ ")
 ASSERTION_LINE = re.compile(r"^\[OS\] assertion .* failed$")
 WHERE_LINE = re.compile(r"^\[OS\]\s+in \S.* on line \d+\.?$")
+# How a hang's detail begins for a read with no answer, and how it brings in an assertion.
+UNANSWERED = "no answer to a read"
 ASSERTED = "the game asserted"
 
 
@@ -699,7 +701,7 @@ def run(name: str, seconds: int, bot: Callable[[Link], dict[int, Pad]], *, pads:
             detail = f"no new connection for {hang:g} s after the link closed" + (
                 f", and its last line is {last!r}" if last else "")
         elif state.unanswered:
-            detail = f"no answer to a read for {hang:g} s at frame {state.last_frame}"
+            detail = f"{UNANSWERED} for {hang:g} s at frame {state.last_frame}"
         else:
             after = "it connected" if state.last_frame is None else f"frame {state.last_frame}"
             detail = f"no frame for {hang:g} s after {after}"

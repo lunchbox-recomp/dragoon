@@ -166,7 +166,7 @@ class ClassifyTest(unittest.TestCase):
                                       "--hang")
 
     def test_a_read_with_no_answer_after_a_slow_restart_is_not_blamed_on_it(self) -> None:
-        detail = "no answer to a read for 30 s at frame 3"
+        detail = f"{bot_link.UNANSWERED} for 30 s at frame 3"
         stop = classify(outcome(bot_link.HANG, detail), resets(RESET, SHADERS.format(24500)), hang=30)
         assert stop is not None
         self.assertEqual((stop.kind, stop.detail), (bot_stop.HANG, detail))
