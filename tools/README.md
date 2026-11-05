@@ -776,9 +776,23 @@ A first build on an M4 Max, with the Command Line Tools' make 3.81, clang 21 and
 
 `--no-warmup` skips the warm-up. `--keep-build` keeps `<cache>/build`, which is deleted after a good build otherwise.
 
+## mod_choices.py
+
+How does a player list Riivolution packages, save a choice and apply the selected patches? `mod_choices.py` reads `mods/` in the folder holding `settings.txt`. A release unzips there as its readme directs for Dolphin's `Load/Riivolution` folder.
+
+```sh
+python3 tools/mod_choices.py list --data DIR
+python3 tools/mod_choices.py set --data DIR pack.xml opt 1
+python3 tools/mod_choices.py apply --data DIR --disc IMAGE
+```
+
+`list` returns packages with each option's current `choice`. `set` writes `mods.txt`, where each line has the form `XML:OPTION=CHOICE` and 0 means off. `apply` writes under `mods/.out/` and returns the overlay path, RAM patch path, failed packages and elapsed milliseconds as JSON. It turns a failed package off for that run and keeps the saved choice. See [the Riivolution package guide](../docs/dev/mods.md) for the layout and the settings keys.
+
 ## mods.py
 
 Which mods does a mods folder hold, and can the game be built with them? Each folder in it whose name doesn't start with a dot is one mod. A mod's `files/` mirrors the disc's root, and its `dol.txt` is a patch list in the format of gcn-recomp's `docs/dol-patches.md`.
+
+`mods.py` checks folder mods given as its MODS argument, while `mod_choices.py` handles Riivolution packages in `mods/`.
 
 Either may be missing, and either name may come in any letter case. The other files beside `dol.txt` are the ones its `section` lines may name, so a section's file sits there and not under `files/`.
 

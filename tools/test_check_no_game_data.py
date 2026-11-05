@@ -54,7 +54,8 @@ class ViolationsTest(unittest.TestCase):
                 self.assertEqual(check_no_game_data.violations(paths), paths)
 
     def test_anything_under_a_top_level_mods_fails(self):
-        paths = ["mods/README.md", "mods/Some Mod/patches.txt", "mods/a/b/c.txt"]
+        paths = ["mods/README.md", "mods/Some Mod/patches.txt", "mods/a/b/c.txt",
+                 "mods/riivolution/x.xml", "mods/.out/ram-patches.txt"]
         self.assertEqual(check_no_game_data.violations(paths), paths)
 
     def test_a_top_level_mods_folder_fails_in_any_letter_case(self):
@@ -148,6 +149,14 @@ class MainTest(unittest.TestCase):
         with self.ls_files("a.txt\nrom/game.iso\n"):
             code, out, _ = run_main(check_no_game_data.main)
         self.assertEqual((code, out), (1, "game data tracked: rom/game.iso\n"))
+
+    def test_tracked_riivolution_package_and_output_fail(self):
+        paths = "mods/riivolution/x.xml\nmods/.out/ram-patches.txt\n"
+        with self.ls_files(paths):
+            code, out, _ = run_main(check_no_game_data.main)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "game data tracked: mods/riivolution/x.xml\n"
+                              "game data tracked: mods/.out/ram-patches.txt\n")
 
     def test_failing_git_exits_2(self):
         failure = check_no_game_data.subprocess.CalledProcessError(128, "git", stderr="not a repo")
