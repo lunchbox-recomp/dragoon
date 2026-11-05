@@ -42,8 +42,10 @@ logs the same at boot.
   decode the mixer control word.
 - `ax.cpp` mixes with the decoder the layout picks (`:442-443`, `:485-487`). It runs command
   `12` for any hash but the 2001 one (`:673-679`).
-- Each command list gets `DCD10002` back (`dsp_hle.cpp:98-99`). The ten runs in `status.md`
-  counted 484,400 lists and none had an unknown command.
+- In a 30-second run at an earlier gcn-recomp (`67a7e30`) the game sent 5,834 command lists,
+  about 29 seconds of 5 ms frames. Each command list gets `DCD10002` back
+  (`dsp_hle.cpp:98-99`). The ten runs in `status.md` counted 484,400 lists and none had an
+  unknown command.
 - The sound crackled the one time it was listened to, before the source type 2 fix.
   `GCN_AXSTATS` counts levels and `GCN_WAV` captures the output. `status.md` has the levels
   measured on the race route.
@@ -126,20 +128,20 @@ volume envelope becomes `(a0 * x + b0 * yn1) >> 15` clamped to 16 bits, and that
 the next `yn1`.
 
 The runtime reads and writes all 97 words on every build but the 2001 one and takes parameter
-updates up to word 96 (`ax.cpp:42`, `:53`, `:504`), but it doesn't apply the filter. The game
-didn't turn it on in the twelve runs counted under "What the game sends".
+updates up to word 96 (`ax.cpp:42`, `:53-60`, `:504`), but it doesn't apply the filter. The
+game didn't turn it on in the twelve runs counted under "What the game sends".
 
 ### Compressor
 
 Command `12` carries a threshold, a release length in lists and the address of a gain table
-in main RAM. The table holds 160-entry ramps of unsigned 16-bit gains with 0x8000 as 1.0, 11
-attack ramps and then the release ramps.
+in main RAM. The table holds 160-entry ramps of unsigned 16-bit gains, with 0x8000 as 1.0. The
+first 11 are attack ramps and the rest release ramps.
 
 For any hash but the 2001 one, `compress` (`ax.cpp:568-592`) checks whether any main L or R
 sample in the list is over the threshold. If one is, both channels are scaled by the attack ramp
 numbered by the release count left from earlier lists (0 when none), and the count restarts at
 the release length. Otherwise, while the count is nonzero, it steps down and both channels are
-scaled by release ramp 11 plus the count.
+scaled by the table's ramp 11 plus the count, one of the release ramps.
 
 Surround is never touched. The count carries from list to list and resets when AX starts
 (`:624`). On the 2001 hash the command's four words are skipped (`:673-679`).
@@ -168,7 +170,10 @@ within 2 samples of a 160-sample block join, where chance gives 29.
 
 Source type 2 (PB word 4) was the cause. It means no rate conversion, so the ucode reads one
 sample for every sample out and ignores the ratio, as Dolphin's `AXVoice.h` and
-`ax.cpp:448-453` do. `status.md` has the counts after.
+`ax.cpp:448-453` do. The runtime used to step through a type 2 voice's input by the ratio, so a
+PCM16 stereo pair the game refills every list fell behind its refills and jumped at each join.
+
+`status.md` has the counts after.
 
 [`scorecard.md`](scorecard.md) scores five routes with `tools/audio_scorecard.py` on later pins
 and on gcn-recomp `caf12a2`, from before the audio work. Unpaced, over 324 s, the mixer stage's
@@ -176,7 +181,7 @@ clipped runs fell from 208 to 25 by `b848158` while its clicks went from 132 to 
 fell to 94 at `b97c019`.
 
 `scorecard.md` rescores the same recordings with `--no-run` and finds that on the title and the
-mode select the clicks that fell by `b848158` fell past the scored seconds.
+mode select the clicks `b848158` removed sat past the scored seconds.
 
 ## Stream music and disc timing
 
@@ -191,10 +196,12 @@ a time. The SDK's `__AXServiceVPB` copies those fields alone when any of them is
 copies the whole address with its loop flag only when none is, so the two callbacks have to
 land in different 5 ms audio frames.
 
-On a console the disc read between them takes tens of milliseconds. A much faster read lands
-both callbacks in one frame, and the voices play their first slot (1.79 s) and end, as the menu
-music did in the playtest on 2026-10-27. The Melee native port traced the same stop to the same
-merged address update
+On a console the disc read between them takes tens of milliseconds. Before gcn-recomp `04c025f`
+a read took 100 us and its length at 64 MiB/s, so both callbacks often landed in one frame. The
+voices then played their first slot (1.79 s) and ended, as the menu music did in the playtest on
+2026-10-27.
+
+The Melee native port traced the same stop to the same merged address update
 ([its notes](https://github.com/HexDump0/melee/blob/main/native/AI/handoffs/2026-09-13-P-648-menu-bgm.md)).
 
 ## Music at fast reads
@@ -205,8 +212,8 @@ Dolphin's "Speed up disc transfer rate" has it. `disc console` in `settings.txt`
 `--disc=console` keeps Dolphin's model of the console's drive (`04c025f`), and `status.md` has
 the menu route's loads at both speeds under "Disc reads".
 
-The two callbacks still land in different audio frames. With the drive code `b5ec329` has, each
-of the twenty-four routes in `tests/hashes/manifest.txt` ran once at each speed under
+The two callbacks still land in different audio frames. At gcn-recomp `b5ec329`, each of the
+twenty-four routes in `tests/hashes/manifest.txt` ran once at each speed under
 `GCN_AXVOICES=1`. `tools/stream_voices.py` found no stream voice that ended early in any of the
 48 runs, and a separate pass over every voice at a stream address found none that started
 without its loop flag or that the mixer ended.
@@ -217,7 +224,8 @@ without its loop flag or that the mixer ended.
 | Loops, with no `end` | 52 | 50 |
 | 80579F88's `run` and `set` lines | 2 lists apart all 46 times through list 19,400 | 16 under 50 lists, from 2 to 44 |
 
-At `fast` the header and data callbacks land 2 lists apart, one more than the loop flag needs.
+At `fast` 80579F88's `set` line came 2 lists after its `run` line all 46 times, and each start
+had its loop flag.
 Four-player City Trial, the Sand, Fire and Light Top Ride routes and `top-ride-courses` each had
 two more stream voices at `fast`, because each fast run reached a later track change before its
 time ran out. The other nineteen matched, but the title and Top Ride's Sky course differed in
@@ -241,19 +249,22 @@ Generic runtime work in `runtime/`.
 | Decode both mixer layouts into per-bus enable and ramp flags, then mix each of the nine buses by its own flags | `ax.cpp:238-286`, `:485-487` | Done |
 | Compressor | `ax.cpp:568-592`, `:673-679` | Done |
 | Source types 2 and up with no rate conversion | `ax.cpp:448-453` | Done |
-| PB layout with the filter's four words, 97 words on every build but the 2001 one | `ax.cpp:42`, `:53` | Done in `3056588` |
+| PB layout with the filter's four words, 97 words on every build but the 2001 one | `ax.cpp:40-42`, `:53` | Done in `3056588` |
 | Low-pass filter | after the volume envelope, `ax.cpp:474-479` | Not done |
 | Depop words | `ax.cpp:225-236` | Done in `3b025ac` |
 | Polyphase resampling through worked-out coefficient sets | `ax.cpp:332-384` | Done in `cce9fbc` and `795ccc4` |
 | A bus the setup command starts at zero stays silent | `ax.cpp:552-566` | Done in `84471cc` |
 | Mixing, `0E` and the ADPCM decoder clamp at -32,768 | `ax.cpp:230`, `:604`, `:163` | Done in `2b7ae75`, `3d4fe9b` and `6def94c` |
-| An AI DMA catch-up jump ends a block only once the guest queues after it | `dsp.cpp` | Done in `a87ab06` and `3c55458` |
+| An AI DMA block ends once the guest queues after it, or after a quarter block of the guest's own running with the clock's jumps left out | `dsp.cpp:191`, `:236-243` | Done in `a87ab06` and `3c55458` |
 | Loop counter and signed envelope | `ax.cpp:198-216`, `:474-479` | Not done |
 | Loop or stop a voice only on the sample at its end address | `ax.cpp:198-216` | Done in `1f5e5a3` |
 | Wrap an ADPCM voice whose end is on a frame's header to its loop address | `ax.cpp:167-179` | Done in `ac8a1f4`, logged as a loop since `545c784` |
 | Disc reads timed as a console's drive times them | `drive.h`, `di.cpp` | Done in `04c025f` and `f19f98d`. Since `7968abc` it's `disc console` |
 | Disc reads at the read-ahead rate by default | `drive.h`, `di.cpp`, `main.cpp` | Done in `22bc2c8` and `7968abc` |
 | A log of each voice's start, changes, loops and end | `GCN_AXVOICES` | Done in `1b25342` |
+
+`b97c019` holds every commit from `3056588` to `3c55458` above, and `b848158` none of them. No
+audio file under `runtime/` changes from `b97c019` to `e1016b8`.
 
 The polyphase sets aren't the console's own, which need the DSP's ROM.
 
