@@ -25,10 +25,11 @@ The two stages are measured with audio_clicks.py's functions, each from the run 
   mixer   The unpaced run's GCN_AIDWAV, the DMA's blocks before the ring (raw, 32 kHz), cut
           to the route's last checkpoint plus --margin seconds. Unpaced, the game's time
           doesn't follow the host's, so two runs of one build should give the same blocks. A
-          real-time run's clock catches up when the host falls behind, and then the DMA plays
-          a block twice, presses land on other frames and sounds move, so its blocks differ
-          from run to run. Clicks a minute, the clicks within 2 samples of a 160-sample block
-          join beside the count chance gives, gaps and clipped runs. The run's log gives the
+          real-time run's clock catches up when the host falls behind, so presses land on
+          other frames and sounds move, and its blocks differ from run to run. Up to
+          gcn-recomp b848158 a catch-up also made the DMA play a block twice, and since
+          a87ab06 it doesn't. Clicks a minute, the clicks within 2 samples of a 160-sample
+          block join beside the count chance gives, gaps and clipped runs. The run's log gives the
           highest main L peak before the output clamp and the samples the clamp changed, from
           the [ax] lines within the cut. A recording shorter than the cut exits 2.
   device  The real-time run's GCN_WAV, what went to the device, ring included (48 kHz).
