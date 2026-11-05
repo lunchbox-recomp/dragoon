@@ -54,7 +54,7 @@ class Detected(Exception):
 
 def engine_picture(link: Link) -> Optional[Hashable]:
     """The hash of the picture the game last showed, from `link.picture`, or None when the link
-    has none, as every Link today."""
+    has none."""
     return getattr(link, "picture", None)
 
 
