@@ -17,7 +17,7 @@ from unittest import mock
 
 import bot_link
 from bot_link import BUTTONS, Link, LinkSetupError, Outcome, Pad, encode_pads, run, socket_path
-from testutil import RUN_LIMIT, run_main, time_limit, write_file
+from testutil import RUN_LIMIT, run_main, temp_dir, time_limit, write_file
 
 REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 
@@ -326,9 +326,7 @@ class FakeProbeCase(unittest.TestCase):
 
     def setUp(self) -> None:
         time_limit(self, self.limit)
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name).resolve()
+        self.root = temp_dir(self).resolve()
         self.probe = self.tree(self.root)
 
     def tree(self, root: Path) -> Path:
@@ -1005,9 +1003,7 @@ class WaitClosedTest(unittest.TestCase):
 
 class AssertionTest(unittest.TestCase):
     def log(self, text: str) -> Path:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        return write_file(Path(tmp.name), "stdout.txt", text)
+        return write_file(temp_dir(self), "stdout.txt", text)
 
     def test_it_is_the_assertion_line_and_the_line_that_says_where(self):
         self.assertEqual(bot_link._assertion(self.log(FT.format(9) + ASSERTS + AFTER)), SAID)

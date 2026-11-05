@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import tempfile
 import unittest
 from collections.abc import Callable
-from pathlib import Path
 
 import bot_watch
 from bot_link import Pad
 from bot_watch import FROZEN, MUSIC, Detected, Frozen, LogWatch, Resets
-from testutil import FakeLink
+from testutil import FakeLink, temp_dir
 
 STILL = Pad()
 PRESS = Pad(buttons=0x0100)
@@ -191,9 +189,7 @@ class ResetsTest(unittest.TestCase):
 
 class LogWatchTest(unittest.TestCase):
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.path = Path(tmp.name) / "stdout.txt"
+        self.path = temp_dir(self) / "stdout.txt"
         self.watch = LogWatch(self.path)
 
     def write(self, text: str, mode: str = "a") -> None:

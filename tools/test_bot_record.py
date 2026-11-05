@@ -13,7 +13,7 @@ import bot_record
 import source_info
 from bot_stop import HANG, PANIC, Stop
 from bot_watch import Resets
-from testutil import commit, write_file
+from testutil import commit, temp_dir, write_file
 
 SHA_A = "a" * 40
 SHA_B = "b" * 40
@@ -52,9 +52,7 @@ class NewNameTest(unittest.TestCase):
 
 class CommitsTest(unittest.TestCase):
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name).resolve()
+        self.root = temp_dir(self).resolve()
 
     def info(self, dragoon: str = SHA_A, engine: str = SHA_B) -> None:
         source_info.write(self.root / source_info.NAME, {"dragoon": dragoon, "gcn-recomp": engine,
@@ -94,9 +92,7 @@ class CommitsTest(unittest.TestCase):
 
 class BuiltEngineTest(unittest.TestCase):
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.session = Path(tmp.name)
+        self.session = temp_dir(self)
 
     def test_it_is_the_engine_sha_the_session_recorded_with_its_dirty_mark(self) -> None:
         write_file(self.session, "session.json", json.dumps({"engine_sha": SHA_B + "-dirty", "x": 1}))

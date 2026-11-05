@@ -6,7 +6,6 @@ import json
 import re
 import shlex
 import signal
-import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -19,7 +18,7 @@ import bot_record
 import bot_soak
 from bot_watch import engine_picture
 from testengine import PICTURE_ADDR, axv, built_sha, make_tree, set_plan
-from testutil import RUN_LIMIT, TimeLimit, commit, run_main, time_limit
+from testutil import RUN_LIMIT, TimeLimit, commit, run_main, temp_dir, time_limit
 
 SEED = "3"
 
@@ -42,9 +41,7 @@ class SoakCase(unittest.TestCase):
 
     def setUp(self) -> None:
         time_limit(self, self.limit)
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name).resolve()
+        self.root = temp_dir(self).resolve()
         self.probe = make_tree(self.root)
         self.plan()
 
