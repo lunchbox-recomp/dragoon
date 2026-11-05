@@ -103,8 +103,9 @@ runtime/gx/render_gl.cpp:3189:13: warning: enumeration value 'Screen' not handle
 ### What the build downloads
 
 By default the first configure downloads two source archives. gcn-recomp's `CMakeLists.txt`
-pins each by SHA-256, so CMake stops at one that doesn't match. Nothing in either was run by
-hand, only read in `build/_deps/` after a configure at gcn-recomp `782d7fa` with CMake 4.4.4.
+pins each by SHA-256, so CMake stops at one that doesn't match. No program from these archives
+or from GoogleTest's below was run by hand, only read in `build/_deps/` after configures at
+gcn-recomp `782d7fa` with CMake 4.4.4.
 
 | | SDL3 | Dear ImGui |
 |---|---|---|
@@ -126,7 +127,43 @@ Here that was `/opt/homebrew/bin/pkg-config`, which found 1.0.29 (`PC_LibUSB_VER
 
 `-DDRAGOON_TESTS=ON` adds a third download, GoogleTest 1.17.0's source release, which Dragoon's
 own `CMakeLists.txt:41-45` pins by SHA-256 and CI's macOS job turns on (`tools/ci.py:79-80`).
-No build directory here has fetched it, so this record doesn't cover it.
+A configure at gcn-recomp `782d7fa` with no disc and CMake 4.4.4 fetched it.
+
+| | GoogleTest |
+|---|---|
+| Archive | `googletest-1.17.0.tar.gz` from the `v1.17.0` release of `google/googletest` on GitHub (Dragoon's `CMakeLists.txt:41-45`), 885,595 bytes |
+| SHA-256, pinned and as downloaded | `65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c` (Dragoon's `CMakeLists.txt:43`; `shasum -a 256` on the archive) |
+| Version inside | The archive's `CMakeLists.txt:7` sets `GOOGLETEST_VERSION` to `1.17.0` |
+| At configure | `FetchContent_MakeAvailable` configures GoogleTest with Google Mock and installation off, then defines two libraries; no program built from the archive runs |
+| At build | `googletest/src/gtest-all.cc` (which includes nine more `src/*.cc` files) makes `lib/libgtest.a`, and `googletest/src/gtest_main.cc` makes `lib/libgtest_main.a`. Their generated rules have `POST_BUILD = :` |
+
+Dragoon disables Google Mock and installation (Dragoon's `CMakeLists.txt:39-40`). The archive's
+`CMakeLists.txt:6-35` selects the GoogleTest subdirectory, whose `googletest/CMakeLists.txt:123-142`
+defines both libraries. GoogleTest calls `find_package(Threads)`
+(`googletest/cmake/internal_utils.cmake:64-70`), and CMake 4.4.4's `Modules/FindThreads.cmake:157-163`
+compiles a test program and runs none.
+
+The archive's CMake files have no `execute_process`, `try_compile` or `try_run`. Its Python3
+lookup is conditional on GoogleTest's own tests (`googletest/cmake/internal_utils.cmake:250-251`),
+which are off (`googletest/CMakeLists.txt:18`).
+
+The archive's CMake has no custom command, but Dragoon's `gtest_discover_tests(dragoon_tests)`
+adds one (Dragoon's `CMakeLists.txt:57`). CMake 4.4.4's `Modules/GoogleTest.cmake:583-587`
+defaults discovery to `POST_BUILD`, and its `Modules/GoogleTest.cmake:728-736` runs `cmake -P` on
+the discovery file after `dragoon_tests` links.
+
+CMake 4.4.4's `Modules/GoogleTestAddTests.cmake:205-224` runs `dragoon_tests --gtest_list_tests`
+with `--gtest_output=json:<build dir>/cmake_test_discovery_<hash>.json`. Discovery has a 5 s
+timeout (`Modules/GoogleTest.cmake:580-582`), and a nonzero exit stops the build (CMake 4.4.4's
+`Modules/GoogleTestAddTests.cmake:226-241`). Only `gtest` and `gtest_main` were built for this
+record, and the discovery and CTest steps were read from CMake's files, not run.
+
+CI's `ninja unit` builds `dragoon_tests` and the engine's unit dependencies, then runs CTest
+with `--no-tests=error --timeout 300 --output-on-failure` (Dragoon's `CMakeLists.txt:60-61`;
+`gcn-recomp/CMakeLists.txt:1190-1200`). CI's macOS job invokes that target (`tools/ci.py:79-82`).
+So `ninja unit` runs `dragoon_tests` once to list its tests and then once per test under CTest
+(CMake 4.4.4's `Modules/GoogleTestAddTests.cmake:63-67`), and CI's macOS job runs code compiled
+from this archive.
 
 In the game, SDL opens `libusb-1.0.dylib` with `dlopen` for controllers over USB
 (`SDL_LIBUSB_DYNAMIC` in this build's `SDL_build_config.h:333`). Dear ImGui's OpenGL 3 backend
