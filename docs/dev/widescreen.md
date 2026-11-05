@@ -19,10 +19,11 @@ tools/probe.sh race 30 tests/routes/air-ride-race.txt 4200 DRAGOON_CENSUS=1 GCN_
 tools/drawlog.py cameras build/probe/race/stdout.txt --frame 4200 --symbols analysis/symbols.txt
 ```
 
-`DRAGOON_CENSUS=1` turns on three hooks in `src/census.cpp`. One sits at the entry of
-`HSD_CObjSetCurrent` (`0x80401150`) and logs the camera it's about to make current. Another
-sits where `GObj_SetTextureCamera` (`0x8042A0B4`) calls each object's render callback, and
-logs the callback with the camera it draws through.
+`DRAGOON_CENSUS=1` turns on the census in `src/census.cpp`, which three hooks in
+`recomp/patches.txt` call. One sits at the entry of `HSD_CObjSetCurrent` (`0x80401150`) and logs
+the camera it's about to make current. Another sits where `GObj_SetTextureCamera`
+(`0x8042A0B4`) calls each object's render callback, and logs the callback with the camera it
+draws through.
 
 Each pair is logged once a frame as a `[census]` line. drawlog.py matches those cameras to the
 projections in the frame's `[draw]` lines and counts the draws through each.
@@ -42,7 +43,7 @@ cameras were in gets an `[amnesia]` line. Both are under "A change of output asp
 
 Five kinds of camera draw at the six checkpoints.
 
-| Kind | Projection | Viewport | Set by | Drawn through by, among others |
+| Kind | Projection | Viewport | Made current by | Drawn through by, among others |
 |---|---|---|---|---|
 | World | Perspective, fov 78 in one player, 68 in 2P and 80 in 4P | The player's view | `kar_objalloc__near_800b04a8` | `fn_801C6E84`, `kar_grcoll__near_800d81e4`, `kar_itdata_display_item_gobj`, `kar_efrequest2__near_8023dc8c` |
 | HUD 3D | Perspective, fov 25 | The whole screen | `fn_8011586C`, `GObj_SetCamera` | `fn_80114F1C`, `fn_8011500C`, `fn_8011F114` |
@@ -65,10 +66,10 @@ The title's 164 menu draws are 153 through fov 25 and 11 through fov 30. The mod
 218 are 176 through fov 25, 41 through the 640x480 frame and 1 through the 256x192 render to
 texture.
 
-Some cameras drew nothing at every checkpoint. A fov 60 camera set by `GObj_SetCamera` holds
-an aspect of 1.33333, and a 680x520 orthographic frame is drawn through only by
-`kar_dbmapgravity__near_800ab15c`. In 2P and 4P each view also has a fov 25 camera of its
-own, set by `fn_8011586C`, that drew nothing at frame 3480.
+Some cameras drew nothing at every checkpoint. A fov 60 camera made current by
+`GObj_SetCamera` holds an aspect of 1.33333, and a 680x520 orthographic frame is drawn through
+only by `kar_dbmapgravity__near_800ab15c`. In 2P and 4P each view also has a fov 25 camera of
+its own, made current by `fn_8011586C`, that drew nothing at frame 3480.
 
 ### Aspects
 
@@ -234,7 +235,7 @@ a released camera, one made later at its address, forgetting every camera and th
 World to screen reads the world camera's stored aspect, so it needed no change of its own. A
 watch build of gcn-recomp lists every load from a range of guest memory. On Dragoon `0159b5e`
 at loads of 3.2 to 3.4, in the race at 16:9, these were all the loads of the full-screen world
-camera's field of view and aspect over frames 4,199 and 4,200.
+camera's field of view and aspect between frames 4,199 and 4,200.
 
 | Function | Field of view loaded at | Aspect loaded at |
 |---|---|---|
@@ -261,13 +262,13 @@ second view, 4P's second and fourth and Top Ride.
 
 ```sh
 cmake -S . -B build -DCMAKE_C_FLAGS=-DGCN_WATCH -DCMAKE_CXX_FLAGS=-DGCN_WATCH
-ninja -C build
+ninja -C build dragoon
 tools/probe.sh readers 300 tests/routes/air-ride-race.txt 100000 --aspect=16:9 GCN_STORE_HIST=4199-4200 GCN_READERS=/path/to/ranges.txt --exit-after=4210
 ```
 
 `ranges.txt` holds the range of the camera's field of view and aspect, its address from the
-`[census]` line plus `0x40` to plus `0x47`. The run's directory is its working directory, so
-the path is absolute. Configure again with `-DCMAKE_C_FLAGS=` and `-DCMAKE_CXX_FLAGS=` for the
+`[census]` line plus `0x40` to plus `0x47`. The game runs in `build/probe/readers/`, so the
+path has to be absolute. Configure again with `-DCMAKE_C_FLAGS=` and `-DCMAKE_CXX_FLAGS=` for the
 usual build.
 
 ## Measured on Dragoon `45c52c5`
@@ -407,8 +408,8 @@ tools/drawlog.py hud build/probe/hud/stdout.txt build/probe/hud-wide/stdout.txt 
 
 `drawlog.py hud` pairs the two runs' HUD draws and checks each anchored one's box against its
 4:3 box, as `tools/README.md` says. On Dragoon `e52dce1` at gcn-recomp `5e49451`, one run at a
-time at loads of 1.5 to 3.1, every checkpoint passed. `e52dce1`, here and below, is #46's commit
-that became `fe88e8a`.
+time at loads of 1.5 to 3.1, every checkpoint passed. `e52dce1`, here and below, is on the
+`hud-anchors` branch, with the same `src/`, `recomp/` and `tools/drawlog.py` as `fe88e8a`.
 
 | Checkpoint | Anchored | Failed | Stretched |
 |---|---|---|---|
@@ -434,8 +435,8 @@ callbacks' trees took these anchors on both.
 | Callback | Race, 4200 | City Trial, 3300 | 2P, 3480 | 4P, 3480 |
 |---|---|---|---|---|
 | `fn_80114F1C` | L for the position. R for the lap count, the speedometer and its frame | R for the speedometer and its frame | In each view, L for the name and R for the speedometer and its frame | As in 2P |
-| `8011DCF8`, the minimap's karts | R | L | L | None drawn |
-| `8011E404`, the minimap's start | R | None drawn | None drawn | None drawn |
+| `kar_ifround_display_mmapply_player_marker_world_projected`, the minimap's karts | R | L | L | None drawn |
+| `kar_ifround_display_mmapstart_marker_projected_midpoint`, the minimap's start | R | None drawn | None drawn | None drawn |
 | `fn_8011F114` | None drawn | R | R in each view | R in each view |
 
 In the output dumps at 16:9 the race's position sits at the left and the timer in the middle.
