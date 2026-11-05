@@ -769,10 +769,28 @@ The files were 120 pieces of 1 MiB from `/dev/urandom` in one mod's `files/audio
 ## Goldens
 
 The frame and audio goldens were recorded at fast disc reads on gcn-recomp `b5ec329` and Dragoon
-`39c8d8f`, where the record changed 1,050 of the 1,906 frames, on every route but the title, and
-all 48 audio rows. Two checks after the record matched all 1,906 frames and 48 audio rows. Every
-checkpoint frame the record changed was dumped again on Dragoon `0bc2902` and looked at, and How
-far it gets says what each shows.
+`39c8d8f`, where the record changed 1,050 of the 1,906 frames on every route but the title, along
+with all 48 audio rows. Route for route, those are the counts a check with fast reads found before
+gcn-recomp took them. Two checks after the record matched all 1,906 frames and 48 audio rows.
+
+| Routes | Frames changed |
+|---|---|
+| `title` | 0 of 16 |
+| `menu` | 4 of 20, from frame 1,020 |
+| `air-ride-race` | 37 of 100 |
+| `city-trial` and `city-trial-4p` | 29 of 55 and 29 of 58 |
+| Each one-course Air Ride route | 25 of 70 |
+| `air-ride-courses-1` and `-2` | 126 of 229 and 96 of 194 |
+| Each one-course Top Ride route | 44 of 60 |
+| `top-ride-courses` | 140 of 186 |
+| `city-trial-stadium` and `-4p` | 54 of 68 and 52 of 70 |
+
+The menu's frames 1,020 to 1,200 hash as they did from `e1016b8` to `5e49451`, before reads were
+timed.
+
+All 24 checkpoint frames the record changed were dumped again on Dragoon `0bc2902`, and each
+matched its golden and was looked at. How far it gets says what each shows, except
+`top-ride-courses` frame 3600, which has no row and is byte for byte `top-ride-grass` frame 3600.
 
 On Dragoon `30a3ca3` at the pin `782d7fa`, `tools/frame_hashes.py check` matched all
 twenty-four routes' 1,906 frames in 14 min 37 s and `tools/audio_hashes.py check` all 48 rows in
@@ -803,6 +821,12 @@ KiB rounded down.
 | START at 1000 to the mode select | f1003, 213 ms (17 reads, 1,267 KiB, 49 ms drive) | f1002, 1,514 ms (130 reads, 2,872 KiB, 1,579 ms drive) |
 | f1032 | under 100 ms | 149 ms (6 reads, 241 KiB, 169 ms drive) |
 | Route reads | 1,005, 31.4 MiB, 1,584 ms drive | 760, 27.4 MiB, 11,781 ms drive |
+
+A second fast run made the same reads in each interval with the same drive time, and its three
+intervals came within 2 ms of the first run's. gcn-recomp's diagnostics put the route's two scene
+changes at 400 ms and 213 ms at `fast` and 1,485 ms and 1,458 ms at `console`. A playtest's input
+log recorded at `bad7160`, with no disc line, replayed with a first read of 69,464 us, and the log
+the replay wrote says `# disc console`.
 
 `dragoon_bench` reads neither `settings.txt` nor `--disc`, so `tools/audio_hashes.py` records
 and checks at fast reads. With every route run once at each speed under `GCN_AXVOICES=1` at
