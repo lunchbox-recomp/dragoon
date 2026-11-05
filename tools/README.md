@@ -199,8 +199,6 @@ The line leaves out what the soak sets for itself, and any `GCN_WAV` or `GCN_AID
 
 The soak exits 0 when the run ended with no stop, at its time limit or at an `--exit-after` given after `--`, and 1 when it stopped. A bad argument, a game that never connected or a bot that raised an error exits 2 and writes no `bot.json`.
 
-Not yet seen in the game is a soak with `-- --exit-after=N` ending as `exit_after`. `bot_link` looks for the shutdown line first, so an engine that logs `(shutdown,` when it quits at N would make that run a `game_exit`.
-
 The tests stand a fake probe.sh in for the game, so they need no disc.
 
 ## bot_watch.py
