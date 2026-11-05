@@ -25,8 +25,8 @@ to C and links it with a runtime that stands in for the GameCube.
 ## The boundary
 
 - Addresses, function names, struct layouts and any other knowledge of the game go in
-  `src/` and `recomp/`. The fork stays generic, and its `check_generic.py` refuses Kirby
-  names, strings and addresses.
+  `src/` and `recomp/`. The fork stays generic, and its `check_generic.py` refuses the
+  Kirby terms in its `tools/game_terms.txt`, such as the title and the disc ID.
 - Every hook names its guest function and address in a comment.
 - A `patches.txt` line has to restate the instruction it replaces, since the line takes its
   place. Its comment says which function and why, and never pastes generated C.
