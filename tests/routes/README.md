@@ -1,17 +1,17 @@
 # Routes
 
 Each file here is one input script in gcn-recomp's `input_script.h` syntax
-(`frame:BUTTON[+BUTTON]:duration,...`), from a blank memory card to a checkpoint. Frames
-are the game's submitted frames, not wall-clock time, so a route lands in the same place on
-any machine. A press for another controller puts its port first, as in `2/2100:A:5`, and
-that port has to be plugged in with `--pads=N`. Lines starting with `#` are comments, and
-the rest is joined into one script.
+(`frame:BUTTON[+BUTTON]:duration,...`), from a blank memory card to a checkpoint, with `#`
+lines as comments and the rest joined into one script. Frames are the game's submitted
+frames, not wall-clock time, so where a route lands doesn't depend on how fast the machine
+runs. A press for another controller puts its port first (`2/2100:A:5`), and that port has
+to be plugged in with `--pads=N`.
 
-| File | Reaches | Proof frame |
+| File | Reaches | Checked to |
 |---|---|---|
 | `title.txt` | The title screen | 960 |
 | `menu.txt` | The mode select menu | 1200 |
-| `air-ride-race.txt` | An Air Ride race on Fantasy Meadows, past the countdown | 4200 |
+| `air-ride-race.txt` | An Air Ride race on Fantasy Meadows, past the countdown | 6000 |
 | `air-ride-celestial-valley.txt` | An Air Ride race on Celestial Valley, past the countdown | 4200 |
 | `air-ride-sky-sands.txt` | An Air Ride race on Sky Sands, past the countdown | 4200 |
 | `air-ride-frozen-hillside.txt` | An Air Ride race on Frozen Hillside, past the countdown | 4200 |
@@ -23,7 +23,7 @@ the rest is joined into one script.
 | `air-ride-courses-2.txt` | The same on Magma Flows, Machine Passage and Beanstalk Park | 19400 |
 | `city-trial.txt` | City Trial, one player, the clock running | 3300 |
 | `city-trial-4p.txt` | City Trial, four players on ports 1 to 4, each steering its own way | 3480 |
-| `city-trial-2p.txt` | City Trial, two players on ports 1 and 2, in two views | 3480 |
+| `city-trial-2p.txt` | City Trial, two players on ports 1 and 2, in two views | 3480, not in `tests/hashes/manifest.txt` |
 | `city-trial-stadium.txt` | City Trial with a three-minute clock, then the Drag Race 3 stadium and its results, one player | 20400 |
 | `city-trial-stadium-4p.txt` | The same with four players on ports 1 to 4 and no CPUs | 21000 |
 | `top-ride-grass.txt` | A Top Ride race on Grass, one player and three CPUs, past the countdown | 3600 |
@@ -53,8 +53,7 @@ pauses and two DOWN and an A pick End Game.
 
 End Game goes back to the mode's own menu with Start Game under the cursor. An A there goes
 straight to the course select, with no movie this time and the cursor on the course just raced,
-so the next course's presses start from there. Each course is raced for as long after its START
-as its own route's warm-up pass played it.
+so the next course's presses start from there.
 
 On the way out a race can earn a box on the checklist, which shows for about 160 frames and
 drops any press made meanwhile. So the Air Ride routes wait 400 frames between End Game and
@@ -73,10 +72,9 @@ tools/probe.sh city4 25 tests/routes/city-trial-4p.txt 60 --pads=4
 
 The first runs the game in a hidden window as fast as it goes, stops it after 20 seconds and
 writes every 600th frame, its output and any `panic.txt` to `build/probe/race/`. The second
-plugs in four controllers, which `city-trial-4p.txt` and `city-trial-stadium-4p.txt` need. The game
-runs inside that directory, so a new name starts from a blank memory card. Run a route under
-a name that's been used before and the card already holds a save, which skips the card
-prompts and puts every later press in the wrong place.
+plugs in the four controllers the two `-4p` routes need, and `city-trial-2p.txt` needs
+`--pads=2`. The game runs inside that directory, so reuse a name and the card already holds a
+save, which skips the card prompts and puts every later press in the wrong place.
 
 A route gives byte-identical frames from run to run on the same build, because gcn-recomp
 applies each press where the game reads the controller, at the frame the game has reached.
