@@ -5,7 +5,7 @@ five routes and scores their sound before the audio ring and after it, with nobo
 The baseline is gcn-recomp `caf12a2`, with none of the audio work. Passes 1 to 5 call `b848158`
 current and `b97c019` next, and pass 6 names `3a8d154` and `dac449e` by commit.
 
-The newest numbers are pass 6's at `dac449e`. The pin is `782d7fa`, and on the way `bad7160`
+The newest numbers are pass 6's at `dac449e`. The pin is `95e1c6b`, and on the way `bad7160`
 and `b5ec329` changed every route's audio hashes (Dragoon `3243778` and `fd439aa`), so no
 number here is the pin's.
 
