@@ -428,9 +428,7 @@ private let pastTheEndResult = DiscCheck.unreadable(
     // MARK: On disk
 
     @Test func filesOnDiskWithSpacesInTheirPathsCheckOut() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Dragoon disc tests \(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let directory = try URL(fileURLWithPath: ScratchDirectory("disc").path)
         defer { try? FileManager.default.removeItem(at: directory) }
         let isoPath = directory.appendingPathComponent("Kirby Air Ride (USA).gcm").path
         let cisoPath = directory.appendingPathComponent("Kirby Air Ride (USA).ciso").path

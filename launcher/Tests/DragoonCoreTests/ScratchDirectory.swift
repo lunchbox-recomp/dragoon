@@ -6,9 +6,9 @@ import Foundation
 struct ScratchDirectory {
     let path: String
 
-    init() throws {
+    init(_ kind: String = "window") throws {
         let made = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Dragoon window tests \(UUID().uuidString)")
+            .appendingPathComponent("Dragoon \(kind) tests \(UUID().uuidString)")
         try FileManager.default.createDirectory(at: made, withIntermediateDirectories: true)
         path = SystemFileSystem().resolvingSymlinks(at: made.path)
     }

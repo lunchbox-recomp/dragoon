@@ -38,10 +38,7 @@ final class RecipeFixture: @unchecked Sendable {
     }
 
     init() throws {
-        let made = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Dragoon build tests \(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: made, withIntermediateDirectories: true)
-        root = SystemFileSystem().resolvingSymlinks(at: made.path)
+        root = try ScratchDirectory("build").path
         try executable(
             python3,
             """

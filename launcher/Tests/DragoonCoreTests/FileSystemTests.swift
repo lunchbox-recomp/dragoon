@@ -15,10 +15,7 @@ private struct DiskTree: Tree {
     let root: String
 
     init() throws {
-        let made = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Dragoon tests \(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: made, withIntermediateDirectories: true)
-        root = SystemFileSystem().resolvingSymlinks(at: made.path)
+        root = try ScratchDirectory("tree").path
     }
 
     func file(_ path: String, _ text: String) throws {

@@ -31,10 +31,7 @@ final class GameFixture: @unchecked Sendable {
     var logPath: String { logs + "/" + Self.logName }
 
     init() throws {
-        let made = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Dragoon game tests \(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: made, withIntermediateDirectories: true)
-        root = SystemFileSystem().resolvingSymlinks(at: made.path)
+        root = try ScratchDirectory("game").path
         try FileManager.default.createDirectory(
             atPath: data + "/game/build one", withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(

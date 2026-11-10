@@ -22,12 +22,10 @@ import Testing
     }
 
     private func scratch() throws -> Files {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Dragoon group tests \(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let directory = try ScratchDirectory("group").path
         return Files(
-            pid: directory.path + "/pid.txt", helper: directory.path + "/helper pid.txt",
-            note: directory.path + "/note.txt", directory: directory.path)
+            pid: directory + "/pid.txt", helper: directory + "/helper pid.txt",
+            note: directory + "/note.txt", directory: directory)
     }
 
     @Test func theGraceBetweenSigtermAndSigkillIsTenSeconds() {
