@@ -9,9 +9,14 @@ endif()
 # Ride's own tables and code live in this repository.
 add_subdirectory(gcn-recomp)
 
-# src/, the C++ the tables' hooks call. SOURCES compiles it into the game targets.
+# src/, the C++ the tables' hooks call and the overlay's Mods page. SOURCES compiles it into the
+# game targets, and the page draws only where GCN_OVERLAY is defined, which is the desktop
+# game's. The unit tests link DRAGOON_UNIT_SOURCES too.
+set(DRAGOON_UNIT_SOURCES ${CMAKE_SOURCE_DIR}/src/json_read.cpp ${CMAKE_SOURCE_DIR}/src/child_run.cpp
+                         ${CMAKE_SOURCE_DIR}/src/mods_page.cpp)
 set(DRAGOON_SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp ${CMAKE_SOURCE_DIR}/src/cameras.cpp
-                    ${CMAKE_SOURCE_DIR}/src/draw_marks.cpp ${CMAKE_SOURCE_DIR}/src/hud_anchors.cpp)
+                    ${CMAKE_SOURCE_DIR}/src/draw_marks.cpp ${CMAKE_SOURCE_DIR}/src/hud_anchors.cpp
+                    ${DRAGOON_UNIT_SOURCES} ${CMAKE_SOURCE_DIR}/src/mods_overlay.cpp)
 
 gcn_add_game(
   NAME dragoon
@@ -51,7 +56,8 @@ if(DRAGOON_TESTS)
                                ${CMAKE_SOURCE_DIR}/tests/src/test_hud_anchors.cpp
                                ${CMAKE_SOURCE_DIR}/tests/src/test_json_read.cpp
                                ${CMAKE_SOURCE_DIR}/tests/src/test_child_run.cpp
-                               ${CMAKE_SOURCE_DIR}/src/json_read.cpp ${CMAKE_SOURCE_DIR}/src/child_run.cpp)
+                               ${CMAKE_SOURCE_DIR}/tests/src/test_mods_page.cpp
+                               ${DRAGOON_UNIT_SOURCES})
   set_target_properties(dragoon_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
   # gcn-recomp's runtime for gx/anchor.h, which is free of the rest of it.
   target_include_directories(dragoon_tests PRIVATE ${CMAKE_SOURCE_DIR}/src

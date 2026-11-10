@@ -144,8 +144,19 @@ def disc_from_cache():
     except OSError:
         pass
     except UnicodeDecodeError as exc:
-        raise ArgumentError("build/CMakeCache.txt isn't UTF-8. Pass --disc IMAGE or fix the cache.") from exc
-    raise ArgumentError('GAME_ISO is missing from build/CMakeCache.txt. Pass --disc IMAGE.')
+        raise ArgumentError("build/CMakeCache.txt isn't UTF-8. Configure the build again to rewrite it.") from exc
+    raise ArgumentError('build/CMakeCache.txt names no disc image. Configure the build again with GAME_ISO set '
+                        'to the disc image.')
+
+
+def save_off(data, found, chosen, failed):
+    """Save each option of a left-off package as off, so list shows what runs."""
+    off = [(p['xml'], o['id']) for p in found if p['xml'] in failed for o in p.get('options', [])]
+    choices = [(xml, option, 0 if (xml, option) in off else number) for xml, option, number in chosen]
+    saved = {item[:2] for item in chosen}
+    choices.extend((xml, option, 0) for xml, option in off if (xml, option) not in saved)
+    if choices != chosen:
+        write_choices(data, choices)
 
 
 def apply(data, found, disc, started):
@@ -180,12 +191,34 @@ def apply(data, found, disc, started):
         for xml in culprits:
             detail = result.get('error', 'Riivolution refused a package.')
             if len(culprits) > 1:
-                failed[xml] = '%s These packages conflict. Turn one off with set.' % sentence(detail)
+                failed[xml] = ('%s These packages conflict, so they were left off. Turn on only one of them.'
+                               % sentence(detail))
             else:
                 failed[xml] = ('%s This package was left off. Ask the package author to fix it '
                                'or remove it from mods/riivolution.' % sentence(detail))
-    return {'overlay': 'mods/.out/disc-overlay.txt' if (output / 'disc-overlay.txt').is_file() else None,
-            'ram_patches': 'mods/.out/ram-patches.txt' if (output / 'ram-patches.txt').is_file() else None,
+    # A package with a choice on that Riivolution didn't turn on is for another game, or its
+    # choices patch nothing. A choice outside an option's list runs as off (Package.active).
+    change_nothing = ('The choices picked change nothing on this disc, so the package was left off. '
+                      'A package for another game does this too.')
+    picks = {(xml, option): number for xml, option, number in chosen}
+    on = set(result.get('packages', []))
+    for package in found:
+        xml = package['xml']
+        if xml not in failed and xml not in on and any(
+                0 < picks.get((xml, o['id']), o['default']) <= len(o['choices'])
+                for o in package.get('options', [])):
+            failed[xml] = change_nothing
+    # One that Riivolution turned on can still write nothing, since none of its patches changes
+    # anything on this disc. With no output at all the game would start with none of them while
+    # `list` says on.
+    overlay = (output / 'disc-overlay.txt').is_file()
+    ram_patches = (output / 'ram-patches.txt').is_file()
+    if not overlay and not ram_patches:
+        for xml in on:
+            failed[xml] = change_nothing
+    save_off(data, found, chosen, failed)
+    return {'overlay': 'mods/.out/disc-overlay.txt' if overlay else None,
+            'ram_patches': 'mods/.out/ram-patches.txt' if ram_patches else None,
             'failed': [{'xml': xml, 'error': failed[xml]} for xml in sorted(failed)],
             'ms': round((time.monotonic() - started) * 1000)}
 
@@ -222,11 +255,11 @@ def main(argv=None):
             match = next((o for p in found if p['xml'] == args.xml
                           for o in p.get('options', []) if o['id'] == args.option), None)
             if match is None:
-                raise ChoiceError("The package or option isn't listed. Run list and choose one shown there.")
+                raise ChoiceError("The package or option isn't in mods/riivolution. Choose one that's there.")
             if '\n' in args.xml or '\n' in args.option:
                 raise ChoiceError("The package or option ID holds a line break, so it can't be saved in mods.txt. Ask the package author to fix it.")
             if number > len(match['choices']):
-                raise ChoiceError('The choice is past the last one. Run list and choose a shown number.')
+                raise ChoiceError("The choice is past the option's last one. Choose one of its choices.")
             old = read_choices(data, found)
             key = (args.xml, args.option)
             replacement = (args.xml, args.option, number)
@@ -238,7 +271,9 @@ def main(argv=None):
         else:
             disc = args.disc or disc_from_cache()
             if not Path(disc).is_file():
-                raise ArgumentError("The disc image isn't a file. Pass --disc with a readable image.")
+                raise ArgumentError("The disc image isn't a file. Check its path." if args.disc else
+                                    'GAME_ISO in build/CMakeCache.txt names no file. Configure the build again '
+                                    'with GAME_ISO set to the disc image.')
             result = apply(data, found, disc, started)
         print(json.dumps(result, sort_keys=True))
         return 0

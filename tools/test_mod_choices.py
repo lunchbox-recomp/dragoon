@@ -40,11 +40,12 @@ class ModChoicesTest(unittest.TestCase):
         image[0x2800:0x2804] = b'fake'
         self.image.write_bytes(image)
 
-    def package(self, name='a.xml', body='<memory offset="0x1200" value="abcd"/>', default=1):
-        xml = ('<wiidisc version="1"><id game="FAKE"/><options><section name="Made up">'
+    def package(self, name='a.xml', body='<memory offset="0x1200" value="abcd"/>', default=1,
+                game='FAKE'):
+        xml = ('<wiidisc version="1"><id game="%s"/><options><section name="Made up">'
                '<option name="Option" id="opt" default="%s"><choice name="First"><patch id="p"/>'
                '</choice><choice name="Second"/></option></section></options><patch id="p">%s'
-               '</patch></wiidisc>') % (default, body)
+               '</patch></wiidisc>') % (game, default, body)
         (self.root / 'riivolution' / name).write_text(xml)
 
     def run_tool(self, *args, code=0):
@@ -127,10 +128,14 @@ class ModChoicesTest(unittest.TestCase):
 
     def test_set_refuses_unknown_names_and_choice(self):
         self.package()
-        for xml, option, choice in [('gone.xml', 'opt', '1'), ('a.xml', 'gone', '1'),
-                                    ('a.xml', 'opt', '3')]:
+        gone = "The package or option isn't in mods/riivolution. Choose one that's there."
+        for xml, option, choice, error in [
+                ('gone.xml', 'opt', '1', gone), ('a.xml', 'gone', '1', gone),
+                ('a.xml', 'opt', '3', "The choice is past the option's last one. "
+                                      'Choose one of its choices.')]:
             with self.subTest(xml=xml, option=option, choice=choice):
-                self.assertIn('error', self.run_tool('set', xml, option, choice, code=1))
+                self.assertEqual(self.run_tool('set', xml, option, choice, code=1),
+                                 {'error': error})
         self.assertFalse((self.data / 'mods.txt').exists())
 
     def test_apply_writes_both_paths_and_elapsed_time(self):
@@ -143,6 +148,8 @@ class ModChoicesTest(unittest.TestCase):
         self.assertEqual(result['ram_patches'], 'mods/.out/ram-patches.txt')
         self.assertEqual(result['failed'], [])
         self.assertIsInstance(result['ms'], int)
+        # Nothing was left off, so the choices aren't written.
+        self.assertFalse((self.data / 'mods.txt').exists())
 
     def test_apply_failing_package_leaves_good_one_on(self):
         self.package('good.xml')
@@ -160,6 +167,10 @@ class ModChoicesTest(unittest.TestCase):
         result = self.run_tool('apply', '--disc', str(self.image))
         self.assertEqual([x['xml'] for x in result['failed']], ['bad.xml'])
         self.assertEqual(result['ram_patches'], 'mods/.out/ram-patches.txt')
+        # It's saved off, so list shows what runs.
+        self.assertEqual((self.data / 'mods.txt').read_text(), 'bad.xml:opt=0\n')
+        self.assertEqual([p['options'][0]['choice'] for p in self.run_tool('list')['packages']],
+                         [0, 1])
 
     def test_dash_named_xml_and_disc(self):
         self.package('-a.xml')
@@ -178,13 +189,52 @@ class ModChoicesTest(unittest.TestCase):
     def test_conflict_leaves_both_off(self):
         self.package('a.xml')
         self.package('b.xml')
+        (self.data / 'mods.txt').write_text('b.xml:opt=1\n')
         result = self.run_tool('apply', '--disc', str(self.image))
         self.assertEqual([x['xml'] for x in result['failed']], ['a.xml', 'b.xml'])
         for package in result['failed']:
-            self.assertIn('These packages conflict. Turn one off with set.',
+            self.assertIn('These packages conflict, so they were left off. Turn on only one of them.',
                           package['error'])
         self.assertIsNone(result['ram_patches'])
         self.assertIsNone(result['overlay'])
+        self.assertEqual((self.data / 'mods.txt').read_text(), 'b.xml:opt=0\na.xml:opt=0\n')
+        self.assertEqual([p['options'][0]['choice'] for p in self.run_tool('list')['packages']],
+                         [0, 0])
+
+    def test_package_for_another_game_is_left_off(self):
+        self.package('a.xml')
+        self.package('other.xml', game='OTHR')
+        self.package('unused.xml', game='OTHR', default=0)
+        result = self.run_tool('apply', '--disc', str(self.image))
+        self.assertEqual(result['ram_patches'], 'mods/.out/ram-patches.txt')
+        self.assertEqual(result['failed'], [{
+            'xml': 'other.xml',
+            'error': 'The choices picked change nothing on this disc, so the package was left off. '
+                     'A package for another game does this too.'}])
+        self.assertEqual((self.data / 'mods.txt').read_text(), 'other.xml:opt=0\n')
+        self.assertEqual([p['options'][0]['choice'] for p in self.run_tool('list')['packages']],
+                         [1, 0, 0])
+        # Saved off, it's no longer reported.
+        self.assertEqual(self.run_tool('apply', '--disc', str(self.image))['failed'], [])
+
+    def test_default_past_the_choices_runs_off_and_isnt_left_off(self):
+        self.package(default=3)
+        result = self.run_tool('apply', '--disc', str(self.image))
+        self.assertEqual(result['failed'], [])
+        self.assertIsNone(result['ram_patches'])
+        self.assertFalse((self.data / 'mods.txt').exists())
+
+    def test_package_whose_data_folder_is_empty_is_left_off(self):
+        # Riivolution turns the package on, but its folder patch puts nothing on the disc.
+        (self.root / 'payload').mkdir()
+        self.package(body='<folder external="/payload" disc="/"/>')
+        result = self.run_tool('apply', '--disc', str(self.image))
+        self.assertIsNone(result['overlay'])
+        self.assertIsNone(result['ram_patches'])
+        self.assertEqual([x['xml'] for x in result['failed']], ['a.xml'])
+        self.assertIn('The choices picked change nothing on this disc', result['failed'][0]['error'])
+        self.assertEqual((self.data / 'mods.txt').read_text(), 'a.xml:opt=0\n')
+        self.assertEqual(self.run_tool('list')['packages'][0]['options'][0]['choice'], 0)
 
     def test_list_error_is_reported_by_apply(self):
         self.package('good.xml')
@@ -193,6 +243,8 @@ class ModChoicesTest(unittest.TestCase):
         result = self.run_tool('apply', '--disc', str(self.image))
         self.assertEqual([x['xml'] for x in result['failed']], ['bad.xml'])
         self.assertEqual(result['ram_patches'], 'mods/.out/ram-patches.txt')
+        # It has no options to save off.
+        self.assertFalse((self.data / 'mods.txt').exists())
 
     def test_nothing_on_is_null(self):
         self.package(default=0)
@@ -210,7 +262,10 @@ class ModChoicesTest(unittest.TestCase):
         output = io.StringIO()
         with mock.patch.object(mod_choices, 'REPO', repo), contextlib.redirect_stdout(output):
             self.assertEqual(mod_choices.main(['apply', '--data', str(self.data)]), 2)
-        self.assertIn('Pass --disc', json.loads(output.getvalue())['error'])
+        # The Mods page shows this too, so it names what to fix and no command.
+        self.assertEqual(json.loads(output.getvalue())['error'],
+                         'build/CMakeCache.txt names no disc image. Configure the build again '
+                         'with GAME_ISO set to the disc image.')
         self.assertEqual(self.run_tool('apply', '--disc', str(self.image))['failed'], [])
 
     def test_apply_disc_defaults_to_cache_path(self):
@@ -236,6 +291,21 @@ class ModChoicesTest(unittest.TestCase):
             self.assertEqual(mod_choices.main(['apply', '--data', str(self.data)]), 0)
         self.assertEqual(json.loads(output.getvalue())['ram_patches'],
                          'mods/.out/ram-patches.txt')
+
+    def test_missing_image_names_where_its_path_came_from(self):
+        self.package()
+        repo = self.data / 'fake repo'
+        (repo / 'build').mkdir(parents=True)
+        gone = self.data / 'gone.iso'
+        (repo / 'build' / 'CMakeCache.txt').write_text('GAME_ISO:FILEPATH=%s\n' % gone)
+        output = io.StringIO()
+        with mock.patch.object(mod_choices, 'REPO', repo), contextlib.redirect_stdout(output):
+            self.assertEqual(mod_choices.main(['apply', '--data', str(self.data)]), 2)
+        self.assertEqual(json.loads(output.getvalue())['error'],
+                         'GAME_ISO in build/CMakeCache.txt names no file. Configure the build '
+                         'again with GAME_ISO set to the disc image.')
+        self.assertEqual(self.run_tool('apply', '--disc', str(gone), code=2),
+                         {'error': "The disc image isn't a file. Check its path."})
 
     def test_default_data_is_current_folder(self):
         self.package()
@@ -274,9 +344,8 @@ class ModChoicesTest(unittest.TestCase):
         output = io.StringIO()
         with mock.patch.object(mod_choices, 'REPO', repo), contextlib.redirect_stdout(output):
             self.assertEqual(mod_choices.main(['apply', '--data', str(self.data)]), 2)
-        error = json.loads(output.getvalue())['error']
-        self.assertIn('CMakeCache.txt', error)
-        self.assertIn('--disc', error)
+        self.assertEqual(json.loads(output.getvalue())['error'],
+                         "build/CMakeCache.txt isn't UTF-8. Configure the build again to rewrite it.")
 
     def test_mods_txt_link_is_not_followed(self):
         self.package()
@@ -411,6 +480,74 @@ class FakeEngineTest(unittest.TestCase):
                                '--disc', str(self.image), code=1)
         self.assertIn('no package named', result['error'])
         self.assertIn('Check', result['error'])
+
+    def engine_wrote(self, name):
+        # What Riivolution leaves in mods/.out, which a mocked call_engine doesn't write.
+        out = self.data / 'mods' / '.out'
+        out.mkdir(exist_ok=True)
+        (out / name).write_text('made up\n')
+
+    def apply_fake(self, listing, *results):
+        output = io.StringIO()
+        with mock.patch.object(mod_choices, 'call_engine', side_effect=[
+                (0, listing), *results, AssertionError('ran again')]), contextlib.redirect_stdout(output):
+            self.assertEqual(mod_choices.main(['apply', '--data', str(self.data),
+                                               '--disc', str(self.image)]), 0)
+        return json.loads(output.getvalue())
+
+    def test_apply_saves_each_left_off_option_off(self):
+        listing = {'packages': [
+            {'xml': xml, 'options': [{'id': 'opt', 'default': default, 'choices': ['one']}]}
+            for xml, default in [('a.xml', 1), ('b.xml', 1), ('c.xml', 0), ('d.xml', 2), ('e.xml', 1)]]}
+        (self.data / 'mods.txt').write_text('b.xml:opt=1\nc.xml:opt=1\n')
+        self.engine_wrote('ram-patches.txt')
+        result = self.apply_fake(listing,
+                                 (1, {'error': 'a.xml and b.xml both patch 80001200',
+                                      'packages': ['a.xml', 'b.xml']}),
+                                 (0, {'packages': ['c.xml']}))
+        self.assertEqual([x['xml'] for x in result['failed']], ['a.xml', 'b.xml', 'e.xml'])
+        for conflict in result['failed'][:2]:
+            self.assertIn('These packages conflict, so they were left off.', conflict['error'])
+        self.assertIn('The choices picked change nothing on this disc', result['failed'][2]['error'])
+        # b.xml's line turns off where it is, and the rest follow in the listing's order. c.xml
+        # is on, and d.xml's default is past its choices, so it runs off without being left off.
+        self.assertEqual((self.data / 'mods.txt').read_text(),
+                         'b.xml:opt=0\nc.xml:opt=1\na.xml:opt=0\ne.xml:opt=0\n')
+
+    def test_apply_leaves_mods_txt_alone_when_everything_is_on(self):
+        listing = {'packages': [{'xml': 'a.xml', 'options': [
+            {'id': 'opt', 'default': 1, 'choices': ['one']}]}]}
+        self.engine_wrote('disc-overlay.txt')
+        result = self.apply_fake(listing, (0, {'packages': ['a.xml']}))
+        self.assertEqual(result['failed'], [])
+        self.assertFalse((self.data / 'mods.txt').exists())
+
+    def test_apply_leaves_a_package_off_when_nothing_is_written(self):
+        # Riivolution turned a.xml on, but none of its patches changed anything on the disc, so
+        # the game would start with nothing while `list` says on. b.xml is off and stays as it is.
+        listing = {'packages': [
+            {'xml': xml, 'options': [{'id': 'opt', 'default': default, 'choices': ['one']}]}
+            for xml, default in [('a.xml', 1), ('b.xml', 0)]]}
+        result = self.apply_fake(listing, (0, {'packages': ['a.xml']}))
+        self.assertIsNone(result['overlay'])
+        self.assertIsNone(result['ram_patches'])
+        self.assertEqual(result['failed'], [{
+            'xml': 'a.xml',
+            'error': 'The choices picked change nothing on this disc, so the package was left off. '
+                     'A package for another game does this too.'}])
+        self.assertEqual((self.data / 'mods.txt').read_text(), 'a.xml:opt=0\n')
+
+    def test_apply_keeps_a_package_that_writes_nothing_beside_one_that_does(self):
+        # Which package wrote the file isn't known, and the game starts with the one that did.
+        listing = {'packages': [
+            {'xml': xml, 'options': [{'id': 'opt', 'default': 1, 'choices': ['one']}]}
+            for xml in ('a.xml', 'b.xml')]}
+        self.engine_wrote('ram-patches.txt')
+        result = self.apply_fake(listing, (0, {'packages': ['a.xml', 'b.xml']}))
+        self.assertIsNone(result['overlay'])
+        self.assertEqual(result['ram_patches'], 'mods/.out/ram-patches.txt')
+        self.assertEqual(result['failed'], [])
+        self.assertFalse((self.data / 'mods.txt').exists())
 
     def test_apply_time_includes_list(self):
         script = ('import time\n'
