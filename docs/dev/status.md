@@ -16,7 +16,7 @@ frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `95e1
 | Audio | Partial | The mixer runs the commands of the game's ucode (`07F88145`) with its compressor among them, and ten runs' 484,400 command lists held no unknown or skipped one (under Audio). Source type 0 voices, 98.9% of the voice time, resample through a polyphase filter whose coefficients the runtime works out because the console's are in the DSP's ROM, and the low-pass filter isn't applied. Nobody has listened for the sound's quality since the source type 2 fix or compared it with a console, and the click counts are in [`scorecard.md`](scorecard.md), last scored at gcn-recomp `dac449e` (`audio.md`) |
 | Controllers | Four ports, live | Each gamepad takes the port `saves/ports.txt` says it was last on, or else its SDL player number's or the lowest free one (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with Air Ride's and City Trial's HUD anchored | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD keeps its 4:3 shape at the race, City Trial, 2P and 4P checkpoints, anchored to the edges of the screen or of its player's view, as all four showed on Dragoon `1ff85c8`. Top Ride's HUD and the menus stretch with the picture (`widescreen.md`) |
-| Speed | Holds 60 fps | About 500 frames a second in a race, hidden window, `--fast`. Four-player City Trial holds 60 at the game's own speed. The stadium's scene changes stall the guest for up to 135 ms (under Top Ride and the stadium at the game's speed) |
+| Speed | Holds 60 fps | 513 frames a second in a race in a hidden window with `--fast`. `dragoon_bench`, which draws nothing, runs the race at 601. Four-player City Trial averages 16.69 ms a frame at the game's own speed, with two intervals over 20 ms, the worst 42 ms. The stadium's scene changes stall the guest for up to 160 ms (under gcn-recomp `95e1c6b`) |
 | Build from the disc | Works | 23 s at gcn-recomp `67a7e30` (3.5 s to configure, 19.5 s for Ninja). That's before the build compiled SDL3 and Dear ImGui and before the default target ran the shader warm-up, which adds about 64 s (`CMakeLists.txt:69-78`, Player targets) |
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
@@ -827,6 +827,29 @@ Built on Dragoon `60dd08d`, `tools/frame_hashes.py check` matched all twenty-fou
 after the build, 4.7 between the checks and 6.8 after the audio check.
 
 None of the 24 bench logs has an `[interp]` line.
+
+The speed runs came after the checks on the same build, one game at a time, at 1-minute loads
+of 4.9 to 6.3. The race route ran hidden with `--fast` as
+`tools/probe.sh speed-race 40 tests/routes/air-ride-race.txt 60`, and its dumps of frames 3,600
+and 13,200 were written 18.72 s apart, 513 frames a second. In the audio check's
+`dragoon_bench` run of that route, the one-second samples from 8 s to 20 s, about frames 5,000
+to 12,800, averaged 601 frames a second, between 558 and 716.
+
+`tools/probe.sh speed-ct4p 130 tests/routes/city-trial-4p.txt 100000 --pads=4 --real-time GCN_FRAMETIME=1`
+gave 4,309 guest intervals from frame 3,400 (`tools/frametime.py --from 3400`). They averaged
+16.69 ms, with 16.78 ms at the 95th percentile and 16.95 ms at the 99th. Two went over 20 ms,
+42.15 ms at frame 5,886 and 20.60 ms at 6,923. The frames on either side of the 42 ms one drew
+the same 3,904 draws, and what held the guest wasn't checked.
+
+`tools/probe.sh speed-stadium 360 tests/routes/city-trial-stadium.txt 100000 GCN_FRAMETIME=1 --real-time`
+started with an empty shader cache and reached frame 21,553. From frame 4,400 the guest
+averaged 16.72 ms, and 12 intervals went over 20 ms. The four longest were 105 ms at frame
+15,613, 119 ms at 16,203, 156 ms at 16,502 and 160 ms at 20,054, each within 7 frames of a
+scene change under Top Ride and the stadium at the game's speed.
+
+In the audio check the four-player bench fell from about 360 to between 92 and 138 frames a
+second for its last 7 s, with the same work per frame. A rerun of that route's check matched its
+2 rows and held 256 to 380 from 8 s to the end, so the drop didn't repeat on the same build.
 
 ## Disc reads
 
