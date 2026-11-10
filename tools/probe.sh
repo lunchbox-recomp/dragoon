@@ -38,6 +38,9 @@
 #                   does. A relative DIR is taken from where probe.sh was run, like --disc.
 #                   Windowed runs only
 #     --exit-after=N  quit once N frames have been presented. Windowed runs only
+#     --no-session-audio  a GCN_SESSION records no out.wav or aid.raw, though a GCN_WAV or
+#                   GCN_AIDWAV given here still records (gcn-recomp's --no-session-audio).
+#                   Windowed runs only
 #     --bin=PATH    run PATH instead of build/dragoon, or instead of build/dragoon_bench under
 #                   --bench, so two builds can be run in turn. A relative PATH is taken from
 #                   where probe.sh was run, like --disc. A PATH with an = in it exits 2, since
@@ -49,7 +52,7 @@
 # that isn't an executable file or has an = in its path, or when the game binary (build/dragoon,
 # or build/dragoon_bench under --bench) isn't built.
 set -e
-case ${1:-} in -h|--help) sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case ${1:-} in -h|--help) sed -n '2,53p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 if [ $# -lt 2 ]; then
   echo "usage: tools/probe.sh NAME SECONDS [INPUT_SCRIPT [DUMP_EVERY [SETTING ...]]] (--help for more)" >&2
   exit 2
@@ -73,6 +76,7 @@ aspect=
 output=
 replay=
 exit_after=
+session_audio=
 bin=
 no_input_log=--no-input-log
 # Keeps the GCN_ and DRAGOON_ settings in "$@" and takes the rest out.
@@ -94,6 +98,7 @@ for s in "$@"; do
     --exit-after=[1-9]*)
       case ${s#--exit-after=} in *[!0-9]*) echo "not a setting (see tools/probe.sh --help): $s" >&2; exit 2 ;; esac
       exit_after=$s ;;
+    --no-session-audio) session_audio=$s ;;
     --bin=?*) bin=${s#--bin=} ;;
     *) echo "not a setting (see tools/probe.sh --help): $s" >&2; exit 2 ;;
   esac
@@ -118,9 +123,10 @@ if [ -n "$aspect$output" ] && [ -n "$bench" ]; then
   echo "${aspect:-$output} needs a windowed run; dragoon_bench has no window" >&2
   exit 2
 fi
-if [ -n "$replay$exit_after" ] && [ -n "$bench" ]; then
+if [ -n "$replay$exit_after$session_audio" ] && [ -n "$bench" ]; then
   windowed=--exit-after
   if [ -n "$replay" ]; then windowed=--replay; fi
+  if [ -n "$session_audio" ]; then windowed=$session_audio; fi
   echo "$windowed needs a windowed run; dragoon_bench takes no $windowed" >&2
   exit 2
 fi
@@ -144,7 +150,7 @@ fi
 # At --scale=1 a dump is 640x480 and 1.2 MB, uncompressed; N times each side at --scale=N.
 env SDL_AUDIO_DRIVER=dummy GCN_INPUT="$input" GCN_INPUT_LOG=1 "$@" "$game" --hidden --no-gamepads $fast $no_input_log \
   ${log:+"$log"} ${disc_speed:+"$disc_speed"} ${aspect:+"$aspect"} ${output:+--dump-output} ${replay:+--replay="$replay"} \
-  ${exit_after:+"$exit_after"} --pads="$pads" --scale="$scale" \
+  ${exit_after:+"$exit_after"} ${session_audio:+"$session_audio"} --pads="$pads" --scale="$scale" \
   --dump-dir="$out" --dump-every="$every" ${disc:+"$disc"} >"$out/stdout.txt" 2>&1 &
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true' EXIT

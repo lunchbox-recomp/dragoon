@@ -30,6 +30,7 @@ class ProbeArgumentsTest(unittest.TestCase):
         self.assertIn("--disc=PATH", r.stdout)
         self.assertIn("--disc=fast|console", r.stdout)
         self.assertIn("--bin=PATH", r.stdout)
+        self.assertIn("--no-session-audio", r.stdout)
         self.assertTrue(r.stdout.endswith("under --bench) isn't built.\n"), r.stdout)
         self.assertNotIn("set -e", r.stdout)
 
@@ -264,6 +265,10 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertNotIn("--no-input-log", self.game_args("GCN_SESSION=/somewhere/session"))
         self.assertIn("--no-input-log", self.game_args("GCN_SESSION="))
 
+    def test_no_session_audio_reaches_the_windowed_game_only_when_given(self):
+        self.assertIn("--no-session-audio", self.game_args("GCN_SESSION=/somewhere/session", "--no-session-audio"))
+        self.assertNotIn("--no-session-audio", self.game_args("GCN_SESSION=/somewhere/session"))
+
     def inputs(self) -> Path:
         directory = self.root / "my inputs"
         directory.mkdir()
@@ -312,9 +317,9 @@ class ProbeTreeTest(unittest.TestCase):
                 self.assertIn(bad, r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
-    def test_replay_and_exit_after_with_bench_exit_2(self):
+    def test_replay_exit_after_and_no_session_audio_with_bench_exit_2(self):
         self.add_game("dragoon_bench", "echo 'whole run'\n")
-        for setting in ("--replay=/somewhere/inputs", "--exit-after=900"):
+        for setting in ("--replay=/somewhere/inputs", "--exit-after=900", "--no-session-audio"):
             with self.subTest(setting=setting):
                 r = probe(NAME, "1", "", "60", setting, "--bench", script=self.script)
                 self.assertEqual(r.returncode, 2)
