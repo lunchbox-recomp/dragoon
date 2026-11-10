@@ -8,7 +8,6 @@ import os
 import shutil
 import socket
 import sys
-import tempfile
 import threading
 import time
 import unittest
@@ -1289,9 +1288,9 @@ class RealProbeTest(unittest.TestCase):
     def setUp(self) -> None:
         time_limit(self, self.limit)
 
-    def tree(self, tmp: str) -> tuple[Path, Path]:
+    def tree(self) -> tuple[Path, Path]:
         """The real probe.sh over FAKE_GAME in a temp tree: the tree's root and its probe.sh."""
-        root = Path(tmp).resolve()
+        root = temp_dir(self).resolve()
         (root / "tools").mkdir()
         (root / "build").mkdir()
         probe = root / "tools" / "probe.sh"
@@ -1301,20 +1300,18 @@ class RealProbeTest(unittest.TestCase):
         return root, probe
 
     def test_a_game_that_exited_is_not_a_hang_however_late_probe_sh_notices(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            _, probe = self.tree(tmp)
-            began = time.monotonic()
-            outcome = run("t", 20, neutral, settings=["--exit-after=1500"], hang=0.5, probe=probe)
-            took = time.monotonic() - began
+        _, probe = self.tree()
+        began = time.monotonic()
+        outcome = run("t", 20, neutral, settings=["--exit-after=1500"], hang=0.5, probe=probe)
+        took = time.monotonic() - began
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.EXIT_AFTER, 3))
         self.assertLess(took, 10)  # probe.sh's next one-second tick, not the run's 20 s
 
     def test_gcn_bot_the_session_and_the_settings_pass_through_probe_sh(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, probe = self.tree(tmp)
-            outcome = run("t", 20, neutral, pads=2, script="120:A:5", every=30,
-                          settings=["--exit-after=1500", "GCN_FRAMETIME=1"], probe=probe)
-            record = json.loads((root / "build" / "probe" / "t" / "record.json").read_text())
+        root, probe = self.tree()
+        outcome = run("t", 20, neutral, pads=2, script="120:A:5", every=30,
+                      settings=["--exit-after=1500", "GCN_FRAMETIME=1"], probe=probe)
+        record = json.loads((root / "build" / "probe" / "t" / "record.json").read_text())
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.EXIT_AFTER, 3, 2))
         self.assertEqual(outcome.detail, "--exit-after=1500")
         self.assertEqual(outcome.input_log, root / "build" / "probe" / "t" / "session" / "inputs")
@@ -1332,10 +1329,9 @@ class RealProbeTest(unittest.TestCase):
         self.assertNotIn("--bot", " ".join(record["argv"]))
 
     def test_an_empty_recording_in_settings_reaches_the_game_empty_beside_the_no_audio_switch(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, probe = self.tree(tmp)
-            run("t", 20, neutral, settings=["--exit-after=1500", "GCN_WAV=", "GCN_AIDWAV="], probe=probe)
-            record = json.loads((root / "build" / "probe" / "t" / "record.json").read_text())
+        root, probe = self.tree()
+        run("t", 20, neutral, settings=["--exit-after=1500", "GCN_WAV=", "GCN_AIDWAV="], probe=probe)
+        record = json.loads((root / "build" / "probe" / "t" / "record.json").read_text())
         self.assertEqual((record["env"]["GCN_WAV"], record["env"]["GCN_AIDWAV"]), ("", ""))  # the engine's unset
         self.assertIn("--no-session-audio", record["argv"])  # so the session fills in neither
 

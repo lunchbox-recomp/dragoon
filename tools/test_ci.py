@@ -6,13 +6,12 @@ import os
 import re
 import stat
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import ci
-from testutil import run_main
+from testutil import run_main, temp_dir
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
 
@@ -23,19 +22,15 @@ def py(code: str) -> list[str]:
 
 def in_temp_dir(test: unittest.TestCase) -> Path:
     """Run the rest of the test in a new empty directory."""
-    tmp = tempfile.TemporaryDirectory()
-    test.addCleanup(tmp.cleanup)
+    root = temp_dir(test).resolve()
     test.addCleanup(os.chdir, os.getcwd())
-    root = Path(tmp.name).resolve()
     os.chdir(root)
     return root
 
 
 class Runner(unittest.TestCase):
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.mark = Path(tmp.name, "ran")
+        self.mark = temp_dir(self) / "ran"
 
     def test_the_first_failing_step_stops_the_run(self):
         jobs = {"a": lambda: [("ok", py("pass")), ("bad", py("raise SystemExit(3)")),
