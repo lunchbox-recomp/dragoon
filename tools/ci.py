@@ -77,7 +77,7 @@ JOBS: dict[str, Callable[[], list[Step]]] = {
     )],
     "macos": lambda: [
         ("Configure without a disc", ["cmake", "-S", ".", "-B", "build-nodisc", "-G", "Ninja",
-                                      "-DDRAGOON_TESTS=ON"]),
+                                      "-DDRAGOON_TESTS=ON", "-DGAME_ISO="]),
         ("Compile the runtime", ["ninja", "-C", "build-nodisc", "runtime_check"]),
         ("Engine and src/ unit tests", ["ninja", "-C", "build-nodisc", "unit"]),
     ],
