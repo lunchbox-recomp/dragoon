@@ -26,6 +26,8 @@ writes beside tools/:
                 ["freeze_picture"]       the picture counter stops
   "refuse"    text for stderr; the game exits 2 without a game
   "connect_fails"  the game's failed connect, without one
+  "term_elsewhere"  a SIGTERM is taken on a second thread, which leaves the wait on the link
+              uninterrupted, as one that CPython takes just before that wait does
 """
 from __future__ import annotations
 
@@ -45,7 +47,7 @@ def built_sha(process: int) -> str:
     return f"{ENGINE_SHA}-dirty{process}"
 
 FAKE_ENGINE = r'''#!@PYTHON@
-import atexit, json, os, signal, socket, struct, sys, time
+import atexit, json, os, select, signal, socket, struct, sys, time
 
 sys.path.insert(0, "@TOOLS@")
 import bot_menus
@@ -71,7 +73,7 @@ ports = int(setting("--pads=", "1"))
 session = setting("GCN_SESSION=")
 exit_after = int(setting("--exit-after=", "0"))  # frames before the game ends, as the engine's flag does
 process, frame, picture, picture_frozen, game_frozen = 1, 0, 0, False, False
-conn = lines = log = None
+conn = log = None
 fired = set()
 link = FakeLink()
 game = FakeGame(link, players=ports, race=plan.get("race", 3000))
@@ -126,13 +128,37 @@ def on_term(signum, stack):
 
 
 signal.signal(signal.SIGTERM, on_term)
+# CPython runs on_term only between bytecodes, so a SIGTERM taken just before a blocking recv
+# would leave the game waiting on a link bot_link holds open until the game exits. The signal's
+# C handler writes to this pipe, and the wait on the link selects on it too.
+woken, wake = os.pipe()
+os.set_blocking(wake, False)
+signal.set_wakeup_fd(wake)
+if plan.get("term_elsewhere"):
+    import threading
+    threading.Thread(target=threading.Event().wait, daemon=True).start()
+    signal.pthread_sigmask(signal.SIG_BLOCK, [signal.SIGTERM])  # here only; the thread keeps it
 
 
 def connect():
-    global conn, lines
+    global conn, pending
     conn = socket.socket(socket.AF_UNIX)
     conn.connect(path)
-    lines = conn.makefile("rb")
+    pending = b""  # what the bot sent after the last line read
+
+
+def next_line():
+    """The bot's next line, or "" once it hangs up. A SIGTERM ends the wait, and on_term runs
+    as the select returns."""
+    global pending
+    while b"\n" not in pending:
+        select.select([conn, woken], [], [])
+        data = conn.recv(4096)
+        if not data:
+            return ""
+        pending += data
+    line, pending = pending.split(b"\n", 1)
+    return line.decode() + "\n"
 
 
 def stop_game(code):
@@ -142,10 +168,9 @@ def stop_game(code):
 
 
 def reset(spec):
-    global conn, lines, process, link, game, frame, game_frozen
+    global conn, process, link, game, frame, game_frozen
     say("[reset] the game reset the console (%s, code 0)\n" % spec.get("kind", "restart"))
     end_log()
-    lines.close()
     conn.close()
     process += 1
     frame = 0
@@ -207,7 +232,7 @@ def events():
 def step(pads):
     conn.sendall(("frame %d\n" % frame).encode())
     while True:
-        line = lines.readline().decode()
+        line = next_line()
         if not line:
             say("[bot] frame %d: the bot hung up\n" % frame)
             stop_game(1)

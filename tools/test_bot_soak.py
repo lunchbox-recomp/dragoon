@@ -130,6 +130,16 @@ class CleanRunTest(SoakCase):
         self.assertFalse(list(self.run_dir(out).rglob("bot.json")))
         self.assertEqual(self.record(out)["visited"][0], bot_menus.BOOT)
 
+    def test_the_time_limit_ends_a_game_whose_sigterm_does_not_interrupt_its_wait(self) -> None:
+        # CPython runs a Python handler only between bytecodes, so a SIGTERM taken just before the
+        # fake's recv left it waiting on a link bot_link holds open until the game exits, on
+        # GitHub's runner. One taken on another thread leaves the wait the same, every time.
+        self.plan(race=100000, term_elsewhere=True)
+        count_from_the_connect(self)
+        code, out, err = self.soak("--seed", SEED, "--minutes", "0.05", "--modes", "air-ride")
+        self.assertEqual((code, err), (0, ""), out)
+        self.assertRegex(out, r"(?m)ended on time_limit$")
+
     def test_the_game_is_played_through_the_menus_into_rounds_and_back(self) -> None:
         self.plan(race=100000)
         code, out, err = self.soak("--seed", SEED, "--minutes", "1", "--modes", "air-ride", "--round", "5",
