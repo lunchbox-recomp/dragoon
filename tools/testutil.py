@@ -60,7 +60,8 @@ class FakeLink:
         self.put(entry.address, struct.pack(kar_ram.FORMATS[entry.type], value))
 
     def read(self, address: int, length: int) -> bytes:
-        assert 1 <= length <= 256 and 0x80000000 <= address and address + length <= 0x81800000, (hex(address), length)
+        import kar_ram
+        assert 1 <= length <= kar_ram.READ_MAX and kar_ram.in_ram(address, length), (hex(address), length)
         self.reads.append((address, length))
         return bytes(self.bytes.get(address + i, 0) for i in range(length))
 

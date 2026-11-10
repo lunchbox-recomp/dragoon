@@ -8,27 +8,9 @@ from unittest import mock
 
 import bot_link
 import kar_ram
-import ram_peek
 from bot_link import Outcome, Pad
 from ram_peek import Sampler, main, parse_frames, parse_item, show
-from testutil import run_main, temp_dir, write_file
-
-
-class FakeLink:
-    """A Link over made-up RAM: the bytes put at addresses, zero elsewhere."""
-
-    def __init__(self) -> None:
-        self.frame = 0
-        self.bytes: dict[int, int] = {}
-
-    def put(self, address: int, data: bytes) -> None:
-        for i, b in enumerate(data):
-            self.bytes[address + i] = b
-
-    def read(self, address: int, length: int) -> bytes:
-        assert 1 <= length <= kar_ram.READ_MAX and kar_ram.in_ram(address, length), (hex(address), length)
-        return bytes(self.bytes.get(address + i, 0) for i in range(length))
-
+from testutil import FakeLink, run_main, temp_dir, write_file
 
 TABLE = {
     "made.flag": {"address": "80001000", "type": "u8", "means": "a made-up flag",

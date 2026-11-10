@@ -7,30 +7,9 @@ from pathlib import Path
 
 import kar_ram
 from kar_ram import Entry, decode, follow, in_ram, load, read
-from testutil import temp_dir, write_file
+from testutil import FakeLink, temp_dir, write_file
 
 ROUTES = Path(__file__).resolve().parent.parent / "tests" / "routes"
-
-
-class FakeRam:
-    """Guest RAM for a test: the bytes put at addresses, zero elsewhere, read as Link.read does."""
-
-    def __init__(self, frame: int = 0) -> None:
-        self.frame = frame
-        self.bytes: dict[int, int] = {}
-        self.reads: list[tuple[int, int]] = []
-
-    def put(self, address: int, data: bytes) -> None:
-        for i, b in enumerate(data):
-            self.bytes[address + i] = b
-
-    def pointer(self, address: int, to: int) -> None:
-        self.put(address, struct.pack(">I", to))
-
-    def read(self, address: int, length: int) -> bytes:
-        assert 1 <= length <= kar_ram.READ_MAX and in_ram(address, length), (hex(address), length)
-        self.reads.append((address, length))
-        return bytes(self.bytes.get(address + i, 0) for i in range(length))
 
 
 def entry(type_: str = "u8", length: int | None = None, path: tuple[int, ...] = (),
@@ -105,7 +84,7 @@ class RamTest(unittest.TestCase):
 
 class FollowTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.ram = FakeRam()
+        self.ram = FakeLink()
 
     def test_no_path_is_the_address_itself(self) -> None:
         self.assertEqual(follow(self.ram, 0x80001000, (), 4), 0x80001000)
@@ -117,15 +96,15 @@ class FollowTest(unittest.TestCase):
         self.assertEqual(self.ram.reads, [])
 
     def test_each_offset_is_added_to_the_pointer_read_before_it(self) -> None:
-        self.ram.pointer(0x80001000, 0x81000000)
-        self.ram.pointer(0x8100001C, 0x81200000)
+        self.ram.put(0x80001000, struct.pack(">I", 0x81000000))
+        self.ram.put(0x8100001C, struct.pack(">I", 0x81200000))
         self.assertEqual(follow(self.ram, 0x80001000, (0x1C, 0x240), 4), 0x81200240)
         self.assertEqual(self.ram.reads, [(0x80001000, 4), (0x8100001C, 4)])
 
     def test_a_null_pointer_leads_nowhere(self) -> None:
         self.assertIsNone(follow(self.ram, 0x80001000, (0x1C, 0x240), 4))
         self.assertEqual(self.ram.reads, [(0x80001000, 4)])
-        self.ram.pointer(0x80001000, 0x81000000)
+        self.ram.put(0x80001000, struct.pack(">I", 0x81000000))
         self.assertIsNone(follow(self.ram, 0x80001000, (0x1C, 0x240), 4))
         self.assertEqual(self.ram.reads, [(0x80001000, 4), (0x80001000, 4), (0x8100001C, 4)])
 
@@ -133,16 +112,16 @@ class FollowTest(unittest.TestCase):
         self.assertIsNone(follow(self.ram, 0x80001000, (0x80000000,), 4))
 
     def test_a_pointer_past_ram_leads_nowhere(self) -> None:
-        self.ram.pointer(0x80001000, 0x81800000)
+        self.ram.put(0x80001000, struct.pack(">I", 0x81800000))
         self.assertIsNone(follow(self.ram, 0x80001000, (0,), 1))
 
     def test_a_value_that_runs_past_ram_leads_nowhere(self) -> None:
-        self.ram.pointer(0x80001000, 0x817FFFF0)
+        self.ram.put(0x80001000, struct.pack(">I", 0x817FFFF0))
         self.assertEqual(follow(self.ram, 0x80001000, (0xC,), 4), 0x817FFFFC)
         self.assertIsNone(follow(self.ram, 0x80001000, (0xD,), 4))
 
     def test_a_pointer_on_the_way_has_to_fit_too(self) -> None:
-        self.ram.pointer(0x80001000, 0x817FFFF0)
+        self.ram.put(0x80001000, struct.pack(">I", 0x817FFFF0))
         self.assertIsNone(follow(self.ram, 0x80001000, (0xE, 0), 1))
         self.assertEqual(self.ram.reads, [(0x80001000, 4)])
 
@@ -150,7 +129,7 @@ class FollowTest(unittest.TestCase):
 class ReadTest(TableCase):
     def setUp(self) -> None:
         super().setUp()
-        self.ram = FakeRam()
+        self.ram = FakeLink()
         self.made_up = load(self.table({
             "made.flag": GOOD,
             "made.where": {"address": "80002000", "path": ["1C", "240"], "type": "f32",
@@ -164,8 +143,8 @@ class ReadTest(TableCase):
         self.assertEqual(read(self.ram, "made.flag", self.made_up), 1)
 
     def test_a_value_behind_pointers(self) -> None:
-        self.ram.pointer(0x80002000, 0x81000000)
-        self.ram.pointer(0x8100001C, 0x81100000)
+        self.ram.put(0x80002000, struct.pack(">I", 0x81000000))
+        self.ram.put(0x8100001C, struct.pack(">I", 0x81100000))
         self.ram.put(0x81100240, struct.pack(">f", 7.75))
         self.assertEqual(read(self.ram, "made.where", self.made_up), 7.75)
 
