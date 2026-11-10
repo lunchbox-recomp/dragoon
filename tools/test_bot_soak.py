@@ -696,13 +696,7 @@ class ArgumentTest(SoakCase):
         for name in ("minutes", "round", "stuck", "hang"):
             for value in ("0", "-1", "-inf", "nan", "inf", "infinity"):
                 with self.subTest(name=name, value=value):
-                    ap = bot_soak.parser()
-                    args = ap.parse_args([f"--{name}={value}"])
-                    err = io.StringIO()
-                    with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
-                        bot_soak.checked(ap, args, time.time)
-                    self.assertEqual(caught.exception.code, 2)
-                    self.assertIn(f"--{name} is a finite number above 0", err.getvalue())
+                    self.assertIn(f"--{name} is a finite number above 0", self.check(name, value))
 
     def check(self, name: str, value: str) -> str:
         """What `checked` says about --NAME=VALUE: '' when it takes it, and else the usage error."""
@@ -714,6 +708,8 @@ class ArgumentTest(SoakCase):
                 bot_soak.checked(ap, args, time.time)
             except SystemExit as e:
                 self.assertEqual(e.code, 2)
+            else:
+                self.assertEqual(err.getvalue(), "")
         return err.getvalue()
 
     def test_a_stuck_under_thirty_seconds_is_a_usage_error_since_the_first_walk_would_not_fit(self) -> None:

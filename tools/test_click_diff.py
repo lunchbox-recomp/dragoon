@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import contextlib
-import io
 import json
 import unittest
 from array import array
@@ -192,10 +190,8 @@ class MainTest(unittest.TestCase):
         for same, text in ((1.0, "100.0%"), (31999 / 32000, "99.9%"), (0.5, "50.0%"), (0.9996, "99.9%")):
             with self.subTest(same=same):
                 shown = click_diff.Diff(1.0, 0, 0, 0, 0, same, 0, 0, 0, [])
-                out = io.StringIO()
-                with contextlib.redirect_stdout(out):
-                    click_diff.print_diff(shown, 20)
-                self.assertIn(f"1.00 s compared, {text} of samples the same\n", out.getvalue())
+                _, out, _ = run_main(lambda argv: click_diff.print_diff(shown, 20))
+                self.assertIn(f"1.00 s compared, {text} of samples the same\n", out)
 
     def test_an_offset_of_one_sample_reads_in_the_singular(self):
         for offset, text in ((0, "0 samples into its block"), (1, "1 sample into its block"),
@@ -203,10 +199,8 @@ class MainTest(unittest.TestCase):
             with self.subTest(offset=offset):
                 click = click_diff.OneSided(0.5, "B", -20.0, offset, 100, 100, True, False, False)
                 shown = click_diff.Diff(1.0, 0, 1, 0, 1, 1.0, 0, 0, 0, [click])
-                out = io.StringIO()
-                with contextlib.redirect_stdout(out):
-                    click_diff.print_diff(shown, 20)
-                self.assertIn(f"dB, {text}, ", out.getvalue())
+                _, out, _ = run_main(lambda argv: click_diff.print_diff(shown, 20))
+                self.assertIn(f"dB, {text}, ", out)
 
     def test_json_has_each_click(self):
         _, out, _ = run_main(click_diff.main, str(self.a), str(self.b), "--json")
