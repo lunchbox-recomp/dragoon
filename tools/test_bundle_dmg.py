@@ -1,6 +1,5 @@
 import json
 import os
-import tempfile
 import time
 import unittest
 from unittest import mock
@@ -82,11 +81,10 @@ class MountedTest(unittest.TestCase):
     def test_a_forced_detach_that_hangs_is_an_error(self):
         write_file(self.tools, "busy", "")
         write_file(self.tools, "force hangs", "")
-        with mock.patch.object(tempfile, "tempdir", str(self.dir)):
-            with mock.patch.object(bundle_dmg, "DETACH_SECONDS", 1):
-                with self.assertRaisesRegex(bundle_dmg.DmgError, "detach didn't finish in 1 s"):
-                    with bundle_dmg.mounted(self.dmg):
-                        pass
+        with mock.patch.object(bundle_dmg, "DETACH_SECONDS", 1):
+            with self.assertRaisesRegex(bundle_dmg.DmgError, "detach didn't finish in 1 s"):
+                with bundle_dmg.mounted(self.dmg):
+                    pass
         attach, detach, forced = self.calls()
         mount = attach[attach.index("-mountpoint") + 1]
         self.assertEqual([detach, forced], [["detach", mount], ["detach", "-force", mount]])
@@ -105,10 +103,9 @@ class MountedTest(unittest.TestCase):
 
     def test_a_failed_attach_is_an_error_naming_hdiutil_and_leaves_nothing(self):
         write_file(self.tools, "attach fails", "")
-        with mock.patch.object(tempfile, "tempdir", str(self.dir)):
-            with self.assertRaisesRegex(bundle_dmg.DmgError, "Resource temporarily unavailable"):
-                with bundle_dmg.mounted(self.dmg):
-                    self.fail("the body ran")
+        with self.assertRaisesRegex(bundle_dmg.DmgError, "Resource temporarily unavailable"):
+            with bundle_dmg.mounted(self.dmg):
+                self.fail("the body ran")
         self.assertEqual([c[0] for c in self.calls()], ["attach"])
         self.assertEqual(sorted(os.listdir(self.dir)),
                          ["Dragoon 1.0.dmg", "Dragoon 1.0.dmg.contents", "fake tools", "records.jsonl"])
