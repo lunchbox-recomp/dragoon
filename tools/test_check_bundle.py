@@ -15,7 +15,8 @@ import bundle_dmg
 import bundle_tree
 import check_bundle
 import export_source
-from testutil import GIT_ENV, archive, commit, compile_c, fake_hdiutil, git, run_main, temp_dir, write_file
+from testutil import (GIT_ENV, archive, commit, compile_c, fake_hdiutil, git, run_main, temp_dir,
+                      temp_files_in, write_file)
 
 MACHO = bytes.fromhex("cffaedfe")
 AR_MAGIC = b"!<arch>\n"
@@ -664,6 +665,7 @@ class DmgTest(BundleTestCase):
 
     def setUp(self):
         super().setUp()
+        temp_files_in(self, self.dir)
         self.records = self.dir / "records.jsonl"
         self.tools = self.dir / "fake tools"
         self.tools.mkdir()
@@ -750,12 +752,15 @@ class DmgTest(BundleTestCase):
         self.assertEqual(code, 1)
         self.assertIn("executable not on the manifest: Contents/Resources/dragoon", out)
         self.assertIn("couldn't detach", err)
+        # The mount point stays, so it has to be in the test's own folder.
+        self.assertEqual(os.path.dirname(self.calls()[0][4]), str(self.dir))
 
     def test_a_clean_dmg_that_will_not_detach_exits_2(self):
         write_file(self.tools, "detach fails", "")
         code, out, err = self.check(self.dmg)
         self.assertEqual((code, out), (2, []))
         self.assertIn("couldn't detach", err)
+        self.assertEqual(os.path.dirname(self.calls()[0][4]), str(self.dir))
 
     def test_a_dmg_that_will_not_attach_exits_2(self):
         write_file(self.tools, "attach fails", "")

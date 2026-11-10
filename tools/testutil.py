@@ -20,6 +20,7 @@ from array import array
 from pathlib import Path
 from types import FrameType
 from typing import Callable, Optional
+from unittest import mock
 
 # Fixture repositories ignore the user's and the system's git config, so no signing, hook
 # or filter of theirs runs, and commit as a fixed name.
@@ -152,6 +153,14 @@ def temp_dir(test: unittest.TestCase, prefix: str | None = None) -> Path:
     tmp = tempfile.TemporaryDirectory(prefix=prefix)
     test.addCleanup(tmp.cleanup)
     return Path(tmp.name)
+
+
+def temp_files_in(test: unittest.TestCase, directory: Path) -> None:
+    """Make tempfile create its files and folders in DIRECTORY until TEST ends, so what the code
+    under test leaves behind goes with DIRECTORY."""
+    patch = mock.patch.object(tempfile, "tempdir", str(directory))
+    patch.start()
+    test.addCleanup(patch.stop)
 
 
 def write_file(directory: Path, name: str, data: bytes | str) -> Path:

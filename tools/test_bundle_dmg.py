@@ -6,7 +6,7 @@ import unittest
 from unittest import mock
 
 import bundle_dmg
-from testutil import fake_hdiutil, temp_dir, write_file
+from testutil import fake_hdiutil, temp_dir, temp_files_in, write_file
 
 
 class MountedTest(unittest.TestCase):
@@ -14,6 +14,7 @@ class MountedTest(unittest.TestCase):
 
     def setUp(self):
         self.dir = temp_dir(self)
+        temp_files_in(self, self.dir)
         self.records = self.dir / "records.jsonl"
         self.tools = self.dir / "fake tools"
         self.tools.mkdir()
@@ -57,6 +58,8 @@ class MountedTest(unittest.TestCase):
         with self.assertRaisesRegex(bundle_dmg.DmgError, "detach"):
             with bundle_dmg.mounted(self.dmg):
                 pass
+        # The mount point stays, so it has to be in the test's own folder.
+        self.assertEqual(os.path.dirname(self.calls()[0][4]), str(self.dir))
 
     def test_an_attach_that_hangs_is_an_error_and_gets_a_forced_detach(self):
         write_file(self.tools, "attach hangs", "")
