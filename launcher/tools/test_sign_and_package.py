@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import contextlib
-import io
 import os
 import plistlib
 import shlex
@@ -504,17 +502,14 @@ class RefusalTest(SignTestCase):
     def test_a_notary_key_without_its_id_and_issuer(self):
         for missing in ("--notary-key", "--notary-key-id", "--notary-issuer"):
             with self.subTest(missing):
-                argv = ["--app", str(self.app), "--identity", IDENTITY, "--out", str(self.out)]
+                self.out = self.dir / f"out {missing}"
+                argv: list[str] = []
                 given = {"--notary-key": str(self.key), "--notary-key-id": KEY_ID,
                          "--notary-issuer": ISSUER}
                 for flag, value in given.items():
                     if flag != missing:
                         argv += [flag, value]
-                err = io.StringIO()
-                with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
-                    code = sign_and_package.main(argv)
-                self.assertEqual(code, 2)
-                self.assertIn("all three", err.getvalue())
+                self.assert_refused("all three", *argv, notary=False)
 
     def test_an_ad_hoc_identity_with_a_notary_key(self):
         self.assert_refused("ad hoc", identity="-")
@@ -537,20 +532,15 @@ class RefusalTest(SignTestCase):
         self.assert_refused(str(self.key))
 
     def test_no_identity(self):
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            with self.assertRaises(SystemExit) as raised:
-                sign_and_package.main(["--app", str(self.app), "--out", str(self.out)])
-        self.assertEqual(raised.exception.code, 2)
-        self.assertIn("--identity", err.getvalue())
+        code, out, err = fake_tools.run_main(sign_and_package.main, "--app", str(self.app),
+                                             "--out", str(self.out))
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("--identity", err)
 
     def test_help_exits_0_and_prints_usage(self):
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            with self.assertRaises(SystemExit) as raised:
-                sign_and_package.main(["--help"])
-        self.assertEqual(raised.exception.code, 0)
-        self.assertIn("Usage:", out.getvalue())
+        code, out, err = fake_tools.run_main(sign_and_package.main, "--help")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("Usage:", out)
 
 
 if __name__ == "__main__":
