@@ -6,7 +6,9 @@ import io
 import math
 import os
 import random
+import select
 import signal
+import socket
 import struct
 import subprocess
 import sys
@@ -60,6 +62,42 @@ class FakeLink:
         assert 1 <= length <= 256 and 0x80000000 <= address and address + length <= 0x81800000, (hex(address), length)
         self.reads.append((address, length))
         return bytes(self.bytes.get(address + i, 0) for i in range(length))
+
+
+def signal_pipe() -> int:
+    """The read end of a pipe CPython's C signal handler writes to for each signal it takes
+    (signal.set_wakeup_fd), for a fake game's LinkLines to wait on. Call it on the main thread."""
+    woken, wake = os.pipe()
+    os.set_blocking(wake, False)
+    signal.set_wakeup_fd(wake)
+    return woken
+
+
+class LinkLines:
+    """The lines a fake game reads from the bot on CONN, as conn.makefile("rb") gives them, with
+    each wait a select on CONN and on WOKEN, a signal_pipe(). CPython runs a Python signal
+    handler only between bytecodes, so a SIGTERM taken just before a blocking recv would leave the
+    fake waiting on a link that bot_link holds open until the game exits. The pipe wakes the
+    select instead, and the handler runs as it returns."""
+
+    def __init__(self, conn: socket.socket, woken: int) -> None:
+        self.conn, self.woken = conn, woken
+        self.pending = b""  # what the bot sent after the last line read
+
+    def readline(self) -> bytes:
+        """The next line with its newline, or what's left once the bot hangs up, b"" at the end."""
+        while b"\n" not in self.pending:
+            ready, _, _ = select.select([self.conn, self.woken], [], [])
+            if self.woken in ready:
+                os.read(self.woken, 4096)  # the signals' handlers have run
+            if self.conn in ready:
+                data = self.conn.recv(4096)
+                if not data:
+                    left, self.pending = self.pending, b""
+                    return left
+                self.pending += data
+        line, self.pending = self.pending.split(b"\n", 1)
+        return line + b"\n"
 
 
 # The wall seconds a test that starts a probe.sh run may take. The slowest takes about 3.
