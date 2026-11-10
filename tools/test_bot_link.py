@@ -55,9 +55,14 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #   "moving"         makes RAM change from frame to frame
 #   "kind"           what a reset says it is: "restart" (the default), "hot reset" or "shutdown"
 #   "exit_late"      seconds the probe lingers after a plain exit, with the link closed
+#   "term_elsewhere" a SIGTERM is taken on a second thread, which leaves the wait on the link
+#                    uninterrupted, as one that CPython takes just before that wait does
 # A read outside 80000000 to 817FFFFF, or of fewer than 1 or more than 256 bytes, stops the game.
 FAKE_PROBE = r'''#!@PYTHON@
 import atexit, json, os, signal, socket, sys, time
+
+sys.path.insert(0, "@TOOLS@")
+from testutil import LinkLines, signal_pipe
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 name, seconds, script, every, *settings = sys.argv[1:]
@@ -142,6 +147,11 @@ def on_term(signum, frame):
 
 
 signal.signal(signal.SIGTERM, on_term)
+woken = signal_pipe()  # which wakes the wait on the link for a SIGTERM (testutil.LinkLines)
+if plan.get("term_elsewhere"):
+    import threading
+    threading.Thread(target=threading.Event().wait, daemon=True).start()
+    signal.pthread_sigmask(signal.SIG_BLOCK, [signal.SIGTERM])  # here only; the thread keeps it
 
 
 def stop(frame, why):
@@ -225,7 +235,7 @@ def play(frames, forever=False, connect_after=0, begun=False):
     conn = socket.socket(socket.AF_UNIX)
     conn.connect(path)
     rec["starts"] += 1
-    lines = conn.makefile("rb")
+    lines = LinkLines(conn, woken)
     for frame in numbers(frames, forever):
         last = frame
         step(frame)
@@ -260,7 +270,6 @@ elif after in ("reset", "reset_fails", "reset_dies"):
     early = after == "reset" and plan["then"].get("session_first")
     if early:  # the new process is quick, and says its [session] line as the old one lets go
         begin_log()
-    lines.close()
     conn.close()
     if after == "reset_dies":
         begin_log(open_log=False)
@@ -271,7 +280,6 @@ elif after in ("reset", "reset_fails", "reset_dies"):
 else:
     end_log()
 if plan.get("exit_late"):  # probe.sh sees its game gone only at its next one-second tick
-    lines.close()
     conn.close()
     time.sleep(plan["exit_late"])
 '''
@@ -331,7 +339,8 @@ class FakeProbeCase(unittest.TestCase):
 
     def tree(self, root: Path) -> Path:
         (root / "tools").mkdir(parents=True)
-        probe = write_file(root / "tools", "probe.sh", FAKE_PROBE.replace("@PYTHON@", sys.executable))
+        probe = write_file(root / "tools", "probe.sh", FAKE_PROBE.replace("@PYTHON@", sys.executable)
+                           .replace("@TOOLS@", str(REAL_PROBE.parent)))
         probe.chmod(0o755)
         return probe
 
@@ -693,6 +702,15 @@ class OutcomeTest(FakeProbeCase):
         outcome = self.go(neutral, seconds=1)
         self.assertEqual(outcome.reason, bot_link.TIME_LIMIT)
         self.assertGreater(outcome.frames, 1)
+        self.assertEqual(self.record()["link_at_term"], "open")
+
+    def test_the_time_limit_ends_a_game_whose_sigterm_does_not_interrupt_its_wait(self):
+        # CPython runs a Python handler only between bytecodes, so a SIGTERM taken just before the
+        # fake's recv would leave it waiting on a link run holds open until the game exits, as
+        # test_bot_soak's fake did on GitHub's runner. One taken on another thread does the same.
+        self.plan([0], forever=True, term_elsewhere=True)
+        outcome = self.go(neutral, seconds=1)
+        self.assertEqual(outcome.reason, bot_link.TIME_LIMIT)
         self.assertEqual(self.record()["link_at_term"], "open")
 
     def test_a_game_that_has_not_connected_when_the_time_is_up_never_linked_and_says_where_it_got_to(self):
