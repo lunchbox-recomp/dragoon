@@ -21,7 +21,7 @@ from unittest import mock
 import export_source
 import launcher_build
 import source_info
-from testutil import run_main, temp_dir, write_file
+from testutil import run_main, temp_dir, tree, write_file
 
 ROOT = Path(__file__).resolve().parents[1]
 MAKE = "/usr/bin/make"
@@ -100,20 +100,6 @@ with open(os.path.join(saves, ".shader-warmup"), "w") as f:
     f.write("new stamp\\n")
 print("warm: 2 passes")
 """
-
-
-def tree(root: Path) -> dict[str, object]:
-    """Every path under ROOT with its bytes, its link target or "dir"; links aren't followed."""
-    found = {}
-    for path in sorted(root.rglob("*")):
-        rel = path.relative_to(root).as_posix()
-        if path.is_symlink():
-            found[rel] = "-> " + os.readlink(path)
-        elif path.is_file():
-            found[rel] = path.read_bytes()
-        else:
-            found[rel] = "dir"
-    return found
 
 
 class FullLog:

@@ -15,6 +15,7 @@ import bundle_tree
 import export_source
 import launcher_build
 import source_info
+from testutil import tree
 
 ENGINE = "e" * 40
 OTHER_ENGINE = "f" * 40
@@ -64,25 +65,6 @@ FAKES: dict[str, str] = {}
 
 def setUpModule() -> None:
     FAKES.update(fake_tools.write({"codesign": FAKE_CODESIGN}))
-
-
-def tree(root: Path) -> dict[str, object]:
-    """Everything under ROOT by relative path: a file's bytes, a symlink's target and "dir"."""
-    found: dict[str, object] = {}
-    for parent, dirs, names in os.walk(root):
-        for name in dirs + names:
-            path = Path(parent, name)
-            rel = path.relative_to(root).as_posix()
-            if path.is_symlink():
-                found[rel] = ("link", os.readlink(path))
-            elif path.is_file():
-                try:
-                    found[rel] = path.read_bytes()
-                except PermissionError:
-                    found[rel] = "unreadable"
-            else:
-                found[rel] = "dir"
-    return found
 
 
 def children(files: dict[str, object], parent: str) -> list[str]:

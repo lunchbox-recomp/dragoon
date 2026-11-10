@@ -173,6 +173,25 @@ def write_file(directory: Path, name: str, data: bytes | str) -> Path:
     return path
 
 
+def tree(root: Path) -> dict[str, object]:
+    """Everything under ROOT by relative path: a file's bytes, a symlink's target and "dir"."""
+    found: dict[str, object] = {}
+    for parent, dirs, names in os.walk(root):
+        for name in dirs + names:
+            path = Path(parent, name)
+            rel = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                found[rel] = ("link", os.readlink(path))
+            elif path.is_file():
+                try:
+                    found[rel] = path.read_bytes()
+                except PermissionError:
+                    found[rel] = "unreadable"
+            else:
+                found[rel] = "dir"
+    return found
+
+
 def compile_c(source: str, out: Path, debug: bool = True, arch: str = "arm64") -> Path:
     """OUT, an object for ARCH the system's cc compiles from SOURCE, with debug info if DEBUG."""
     out.parent.mkdir(parents=True, exist_ok=True)
