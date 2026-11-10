@@ -46,11 +46,17 @@ The overlay path is relative to the folder holding `settings.txt`. When `apply` 
 disc_overlay mods/.out/disc-overlay.txt
 ```
 
-The pinned engine reads RAM patches only from `--ram-patches=mods/.out/ram-patches.txt` or `GCN_RAM_PATCHES`, which can hold the same path. A relative RAM patch path is relative to the game's working directory. The game starts in `DIR`, so the path printed by `apply` works there.
+Put the RAM patch path that `apply` prints in the `ram_patches` line of `settings.txt`. Like the overlay path, it's relative to the folder holding `settings.txt`.
 
-When `apply` prints null for `ram_patches`, drop the flag or variable. The game stops at start if it names a list that `apply` removed.
+```text
+ram_patches mods/.out/ram-patches.txt
+```
 
-`gcn-recomp/runtime/main.cpp:451-467` selects the paths. `gcn-recomp/runtime/ram_patches.cpp:66-86` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:68-74` stops when an overlay manifest can't open.
+When `apply` prints null for `ram_patches`, empty the line by writing `ram_patches` with no value. The game stops at start if that line still names a list that `apply` removed.
+
+For one run, `--ram-patches=PATH` beats `GCN_RAM_PATCHES`, which beats the key. An empty value at any of the three means no patches. A relative path in the flag or the variable is relative to the game's working directory.
+
+`gcn-recomp/runtime/main.cpp:451-470` selects the paths, and `gcn-recomp/runtime/settings.cpp:145-148` reads both keys. `gcn-recomp/runtime/ram_patches.cpp:66-86` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:68-74` stops when an overlay manifest can't open.
 
 The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 for:
 
