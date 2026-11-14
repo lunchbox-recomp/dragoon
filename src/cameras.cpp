@@ -94,9 +94,10 @@ extern "C" void hle_CObjRelease(CPU* c) {
 
 // CObjAmnesia(class info in r3) is the camera class's amnesia, which the game calls at a change
 // of scene as it forgets the memory its objects were in. The world cameras go this way, with
-// no release of their own. The census logs it.
+// no release of their own, and the HUD anchors forget their views. The census logs it.
 extern "C" void hle_CObjAmnesia(CPU* c) {
     g_set_once.forget_all();
+    dragoon::hud_forget_views();
     dragoon::census_amnesia();
     orig_CObjAmnesia(c);
 }

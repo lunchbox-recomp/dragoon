@@ -303,7 +303,8 @@ inline Mark camera_mark(const Lens& l, const std::vector<Rect>& world_views, flo
 
 // The world's views, the viewports of the world cameras the game set up in the latest frame
 // that set any. A frame's HUD reads those of its own frame, or of the one before when the game
-// hasn't set its cameras yet. Older ones are gone, so a menu after a race has none.
+// hasn't set its cameras yet. Older ones are gone, so a menu after a race has none. A change of
+// scene forgets them, so the first frame of a menu after play doesn't read the frame before's.
 class WorldViews {
 public:
     void add(uint32_t frame, const Rect& r) {
@@ -315,6 +316,7 @@ public:
             if (v == r) return;
         views_.push_back(r);
     }
+    void forget() { views_.clear(); }
     const std::vector<Rect>& at(uint32_t frame) const {
         static const std::vector<Rect> kNone;
         return frame == frame_ || frame == frame_ + 1 ? views_ : kNone;
@@ -380,5 +382,9 @@ private:
 // Notes a world camera the game has set the aspect of, whose viewport is one of the frame's
 // views (src/hud_anchors.cpp).
 void hud_world_view(uint32_t cam);
+
+// Forgets the world's views, as the game forgets its cameras at a change of scene
+// (src/cameras.cpp).
+void hud_forget_views();
 
 }  // namespace dragoon

@@ -511,6 +511,23 @@ TEST(WorldViews, ANewFrameStartsOver) {
     EXPECT_EQ(w.at(11)[0], dragoon::kScreen);
 }
 
+TEST(WorldViews, AChangeOfSceneForgetsThem) {
+    // The race's results take over at frame 13,062, as the game forgets its cameras. The menu's
+    // first frame there has no world, so it doesn't read frame 13,061's views.
+    dragoon::WorldViews w;
+    w.add(13061, dragoon::kScreen);
+    w.forget();
+    EXPECT_TRUE(w.at(13061).empty());
+    EXPECT_TRUE(w.at(13062).empty());
+    w.add(13062, dragoon::kScreen);
+    EXPECT_EQ(w.at(13062).size(), 1u);
+    w.add(13063, kFourViews[0]);
+    w.forget();
+    w.add(13063, kFourViews[1]);
+    ASSERT_EQ(w.at(13063).size(), 1u);
+    EXPECT_EQ(w.at(13063)[0], kFourViews[1]);
+}
+
 TEST(HudCallbacks, OutsideEveryCallbackNothingIsPlaced) {
     dragoon::HudCallbacks h;
     EXPECT_EQ(h.placement(), dragoon::Placement::Stretch);

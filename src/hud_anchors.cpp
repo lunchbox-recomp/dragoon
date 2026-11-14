@@ -205,3 +205,6 @@ extern "C" void hle_HSD_JObjDispAll(CPU* c) {
 void dragoon::hud_world_view(uint32_t cam) {
     if (in_ram(cam)) g_views.add(this_frame(), viewport_of(cam));
 }
+
+// CObjAmnesia, from src/cameras.cpp: the scene's cameras are gone, and their views with them.
+void dragoon::hud_forget_views() { g_views.forget(); }
