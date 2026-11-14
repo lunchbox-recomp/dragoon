@@ -4,28 +4,31 @@ import SwiftUI
 /// The Settings sheet's picture of what the game's aspect does, drawn in shapes: a horizon, the
 /// lines of a track running to it and the race HUD's boxes. A wider aspect shows more of the
 /// track to each side. Each HUD box keeps its 4:3 size and its 4:3 distance to the picture's
-/// left or right edge, as the game anchors its HUD, and a dashed 4:3 frame in the middle is
-/// where the menus stay. The frame has the shape of the window the game opens, or of the screen
-/// when it's fullscreen.
+/// left edge, middle or right edge, where `docs/dev/widescreen.md` has the race draw it at
+/// 16:9, and a dashed 4:3 frame in the middle is where the menus stay. The frame has the shape
+/// of the window the game opens, or of the screen when it's fullscreen.
 public struct PicturePreview: View {
     /// The frame's height in points. Its width follows the window's or the screen's shape.
     nonisolated public static let height: CGFloat = 120
 
-    /// One of the race HUD's boxes, by the edge of the picture it keeps.
+    /// One of the race HUD's boxes, by the place in the picture it keeps.
     public struct HUDBox: Equatable, Sendable {
-        public enum Edge: Equatable, Sendable { case left, right }
+        public enum Edge: Equatable, Sendable { case left, middle, right }
         public var edge: Edge
         public var rect: CGRect
         /// The speed dial, drawn round.
         public var dial: Bool
     }
 
-    /// The HUD's boxes in a 4:3 picture 12 units high and 16 across. `x` runs from the box's edge
-    /// to its left side.
+    /// The HUD's boxes in a 4:3 picture 12 units high and 16 across, as the race draws them: the
+    /// position at the left, the timer in the middle, and the lap count, the minimap and the
+    /// speedometer at the right. `x` runs from the box's edge, or the picture's middle, to its
+    /// left side.
     nonisolated static let hudUnits: [(edge: HUDBox.Edge, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, dial: Bool)] = [
         (.left, 0.6, 0.6, 3.4, 1.3, false),
+        (.middle, -1.7, 0.6, 3.4, 1.3, false),
         (.right, -4.0, 0.6, 3.4, 1.3, false),
-        (.left, 0.6, 10.1, 4.4, 1.3, false),
+        (.right, -3.7, 2.5, 3.1, 3.1, false),
         (.right, -3.4, 8.6, 2.8, 2.8, true),
     ]
 
@@ -76,7 +79,12 @@ public struct PicturePreview: View {
         let unit = picture.height / 12
         var hud: [HUDBox] = []
         for box in hudUnits {
-            let edge = box.edge == .left ? picture.minX : picture.maxX
+            let edge: CGFloat
+            switch box.edge {
+            case .left: edge = picture.minX
+            case .middle: edge = picture.midX
+            case .right: edge = picture.maxX
+            }
             let rect = CGRect(
                 x: edge + box.x * unit, y: picture.minY + box.y * unit, width: box.width * unit,
                 height: box.height * unit)
@@ -149,7 +157,7 @@ public struct PicturePreview: View {
         context.stroke(line, with: .color(colors.glow.opacity(0.8)), lineWidth: 1)
     }
 
-    /// The HUD's boxes at the picture's edges, and the menus' 4:3 frame, dashed.
+    /// The HUD's boxes at the picture's edges and middle, and the menus' 4:3 frame, dashed.
     private func drawHUD(in context: GraphicsContext, increased: Bool) {
         let unit = layout.picture.height / 12
         let ink = Color.white.opacity(increased ? 1 : 0.85)

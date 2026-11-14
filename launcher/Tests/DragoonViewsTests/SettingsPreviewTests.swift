@@ -100,8 +100,9 @@ struct SettingsPreviewTests {
         }
     }
 
-    /// Each HUD box is where it is in the 4:3 picture of the same height, moved with the edge it
-    /// keeps: the left ones stay with the left edge and the right ones with the right.
+    /// Each HUD box is where it is in the 4:3 picture of the same height, moved with the place it
+    /// keeps: the left one stays with the left edge, the middle one with the middle and the right
+    /// ones with the right.
     @Test(arguments: [testDisplay, laptop, nil])
     func eachHUDBoxKeepsItsFourByThreeSizeAndDistanceToItsEdge(_ display: PictureDisplay?) {
         for picture in Self.pictures {
@@ -111,7 +112,7 @@ struct SettingsPreviewTests {
             let fourByThree = CGRect(x: p.minX, y: p.minY, width: p.height * 4 / 3, height: p.height)
             let reference = PicturePreview.layout(PictureSettings(aspect: "4:3"), display: nil)
             let k = p.height / reference.picture.height
-            #expect(layout.hud.map(\.edge) == [.left, .right, .left, .right])
+            #expect(layout.hud.map(\.edge) == [.left, .middle, .right, .right, .right])
             for (box, at43) in zip(layout.hud, reference.hud) {
                 #expect(abs(box.rect.width - at43.rect.width * k) < 1e-9, "\(picture)")
                 #expect(abs(box.rect.height - at43.rect.height * k) < 1e-9, "\(picture)")
@@ -119,6 +120,9 @@ struct SettingsPreviewTests {
                 switch box.edge {
                 case .left:
                     #expect(abs(box.rect.minX - (fourByThree.minX + at43.rect.minX * k)) < 1e-9, "\(picture)")
+                case .middle:
+                    let fromMiddle = at43.rect.minX - reference.picture.midX
+                    #expect(abs((box.rect.minX - p.midX) - fromMiddle * k) < 1e-9, "\(picture)")
                 case .right:
                     let fromRight = reference.picture.maxX - at43.rect.maxX
                     #expect(abs((p.maxX - box.rect.maxX) - fromRight * k) < 1e-9, "\(picture)")
@@ -128,14 +132,16 @@ struct SettingsPreviewTests {
     }
 
     /// At 16:9 on the test display, the window is 213.375 points across in the preview against
-    /// 160 at 4:3, so a right box sits 53.375 further right and a left box doesn't move.
+    /// 160 at 4:3, so a right box sits 53.375 further right, the middle one half that and a left
+    /// box doesn't move.
     @Test func sixteenByNinesRightBoxesMoveWithTheRightEdge() {
         let wide = PicturePreview.layout(PictureSettings(aspect: "16:9"), display: testDisplay)
         let narrow = PicturePreview.layout(PictureSettings(aspect: "4:3"), display: testDisplay)
         #expect(narrow.frame.width == 160)
+        let movedBy: [PicturePreview.HUDBox.Edge: CGFloat] = [.left: 0, .middle: 26.6875, .right: 53.375]
         for (box, at43) in zip(wide.hud, narrow.hud) {
             let moved = box.rect.minX - at43.rect.minX
-            #expect(abs(moved - (box.edge == .left ? 0 : 53.375)) < 1e-9)
+            #expect(abs(moved - movedBy[box.edge]!) < 1e-9)
             #expect(box.rect.size == at43.rect.size)
         }
     }

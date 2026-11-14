@@ -271,8 +271,11 @@ public enum Strings {
         case "window": return "The picture takes the window's shape as it's resized. The window opens at 4:3."
         case _ where PictureSettings.aspects.contains(aspect):
             // The HUD at 16:9 is measured (docs/dev/status.md's HUD row), and 16:10 and 21:9 are
-            // checked by tests/src/test_hud_anchors.cpp's offered aspects.
-            return "The world widens to \(aspect). The race HUD keeps its 4:3 size at the picture's edges, the menus stay 4:3 in the middle, and Top Ride's HUD stretches."
+            // checked by tests/src/test_hud_anchors.cpp's offered aspects. Top Ride's 38 HUD
+            // draws measured stretched. A menu over a world view, such as the pause menu,
+            // stretches because the menu cameras are centered only in a frame with no world view,
+            // which test_hud_anchors.cpp checks, though no dump has shown one (widescreen.md).
+            return "The world widens to \(aspect). The race HUD keeps its 4:3 size at the picture's edges and middle, the menus stay 4:3 in the middle, and the pause menu and Top Ride's HUD stretch."
         default:
             // A hand-edited aspect the sheet has no button for, such as 5:4.
             return "settings.txt sets \(aspect), which isn't one of these."
