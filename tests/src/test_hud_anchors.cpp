@@ -750,4 +750,31 @@ TEST(HudCallbacks, TopRidesHudOutsideEveryCallbackStretches) {
     EXPECT_EQ(h.mark(), Mark{});
 }
 
+TEST(HudCallbacks, ACallerTakesTheCameraANestedCallbackMadeCurrent) {
+    dragoon::HudCallbacks h;
+    h.set_camera(dragoon::kMenuFrame);
+    h.enter(dragoon::Placement::Stretch);
+    h.enter(dragoon::Placement::Stretch);
+    h.set_camera({});
+    h.leave();
+    EXPECT_EQ(h.mark(), Mark{});
+    h.enter(dragoon::Placement::Stretch);
+    h.set_camera(dragoon::kMenuFrame);
+    h.leave();
+    EXPECT_EQ(h.mark(), dragoon::kMenuFrame);
+    h.leave();
+    EXPECT_EQ(h.mark(), Mark{});  // outside every callback
+}
+
+TEST(HudCallbacks, APlacedCallerKeepsItsMarkAfterANestedCameraChange) {
+    dragoon::HudCallbacks h;
+    const Mark right{Anchor::Right, 0, 640};
+    h.enter(dragoon::Placement::Edge);
+    h.set_mark(right);
+    h.enter(dragoon::Placement::Stretch);
+    h.set_camera(dragoon::kMenuFrame);
+    h.leave();
+    EXPECT_EQ(h.mark(), right);
+}
+
 }  // namespace

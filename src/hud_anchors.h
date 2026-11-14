@@ -342,12 +342,14 @@ public:
         camera_ = m;
         if (!outer_.empty() && top_.placement == Placement::Stretch) top_.mark = m;
     }
-    // It returns, and its caller's mark is back.
+    // It returns, and its caller's mark is back. A caller the table doesn't place takes the
+    // mark of the camera current now, which a callback nested in it may have changed.
     void leave() {
         top_ = {};
         if (!outer_.empty()) {
             top_ = outer_.back();
             outer_.pop_back();
+            if (!outer_.empty() && top_.placement == Placement::Stretch) top_.mark = camera_;
         }
     }
     Placement placement() const { return top_.placement; }
