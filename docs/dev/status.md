@@ -1014,3 +1014,38 @@ build as it ships. A window can't be made key from a script, so the moving strea
 measured on a copy built to keep them moving without it. Covering the window and turning on
 Reduce Motion both need the user's screen, so those two rows haven't been measured. The banner
 time is what `--dump-banner`, added in `29cc77b`, prints for the supported disc.
+
+### The hand-off to the game
+
+Measured on 2026-11-14 on macOS 26.6.2, on fake games only. No real engine ran, so the
+real game's own time to its window isn't here.
+
+| Check | Bar | Measured | Result |
+|---|---|---|---|
+| Play to the game's process starting, in `LaunchTimingTests` | 250 ms | 1.4 to 4.3 ms | Pass |
+| The `window` line going in to the flow hiding on it | 100 ms | 4 to 35 ms | Pass |
+| Play to the game's window, then to its first frame, by the file and the launcher's clock | at least the fake's 300 and 700 ms | 301 to 304 ms, then 701 to 704 ms | Pass |
+| The same in a release app, the fake saying 500 and 1,000 ms | none set | 557 to 577 ms, then 1,057 to 1,077 ms | Recorded |
+| An engine that writes no ready file, Play to the hide | 5 s and a log line | 5.0 s, and the line | Pass |
+| The game ending to the window back in, App Nap held off | 0.5 s | 265 and 380 ms | Pass |
+| The same before App Nap was held off | 0.5 s | 270 ms, or 26 s to over 2 minutes | Fail, fixed in `177a791` |
+| Launcher's share of a core while clear, the game running | 0.2% | 0.02% | Pass |
+| Hiding with neither a `window` line nor the 5 s timeout | never | never, in `FlowHandOffTests` | Pass |
+
+The fake game in `LaunchTimingTests` is a shell script that writes `window 300` and `frame 700`
+as the engine does. Its times count from the process start, as the engine's do, but its
+shell takes 300 to 930 ms more before it runs a line, so its `window` line really went in
+600 to 1,230 ms after the start.
+The release app was a scratch build answering the bookmark and the disc check at once, under
+a scratch HOME, with a fake `dragoon` that writes `window 500` and `frame 1000` and then idles.
+So Play to the game's start took 57 to 77 ms in that app. A launcher started from a shell
+isn't the active app, so `NSApplication.hide` did nothing. The window stayed clear and let
+clicks through, and did the same with `activate` called before Play.
+
+Once the launcher had called `activate`, its 80 s runs got the game's end late, by 57 s and
+26 s. In a third the game sat as a zombie and the termination handler hadn't run 2 minutes
+after it exited. Runs of 20 s and 80 s that never called `activate` were on time. App Nap fits
+what was seen, so since `177a791` the launcher holds a `ProcessInfo` activity until the game
+ends. With it, two 80 s runs after `activate` were on time, one of them with a fake that
+writes no ready file. The share is `launcher/tools/idle_cpu.py` over 60 s while the
+window was clear, 0.00% before the activity and 0.02% with it.
