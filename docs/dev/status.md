@@ -668,16 +668,16 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | Launcher's settings.txt writes | Byte for byte what the engine's `settings_save` writes, on shared fixtures | 20 of 20 fixtures the same on the real and the fake file system: BOM, CR LF, a first newline in CR LF and a last in LF, a last line with no newline, comments, unknown keys, bytes that aren't UTF-8, missing, duplicate and bad keys, and a `menu_sounds on` kept (`PictureSettingsTests`) | Pass |
 | Launcher's Settings preview | Every size it shows is the engine's | 50 window sizes for the five aspects in ten usable areas, 40 fullscreen pictures on eight displays and the internal picture at scales 1 to 10 match the engine's `aspect.h` and `kMaxInternalScale` (`PictureGeometryTests`), and the preview draws each of those windows and fullscreen pictures, checked row by row against the same tables (`SettingsPreviewTests`) | Pass |
 | Launcher's Settings sheet opening | 100 ms from Settings to the sheet drawn | 55 to 71 ms in a test process of its own and 17 to 19 ms in the full suite (`SettingsSheetTests`) | Pass |
-| Launcher writing settings.txt while the game runs | Never | Never, in `FlowSettingsTests`: Settings does nothing and a pick saves nothing while the launcher's or an earlier launcher's game runs, and Play waits while the sheet is open | Pass |
+| Launcher writing settings.txt while the game runs | Never | Never, in `FlowSettingsTests`: Settings does nothing and a pick saves nothing while the launcher's or an earlier launcher's game runs, and Play waits while the sheet is open. Never in `FlowPictureCardTests` either: the Picture card doesn't show while a game runs, a pick saves nothing once one does, and Play waits while the card's read or save is on its way | Pass |
+| Launcher's Picture card | Shown once, after the first build, only when settings.txt has no `aspect` line; a pick writes what the Settings sheet's does; Keep 4:3 writes nothing | Shown after the build that made the first game and remembered in `launcher.json`, not after a rebuild, not by a launcher that showed it, not over any `aspect` line or a file that can't be read (`FlowPictureCardTests`). Each pick, 4:3 and 16:9, over four files without an aspect line writes the sheet's bytes, and over `bom-only` and `empty` the engine's own `settings_save` bytes (`PictureCardWriteTests`) | Pass |
 
-The four launcher rows were measured on 2026-11-14 on macOS 26.6.2 with Swift 6.3.3. The
+The five launcher rows were measured on 2026-11-14 on macOS 26.6.2 with Swift 6.3.3. The
 fixtures and the geometry tables come from `tools/settings_fixtures.py`, which builds a harness
 against the pinned gcn-recomp's `runtime/settings.cpp`, `runtime/platform.cpp` and
 `runtime/gx/aspect.h`, and its test checks it writes every committed file. They were last
 written at gcn-recomp `864d9d4`, whose `settings_save` also writes `menu_sounds`. The sheet's time runs from the press through
 reading a real `settings.txt` to an `NSHostingView` laid out and drawn, and leaves out AppKit's
-slide in. Alone it's the first SwiftUI view the process draws. The one-time card after the
-first build that offers 4:3 or 16:9 isn't built yet.
+slide in. Alone it's the first SwiftUI view the process draws.
 
 These runs set `DUMP_EVERY` to 100,000, since a dumped frame goes over 33 ms by itself. The
 stall, compile and boot rows ran at Dragoon `2fc9285` and gcn-recomp `dac449e` on an M4 Max,
