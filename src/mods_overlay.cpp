@@ -14,6 +14,7 @@
 #include "hw/disc_overlay.h"
 #include "input_log.h"
 #include "overlay/overlay.h"
+#include "platform.h"
 #include "ram_patches.h"
 #include <chrono>
 #include <cstdio>
@@ -77,6 +78,9 @@ struct Page {
 };
 
 ChildResult run(const std::vector<std::string>& argv, const std::vector<std::string>& env) {
+    // Quit, Restart game, the game's reset and Ctrl-C end a script still running.
+    static const bool hooked = (plat_at_exit([] { child_run_kill_running(); }), true);
+    (void)hooked;
     return child_run(argv, env, kModsTimeoutMs);
 }
 

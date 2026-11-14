@@ -74,7 +74,7 @@ Apply and restart becomes active once a choice differs from what `list` said. No
 
 Apply and restart first empties the `disc_overlay` and `ram_patches` lines of `settings.txt`, since an `apply` cut short can remove a file they name, and a start would then stop on it.
 
-Then it runs `set` for each changed option and then `apply`, on a thread of its own, so the menu keeps drawing. Each run is `/usr/bin/python3 -B tools/mod_choices.py` with `--data .` in the folder the game started in. It gets only the environment that `tools/tool_env.py` describes, and 30 s. The script gives each Riivolution run 10 s, and `apply` makes one `list` run, then an `apply` run for each try, so an `apply` that retries can run past 30 s and be stopped.
+Then it runs `set` for each changed option and then `apply`, on a thread of its own, so the menu keeps drawing. Each run is `/usr/bin/python3 -B tools/mod_choices.py` with `--data .` in the folder the game started in. It gets only the environment that `tools/tool_env.py` describes, and 30 s. The script gives each Riivolution run 10 s, and `apply` makes one `list` run, then an `apply` run for each try, so an `apply` that retries can run past 30 s and be stopped. A quit, Restart game, the game's reset or Ctrl-C during a run kills its process group too, so no script writes `mods.txt` or `mods/.out` under the next start.
 
 The page passes no `--disc`, so `apply` reads `GAME_ISO` from `build/CMakeCache.txt`. A game started outside the repository root finds no `tools/mod_choices.py`, and the page says so.
 

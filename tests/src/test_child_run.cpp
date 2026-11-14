@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <chrono>
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <libproc.h>
@@ -17,6 +18,7 @@ namespace {
 
 using dragoon::ChildResult;
 using dragoon::child_run;
+using dragoon::child_run_kill_running;
 using End = ChildResult::End;
 
 timeval now() {
@@ -141,6 +143,50 @@ TEST(ChildRun, ATimeoutEndsWhatTheRunLeftHoldingStdout) {
     ASSERT_GT(sleeper, 0);
     EXPECT_TRUE(gone_by(sleeper, returned));
     EXPECT_EQ(r.end, End::timed_out);
+}
+
+TEST(ChildRun, TheKillOnTheWayOutEndsARunAndWhatItStarted) {
+    // The shell starts a sleep, names its pid in a file once it's up and waits for it.
+    std::string dir = std::string(getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp") + "/child_run.XXXXXX";
+    ASSERT_NE(mkdtemp(dir.data()), nullptr);
+    const std::string named = dir + "/pid";
+    const auto start = std::chrono::steady_clock::now();
+    ChildResult r;
+    std::thread running([&r, &named] {
+        r = child_run({"/bin/sh", "-c", "/bin/sleep 30 & echo $! > \"$0.new\" && /bin/mv \"$0.new\" \"$0\"; wait",
+                       named},
+                      {}, 30000);
+    });
+    pid_t sleeper = 0;
+    for (int i = 0; i < 500 && sleeper == 0; i++) {
+        if (FILE* f = fopen(named.c_str(), "r")) {
+            if (fscanf(f, "%d", &sleeper) != 1) sleeper = 0;
+            fclose(f);
+        }
+        if (sleeper == 0) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    const bool killed = child_run_kill_running();
+    running.join();
+    const timeval returned = now();
+    unlink(named.c_str());
+    rmdir(dir.c_str());
+    ASSERT_GT(sleeper, 0);
+    EXPECT_TRUE(gone_by(sleeper, returned));
+    EXPECT_TRUE(killed);
+    EXPECT_EQ(r.end, End::signaled);
+    EXPECT_EQ(r.code, SIGKILL);
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(10));
+}
+
+TEST(ChildRun, ARunThatEndedIsntKilledOnTheWayOut) {
+    child_run({"/bin/echo"}, {}, 5000);
+    EXPECT_FALSE(child_run_kill_running());
+    child_run({"/bin/sh", "-c", "exec /bin/sleep 30"}, {}, 100);
+    EXPECT_FALSE(child_run_kill_running());
+    child_run({"/bin/sh", "-c", "exec >&-; exec /bin/sleep 30"}, {}, 100);
+    EXPECT_FALSE(child_run_kill_running());
+    child_run({"/nonexistent/python3"}, {}, 5000);
+    EXPECT_FALSE(child_run_kill_running());
 }
 
 TEST(ChildRun, StopsARunThatClosedStdoutButGoesOn) {

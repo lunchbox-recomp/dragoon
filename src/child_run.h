@@ -18,4 +18,9 @@ struct ChildResult {
 // killed once `timeout_ms` has passed. That ends anything it started too.
 ChildResult child_run(const std::vector<std::string>& argv, const std::vector<std::string>& env, int timeout_ms);
 
+// Kills the group of every run still going. The game's quit and restart call it (plat_at_exit),
+// since a group of its own goes on past both. Each run then returns signaled with SIGKILL. True
+// if there was one.
+bool child_run_kill_running();
+
 }  // namespace dragoon
