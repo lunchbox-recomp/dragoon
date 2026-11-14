@@ -1025,11 +1025,11 @@ real game's own time to its window isn't here.
 | Play to the game's process starting, by the launcher's clock and the kernel's start time, as `LaunchTimingTests` prints it | 250 ms | 0.7 to 2.1 ms | Pass |
 | The `window` line going in, by the file's time, to the flow hiding on it, as `LaunchTimingTests` prints it | 100 ms | 1.9 to 3.9 ms | Pass |
 | Play to the game's process starting in a release app, by its logged times less the fake's 500 ms | none set | 57 to 77 ms | Recorded |
-| An engine that writes no ready file, Play to the hide | 5 s and a log line | 5.0 s, and the line | Pass |
+| An engine that writes no ready file, Play to the hide | the timeout and a log line | 5.0 s and the line, when the timeout was 5 s; not measured at 20 s | Pass at 5 s |
 | The game ending to the window back in, App Nap held off | 0.5 s | 265 and 380 ms | Pass |
 | The same before App Nap was held off | 0.5 s | 270 ms, or 26 s to over 2 minutes | Fail, fixed in `d34b76d` |
 | Launcher's share of a core while clear, the game running | 0.2% | 0.02% | Pass |
-| Hiding with neither a `window` line nor the 5 s timeout | never | never, in `FlowHandOffTests` | Pass |
+| Hiding with neither a `window` line nor the timeout | never | never, in `FlowHandOffTests` | Pass |
 | The bars above on the real game | an engine that writes `GCN_READY_FILE`, which the gcn-recomp pin bump brings | Not measured | Not measured |
 
 The first two rows are from 2026-11-14, ten runs of `LaunchTimingTests`, five alone and five in

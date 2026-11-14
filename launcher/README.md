@@ -191,7 +191,7 @@ The engine replaces the file through its `.tmp` at each line, so `ReadyWatcher` 
 | Event | The launcher |
 |---|---|
 | The `window` line | Fades its window out over 0.25 s, then hides the app |
-| 5 s after the game started with no `window` line | The same, and logs that it timed out. An engine from before the ready file writes nothing |
+| 20 s after the game started with no `window` line | The same, and logs that it timed out. An engine from before the ready file writes nothing, and a slow disc or a first run's shader compiles can hold the line back, so the wait is long |
 | The game ends or can't start | Fades its window back in with the card up, then the card shrinks back into Play |
 
 The launcher hides on nothing else. With an engine that writes the file, its window goes only once the game's window has shown a frame.
