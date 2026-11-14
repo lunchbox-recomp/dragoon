@@ -146,7 +146,7 @@ A build shows one bar in segments, each as wide as its step took on the Mac it w
 | Recompile | Its start | A shimmer in its segment, since it prints no progress |
 | Compile | A progress event as make starts each file | "41 of 135 files" |
 | Warm-up | A progress event as each run ends | "3 of 8 runs done" |
-| Package, swap | Their start | Nothing more |
+| Package, swap | Their start | A shimmer across the sliver they share, since they print no progress |
 
 The time left comes once a step has 3 counts. It's the step's rate across its newest 30 counts, as DuckStation's loading screen takes it (`fullscreenui_widgets.cpp:7144-7181`), plus each later step's measured time scaled by this Mac's ratio on the steps it has finished. A step that didn't count all its work, as a warm-up whose cache was current, stays out of the ratio. The estimate changes only on an event.
 
