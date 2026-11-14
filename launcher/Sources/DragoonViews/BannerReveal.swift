@@ -12,24 +12,48 @@ struct BannerReveal<Placeholder: View>: View {
     @ViewBuilder let placeholder: () -> Placeholder
 
     var body: some View {
+        KeyframeAnimator(initialValue: 1.0, trigger: banner != nil) { progress in
+            if let banner {
+                BannerRevealFrame(banner: banner, scale: scale, progress: progress)
+            } else {
+                placeholder()
+            }
+        } keyframes: { _ in
+            KeyframeTrack {
+                MoveKeyframe(0.0)
+                LinearKeyframe(1.0, duration: Self.duration)
+            }
+        }
+    }
+}
+
+/// The banner `progress` of the way through its reveal, as `Look.at` picks it.
+struct BannerRevealFrame: View {
+    /// The banner in place, fading in as Reduce Motion wants, or flying in.
+    enum Look: Equatable {
+        case logo
+        case fade(opacity: Double)
+        case flight(progress: Double)
+
+        static func at(_ progress: Double, reduceMotion: Bool) -> Look {
+            if progress >= 1 { return .logo }
+            return reduceMotion ? .fade(opacity: progress) : .flight(progress: progress)
+        }
+    }
+
+    let banner: DiscBanner
+    let scale: CGFloat
+    let progress: Double
+
+    var body: some View {
         ReduceMotionReader { reduceMotion in
-            KeyframeAnimator(initialValue: 1.0, trigger: banner != nil) { progress in
-                if let banner {
-                    if progress >= 1 {
-                        BannerLogo(banner: banner, scale: scale)
-                    } else if reduceMotion {
-                        BannerLogo(banner: banner, scale: scale).opacity(progress)
-                    } else {
-                        BannerFlight(banner: banner, scale: scale, progress: progress)
-                    }
-                } else {
-                    placeholder()
-                }
-            } keyframes: { _ in
-                KeyframeTrack {
-                    MoveKeyframe(0.0)
-                    LinearKeyframe(1.0, duration: Self.duration)
-                }
+            switch Look.at(progress, reduceMotion: reduceMotion) {
+            case .logo:
+                BannerLogo(banner: banner, scale: scale)
+            case .fade(let opacity):
+                BannerLogo(banner: banner, scale: scale).opacity(opacity)
+            case .flight(let progress):
+                BannerFlight(banner: banner, scale: scale, progress: progress)
             }
         }
     }
