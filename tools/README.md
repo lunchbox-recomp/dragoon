@@ -874,6 +874,30 @@ launcher/tools/swift_test.py --filter FileSystemTests
 
 [Why a wrapper runs the tests](../launcher/README.md#why-a-wrapper-runs-the-tests) in the launcher's README gives the flags it adds and when. It adds none when `xcode-select` fails, and it prints the swift command on stderr as a `+` line before it runs. A signal that ends swift exits 128 plus its number, and exit 2 means swift couldn't be started.
 
+## fork_cites.py
+
+Which gcn-recomp cites did an engine bump leave pointing at the wrong lines? fork_cites.py finds the cites of fork files by line in every tracked text file. It reads each one's lines at OLD with `git -C gcn-recomp show` and looks for the same text at NEW. Run it after moving the pin and before touching a cite.
+
+```
+tools/fork_cites.py 95e1c6b 5e54665
+tools/fork_cites.py 95e1c6b 5e54665 --at 92405f1
+```
+
+These count as cites:
+
+| Form | Example |
+|---|---|
+| A path under `gcn-recomp/` | `gcn-recomp/runtime/main.cpp:419-422` |
+| A fork-relative path or a bare name that exactly one fork file has and no Dragoon file does | `runtime/hw/drive.h:64`, `ax.cpp:42` |
+| A `:N` continuation, which takes the file of the cite before it on the line | `ax.cpp:42`, `:53-60` |
+| A list straight after a cite | `render_gl_batch.cpp:180, 522-523` |
+
+A name Dragoon also has, such as `CMakeLists.txt`, needs the `gcn-recomp/` prefix. A name two fork files share is skipped with a warning on stderr. A `file:N:M` compiler diagnostic isn't a cite, and nor is anything in a Markdown fenced block, which holds quoted output.
+
+It prints `ok`, `moved ... now A-B` or `gone` for each cite whose file changed, comparing lines with their surrounding whitespace stripped. `outside` marks a cite whose lines aren't in the file at OLD, changed or not, since it was stale before the bump. Then it prints `total T, ok O, moved M, gone G, outside X, unchanged U`. It exits 1 when any cite moved, is gone or is outside.
+
+A cite that already holds NEW's lines reads as moved. So when a bump's cites were edited by hand first, `--at REV` reads Dragoon's files at the commit that moved the pin instead of the working tree. A cite that was already wrong at OLD but still sits inside its file can't be caught this way, so read the cited lines at NEW against the prose too.
+
 ## The engine's own tools
 
 Two tools in `gcn-recomp/tools/` matter when debugging here.
