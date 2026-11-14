@@ -143,10 +143,13 @@ extension Flow {
             return libraryIsIdle && picture == nil
         }
 
-        /// Whether a step can go back to Library, which needs a game, no build running and no
-        /// disc panel open.
+        /// Whether a step can go back to Library, which needs a game, no build running, no disc
+        /// panel open and no Picture card read or save on its way. Library's Play and Settings
+        /// would otherwise come before the card's save is done, and the sheet would take its
+        /// result.
         public var canGoBackToLibrary: Bool {
             installed != nil && screen != .library && waiting != .build && waiting != .panel
+                && waiting != .pictureCard
         }
 
         /// Why Library offers a rebuild, or nil when it doesn't. The old game plays until a

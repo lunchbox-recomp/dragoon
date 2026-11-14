@@ -183,13 +183,59 @@ private let firstBuildToDone: [Flow.Event] = [
         #expect(run.send(.pictureCardPicked("16:9")) == [])
     }
 
-    @Test func backToLibraryBeforeTheReadShowsNoCard() {
+    @Test func backToLibraryWaitsForTheRead() {
         var run = firstBuildDone()
         run.send(.buildEnded(nil))
+        #expect(!run.state.canGoBackToLibrary)
+        #expect(run.send(.backToLibraryPressed) == [])
+        guard case .build(.finished) = run.screen else {
+            Issue.record("Back left the page during the read: \(run.screen)")
+            return
+        }
+        run.send(.pictureCardRead(PictureSettings(), aspectLine: false))
+        #expect(run.state.pictureCard == Flow.PictureCard(picture: PictureSettings()))
         #expect(run.state.canGoBackToLibrary)
+    }
+
+    /// Back during the card's save would let Library's Play start the game before the save is
+    /// done, and drop a failed save unsaid, so Back waits for its result.
+    @Test(arguments: [nil, PictureSettings.SaveFailure.notWritten("No space left on device")])
+    func backToLibraryWaitsForTheSave(_ failure: PictureSettings.SaveFailure?) {
+        var run = cardUp()
+        let wide = PictureSettings(aspect: "16:9")
+        run.send(.pictureCardPicked("16:9"))
+        #expect(!run.state.canGoBackToLibrary)
+        #expect(run.send(.backToLibraryPressed) == [])
+        guard case .build(.finished) = run.screen else {
+            Issue.record("Back left the page during the save: \(run.screen)")
+            return
+        }
+        #expect(run.send(.playPressed) == [])
+        #expect(run.state.handOff == nil)
+        run.send(.pictureSaved(wide, failure))
+        #expect(run.state.pictureCard == (failure == nil ? nil : Flow.PictureCard(picture: wide, failure: failure)))
+        #expect(run.state.canGoBackToLibrary)
+        #expect(run.send(.backToLibraryPressed) == [.deleteOldBuilds])
+        #expect(run.screen == .library)
+    }
+
+    /// Settings, pressed after Back during the card's save, waits too, so the card's result
+    /// can't be taken as the sheet's, and the sheet opens on what the card saved.
+    @Test func settingsAfterBackDuringTheSaveLeavesTheSheetToItsOwnRead() {
+        var run = cardUp()
+        let wide = PictureSettings(aspect: "16:9")
+        run.send(.pictureCardPicked("16:9"))
         run.send(.backToLibraryPressed)
-        #expect(run.send(.pictureCardRead(PictureSettings(), aspectLine: false)) == [])
-        #expect(run.state.pictureCard == nil)
+        #expect(run.send(.settingsPressed) == [])
+        #expect(run.state.picture == nil)
+        #expect(run.send(.pictureSaved(wide, nil)) == [])
+        #expect(run.state.picture == nil)
+        #expect(run.state.savedPicture == nil)
+        run.send(.backToLibraryPressed)
+        #expect(run.send(.settingsPressed) == [.readPicture])
+        run.send(.pictureRead(wide))
+        #expect(run.state.picture == wide)
+        #expect(run.state.savedPicture == wide)
     }
 
     /// A save the Settings sheet started isn't the card's, and the card's isn't the sheet's.
