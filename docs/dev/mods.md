@@ -30,6 +30,8 @@ python3 tools/mod_choices.py apply --data DIR --disc IMAGE
 
 Names that have disappeared are dropped when `set` writes the file.
 
+Each write of `mods.txt` goes through a `DIR/.mods-*` temp file. A kill can leave one, so `apply` first removes those over a minute old.
+
 `apply` reads those choices and writes output under `DIR/mods/.out/`. Its JSON has `overlay`, `ram_patches`, `failed` and `ms`. Each path is relative to `DIR`, or null when there's no output.
 
 `ms` is the tool's elapsed time in milliseconds.

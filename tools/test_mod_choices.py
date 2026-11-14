@@ -549,6 +549,30 @@ class FakeEngineTest(unittest.TestCase):
         self.assertEqual(result['failed'], [])
         self.assertFalse((self.data / 'mods.txt').exists())
 
+    def test_apply_removes_temp_files_a_killed_write_left(self):
+        # A kill at the time limit or the game's quit skips write_choices' own cleanup.
+        old = time.time() - 120
+        stale = self.data / '.mods-stale'
+        stale.write_text('a.xml:opt=0\n')
+        os.utime(stale, (old, old))
+        young = self.data / '.mods-young'
+        young.write_text('a.xml:opt=0\n')
+        folder = self.data / '.mods-folder'
+        folder.mkdir()
+        os.utime(folder, (old, old))
+        other = self.data / 'other'
+        other.write_text('kept\n')
+        os.utime(other, (old, old))
+        listing = {'packages': [{'xml': 'a.xml', 'options': [
+            {'id': 'opt', 'default': 1, 'choices': ['one']}]}]}
+        self.engine_wrote('disc-overlay.txt')
+        self.apply_fake(listing, (0, {'packages': ['a.xml']}))
+        self.assertFalse(stale.exists())
+        # One under a minute old can be another run's write still going.
+        self.assertTrue(young.exists())
+        self.assertTrue(folder.is_dir())
+        self.assertTrue(other.exists())
+
     def test_apply_time_includes_list(self):
         script = ('import time\n'
                   'if sys.argv[1] == "list":\n'

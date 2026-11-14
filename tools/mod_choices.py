@@ -135,6 +135,19 @@ def write_choices(data, choices):
             os.unlink(temp)
 
 
+def sweep_temps(data):
+    """Remove the temp files of write_choices that a kill left, once they're a minute old.
+
+    A kill at the game's time limit or quit skips write_choices' own cleanup. A younger one can be
+    another run's write still going.
+    """
+    stale = time.time() - 60
+    for path in data.glob('.mods-*'):
+        info = path.lstat()
+        if stat.S_ISREG(info.st_mode) and info.st_mtime < stale:
+            path.unlink()
+
+
 def disc_from_cache():
     cache = REPO / 'build' / 'CMakeCache.txt'
     try:
@@ -160,6 +173,7 @@ def save_off(data, found, chosen, failed):
 
 
 def apply(data, found, disc, started):
+    sweep_temps(data)
     root = data / 'mods'
     output = root / '.out'
     failed = {p['xml']: p['error'] for p in found if 'error' in p}
