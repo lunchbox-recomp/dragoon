@@ -98,9 +98,14 @@ final class EffectRunner {
         case .showWindow:
             showWindow()
         case .watchEarlierGame(let pid):
-            background {
-                await LiveProcess.waitForEnd(of: pid)
-                return .earlierGameEnded
+            // App Nap can hold this game's end as it held the end of one the launcher started.
+            let awake = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep,
+                reason: "Waiting for an earlier game to end")
+            Task {
+                await Task.detached { await LiveProcess.waitForEnd(of: pid) }.value
+                ProcessInfo.processInfo.endActivity(awake)
+                send(.earlierGameEnded)
             }
         case .showSaves:
             let folder = fs.isDirectory(at: places.saves) ? places.saves : places.data

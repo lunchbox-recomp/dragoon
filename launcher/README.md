@@ -200,7 +200,7 @@ Once the game's window is up the launcher may not be the active app. On macOS 26
 
 The times from Play to the game's window and to its first frame go in the system log, under the subsystem `io.github.lunchbox-recomp.dragoon` and the category `launch`, as `Play to the game's window 572 ms, to its first frame 1072 ms`. Play's time comes from the launcher's clock and the game's start from the kernel. The lines count from that start. `LaunchTimingTests` measures the same on a fake game.
 
-While the game runs, `<data>/game.pid` holds its pid and the time its process started, and the file goes as the result is sent. A launcher that opens in the meantime takes the game as running when that pid's process started at that time and runs the installed game. Library counts it as running until a kqueue process source sees it exit, and then shows nothing, since how it ended can't be known.
+While the game runs, `<data>/game.pid` holds its pid and the time its process started, and the file goes as the result is sent. A launcher that opens in the meantime takes the game as running when that pid's process started at that time and runs the installed game. Library counts it as running until a kqueue process source sees it exit, and then shows nothing, since how it ended can't be known. The launcher holds the same activity against App Nap while it waits.
 
 A `game.pid` that's garbled is removed and ignored, and so is one whose process has gone or isn't the game.
 
