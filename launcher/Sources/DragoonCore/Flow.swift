@@ -172,12 +172,17 @@ extension Flow.State {
         case .playPressed:
             guard libraryIsIdle else { return [] }
             gameProblem = nil
+            panicShown = false
             return begin(.play)
         case .rebuildLaterPressed:
             if screen == .library { rebuildDeclined = true }
             return []
         case .showSavesPressed:
             return screen == .library ? [.showSaves] : []
+        case .showPanicPressed:
+            guard screen == .library, case .exited(_, panic: _?)? = gameProblem else { return [] }
+            panicShown.toggle()
+            return []
         case .backToLibraryPressed:
             return canGoBackToLibrary ? showLibrary() : []
         case .gameExited(let launch, let ending, let panic):
@@ -240,6 +245,7 @@ extension Flow.State {
     private mutating func gameStopped(_ problem: GameProblem?) -> [Effect] {
         gameRunning = false
         gameProblem = problem
+        panicShown = false
         return deleteOldBuildsIfIdle()
     }
 

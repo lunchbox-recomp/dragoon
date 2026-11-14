@@ -35,7 +35,7 @@ import Testing
     func everyLaterLaunchWithAGameOpensOnLibrary(welcomeSeen: Bool, installed: InstalledGame) {
         let run = launched(settings: LauncherSettings(welcomeSeen: welcomeSeen), installed: installed)
         #expect(run.screen == .library)
-        #expect(run.state.step == .library)
+        #expect(run.state.step == nil)
         #expect(run.effects == [.deleteOldBuilds])
         #expect(run.state.installed == installed)
     }
@@ -85,13 +85,13 @@ import Testing
 
         #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
         #expect(run.screen == .library)
-        #expect(run.state.step == .library)
+        #expect(run.state.step == nil)
         #expect(run.state.installed == InstalledGame(stamp: sourceCommits))
         #expect(run.state.rebuildOffer == nil)
     }
 
     /// The list's current step only moves down, so the package and swap steps after the warm-up
-    /// stay on Warm-up.
+    /// stay on Warm-up. Library ends setup and shows no list.
     @Test func theStepListNeverGoesBackOnTheFirstRun() {
         var run = launched(settings: LauncherSettings(), installed: nil)
         var steps = [run.state.step]
@@ -108,10 +108,12 @@ import Testing
             run.send(event)
             steps.append(run.state.step)
         }
-        let listed = steps.compactMap { $0 }
-        #expect(listed.count == steps.count)
+        #expect(run.screen == .library)
+        #expect(steps.last == .some(nil))
+        let listed = steps.dropLast().compactMap { $0 }
+        #expect(listed.count == steps.count - 1)
         #expect(listed == listed.sorted())
-        #expect(Set(listed) == Set(Flow.Step.allCases))
+        #expect(Set(listed) == Set(Flow.Step.allCases).subtracting([.library]))
     }
 
     @Test(arguments: ["package", "swap"])

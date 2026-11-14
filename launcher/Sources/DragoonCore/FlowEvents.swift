@@ -51,6 +51,8 @@ extension Flow {
         case showSavesPressed
         case changeDiscPressed
         case backToLibraryPressed
+        /// Opens or closes the game problem's `panic.txt`.
+        case showPanicPressed
         case quitPressed
 
         // Results

@@ -95,7 +95,7 @@ The recipe's exit code decides how the stream ends.
 
 ## The window
 
-The window has the steps on the left and the current step on the right. What it does is `Flow`, a pure state machine in `DragoonCore` whose `reduce` takes a state and an event and gives the next state and a list of effects. The app carries out each effect and sends its result back as an event, so the tests drive every path with no window, the tools check's 5 second timer included.
+During setup the window has the steps on the left and the current step on the right. Library has a layout of its own with no list. What it does is `Flow`, a pure state machine in `DragoonCore` whose `reduce` takes a state and an event and gives the next state and a list of effects. The app carries out each effect and sends its result back as an event, so the tests drive every path with no window, the tools check's 5 second timer included.
 
 The first run walks the steps in order from Welcome down to Library, and every later launch with a built game opens on Library. While the tools are missing, the Tools step offers Apple's installer and looks for them again every 5 seconds. Before each build the launcher wants 2 GB free by `volumeAvailableCapacityForImportantUsage`, then resolves the disc's bookmark and checks the disc, then checks the tools.
 

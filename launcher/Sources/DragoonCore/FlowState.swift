@@ -67,8 +67,16 @@ extension Flow {
         public var gameProblem: GameProblem?
         /// The player chose Later on the rebuild offer.
         public var rebuildDeclined = false
+        /// The player opened the game problem's `panic.txt`. Each new problem starts closed.
+        public var panicShown = false
 
         public init() {}
+
+        /// What Play is doing, for the label beside it.
+        public var playStatus: PlayStatus {
+            if gameRunning { return .playing }
+            return intent == .play ? .checkingDisc : .ready
+        }
 
         /// Whether a result is on its way, so the window's buttons wait for it.
         public var isBusy: Bool { waiting != nil }
@@ -101,7 +109,8 @@ extension Flow {
             case .build(.running(let progress)): return Self.listStep(forBuildStep: progress.step)
             case .build(.failed(let failure, _)): return Self.listStep(forBuildStep: failure.step)
             case .build: return .build
-            case .library: return .library
+            // Library has its own layout, and the list is for setup.
+            case .library: return nil
             }
         }
 
@@ -112,6 +121,16 @@ extension Flow {
             return .warmup
         }
     }
+}
+
+/// What Library's Play is doing.
+public enum PlayStatus: Equatable, Sendable {
+    /// Waiting for the player. Play is on when `libraryIsIdle`.
+    case ready
+    /// Play was pressed, and the bookmark is being resolved or the disc checked.
+    case checkingDisc
+    /// The game is starting or running.
+    case playing
 }
 
 /// Why Library offers a rebuild.
