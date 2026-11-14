@@ -76,7 +76,7 @@ private let discPath = "/Users/Test Player/Games/Kirby Air Ride (USA).gcm"
         #expect(fromFolder.stderr == "\(folder): is a folder, not a disc image\n")
         let fromFIFO = runDumpBanner(["--dump-banner", fifo, png])
         #expect(fromFIFO.status == 1)
-        #expect(fromFIFO.stderr.hasPrefix("\(fifo): can't be opened ("))
+        #expect(fromFIFO.stderr == "\(fifo): isn't a regular file, so it isn't a disc image\n")
         #expect(!FileManager.default.fileExists(atPath: png))
     }
 

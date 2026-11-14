@@ -70,7 +70,7 @@ The first time a disc passes its check with no banner cached, the launcher reads
 
 When that first read brings a banner, its pixels fly in over 900 ms on the Build step, or on Library after Change Disc. After Play checks a disc with no banner cached, the banner arrives once the window has hidden for the game, so its flight isn't seen. Each pixel sets off from up to 520 points down and to the left after a wait of up to 45% of the time and slows into place, trailing a streak of its own color. Under Reduce Motion the banner fades in instead. A banner loaded from the cache at start just shows.
 
-`Dragoon --dump-banner DISC OUT.png` writes the banner as a PNG and prints its format and names as JSON, with the time the read and decode took on stderr. It exits 0 when the PNG is written and 2 for a bad argument. It exits 1 when DISC is a folder, when the disc can't be opened, when it has no banner and when the PNG can't be written, and says which on stderr. Only a regular file opens, and a FIFO is refused without waiting for a writer. On the supported disc on 2026-11-13 the read and decode took 0.21 ms, and the whole command 0.20 s.
+`Dragoon --dump-banner DISC OUT.png` writes the banner as a PNG and prints its format and names as JSON, with the time the read and decode took on stderr. It exits 0 when the PNG is written and 2 for a bad argument. It exits 1 when DISC is a folder or isn't a regular file, when the disc can't be opened, when it has no banner and when the PNG can't be written, and says which on stderr. Only a regular file opens, and a FIFO is refused without waiting for a writer. On the supported disc on 2026-11-13 the read and decode took 0.21 ms, and the whole command 0.20 s.
 
 ## Running the recipe
 

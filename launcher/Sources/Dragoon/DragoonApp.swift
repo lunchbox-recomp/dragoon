@@ -14,8 +14,8 @@ enum Launch {
     /// any other result and 2 for a bad argument or a source-info it can't use.
     ///
     /// `--dump-banner DISC OUT.png` writes the disc's banner as a PNG and exits 0, or exits 1
-    /// when DISC is a folder, when the disc can't be opened, when it has no banner and when the
-    /// PNG can't be written, and 2 for a bad argument.
+    /// when DISC is a folder or isn't a regular file, when the disc can't be opened, when it has
+    /// no banner and when the PNG can't be written, and 2 for a bad argument.
     @MainActor
     static func main() {
         let arguments = Array(CommandLine.arguments.dropFirst())
