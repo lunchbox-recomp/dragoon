@@ -3,7 +3,7 @@ import Foundation
 /// What the kernel says about a process by its pid. The process needn't be this one's child.
 public enum LiveProcess {
     /// When the process `pid` started, in microseconds since 1970, or nil when there's none.
-    static func startTime(of pid: pid_t) -> UInt64? {
+    public static func startTime(of pid: pid_t) -> UInt64? {
         var info = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
         guard pid > 0, proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
