@@ -279,15 +279,14 @@ constexpr float kNarrowAspect = 1.25538f;
 // draw through with y either way up. The menu's 256 by 192 render to texture has a frame and a
 // viewport of its own, so it isn't one.
 inline bool menu_camera(const Lens& l) {
-    if (l.viewport[0] != 0.0f || l.viewport[1] != 640.0f || l.viewport[2] != 0.0f || l.viewport[3] != 480.0f)
-        return false;
+    if (!(Rect{l.viewport[0], l.viewport[1], l.viewport[2], l.viewport[3]} == kScreen)) return false;
     if (l.type == kPerspective) return std::fabs(l.proj[1] - kNarrowAspect) < 1e-4f;
     return l.type == kOrtho && l.proj[0] == 0.0f && std::fabs(l.proj[1]) == 480.0f && l.proj[2] == 0.0f &&
            l.proj[3] == 640.0f;
 }
 
 // The game's 4:3 frame, centered on the screen.
-constexpr Mark kMenuFrame{gx::Anchor::Center, 0.0f, 640.0f};
+constexpr Mark kMenuFrame{gx::Anchor::Center, kScreen.x0, kScreen.x1};
 
 // The mark a camera gives what's drawn through it outside the HUD's table at output aspect
 // `output`: the frame centered for a menu camera while the frame shows no world, as on the
