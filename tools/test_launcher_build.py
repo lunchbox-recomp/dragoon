@@ -179,10 +179,15 @@ class RecipeTestCase(unittest.TestCase):
         self.data = self.dir / "Application Support" / "Dragoon"
         self.cache = self.dir / "Caches" / "Dragoon"
         self.log = self.dir / "Logs" / "build 1.log"
-        # The stamp the fake warm-up takes as current, so the recipe's plan agrees with it.
+        # The stamp the fake warm-up takes as current, so the recipe's plan agrees with it, for
+        # the route manifest's own text only, so a plan that reads another text plays the warm-up.
+        manifest_text = launcher_build.warm_shaders.MANIFEST.read_text()
+
+        def wanted_stamp(text: str) -> str:
+            return CURRENT_STAMP if text == manifest_text else "another manifest's stamp"
+
         for patch in (mock.patch.object(launcher_build, "CODESIGN", str(codesign)),
-                      mock.patch.object(launcher_build.warm_shaders, "wanted_stamp",
-                                        lambda manifest_text: CURRENT_STAMP)):
+                      mock.patch.object(launcher_build.warm_shaders, "wanted_stamp", wanted_stamp)):
             patch.start()
             self.addCleanup(patch.stop)
 
