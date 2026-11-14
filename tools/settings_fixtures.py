@@ -19,8 +19,13 @@ PictureGeometryTests check the launcher against what it writes.
 --check writes them to a scratch folder instead and prints each file of DIR that differs, is
 missing or isn't one it writes. --cxx names the C++ compiler, c++ from PATH by default.
 
+The harness copies main.cpp's window choices and the renderer's 640 wide frame, which it can't
+include. Before it builds, each line it copies, this file's COPIED, has to be in runtime/main.cpp
+or runtime/gx/render_gl_internal.h as it is there, and the first that isn't is named.
+
 Exits 0 when it wrote them or they all match, 1 when --check found a difference, and 2 when
-gcn-recomp isn't checked out, the harness doesn't compile or a save failed.
+gcn-recomp isn't checked out, a copied line isn't in the engine, the harness doesn't compile or
+a save failed.
 """
 from __future__ import annotations
 
@@ -81,18 +86,42 @@ USABLE = [(0, 0), (1512, 944), (1440, 875), (1280, 760), (1920, 1050), (2560, 14
 DISPLAYS = [(1512, 982), (1440, 900), (1920, 1080), (2560, 1440), (3440, 1440), (1280, 800),
             (3024, 1964), (1024, 768)]
 SCALES = range(1, 11)
+# The engine's lines settings_fixtures.cpp copies by hand, since it can't include them: main.cpp's
+# window choices, local to its main(), and the renderer's 640 wide frame. Each must still be a
+# line of its file, spaces at its ends aside, or the harness no longer matches the engine.
+COPIED = [
+    ("main.cpp", "constexpr int kTitleBar = 40;"),
+    ("main.cpp", "const int shape_w = aspect_window ? 4 : aspect_w, shape_h = aspect_window ? 3 : aspect_h;"),
+    ("main.cpp", "const gx::WindowSize size = gx::aspect_window_size(960, shape_w, shape_h, usable.w, usable.h);"),
+    ("main.cpp", "const bool place = !fullscreen && usable.w > 0 && usable.h > 0;"),
+    ("main.cpp", "top = kTitleBar;"),
+    ("main.cpp", "left = bottom = right = 0;"),
+    ("main.cpp", "gx::aspect_window_rect(960, shape_w, shape_h, {usable.x, usable.y, usable.w, usable.h}, "
+                 "top, left, bottom, right);"),
+    ("gx/render_gl_internal.h", "static const int EFB_W = 640, EFB_H = 528;"),
+]
 
 
 class Failure(Exception):
     """The fixtures can't be made, with the one line that says why."""
 
 
+def check_copied() -> None:
+    """Fails naming the first of COPIED its file no longer holds."""
+    for name, line in COPIED:
+        path = RUNTIME / name
+        if line not in (text.strip() for text in path.read_text(encoding="utf-8").splitlines()):
+            raise Failure(f"{path.relative_to(ROOT)}: no line \"{line}\", which settings_fixtures.cpp copies")
+
+
 def build(work: Path, cxx: str) -> Path:
     """The harness, compiled into WORK."""
     sources = [RUNTIME / "settings.cpp", RUNTIME / "platform.cpp", RUNTIME / "gx" / "aspect.h"]
-    missing = [str(p.relative_to(ROOT)) for p in sources if not p.is_file()]
+    copied = [RUNTIME / name for name, _ in COPIED]
+    missing = [str(p.relative_to(ROOT)) for p in sources + copied if not p.is_file()]
     if missing:
         raise Failure(f"{missing[0]}: not there, so check gcn-recomp out: git submodule update --init gcn-recomp")
+    check_copied()
     exe = work / "settings_fixtures"
     cmd = [cxx, "-std=c++20", "-I", str(RUNTIME), str(HARNESS), str(sources[0]), str(sources[1]), "-o", str(exe)]
     try:

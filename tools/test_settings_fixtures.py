@@ -79,6 +79,40 @@ class CommandLineTest(unittest.TestCase):
         self.assertIn("settings_fixtures.cpp: doesn't compile", err)
 
 
+@unittest.skipUnless(CHECKED_OUT, "gcn-recomp isn't checked out: git submodule update --init gcn-recomp")
+class CopiedLinesTest(unittest.TestCase):
+    """main.cpp's window choices and the renderer's 640, which the harness copies by hand."""
+
+    def check_with(self, name: str, old: str, new: str) -> tuple[int, str, str]:
+        """--check against a copy of the engine's files the harness reads, with OLD in NAME made NEW."""
+        root = temp_dir(self, prefix="engine copy ")
+        runtime = root / "gcn-recomp" / "runtime"
+        for each in {"settings.cpp", "platform.cpp", "gx/aspect.h", *(n for n, _ in settings_fixtures.COPIED)}:
+            (runtime / each).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(settings_fixtures.RUNTIME / each, runtime / each)
+        text = (runtime / name).read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1)
+        (runtime / name).write_text(text.replace(old, new), encoding="utf-8")
+        with mock.patch.object(settings_fixtures, "ROOT", root), \
+                mock.patch.object(settings_fixtures, "RUNTIME", runtime):
+            return run_main(settings_fixtures.main, "--check")
+
+    def test_the_engine_holds_every_copied_line(self) -> None:
+        settings_fixtures.check_copied()
+
+    def test_a_title_bar_of_28_in_main_cpp_is_named_and_exits_2(self) -> None:
+        self.assertEqual(self.check_with("main.cpp", "kTitleBar = 40;", "kTitleBar = 28;"),
+                         (2, "", "gcn-recomp/runtime/main.cpp: no line \"constexpr int kTitleBar = 40;\", "
+                                 "which settings_fixtures.cpp copies\n"))
+
+    def test_each_copied_line_changed_is_named(self) -> None:
+        for name, line in settings_fixtures.COPIED:
+            with self.subTest(line=line):
+                self.assertEqual(self.check_with(name, line, line.replace(";", " + 1;", 1)),
+                                 (2, "", f"gcn-recomp/runtime/{name}: no line \"{line}\", "
+                                         "which settings_fixtures.cpp copies\n"))
+
+
 class NoEngineTest(unittest.TestCase):
     def test_without_the_submodule_it_says_how_to_check_it_out_and_exits_2(self) -> None:
         empty = temp_dir(self)

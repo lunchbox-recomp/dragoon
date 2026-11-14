@@ -7,7 +7,9 @@
 //   fit ASPECT DISPLAY_W DISPLAY_H           the fullscreen picture: "X Y W H"
 //   scale N                                  the picture the renderer draws at N: "W H"
 //
-// A usable area of 0 by 0 is none, as SDL gives where it can't say.
+// A usable area of 0 by 0 is none, as SDL gives where it can't say. The window's choices are
+// main.cpp's and the 640 is the renderer's EFB_W, copied since they can't be included;
+// settings_fixtures.py checks the engine still holds each line they come from (its COPIED).
 #include "gx/aspect.h"
 #include "gx/render_gl.h"
 #include "settings.h"
