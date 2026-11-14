@@ -50,7 +50,7 @@ private struct PlayCapsule: View {
             .font(.system(size: 24, weight: .bold, design: .rounded))
             .foregroundStyle(colors.buttonInk)
             .padding(.horizontal, 44)
-            .frame(height: 64)
+            .frame(height: HeroColors.buttonHeight)
             .background(
                 Capsule().fill(LinearGradient(
                     colors: [colors.buttonTop, colors.buttonBottom], startPoint: .top,

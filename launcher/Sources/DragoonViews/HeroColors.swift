@@ -7,11 +7,15 @@ struct HeroColors {
     static let buttonSaturation = 0.85
     static let buttonLight = 0.86
     static let buttonDark = 0.70
+    static let buttonHeight = 64.0
+    /// The rows of the button Play's label covers, from the top of its "l" to the bottom of its
+    /// "y", in points from the button's top, as the library snapshot draws them.
+    static let labelRows: ClosedRange<Double> = 21...45
     /// The near-black ink's gray, sRGB, for the light buttons.
     static let darkInk = 0.08
     /// The bar Play's text meets on every hue: 3:1, WCAG's floor for large text, which Play's
     /// 24 pt bold label is. 4.5:1, the floor for body text, can't be met on every hue: on the
-    /// worst, both inks come to 3.9:1.
+    /// worst, both inks come to 4.0:1.
     static let minimumContrast = 3.0
 
     let palette: BannerPalette
@@ -40,16 +44,17 @@ struct HeroColors {
         return ink.white >= ink.dark
     }
 
-    /// Each ink's contrast with the button, the lower of the two at the gradient's middle,
-    /// where the text sits, and at its darker end.
+    /// Each ink's contrast with the button where it's worst behind the label: white's at the
+    /// label's top row, where the button is lightest, and near-black's at its bottom row, where
+    /// the button is darkest.
     static func inkContrasts(onHue hue: Double) -> (white: Double, dark: Double) {
-        let middle = luminance(
-            hue: hue, saturation: buttonSaturation, brightness: (buttonLight + buttonDark) / 2)
-        let darker = luminance(hue: hue, saturation: buttonSaturation, brightness: buttonDark)
-        let ink = linear(darkInk)
+        func luminance(atRow row: Double) -> Double {
+            let brightness = buttonLight - (buttonLight - buttonDark) * row / buttonHeight
+            return Self.luminance(hue: hue, saturation: buttonSaturation, brightness: brightness)
+        }
         return (
-            min(contrast(1, middle), contrast(1, darker)),
-            min(contrast(ink, middle), contrast(ink, darker))
+            contrast(1, luminance(atRow: labelRows.lowerBound)),
+            contrast(linear(darkInk), luminance(atRow: labelRows.upperBound))
         )
     }
 

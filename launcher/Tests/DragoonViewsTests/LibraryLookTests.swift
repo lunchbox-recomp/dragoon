@@ -45,9 +45,9 @@ struct LibraryLookTests {
         #expect(abs(HeroColors.contrast(1, 0) - 21) < 1e-9)
     }
 
-    /// On every whole degree of hue, Play's ink is the one with more contrast at the button's
-    /// middle and darker end, worked out here from the button's two brightnesses, and it meets
-    /// the bar.
+    /// On every whole degree of hue, Play's ink is the one with more contrast where it's worst
+    /// behind the label, worked out here from the button's brightness at the label's top and
+    /// bottom rows, and it meets the bar.
     @Test func playsInkMeetsItsBarOnEveryHue() {
         let ink = HeroColors.linear(0.08)
         var worst = Double.infinity
@@ -57,15 +57,18 @@ struct LibraryLookTests {
                 HeroColors.luminance(
                     hue: hue, saturation: HeroColors.buttonSaturation, brightness: brightness)
             }
-            let middle = luminance((0.86 + 0.70) / 2), darker = luminance(0.70)
-            let white = min(1.05 / (middle + 0.05), 1.05 / (darker + 0.05))
-            let dark = min((middle + 0.05) / (ink + 0.05), (darker + 0.05) / (ink + 0.05))
+            // The button runs from 0.86 at its top to 0.70 at its bottom, 64 points down, and
+            // the label covers rows 21 to 45.
+            let top = luminance(0.86 - 0.16 * 21 / 64), bottom = luminance(0.86 - 0.16 * 45 / 64)
+            let white = 1.05 / (top + 0.05)
+            let dark = (bottom + 0.05) / (ink + 0.05)
             #expect(HeroColors.whiteReads(onHue: hue) == (white >= dark), "at \(degree)°")
             worst = min(worst, max(white, dark))
         }
         #expect(worst >= HeroColors.minimumContrast)
         #expect(HeroColors.minimumContrast == 3)
-        // Under 4.5:1 somewhere, so the bar is large text's.
+        // The README's figure, and under 4.5:1 somewhere, so the bar is large text's.
+        #expect(worst >= 4.0)
         #expect(worst < 4.5)
     }
 
