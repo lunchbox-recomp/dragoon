@@ -457,7 +457,7 @@ player 1's speed and place at 2400, 3600, 4200 and 6000 of the race at 4:3 and a
 20 values matched.
 
 Play has narrow cameras over the screen too, so the menus' mark could reach a HUD drawn while
-the frame has no view. On Dragoon `e79f475` and `c78d444`, one run at a time at loads of 8 to 10,
+the frame has no view. On Dragoon `e79f475` and `ec0004a`, one run at a time at loads of 8 to 10,
 `drawlog.py hud` gave the same lines at both for these four, and the 16:9 output dumps of Top
 Ride and the race at 8400 were the same files.
 
@@ -483,7 +483,7 @@ banner's pieces under "What 16:9 still gets wrong".
 
 The views are forgotten as `CObjAmnesia` forgets the scene's cameras. Before that, the results'
 first frame at 13,062 read 13,061's view, and its 92 draws stretched while 91 of 13,063's were
-centered. On Dragoon `e523252` 91 of 13,062's are centered.
+centered. On Dragoon `7a0e1c6` 91 of 13,062's are centered.
 
 At an output narrower than 4:3, as with `--aspect=1:1` or a tall window, no camera takes the
 mark. Centered, the frame would be wider than the window and lose about 107 of its 640 at each
@@ -502,7 +502,7 @@ loads of 4.2 to 5.0.
   The banner's dark stripe spans the screen at 4:3 but is drawn within one of the callback's
   joint trees, so at 16:9 it takes the tree's middle anchor and stops short of both sides.
 - In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide. At
-  3600 on Dragoon `c78d444` `drawlog.py hud` listed all 38 of its HUD draws as stretched. Top
+  3600 on Dragoon `ec0004a` `drawlog.py hud` listed all 38 of its HUD draws as stretched. Top
   Ride draws them outside every render callback, none of them carrying a callback's tag, so the
   table, which keys on the callback, can't place them.
 - A HUD element that first shows goes by its root's place, or by joints still where the game made
