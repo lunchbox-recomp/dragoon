@@ -68,11 +68,10 @@ struct Bitmap: Equatable {
         var out = [UInt8](repeating: 0, count: half.width * half.height * 4)
         for y in 0..<half.height {
             for x in 0..<half.width {
+                let top = ((2 * y) * width + 2 * x) * 4, bottom = top + width * 4
                 for channel in 0..<4 {
-                    let at = { (dx: Int, dy: Int) in
-                        Int(bytes[((2 * y + dy) * width + 2 * x + dx) * 4 + channel])
-                    }
-                    let sum = at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1)
+                    let sum = Int(bytes[top + channel]) + Int(bytes[top + 4 + channel])
+                        + Int(bytes[bottom + channel]) + Int(bytes[bottom + 4 + channel])
                     out[(y * half.width + x) * 4 + channel] = UInt8((sum + 2) / 4)
                 }
             }
