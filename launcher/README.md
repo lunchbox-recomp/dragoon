@@ -109,6 +109,8 @@ That `panic.txt` then moves into the logs folder as `panic-<time>.txt`, under a 
 
 The window hides while the game runs and comes back when it exits or can't start. Each `play` effect carries a launch number that its result echoes, and `Flow` ignores a result for any other launch. A late result can't end a game that's running.
 
+The launcher hides its window as it starts the game (`Sources/Dragoon/EffectRunner.swift:123-125`), not at the game's first frame. Since gcn-recomp `1abcf10` the game's own window opens on a boot splash, the disc's banner over a dark grey with a bar for the shader cache's load, which stays up until the game's first frame (gcn-recomp `docs/graphics.md`, "The boot splash"). The engine can also tell a launcher when that first frame is up through `GCN_READY_FILE` (gcn-recomp `docs/diagnostics.md`, "Starting a run"), which this launcher doesn't set.
+
 While the game runs, `<data>/game.pid` holds its pid and the time its process started, and the file goes as the result is sent. A launcher that opens in the meantime takes the game as running when that pid's process started at that time and runs the installed game. Library counts it as running until a kqueue process source sees it exit, and then shows nothing, since how it ended can't be known.
 
 A `game.pid` that's garbled is removed and ignored, and so is one whose process has gone or isn't the game.
