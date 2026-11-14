@@ -671,9 +671,9 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | Launcher writing settings.txt while the game runs | Never | Never, in `FlowSettingsTests`: Settings does nothing and a pick saves nothing while the launcher's or an earlier launcher's game runs, and Play waits while the sheet is open | Pass |
 
 The four launcher rows were measured on 2026-11-14 on macOS 26.6.2 with Swift 6.3.3. The
-fixtures and the geometry tables came from a harness built against gcn-recomp `e9b96fe`'s
-`runtime/settings.cpp`, `runtime/platform.cpp` and `runtime/gx/aspect.h`, whose save matches
-the pinned `5e54665`'s (`launcher/README.md`). The sheet's time runs from the press through
+fixtures and the geometry tables come from `tools/settings_fixtures.py`, which builds a harness
+against the pinned gcn-recomp `5e54665`'s `runtime/settings.cpp`, `runtime/platform.cpp` and
+`runtime/gx/aspect.h`, and its test checks it writes every committed file. The sheet's time runs from the press through
 reading a real `settings.txt` to an `NSHostingView` laid out and drawn, and leaves out AppKit's
 slide in. Alone it's the first SwiftUI view the process draws. The one-time card after the
 first build that offers 4:3 or 16:9 isn't built yet.

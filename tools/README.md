@@ -913,6 +913,16 @@ It prints `ok`, `moved ... now A-B` or `gone` for each cite whose file changed, 
 
 A cite that already holds NEW's lines reads as moved. So when a bump's cites were edited by hand first, `--at REV` reads Dragoon's files at the commit that moved the pin instead of the working tree. A cite that was already wrong at OLD but still sits inside its file can't be caught this way, so read the cited lines at NEW against the prose too. Do the same for a cite of one line of generic text, such as a lone `}`, which reads `ok` while its line still holds that text and `moved` to every place it now sits.
 
+## settings_fixtures.py
+
+What does the engine write over `settings.txt`, and what sizes does it give the picture? settings_fixtures.py compiles `settings_fixtures.cpp` beside it with the submodule's `runtime/settings.cpp`, `runtime/platform.cpp` and `runtime/gx/aspect.h`, as gcn-recomp's own `test_settings` target links the first two. It then writes the launcher's fixtures to `launcher/Tests/DragoonCoreTests/SettingsFixtures/`. For each case in its `CASES` that's `NAME.in` and the `NAME.out` that `settings_save` wrote over it, plus `cases.txt`. The three tables are `window-sizes.txt`, the window `main.cpp` opens in each usable area, `fits.txt`, the fullscreen picture on each display, and `scales.txt`, the picture the renderer draws at scales 1 to 10.
+
+```
+tools/settings_fixtures.py --check
+```
+
+`--check` writes them to a scratch folder and prints each committed file that differs, is missing or isn't one it writes, and exits 1 for any. `--out DIR` writes somewhere else, and `--cxx FILE` names the compiler, `c++` by default. Nothing else in tools/ is C++, so the tool calls the compiler itself, as the bundle tests call `cc`, and needs no configured build. It exits 2 when gcn-recomp isn't checked out or the harness doesn't compile. The test builds the harness and checks it reproduces every committed file byte for byte, and it's skipped without the submodule.
+
 ## The engine's own tools
 
 Two tools in `gcn-recomp/tools/` matter when debugging here.

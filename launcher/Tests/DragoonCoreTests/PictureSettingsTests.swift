@@ -4,8 +4,8 @@ import Testing
 
 /// One file in `SettingsFixtures/`: `<name>.in` is settings.txt before the save, missing for a
 /// file that isn't there, and `<name>.out` what the engine's `settings_save` wrote over it with
-/// these values. A harness built against gcn-recomp's `runtime/settings.cpp` and
-/// `runtime/platform.cpp` wrote both, and `cases.txt` lists the values it saved.
+/// these values. `tools/settings_fixtures.py` wrote both with gcn-recomp's own
+/// `runtime/settings.cpp` and `runtime/platform.cpp`, and `cases.txt` lists the values it saved.
 struct SettingsFixture: CustomTestStringConvertible, Sendable {
     let name: String
     let picture: PictureSettings

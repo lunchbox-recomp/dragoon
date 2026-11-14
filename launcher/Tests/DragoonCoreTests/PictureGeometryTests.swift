@@ -2,8 +2,8 @@ import DragoonCore
 import Foundation
 import Testing
 
-/// The sizes the engine gives, which the harness that wrote `SettingsFixtures/` printed from
-/// gcn-recomp's `runtime/gx/aspect.h`, `settings.h` and `gx::kMaxInternalScale`.
+/// The sizes the engine gives, which `tools/settings_fixtures.py` wrote to `SettingsFixtures/`
+/// from gcn-recomp's `runtime/gx/aspect.h`, `settings.h` and `gx::kMaxInternalScale`.
 enum EngineSizes {
     static let directory = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().appendingPathComponent("SettingsFixtures")
