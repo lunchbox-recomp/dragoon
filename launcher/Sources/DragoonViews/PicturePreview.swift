@@ -9,7 +9,7 @@ import SwiftUI
 /// when it's fullscreen.
 public struct PicturePreview: View {
     /// The frame's height in points. Its width follows the window's or the screen's shape.
-    public static let height: CGFloat = 120
+    nonisolated public static let height: CGFloat = 120
 
     /// One of the race HUD's boxes, by the edge of the picture it keeps.
     public struct HUDBox: Equatable, Sendable {
