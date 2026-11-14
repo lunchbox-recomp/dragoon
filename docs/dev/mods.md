@@ -42,7 +42,7 @@ If one package fails, `apply` turns all its options off for that run and tries t
 
 `--disc` defaults to `GAME_ISO` in `build/CMakeCache.txt`. Pass `--disc IMAGE` when the cache has no image path. Put the overlay path that `apply` prints in the `disc_overlay` line of `settings.txt`.
 
-The overlay path is relative to the folder holding `settings.txt`. When `apply` prints null for `overlay`, empty the line by writing `disc_overlay` with no value. The game stops at start if that line still names a manifest that `apply` removed.
+The overlay path is relative to the folder holding `settings.txt`. When `apply` prints null for `overlay`, empty the line by writing `disc_overlay` with no value. A start skips a line that still names a manifest `apply` removed and says so on stderr.
 
 ```text
 disc_overlay mods/.out/disc-overlay.txt
@@ -54,11 +54,11 @@ Put the RAM patch path that `apply` prints in the `ram_patches` line of `setting
 ram_patches mods/.out/ram-patches.txt
 ```
 
-When `apply` prints null for `ram_patches`, empty the line by writing `ram_patches` with no value. The game stops at start if that line still names a list that `apply` removed.
+When `apply` prints null for `ram_patches`, empty the line by writing `ram_patches` with no value. A start skips a line that still names a list `apply` removed and says so on stderr.
 
 For one run, `--ram-patches=PATH` beats `GCN_RAM_PATCHES`, which beats the key. An empty value at any of the three means no patches. A relative path in the flag or the variable is relative to the game's working directory.
 
-`gcn-recomp/runtime/main.cpp:466-485` selects the paths, and `gcn-recomp/runtime/settings.cpp:139-142` reads both keys. `gcn-recomp/runtime/ram_patches.cpp:66-86` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:68-74` stops when an overlay manifest can't open.
+`gcn-recomp/runtime/main.cpp:482-504` selects the paths, and `gcn-recomp/runtime/settings.cpp:143-144`, `:148-149` reads both keys. `gcn-recomp/runtime/settings.cpp:82-89` skips a key whose file is missing when no flag or variable is set. `gcn-recomp/runtime/ram_patches.cpp:66-92` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:70-76` stops when any other overlay manifest can't open.
 
 The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 for:
 
@@ -72,9 +72,9 @@ It exits 2 on a bad argument, such as a data folder it can't read, or a file ope
 
 The overlay has a Mods page after Display. The first time it's shown, it runs `list` and shows each package's options with their choices and Off. A package that `list` reports with an error shows Off with that error.
 
-Apply and restart becomes active once a choice differs from what `list` said. Nothing applies mods at boot, so when the game started with no disc overlay loaded and no RAM patch list while `list` says an option is on, Apply and restart is active at once. Until a pick changes, the page says the game started without these mods. That covers a fresh install with a package on by default, and a start after an apply that failed or was cut short. A game that started with some mods and then gains a package that's on by default still shows that package as running. Telling it apart needs `apply` to write every option to `mods.txt`. A `--disc-overlay=` or `--ram-patches=` flag given by hand, or `GCN_DISC_OVERLAY` or `GCN_RAM_PATCHES` set empty, wins over `settings.txt` and survives the restart. An empty one means Apply and restart can't take effect in a game started that way. A `--disc-overlay=mods/.out/disc-overlay.txt` given by hand does take effect, but an apply that writes no overlay removes that file, and the restart then stops at `gcn-recomp/runtime/hw/di.cpp:74`. Only games started by hand are affected.
+Apply and restart becomes active once a choice differs from what `list` said. Nothing applies mods at boot, so when the game started with no disc overlay loaded and no RAM patch list while `list` says an option is on, Apply and restart is active at once. Until a pick changes, the page says the game started without these mods. That covers a fresh install with a package on by default, and a start after an apply that failed or was cut short. A game that started with some mods and then gains a package that's on by default still shows that package as running. Telling it apart needs `apply` to write every option to `mods.txt`. A `--disc-overlay=` or `--ram-patches=` flag given by hand, or `GCN_DISC_OVERLAY` or `GCN_RAM_PATCHES` set empty, wins over `settings.txt` and survives the restart. An empty one means Apply and restart can't take effect in a game started that way. A `--disc-overlay=mods/.out/disc-overlay.txt` given by hand does take effect, but an apply that writes no overlay removes that file, and the restart then stops at `gcn-recomp/runtime/hw/di.cpp:76`. Only games started by hand are affected.
 
-Apply and restart first empties the `disc_overlay` and `ram_patches` lines of `settings.txt`, since an `apply` cut short can remove a file they name, and a start would then stop on it.
+Apply and restart first empties the `disc_overlay` and `ram_patches` lines of `settings.txt`, since an `apply` cut short can remove a file they name. Before gcn-recomp `ed82ff0` a start stopped on such a line, and now it skips it.
 
 Then it runs `set` for each changed option and then `apply`, on a thread of its own, so the menu keeps drawing. Each run is `/usr/bin/python3 -B tools/mod_choices.py` with `--data .` in the folder the game started in. It gets only the environment that `tools/tool_env.py` describes, and 30 s. The script gives each Riivolution run 10 s, and `apply` makes one `list` run, then an `apply` run for each try, so an `apply` that retries can run past 30 s and be stopped. A quit, Restart game, the game's reset or Ctrl-C during a run kills its process group too, so no script writes `mods.txt` or `mods/.out` under the next start. A fault such as a segfault skips that kill with the rest of the exit hooks (`gcn-recomp/runtime/platform.cpp:33`), so a script still running then keeps writing. A fatal error still runs them.
 
@@ -101,4 +101,4 @@ A `set` that ran before the failure has saved its choice in `mods.txt`, and the 
 
 A replay has no Apply and restart, since a restart ends a replay. A result that comes in while the menu is closed is taken the next time the page is shown.
 
-`src/mods_overlay.cpp:126-134` starts an apply, `src/mods_overlay.cpp:142-174` takes each result and `src/mods_overlay.cpp:221-272` draws the page. `src/mods_page.cpp:28-56` turns a run into JSON or a message, `src/mods_page.cpp:163-169` decides whether an apply is due at the start and whether the page says so, `src/mods_page.cpp:210-238` rewrites the two lines and `src/mods_page.cpp:272-294` decides what follows a run. `src/child_run.cpp:78-153` runs the script, and `gcn-recomp/runtime/main.cpp:419-422` is the restart.
+`src/mods_overlay.cpp:126-134` starts an apply, `src/mods_overlay.cpp:142-174` takes each result and `src/mods_overlay.cpp:221-272` draws the page. `src/mods_page.cpp:28-56` turns a run into JSON or a message, `src/mods_page.cpp:163-169` decides whether an apply is due at the start and whether the page says so, `src/mods_page.cpp:210-238` rewrites the two lines and `src/mods_page.cpp:272-294` decides what follows a run. `src/child_run.cpp:78-153` runs the script, and `gcn-recomp/runtime/main.cpp:434-437` is the restart.

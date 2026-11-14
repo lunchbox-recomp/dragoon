@@ -887,7 +887,7 @@ These count as cites:
 
 | Form | Example |
 |---|---|
-| A path under `gcn-recomp/` | `gcn-recomp/runtime/main.cpp:419-422` |
+| A path under `gcn-recomp/` | `gcn-recomp/runtime/main.cpp:434-437` |
 | A fork-relative path or a bare name that exactly one fork file has and no Dragoon file does | `runtime/hw/example.h:64`, `example.cpp:42` |
 | A `:N` continuation, which takes the file of the cite before it on the line | `example.cpp:42`, `:53-60` |
 | A list straight after a cite | `example_batch.cpp:180, 522-523` |

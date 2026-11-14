@@ -134,7 +134,7 @@ and the discovery and CTest steps were read from CMake's files, not run.
 
 CI's macOS job runs `ninja unit` (`tools/ci.py:82`), which builds the engine's own unit tests
 and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
-(`gcn-recomp/CMakeLists.txt:1215-1218`). It builds `dragoon_tests` too and runs it once to list
+(`gcn-recomp/CMakeLists.txt:1413-1416`). It builds `dragoon_tests` too and runs it once to list
 its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's
 `Modules/GoogleTestAddTests.cmake:63-67`). So CI runs code compiled from this archive.
 
@@ -151,11 +151,11 @@ clicked (`imgui.cpp:11408`).
 
 `io.ConfigDebugHighlightIdConflicts` turns that tooltip on by default (`imgui.cpp:1712`), and
 the overlay leaves it on. Since gcn-recomp `d1a60e5` the overlay clears
-`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:461-463`), and
+`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:565-567`), and
 `TextLinkOpenURL` calls nothing when it's null, so a click on the link opens nothing. Since
-`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:444`,
+`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:551`,
 `imgui.cpp:11366`). The overlay also sets `IniFilename` and `LogFilename` to null, so Dear
-ImGui writes no file (`runtime/overlay/overlay.cpp:443-445`).
+ImGui writes no file (`runtime/overlay/overlay.cpp:550-552`).
 
 ## Disc inputs
 
@@ -354,7 +354,7 @@ names takes that port again when it's free and the lowest free one when it isn't
 takes the port of its SDL player number if that's free and otherwise the lowest free one
 (gcn-recomp `runtime/port_memory.h:48-59`).
 
-Once a gamepad has a port, its player number is set to the port (`runtime/gamepads.cpp:151-158`).
+Once a gamepad has a port, its player number is set to the port (`runtime/gamepads.cpp:166-173`).
 A gamepad gets no port when none is free, and one pulled out frees its port. The game then sees
 that port unplugged, though the keyboard keeps its port plugged in and so does a port that
 `--pads=N` or a `controls.txt` line covers.
