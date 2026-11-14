@@ -117,7 +117,7 @@ class RealProcessTest(unittest.TestCase):
 
     def test_a_busy_process_uses_most_of_a_core(self) -> None:
         cpu, elapsed = idle_cpu.measure(self.start("/usr/bin/yes").pid, 1.0)
-        self.assertGreater(cpu / elapsed, 0.3)
+        self.assertGreater(cpu / elapsed, 0.5)
 
     def test_a_process_that_has_exited_exits_1(self) -> None:
         child = subprocess.Popen(["/usr/bin/true"])
