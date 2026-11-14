@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import math
 import os
 import shutil
 import signal
@@ -432,14 +433,18 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertTrue((self.run_dir() / "ran-build-dragoon").exists())
 
     def test_a_game_that_exits_ends_the_run_at_the_next_one_second_tick(self):
-        # The game outlives probe.sh's first look, so the run waits out at least one tick, and it
-        # marks its exit, so a load that slows the game's start doesn't count. From the mark to
-        # the run's end is what's left of the tick: up to about 1 s here, and 3 s of a 4 s tick.
-        self.add_game("dragoon", "sleep 1\ntouch exited\n")
+        # probe.sh makes stdout.txt as it starts the game, just before its first look, so the
+        # file's mtime is when its ticks start. The game outlives that look and marks its exit
+        # with a builtin, and the run should end at the first whole second after the mark. The
+        # mark falls in the first second unless the game is very slow to start, and then a tick
+        # of 2 s or more ends the run at least 1 s past that.
+        self.add_game("dragoon", "sleep 0.25\n: > exited\n")
         r = probe(NAME, SECONDS, script=self.script)  # RUN_LIMIT is well short of SECONDS
         ended = time.time()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertLess(ended - (self.run_dir() / "exited").stat().st_mtime, 2.5)
+        ticks_began = (self.run_dir() / "stdout.txt").stat().st_mtime
+        exited = (self.run_dir() / "exited").stat().st_mtime
+        self.assertLess(ended - ticks_began - math.ceil(exited - ticks_began), 0.75)
 
     def test_seconds_ends_a_run_whose_game_never_exits(self):
         # The game takes a moment to stop, so a probe.sh that didn't wait for it ends first
