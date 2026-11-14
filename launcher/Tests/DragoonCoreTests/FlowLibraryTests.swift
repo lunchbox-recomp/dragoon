@@ -60,7 +60,7 @@ private let oldCommits = Commits(
         for (event, _) in rebuildToRunning { run.send(event) }
         run.send(.buildEnded(failure))
         #expect(run.send(.logTailRead(path: flowLog + ".old", lines: ["another build"])) == [])
-        #expect(run.screen == .build(.failed(failure, lastLines: [])))
+        #expect(run.screen == .build(.failed(failure, skipped: [], lastLines: [])))
     }
 
     /// Play checks the disc from Library, and Library's buttons wait for it.

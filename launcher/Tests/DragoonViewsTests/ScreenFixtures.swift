@@ -89,7 +89,18 @@ let screenFixtures: [ScreenFixture] = [
         name: "build-failed",
         state: state(.build(.failed(
             .failed(step: "compile", message: "make exited with status 2.", log: log),
+            skipped: [],
             lastLines: ["clang: error: linker command failed with exit code 1", "make: *** [dragoon] Error 1"]))) {
+            $0.banner = TestBanner.banner
+        }),
+    // The compile failed at 100 of 135 files after a plan without the warm-up: the bar the
+    // running page drew, three segments, stopped where the compile's starts.
+    ScreenFixture(
+        name: "build-failed-skip-warmup",
+        state: state(.build(.failed(
+            .failed(step: "compile", message: "make exited with status 2.", log: log),
+            skipped: compilingWithoutWarmup.skipped,
+            lastLines: ["gen/func_80012345.c:41:3: error: use of undeclared identifier 'r3'", "make: *** [gen/func_80012345.o] Error 1"]))) {
             $0.banner = TestBanner.banner
         }),
     ScreenFixture(name: "library", state: library()),
@@ -139,6 +150,12 @@ private let startingBuild = progress([(3, .step("recompile"))])
 /// 41 of 135 files 14 seconds in, five a second.
 private let compiling = progress(
     [(14, .step("recompile")), (9.6, .step("compile"))] + compileFiles(41, from: 9.5, every: 0.2))
+
+/// 100 of 135 files after a plan without the warm-up, as a rebuild whose shader cache is current
+/// prints it.
+private let compilingWithoutWarmup = progress(
+    [(25.6, .plan(warmup: false)), (25.6, .step("recompile")), (21.4, .step("compile"))]
+        + compileFiles(100, from: 21.3, every: 0.2))
 
 /// 3 of 8 warm-up runs done a minute in.
 private let warmingUp = progress(

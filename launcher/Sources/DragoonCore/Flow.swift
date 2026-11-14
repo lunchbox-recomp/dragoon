@@ -147,18 +147,17 @@ extension Flow.State {
             guard waiting == .build else { return [] }
             return buildEnded(failure)
         case .logTailRead(let path, let lines):
-            guard case .build(.failed(let failure, _)) = screen, failure.log == path else {
-                return []
-            }
-            screen = .build(.failed(failure, lastLines: lines))
+            guard case .build(.failed(let failure, let skipped, _)) = screen, failure.log == path
+            else { return [] }
+            screen = .build(.failed(failure, skipped: skipped, lastLines: lines))
             return []
         case .copyLogPressed:
-            guard case .build(.failed(let failure, _)) = screen, let log = failure.log else {
+            guard case .build(.failed(let failure, _, _)) = screen, let log = failure.log else {
                 return []
             }
             return [.copyLog(log)]
         case .showLogPressed:
-            guard case .build(.failed(let failure, _)) = screen, let log = failure.log else {
+            guard case .build(.failed(let failure, _, _)) = screen, let log = failure.log else {
                 return []
             }
             return [.showLog(log)]
@@ -328,12 +327,12 @@ extension Flow.State {
     private mutating func buildEnded(_ failure: BuildFailure?) -> [Effect] {
         waiting = nil
         intent = nil
+        var progress = BuildProgress()
+        if case .build(.running(let last)) = screen { progress = last }
         switch failure {
         case nil:
             installed = InstalledGame(stamp: source?.commits)
             // The bar becomes Play, so the build ends on its own page.
-            var progress = BuildProgress()
-            if case .build(.running(let last)) = screen { progress = last }
             screen = .build(.finished(progress))
             return deleteOldBuildsIfIdle()
         case .cancelled?:
@@ -342,7 +341,8 @@ extension Flow.State {
             screen = .build(.ready)
             return []
         case let failure?:
-            screen = .build(.failed(failure, lastLines: []))
+            // The bar keeps the plan it was drawn with.
+            screen = .build(.failed(failure, skipped: progress.skipped, lastLines: []))
             return failure.log.map { [.readLogTail($0)] } ?? []
         }
     }

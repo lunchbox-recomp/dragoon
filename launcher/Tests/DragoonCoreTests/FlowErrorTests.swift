@@ -121,13 +121,27 @@ import Testing
         for (event, _) in rebuildToRunning { run.send(event) }
         run.send(.build(.step("compile")))
         #expect(run.send(.buildEnded(failure)) == [.readLogTail(flowLog)])
-        #expect(run.screen == .build(.failed(failure, lastLines: [])))
+        #expect(run.screen == .build(.failed(failure, skipped: [], lastLines: [])))
         #expect(run.state.step == .build)
         #expect(run.send(.logTailRead(path: flowLog, lines: ["clang: error", "make: *** [all]"])) == [])
-        #expect(run.screen == .build(.failed(failure, lastLines: ["clang: error", "make: *** [all]"])))
+        #expect(run.screen == .build(.failed(failure, skipped: [], lastLines: ["clang: error", "make: *** [all]"])))
         #expect(run.send(.copyLogPressed) == [.copyLog(flowLog)])
         #expect(run.send(.showLogPressed) == [.showLog(flowLog)])
         #expect(run.send(.buildPressed) == [.checkSpace])
+    }
+
+    /// A package that failed after a plan without the warm-up keeps the plan, once the log's end
+    /// is read too, so the failed page's bar leaves the warm-up out as the running page's did.
+    @Test func aPackageThatFailedAfterASkipPlanKeepsThePlan() {
+        let failure = BuildFailure.failed(step: "package", message: "codesign exited 1", log: flowLog)
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        run.send(.build(.plan(warmup: false)))
+        for step in ["recompile", "compile", "warmup", "package"] { run.send(.build(.step(step))) }
+        #expect(run.send(.buildEnded(failure)) == [.readLogTail(flowLog)])
+        #expect(run.screen == .build(.failed(failure, skipped: [.warmup], lastLines: [])))
+        run.send(.logTailRead(path: flowLog, lines: ["codesign: error"]))
+        #expect(run.screen == .build(.failed(failure, skipped: [.warmup], lastLines: ["codesign: error"])))
     }
 
     @Test func aWarmUpThatFailedIsShownOnTheWarmUpStep() {
@@ -160,7 +174,7 @@ import Testing
         var run = launched()
         for (event, _) in rebuildToRunning { run.send(event) }
         #expect(run.send(.buildEnded(failure)) == [])
-        #expect(run.screen == .build(.failed(failure, lastLines: [])))
+        #expect(run.screen == .build(.failed(failure, skipped: [], lastLines: [])))
         #expect(run.send(.copyLogPressed) == [])
         #expect(run.send(.showLogPressed) == [])
     }

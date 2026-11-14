@@ -69,6 +69,30 @@ struct BuildPageTests {
         #expect(abs(last.start + last.width - 1) < 1e-9)
     }
 
+    /// The failed page's bar keeps the running build's plan: the fill stops where the failed
+    /// step's segment starts on a bar without the skipped steps, and the failed step's segment is
+    /// drawn even when the plan skipped it.
+    @Test(arguments: [
+        ("package", [.warmup], .package, [.warmup], 22.2 / 22.5),
+        ("compile", [.warmup], .compile, [.warmup], 4.2 / 22.5),
+        ("compile", [], .compile, [], 4.2 / 95.2),
+        ("warmup", [.warmup], .warmup, [], 22.2 / 95.2),
+    ] as [(String, Set<BuildSegment>, BuildSegment, Set<BuildSegment>, Double)])
+    func theFailedBarKeepsThePlanButDrawsTheStepThatFailed(
+        step: String, planned: Set<BuildSegment>, stopped: BuildSegment,
+        drawnSkipped: Set<BuildSegment>, fraction: Double
+    ) throws {
+        let failure = BuildFailure.failed(step: step, message: "bad", log: "/x.log")
+        let bar = try #require(FailedBuild.bar(failure, skipped: planned))
+        #expect(bar.stopped == stopped)
+        #expect(bar.skipped == drawnSkipped)
+        #expect(abs(bar.fraction - fraction) < 1e-9)
+    }
+
+    @Test func aBuildThatStoppedAtNoStepDrawsNoBar() {
+        #expect(FailedBuild.bar(.couldNotStart("no python3"), skipped: [.warmup]) == nil)
+    }
+
     /// A window that isn't key but can be seen, as when the player clicks another app, keeps
     /// its clock and stops its shimmer. One that can't be seen stops both.
     @Test(arguments: [

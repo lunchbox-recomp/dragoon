@@ -31,8 +31,9 @@ struct BuildView: View {
                     BuildMeterView(
                         progress: progress, finished: isFinished, colors: colors,
                         canPlay: state.canPlay, send: send)
-                case .failed(let failure, let lastLines):
-                    FailedBuild(failure: failure, lastLines: lastLines, colors: colors)
+                case .failed(let failure, let skipped, let lastLines):
+                    FailedBuild(
+                        failure: failure, skipped: skipped, lastLines: lastLines, colors: colors)
                 }
             }
         } buttons: {
@@ -56,7 +57,7 @@ struct BuildView: View {
             case .finished:
                 // Play is where the bar was.
                 EmptyView()
-            case .failed(let failure, _):
+            case .failed(let failure, _, _):
                 if failure.log != nil {
                     Button(Strings.copyLog) { send(.copyLogPressed) }
                     Button(Strings.showLog) { send(.showLogPressed) }
@@ -83,28 +84,40 @@ struct BuildView: View {
         case .ready, .lowSpace, .finished: return 1
         case .preparing: return 0
         case .running(let progress): return progress.fraction
-        case .failed(let failure, _): return FailedBuild.stoppedAt(failure)?.start ?? 0
+        case .failed(let failure, let skipped, _):
+            return FailedBuild.bar(failure, skipped: skipped)?.fraction ?? 0
         }
     }
 }
 
 /// The bar stopped at the step that failed, what happened, the end of its log and where the
 /// whole log is.
-private struct FailedBuild: View {
+struct FailedBuild: View {
     let failure: BuildFailure
+    /// The steps the running build's plan left out of its bar.
+    let skipped: Set<BuildSegment>
     let lastLines: [String]
     let colors: HeroColors
 
-    /// The bar's segment for the step the build stopped at, or nil when it stopped at none.
-    static func stoppedAt(_ failure: BuildFailure) -> BuildSegment? {
-        failure.step.flatMap(BuildSegment.init(rawValue:))
+    /// The bar the build stopped with: the step it stopped at, the steps the plan left out but
+    /// that one, which is drawn even when the plan skipped it, and the fill up to its segment.
+    /// Nil when it stopped at no step.
+    static func bar(_ failure: BuildFailure, skipped: Set<BuildSegment>)
+        -> (stopped: BuildSegment, skipped: Set<BuildSegment>, fraction: Double)?
+    {
+        guard let stopped = failure.step.flatMap(BuildSegment.init(rawValue:)) else { return nil }
+        let drawnSkipped = skipped.subtracting([stopped])
+        return (stopped, drawnSkipped, stopped.start(skipping: drawnSkipped))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let stopped = Self.stoppedAt(failure) {
-                SegmentedBar(fraction: stopped.start, colors: colors, stopped: stopped)
-                    .padding(.bottom, 8)
+            if let bar = Self.bar(failure, skipped: skipped) {
+                SegmentedBar(
+                    fraction: bar.fraction, colors: colors, skipped: bar.skipped,
+                    stopped: bar.stopped
+                )
+                .padding(.bottom, 8)
             }
             Text(Strings.buildFailure(failure)).textSelection(.enabled)
             if let log = failure.log {

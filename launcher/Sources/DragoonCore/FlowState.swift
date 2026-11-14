@@ -113,7 +113,7 @@ extension Flow {
             case .tools: return .tools
             case .disc: return .disc
             case .build(.running(let progress)): return Self.listStep(forBuildStep: progress.step)
-            case .build(.failed(let failure, _)): return Self.listStep(forBuildStep: failure.step)
+            case .build(.failed(let failure, _, _)): return Self.listStep(forBuildStep: failure.step)
             case .build(.finished): return .library
             case .build: return .build
             // Library has its own layout, and the list is for setup.
@@ -173,6 +173,7 @@ public enum BuildScreen: Equatable, Sendable {
     case running(BuildProgress)
     /// The new game is current. The bar has become Play.
     case finished(BuildProgress)
-    /// `lastLines` is the end of the log, once it has been read.
-    case failed(BuildFailure, lastLines: [String])
+    /// `skipped` is what the running build's plan left out of the bar, and `lastLines` the end
+    /// of the log, once it has been read.
+    case failed(BuildFailure, skipped: Set<BuildSegment>, lastLines: [String])
 }
