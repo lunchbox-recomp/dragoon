@@ -1,8 +1,9 @@
 import Foundation
 
 /// The recipe's steps as the build bar's segments, each as wide as the seconds it took on the
-/// Mac the build was measured on. Package and swap weren't timed apart and together are a
-/// sliver at the end.
+/// Mac the build was measured on, the first build on an M4 Max in `tools/README.md:684`. That
+/// build took 95.2 s and timed every step but the swap, so the swap is the 0.2 s left over.
+/// Package and swap together are a sliver at the end.
 public enum BuildSegment: String, CaseIterable, Comparable, Sendable {
     case recompile, compile, warmup, package, swap
 
@@ -11,8 +12,8 @@ public enum BuildSegment: String, CaseIterable, Comparable, Sendable {
         case .recompile: return 4.2
         case .compile: return 18.0
         case .warmup: return 72.7
-        case .package: return 0.6
-        case .swap: return 0.4
+        case .package: return 0.1
+        case .swap: return 0.2
         }
     }
 

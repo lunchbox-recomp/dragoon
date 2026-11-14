@@ -16,11 +16,14 @@ func at(_ seconds: Double) -> Date {
         #expect(BuildSegment.recompile.referenceSeconds == 4.2)
         #expect(BuildSegment.compile.referenceSeconds == 18.0)
         #expect(BuildSegment.warmup.referenceSeconds == 72.7)
-        #expect(abs(BuildSegment.referenceTotal - 95.9) < 1e-9)
+        #expect(BuildSegment.package.referenceSeconds == 0.1)
+        #expect(BuildSegment.swap.referenceSeconds == 0.2)
+        // The measured build's whole time, so the swap is what the other steps left.
+        #expect(abs(BuildSegment.referenceTotal - 95.2) < 1e-9)
         #expect(BuildSegment.recompile.start == 0)
-        #expect(abs(BuildSegment.compile.start - 4.2 / 95.9) < 1e-9)
-        #expect(abs(BuildSegment.warmup.start - 22.2 / 95.9) < 1e-9)
-        #expect(abs(BuildSegment.warmup.width - 72.7 / 95.9) < 1e-9)
+        #expect(abs(BuildSegment.compile.start - 4.2 / 95.2) < 1e-9)
+        #expect(abs(BuildSegment.warmup.start - 22.2 / 95.2) < 1e-9)
+        #expect(abs(BuildSegment.warmup.width - 72.7 / 95.2) < 1e-9)
         // Package and swap are a sliver at the end.
         #expect(BuildSegment.package.width + BuildSegment.swap.width < 0.011)
         #expect(abs(BuildSegment.swap.start + BuildSegment.swap.width - 1) < 1e-9)
@@ -110,7 +113,7 @@ func at(_ seconds: Double) -> Date {
         let finished = [FinishedStep(segment: .recompile, seconds: 8.4, complete: true)]
         let left = try #require(BuildMeter.remaining(
             segment: .compile, done: 20, total: 135, samples: samples, finished: finished))
-        let later = (72.7 + 0.6 + 0.4) * 2
+        let later = (72.7 + 0.1 + 0.2) * 2
         #expect(abs(left - (115.0 / 5 + later)) < 1e-9)
     }
 

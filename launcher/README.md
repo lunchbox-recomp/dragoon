@@ -139,7 +139,7 @@ Measured on 2026-11-13 on macOS 26.6.2 with `idle_cpu.py` over 60 seconds, on a 
 
 ## The build page
 
-A build shows one bar in segments, each as wide as its step took on the Mac it was measured on. Recompile took 4.2 s there and compile and link 18.0 s. The warm-up took 72.7 s, and package and swap make a sliver at the end. `BuildProgress` in `DragoonCore` keeps the recipe's events and the moments they came. The bar moves only on an event and never goes back. It's full only once `done` comes.
+A build shows one bar in segments, each as wide as its step took on the Mac it was measured on. Recompile took 4.2 s there and compile and link 18.0 s. The warm-up took 72.7 s and the package 0.1 s, as `tools/README.md` has them. The swap wasn't timed, so it gets the 0.2 s left of that build's 95.2 s, and package and swap make a sliver at the end. `BuildProgress` in `DragoonCore` keeps the recipe's events and the moments they came. The bar moves only on an event and never goes back. It's full only once `done` comes.
 
 | Step | What the recipe tells the bar | What the page shows |
 |---|---|---|

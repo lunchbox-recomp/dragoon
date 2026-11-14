@@ -166,8 +166,8 @@ import Testing
         #expect(Self.replay(events).remaining == nil)
         events.append((64, .progress(step: "warmup", done: 3, total: 8)))
         let left = try #require(Self.replay(events).remaining)
-        // A run every 2 s leaves 10 s, and package and swap take twice their 1 s here.
-        #expect(abs(left - (10 + 2)) < 1e-9)
+        // A run every 2 s leaves 10 s, and package and swap take twice their 0.3 s here.
+        #expect(abs(left - (10 + 0.6)) < 1e-9)
     }
 
     /// A build as the recipe prints it, 135 files and 8 warm-up runs that finish in clumps.
