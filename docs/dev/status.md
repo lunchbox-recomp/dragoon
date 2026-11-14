@@ -134,7 +134,7 @@ and the discovery and CTest steps were read from CMake's files, not run.
 
 CI's macOS job runs `ninja unit` (`tools/ci.py:82`), which builds the engine's own unit tests
 and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
-(`gcn-recomp/CMakeLists.txt:1413-1416`). It builds `dragoon_tests` too and runs it once to list
+(`gcn-recomp/CMakeLists.txt:1432-1435`). It builds `dragoon_tests` too and runs it once to list
 its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's
 `Modules/GoogleTestAddTests.cmake:63-67`). So CI runs code compiled from this archive.
 
@@ -151,11 +151,11 @@ clicked (`imgui.cpp:11408`).
 
 `io.ConfigDebugHighlightIdConflicts` turns that tooltip on by default (`imgui.cpp:1712`), and
 the overlay leaves it on. Since gcn-recomp `d1a60e5` the overlay clears
-`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:565-567`), and
+`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:219-221`), and
 `TextLinkOpenURL` calls nothing when it's null, so a click on the link opens nothing. Since
-`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:551`,
+`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:205`,
 `imgui.cpp:11366`). The overlay also sets `IniFilename` and `LogFilename` to null, so Dear
-ImGui writes no file (`runtime/overlay/overlay.cpp:550-552`).
+ImGui writes no file (`runtime/overlay/overlay.cpp:204-206`).
 
 ## Disc inputs
 
