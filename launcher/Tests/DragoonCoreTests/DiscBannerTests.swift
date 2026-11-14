@@ -349,6 +349,15 @@ private let tileCases: [(Int, Int, Int)] = [
         #expect(banner.texts[0].shortName == "Café €")
     }
 
+    /// Windows-1252 leaves 0x81, 0x8D, 0x8F, 0x90 and 0x9D undefined, so such a string reads as
+    /// Latin-1, where each byte is the code point of its value.
+    @Test func aStringWindows1252CantDecodeReadsAsLatin1() throws {
+        var text = BannerText()
+        text.shortName = [0x41, 0x81, 0x42, 0x8D, 0x90]
+        let banner = try #require(read(standardDisc(makeBNR(texts: [text])).image))
+        #expect(banner.texts[0].shortName == "A\u{81}B\u{8D}\u{90}")
+    }
+
     @Test func stringsAreShiftJISOnAJapaneseDisc() throws {
         var text = BannerText()
         text.shortName = Array("テスト".data(using: .shiftJIS)!)
