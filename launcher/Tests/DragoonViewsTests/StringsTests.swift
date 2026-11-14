@@ -16,7 +16,7 @@ struct StringsTests {
         Strings.gameFailed(.couldNotStart(
             reason: Strings.gameStart(.missing(path: "/Users/Test Player/Dragoon.app")))),
         Strings.panicCut,
-    ]
+    ] + [Flow.HandOff.charging, .launched, .hidden].compactMap(Strings.launchCard)
 
     @Test(arguments: librarySentences)
     func aLibrarySentenceEndsInAFullStop(_ sentence: String) {
