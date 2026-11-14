@@ -665,15 +665,16 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1) | Pass |
 | HUD at 16:9 | Every HUD draw keeps its 4:3 width, height and distance to its anchored edge within 1 display pixel at 480 high, in the race, 1P City Trial, 2P and 4P | `drawlog.py hud` passed every anchored draw, 41 in the race (also with `GCN_GX_SYNC=1`), 33 in City Trial, 54 in 2P and 76 in 4P, on Dragoon `e52dce1` at loads of 1.5 to 3.1. It passed with the same counts under the stricter tool on Dragoon `1ff85c8` at gcn-recomp `b11ebc6`, where all twenty-four routes' frames and audio matched. Top Ride's 38 HUD draws still stretch, and so do the bars between split views, since they span the screen (`widescreen.md`) | Pass |
 | Split views | Every HUD box stays inside its own view at 16:9 | No HUD box in 2P or 4P sticks out of its view by more than 1 pixel more than at 4:3. The 4P clock sits on the bars and anchors to the screen's left edge (Dragoon `e52dce1` at loads of 1.5 to 3.1) | Pass |
-| Launcher's settings.txt writes | Byte for byte what the engine's `settings_save` writes, on shared fixtures | 19 of 19 fixtures the same on the real and the fake file system: BOM, CR LF, a first newline in CR LF and a last in LF, a last line with no newline, comments, unknown keys, bytes that aren't UTF-8, missing, duplicate and bad keys (`PictureSettingsTests`) | Pass |
+| Launcher's settings.txt writes | Byte for byte what the engine's `settings_save` writes, on shared fixtures | 20 of 20 fixtures the same on the real and the fake file system: BOM, CR LF, a first newline in CR LF and a last in LF, a last line with no newline, comments, unknown keys, bytes that aren't UTF-8, missing, duplicate and bad keys, and a `menu_sounds on` kept (`PictureSettingsTests`) | Pass |
 | Launcher's Settings preview | Every size it shows is the engine's | 50 window sizes for the five aspects in ten usable areas, 40 fullscreen pictures on eight displays and the internal picture at scales 1 to 10 match the engine's `aspect.h` and `kMaxInternalScale` (`PictureGeometryTests`), and the preview draws each of those windows and fullscreen pictures, checked row by row against the same tables (`SettingsPreviewTests`) | Pass |
 | Launcher's Settings sheet opening | 100 ms from Settings to the sheet drawn | 55 to 71 ms in a test process of its own and 17 to 19 ms in the full suite (`SettingsSheetTests`) | Pass |
 | Launcher writing settings.txt while the game runs | Never | Never, in `FlowSettingsTests`: Settings does nothing and a pick saves nothing while the launcher's or an earlier launcher's game runs, and Play waits while the sheet is open | Pass |
 
 The four launcher rows were measured on 2026-11-14 on macOS 26.6.2 with Swift 6.3.3. The
 fixtures and the geometry tables come from `tools/settings_fixtures.py`, which builds a harness
-against the pinned gcn-recomp `5e54665`'s `runtime/settings.cpp`, `runtime/platform.cpp` and
-`runtime/gx/aspect.h`, and its test checks it writes every committed file. The sheet's time runs from the press through
+against the pinned gcn-recomp's `runtime/settings.cpp`, `runtime/platform.cpp` and
+`runtime/gx/aspect.h`, and its test checks it writes every committed file. They were last
+written at gcn-recomp `864d9d4`, whose `settings_save` also writes `menu_sounds`. The sheet's time runs from the press through
 reading a real `settings.txt` to an `NSHostingView` laid out and drawn, and leaves out AppKit's
 slide in. Alone it's the first SwiftUI view the process draws. The one-time card after the
 first build that offers 4:3 or 16:9 isn't built yet.

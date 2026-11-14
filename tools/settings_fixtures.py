@@ -8,7 +8,7 @@ runtime/platform.cpp and runtime/gx/aspect.h, from the submodule, then writes th
 fixtures to DIR (launcher/Tests/DragoonCoreTests/SettingsFixtures by default):
   NAME.in, NAME.out  settings.txt before a save and what settings_save wrote over it with the
                      values cases.txt gives NAME. The missing case has no .in
-  cases.txt          NAME ASPECT FULLSCREEN SCALE DISC for each case
+  cases.txt          NAME ASPECT FULLSCREEN SCALE DISC SOUNDS for each case
   window-sizes.txt   ASPECT USABLE_W USABLE_H W H, the window main.cpp opens in a usable area,
                      0 by 0 for none, with its 40 point title bar
   fits.txt           ASPECT DISPLAY_W DISPLAY_H X Y W H, the fullscreen picture
@@ -50,6 +50,7 @@ class Case(NamedTuple):
     fullscreen: int
     scale: int
     disc: str
+    sounds: str = "off"  # menu_sounds
 
 
 CASES = [
@@ -77,6 +78,7 @@ CASES = [
     Case("bom-open-crlf", b"\xef\xbb\xbffullscreen 0\r\naspect window", "4:3", 1, 2, "fast"),
     Case("unchanged", b"aspect 16:9\nfullscreen 1\nscale 3\ndisc fast\n", "16:9", 1, 3, "fast"),
     Case("big-scale", b"scale 2\n", "4:3", 0, 999999999, "fast"),
+    Case("menu-sounds-on", b"menu_sounds on\naspect 4:3\n", "16:9", 0, 2, "fast", "on"),
 ]
 
 ASPECTS = ["4:3", "16:9", "16:10", "21:9", "window"]
@@ -168,13 +170,14 @@ def write(out: Path, exe: Path, work: Path) -> None:
         if case.before is not None:
             (folder / "settings.txt").write_bytes(case.before)
             (out / f"{case.name}.in").write_bytes(case.before)
-        commands.append(f"save {case.aspect} {case.fullscreen} {case.scale} {case.disc} {folder / 'settings.txt'}")
+        commands.append(f"save {case.aspect} {case.fullscreen} {case.scale} {case.disc} {case.sounds} "
+                        f"{folder / 'settings.txt'}")
     for case, answer in zip(CASES, ask(exe, commands)):
         if answer != "saved":
             raise Failure(f"{case.name}: settings_save failed")
         (out / f"{case.name}.out").write_bytes((saves / case.name / "settings.txt").read_bytes())
     (out / "cases.txt").write_text(
-        "".join(f"{c.name} {c.aspect} {c.fullscreen} {c.scale} {c.disc}\n" for c in CASES))
+        "".join(f"{c.name} {c.aspect} {c.fullscreen} {c.scale} {c.disc} {c.sounds}\n" for c in CASES))
 
     windows = [(a, w, h) for a in ASPECTS for w, h in USABLE]
     answers = ask(exe, [f"window {a} {w} {h}" for a, w, h in windows])

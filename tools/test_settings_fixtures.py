@@ -51,8 +51,12 @@ class HarnessTest(unittest.TestCase):
 
     def test_the_saved_bytes_are_the_engines_not_the_inputs(self) -> None:
         made = self.made()
-        self.assertEqual((made / "plain-lf.out").read_bytes(), b"aspect 21:9\nfullscreen 1\nscale 4\ndisc fast\n")
-        self.assertEqual((made / "missing.out").read_bytes(), b"aspect 16:9\nfullscreen 1\nscale 3\ndisc fast\n")
+        self.assertEqual((made / "plain-lf.out").read_bytes(),
+                         b"aspect 21:9\nfullscreen 1\nscale 4\ndisc fast\nmenu_sounds off\n")
+        self.assertEqual((made / "missing.out").read_bytes(),
+                         b"aspect 16:9\nfullscreen 1\nscale 3\ndisc fast\nmenu_sounds off\n")
+        self.assertEqual((made / "menu-sounds-on.out").read_bytes(),
+                         b"menu_sounds on\naspect 16:9\nfullscreen 0\nscale 2\ndisc fast\n")
         self.assertEqual((made / "scales.txt").read_text().splitlines()[-1], "10 5120 3840")
 
 

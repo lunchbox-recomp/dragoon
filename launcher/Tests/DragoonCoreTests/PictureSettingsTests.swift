@@ -21,13 +21,14 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
         let list = (try? String(contentsOf: directory.appendingPathComponent("cases.txt"), encoding: .utf8)) ?? ""
         return list.split(separator: "\n").compactMap { line in
             let words = line.split(separator: " ").map(String.init)
-            guard words.count == 5, let scale = Int(words[3]),
+            guard words.count == 6, let scale = Int(words[3]),
                 let after = try? Data(contentsOf: directory.appendingPathComponent(words[0] + ".out"))
             else { return nil }
             return SettingsFixture(
                 name: words[0],
                 picture: PictureSettings(
-                    aspect: words[1], fullscreen: words[2] == "1", scale: scale, fastDisc: words[4] == "fast"),
+                    aspect: words[1], fullscreen: words[2] == "1", scale: scale, fastDisc: words[4] == "fast",
+                    menuSounds: words[5] == "on"),
                 before: try? Data(contentsOf: directory.appendingPathComponent(words[0] + ".in")),
                 after: after)
         }
@@ -38,7 +39,7 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
     private let path = fakeData + "/settings.txt"
 
     @Test func everyFixtureIsListedAndRead() {
-        #expect(SettingsFixture.all.count == 19)
+        #expect(SettingsFixture.all.count == 20)
         #expect(SettingsFixture.all.filter { $0.before == nil }.map(\.name) == ["missing"])
     }
 
@@ -75,7 +76,8 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
         #expect(fs.writes.map(\.path) == [path + ".tmp"])
         #expect(fs.renames == [.init(from: path + ".tmp", to: path)])
         #expect(!fs.fileExists(at: path + ".tmp"))
-        #expect(try fs.readData(at: path) == Data("aspect 16:9\nfullscreen 0\nscale 2\ndisc fast\n".utf8))
+        #expect(
+            try fs.readData(at: path) == Data("aspect 16:9\nfullscreen 0\nscale 2\ndisc fast\nmenu_sounds off\n".utf8))
     }
 
     @Test(arguments: [
@@ -128,7 +130,9 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
 
     @Test func aFileThatIsntThereLoadsAsTheEngineDefaults() {
         #expect(PictureSettings.load(from: fakeData, fs: FakeFileSystem()) == PictureSettings())
-        #expect(PictureSettings() == PictureSettings(aspect: "4:3", fullscreen: false, scale: 2, fastDisc: true))
+        #expect(
+            PictureSettings()
+                == PictureSettings(aspect: "4:3", fullscreen: false, scale: 2, fastDisc: true, menuSounds: false))
     }
 
     @Test func theLastLineTheEngineTakesWinsAndOthersAreSkipped() {
@@ -142,11 +146,13 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
             fullscreen yes
             disc console
             disc slow
+            menu_sounds on
+            menu_sounds loud
             # aspect 16:10
             aspectx 4:3
             """
         #expect(PictureSettings(parsing: Data(text.utf8))
-            == PictureSettings(aspect: "21:9", fullscreen: true, scale: 3, fastDisc: false))
+            == PictureSettings(aspect: "21:9", fullscreen: true, scale: 3, fastDisc: false, menuSounds: true))
     }
 
     @Test(arguments: [

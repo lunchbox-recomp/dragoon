@@ -1,9 +1,10 @@
 import Foundation
 
-/// The four keys of `<data>/settings.txt` the engine saves: the picture's aspect, fullscreen and
-/// scale, and the disc speed. The game's working directory is `<data>`, so this is the file it
-/// reads as it starts and its Display page saves (gcn-recomp `runtime/settings.h`). The launcher
-/// shows the picture keys and writes the disc speed back as it read it, as the engine does.
+/// The five keys of `<data>/settings.txt` the engine saves: the picture's aspect, fullscreen and
+/// scale, the disc speed and the menu's sounds. The game's working directory is `<data>`, so this
+/// is the file it reads as it starts and its Display page saves (gcn-recomp `runtime/settings.h`).
+/// The launcher shows the picture keys and writes the disc speed and the menu's sounds back as it
+/// read them, as the engine does.
 public struct PictureSettings: Equatable, Sendable {
     /// "W:H", two whole numbers from 1 to 9999, or "window" for the window's own shape.
     public var aspect: String
@@ -13,6 +14,8 @@ public struct PictureSettings: Equatable, Sendable {
     public var scale: Int
     /// `disc fast`, or `disc console` when false.
     public var fastDisc: Bool
+    /// `menu_sounds on`, or `menu_sounds off` when false.
+    public var menuSounds: Bool
 
     /// The aspects the launcher offers, in the order the game's Display page shows them.
     public static let aspects = ["4:3", "16:9", "16:10", "21:9", "window"]
@@ -24,11 +27,15 @@ public struct PictureSettings: Equatable, Sendable {
     /// The largest side of an aspect the file takes, four digits, as `--aspect` takes it.
     static let largestAspectSide = 9999
 
-    public init(aspect: String = "4:3", fullscreen: Bool = false, scale: Int = 2, fastDisc: Bool = true) {
+    public init(
+        aspect: String = "4:3", fullscreen: Bool = false, scale: Int = 2, fastDisc: Bool = true,
+        menuSounds: Bool = false
+    ) {
         self.aspect = aspect
         self.fullscreen = fullscreen
         self.scale = scale
         self.fastDisc = fastDisc
+        self.menuSounds = menuSounds
     }
 
     /// The settings in a file's bytes over the defaults, as `settings_load` reads them. A line
@@ -46,6 +53,8 @@ public struct PictureSettings: Equatable, Sendable {
                 if let n = Self.positive(text, max: Self.largestScale) { scale = n }
             case "disc":
                 if text == "fast" || text == "console" { fastDisc = text == "fast" }
+            case "menu_sounds":
+                if text == "on" || text == "off" { menuSounds = text == "on" }
             default:
                 break
             }
@@ -108,7 +117,7 @@ public struct PictureSettings: Equatable, Sendable {
         }
     }
 
-    /// Sets the four keys in `<dataDirectory>/settings.txt`, keeping every other line, through
+    /// Sets the five keys in `<dataDirectory>/settings.txt`, keeping every other line, through
     /// `settings.txt.tmp` renamed over the file, as `settings_save` does. A save that fails
     /// leaves the old file whole and removes the `.tmp`.
     public func save(to dataDirectory: String, fs: any FileSystem) throws(SaveFailure) {
@@ -138,7 +147,7 @@ public struct PictureSettings: Equatable, Sendable {
     var values: [(key: String, value: String)] {
         [
             ("aspect", aspect), ("fullscreen", fullscreen ? "1" : "0"), ("scale", String(scale)),
-            ("disc", fastDisc ? "fast" : "console"),
+            ("disc", fastDisc ? "fast" : "console"), ("menu_sounds", menuSounds ? "on" : "off"),
         ]
     }
 }

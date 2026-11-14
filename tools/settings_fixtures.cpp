@@ -2,10 +2,10 @@
 // settings_fixtures.py against gcn-recomp's runtime/settings.cpp, runtime/platform.cpp and
 // runtime/gx/aspect.h. It reads one command a line from stdin and prints one line for each:
 //
-//   save ASPECT FULLSCREEN SCALE DISC PATH   settings_save over PATH: "saved" or "failed"
-//   window ASPECT USABLE_W USABLE_H          the window main.cpp opens: "W H"
-//   fit ASPECT DISPLAY_W DISPLAY_H           the fullscreen picture: "X Y W H"
-//   scale N                                  the picture the renderer draws at N: "W H"
+//   save ASPECT FULLSCREEN SCALE DISC SOUNDS PATH   settings_save over PATH: "saved" or "failed"
+//   window ASPECT USABLE_W USABLE_H                 the window main.cpp opens: "W H"
+//   fit ASPECT DISPLAY_W DISPLAY_H                  the fullscreen picture: "X Y W H"
+//   scale N                                         the picture the renderer draws at N: "W H"
 //
 // A usable area of 0 by 0 is none, as SDL gives where it can't say. The window's and the
 // output aspect's choices are main.cpp's, and the 640, the fit and the scale's cap are the
@@ -59,11 +59,12 @@ int main() {
         if (command == "save") {
             Settings s;
             int fullscreen;
-            std::string disc, path;
-            in >> s.aspect >> fullscreen >> s.scale >> disc;
+            std::string disc, sounds, path;
+            in >> s.aspect >> fullscreen >> s.scale >> disc >> sounds;
             std::getline(in >> std::ws, path);
             s.fullscreen = fullscreen == 1;
             s.fast_disc = disc == "fast";
+            s.menu_sounds = sounds == "on";
             printf("%s\n", settings_save(path, s) ? "saved" : "failed");
         } else if (command == "window") {
             int w, h;
