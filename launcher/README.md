@@ -78,7 +78,7 @@ The game's working directory is `<data>`, so `<data>/settings.txt` is the file i
 
 A save sets those four keys as `settings_save` does, through `SettingsText`, which works on the file's bytes. Each line of one of them is rewritten, and one the file lacks goes at the end in the line ending of the file's first newline. Every other line is kept byte for byte, comments, blank lines, unknown keys, bytes that aren't UTF-8 and a byte order mark included. The new file goes to `settings.txt.tmp` and is renamed over the old one, and a save that fails leaves the old file whole. Nothing is written for an aspect or scale the engine's load would skip, or when a file is there that can't be read.
 
-The 18 files in `Tests/DragoonCoreTests/SettingsFixtures/` came from a harness built against gcn-recomp's own `runtime/settings.cpp` and `runtime/platform.cpp` at e9b96fe. Its `settings_save` writes what the pinned 5e54665's does, which read the file with its own `fopen` in place of `plat_read_file`. Each `.in` is the file before a save, and each `.out` what the engine wrote over it with the values `cases.txt` gives. `PictureSettingsTests` saves the same values over each `.in` and checks the launcher writes the `.out` byte for byte.
+The 18 cases in `Tests/DragoonCoreTests/SettingsFixtures/` came from a harness built against gcn-recomp's own `runtime/settings.cpp` and `runtime/platform.cpp` at e9b96fe. Its `settings_save` writes what the pinned 5e54665's does, which read the file with its own `fopen` in place of `plat_read_file`. Each `.in` is the file before a save, and each `.out` what the engine wrote over it with the values `cases.txt` gives. `PictureSettingsTests` saves the same values over each `.in` and checks the launcher writes the `.out` byte for byte.
 
 ## The Settings sheet
 
@@ -88,7 +88,7 @@ Each pick is saved at once. The flow saves only while Library is idle, so never 
 
 The preview draws the game's window, or the screen when fullscreen is on, 120 points high and as wide as its shape. Its sizes come from `PictureGeometry` in `DragoonCore`, which follows gcn-recomp's `runtime/gx/aspect.h`. The window opens at 960 points high and as wide as the aspect makes that, or the largest of that shape that fits the display's usable area less a 40 point title bar, as `main.cpp` places it. Fill window opens at 4:3. Fullscreen fits the picture to the screen with `fit_aspect`'s bars, and Fill window fills it. In the frame is a horizon, a track and the race HUD's boxes, all sized by the picture's height, so a wider aspect shows more of the track at the sides while the HUD stays in its 4:3 box. Scale says what the renderer draws at, 640x480 times the scale, beside an edge drawn in pixels of that scale's size.
 
-From Settings to the sheet drawn takes 63 to 69 ms in `SettingsSheetTests`: the press, the read of a real `settings.txt`, its result and an `NSHostingView` laid out and drawn. The sheet's slide in isn't counted.
+From Settings to the sheet drawn takes 55 to 71 ms in `SettingsSheetTests` run alone, where the sheet is the first SwiftUI view the process draws, and 17 to 19 ms in the full suite. That covers the press, the read of a real `settings.txt`, its result and an `NSHostingView` laid out and drawn. The sheet's slide in isn't counted.
 
 ## Running the recipe
 
@@ -236,7 +236,9 @@ Library's streaks, the launch card, the build bar's shimmer and the build page's
 
 The PNGs hold only the launcher's own UI. Library and Build show the disc's banner, and their fixtures use `TestBanner`, a made-up pattern the tests build, never a real banner.
 
-The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 39 PNGs come to 1,421 KB, from 3 to 112 KB each.
+`SettingsSnapshotTests` renders the Settings sheet alone at its 640x500 points, since `ImageRenderer` doesn't draw a sheet over the window. It draws each aspect in a window, 4:3 and 21:9 fullscreen, and a save that failed, on a 1920x1080 point display whose usable area is 1920x1050, in `TestBanner`'s colors. `SettingsPreviewTests` checks the preview's frame and picture against `PictureGeometry` for every aspect, scale 1 to 8 and 12, windowed and fullscreen, on that display, on a 1512x982 one and on none, and `PictureGeometryTests` checks `PictureGeometry` against `window-sizes.txt`, `fits.txt` and `scales.txt` in `SettingsFixtures/`, which the harness printed from the engine's `aspect.h` and `kMaxInternalScale`.
+
+The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 47 PNGs come to 1,705 KB, from 3 to 112 KB each.
 
 Measured on 2026-11-13 on macOS 26.6.2 with the Command Line Tools 26.6 and Swift 6.3.3, `ImageRenderer` can't draw three of the views the window uses. The results are the same with `NSApplication.shared` made first.
 
