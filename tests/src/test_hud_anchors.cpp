@@ -707,6 +707,43 @@ TEST(CameraMark, TheRaceAfterItsFinishKeepsTheModulesView) {
     EXPECT_EQ(dragoon::camera_mark(narrow(25), w.at(8401), kWide), Mark{});
 }
 
+// The wide aspects the launcher's Settings sheet offers.
+constexpr float kOffered[] = {16.0f / 9.0f, 16.0f / 10.0f, 21.0f / 9.0f};
+
+// Where x in the 640 frame shows once its draw is anchored by `m` at output aspect `output` and
+// the picture is stretched to that aspect, in 4:3 pixels of the picture's height: the output is
+// 640 / k of them across.
+float shown(const Mark& m, float x, float output) {
+    const float k = gx::anchor_scale(output, false);
+    return gx::anchor_x(m.a, x, m.x0, m.x1, k) / k;
+}
+
+TEST(CameraMark, AMenuCameraCentersTheFrameAtEachOfferedAspect) {
+    for (const float output : kOffered) {
+        EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, output), dragoon::kMenuFrame) << output;
+        EXPECT_EQ(dragoon::camera_mark(narrow(25), {dragoon::kScreen}, output), Mark{}) << output;
+    }
+}
+
+TEST(EdgeMark, AHudBoxKeepsItsFourByThreeSizeAndDistanceToItsEdgeAtEachOfferedAspect) {
+    for (const float output : kOffered) {
+        const float across = 640.0f / gx::anchor_scale(output, false);
+        EXPECT_NEAR(across, 480 * output, 1e-2) << output;  // 853.3, 768 and 1120
+        // A box 68 wide, 20 in from the left edge, and its mirror at the right.
+        const Mark left = dragoon::edge_mark(20, 40, {});
+        const Mark right = dragoon::edge_mark(620, 40, {});
+        ASSERT_EQ(left, (Mark{Anchor::Left, 0, 640}));
+        ASSERT_EQ(right, (Mark{Anchor::Right, 0, 640}));
+        EXPECT_NEAR(shown(left, 20, output), 20, 1e-3) << output;
+        EXPECT_NEAR(shown(left, 88, output), 88, 1e-3) << output;
+        EXPECT_NEAR(across - shown(right, 620, output), 20, 1e-3) << output;
+        EXPECT_NEAR(across - shown(right, 552, output), 88, 1e-3) << output;
+        // The menus' frame keeps its 640 width, centered in the wider picture.
+        EXPECT_NEAR(shown(dragoon::kMenuFrame, 0, output), (across - 640) / 2, 1e-3) << output;
+        EXPECT_NEAR(shown(dragoon::kMenuFrame, 640, output), (across + 640) / 2, 1e-3) << output;
+    }
+}
+
 TEST(HudCallbacks, AStretchedCallbackTakesTheCamerasMark) {
     dragoon::HudCallbacks h;
     h.set_camera(dragoon::kMenuFrame);

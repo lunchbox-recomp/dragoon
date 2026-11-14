@@ -270,7 +270,9 @@ public enum Strings {
         case "4:3": return "4:3 is the console's own shape."
         case "window": return "The picture takes the window's shape as it's resized. The window opens at 4:3."
         default:
-            return "The track widens to \(aspect) and the race HUD keeps its 4:3 box. Top Ride's HUD and the menus stretch."
+            // The HUD at 16:9 is measured (docs/dev/status.md's HUD row), and 16:10 and 21:9 are
+            // checked by tests/src/test_hud_anchors.cpp's offered aspects.
+            return "The world widens to \(aspect). The race HUD keeps its 4:3 size at the picture's edges, the menus stay 4:3 in the middle, and Top Ride's HUD stretches."
         }
     }
     /// Where the game's picture goes: its window, or the screen.
@@ -288,7 +290,7 @@ public enum Strings {
     }
     static func scaleNote(_ scale: Int) -> String {
         let size = PictureGeometry.internalSize(scale: scale)
-        return "Each frame is drawn at \(size.width) x \(size.height) inside, then fit to the window."
+        return "Each frame is drawn at \(size.width) x \(size.height), then stretched to the picture's shape."
     }
     /// The preview's name for VoiceOver.
     static func previewLabel(_ size: WholeSize) -> String {
