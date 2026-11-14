@@ -110,7 +110,7 @@ class ForkCitesTest(unittest.TestCase):
                                    docs={"docs/a doc.md": "`gcn-recomp/runtime/main.cpp:3-5`\n"})
         self.assertEqual((code, err), (0, ""))
         self.assertEqual(out, "ok docs/a doc.md:1 runtime/main.cpp:3-5\n"
-                              "total 1, ok 1, moved 0, gone 0, outside 0, unchanged 0\n")
+                              "total 1, ok 1, moved 0, gone 0, outside 0, unchanged 0, skipped 0\n")
 
     def test_lines_pushed_down_are_moved_to_where_they_went(self):
         code, out, _ = self.bump({"runtime/main.cpp": text(TEN)},
@@ -119,7 +119,7 @@ class ForkCitesTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(out, "moved docs/a.md:2 runtime/main.cpp:3-5 now 5-7\n"
                               "moved docs/a.md:2 runtime/main.cpp:8 now 10\n"
-                              "total 2, ok 0, moved 2, gone 0, outside 0, unchanged 0\n")
+                              "total 2, ok 0, moved 2, gone 0, outside 0, unchanged 0, skipped 0\n")
 
     def test_lines_whose_text_changed_are_gone(self):
         new = TEN[:3] + ["line four"] + TEN[4:]
@@ -159,7 +159,7 @@ class ForkCitesTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(out, "outside docs/a.md:1 runtime/same.cpp:10-11, OLD has 10 lines\n"
                               "outside docs/a.md:1 runtime/same.cpp:0, OLD has 10 lines\n"
-                              "total 2, ok 0, moved 0, gone 0, outside 2, unchanged 0\n")
+                              "total 2, ok 0, moved 0, gone 0, outside 2, unchanged 0, skipped 0\n")
 
     def test_a_range_that_runs_backwards_is_outside(self):
         code, out, _ = self.bump({"runtime/same.cpp": text(TEN)}, {},
@@ -182,7 +182,7 @@ class ForkCitesTest(unittest.TestCase):
                                  docs={"docs/a.md": "`same.cpp:2` `main.cpp:2`\n"})
         self.assertEqual(code, 0)
         self.assertEqual(out, "ok docs/a.md:1 runtime/main.cpp:2\n"
-                              "total 2, ok 1, moved 0, gone 0, outside 0, unchanged 1\n")
+                              "total 2, ok 1, moved 0, gone 0, outside 0, unchanged 1, skipped 0\n")
 
     def test_a_bare_name_dragoon_also_has_needs_the_gcn_recomp_prefix(self):
         code, out, _ = self.bump({"CMakeLists.txt": text(TEN)}, {"CMakeLists.txt": text(["x"] + TEN)},
@@ -194,7 +194,7 @@ class ForkCitesTest(unittest.TestCase):
         code, out, err = self.bump({"tools/ci.py": text(TEN)}, {"tools/ci.py": text(["x"] + TEN)},
                                    docs={"tools/ci.py": "pass\n", "docs/a.md": "`tools/ci.py:2`, `:3`\n"})
         self.assertEqual((code, err), (0, ""))
-        self.assertEqual(out, "total 0, ok 0, moved 0, gone 0, outside 0, unchanged 0\n")
+        self.assertEqual(out, "total 0, ok 0, moved 0, gone 0, outside 0, unchanged 0, skipped 0\n")
 
     def test_a_markdown_continuation_with_no_cite_on_its_line_is_warned_about(self):
         code, out, err = self.bump({"runtime/main.cpp": text(TEN)}, {"runtime/main.cpp": text(["x"] + TEN)},
@@ -206,14 +206,13 @@ class ForkCitesTest(unittest.TestCase):
         self.assertEqual(err, "fork_cites.py: docs/a.md:2: :3 has no file:N cite before it on its "
                               "line, so it isn't checked\n")
 
-    def test_a_bare_name_two_fork_files_share_is_warned_about_and_skipped(self):
-        code, out, err = self.bump({"runtime/a/twin.cpp": text(TEN), "runtime/b/twin.cpp": text(TEN)},
-                                   {"runtime/a/twin.cpp": text(["x"] + TEN)},
-                                   docs={"docs/a.md": "x\n`twin.cpp:2` and `a/twin.cpp:2`\n"})
-        self.assertEqual(code, 1)
-        self.assertEqual(self.report(out), ["moved docs/a.md:2 runtime/a/twin.cpp:2 now 3"])
-        self.assertEqual(err, "fork_cites.py: docs/a.md:2: twin.cpp names 2 fork files "
-                              "(runtime/a/twin.cpp, runtime/b/twin.cpp), so it isn't checked\n")
+    def test_a_bare_name_two_fork_files_share_is_skipped_and_exits_1(self):
+        code, out, err = self.bump({"runtime/a/twin.cpp": text(TEN), "runtime/b/twin.cpp": text(TEN)}, {},
+                                   docs={"docs/a.md": "x\n`twin.cpp:2-3` and `a/twin.cpp:2`\n"})
+        self.assertEqual((code, err), (1, ""))
+        self.assertEqual(out, "skipped docs/a.md:2 twin.cpp:2-3, names 2 fork files "
+                              "(runtime/a/twin.cpp, runtime/b/twin.cpp)\n"
+                              "total 2, ok 0, moved 0, gone 0, outside 0, unchanged 1, skipped 1\n")
 
     def test_its_own_two_files_are_left_out(self):
         own = {name: (fork_cites.ROOT / name).read_text() for name in fork_cites.OWN}
@@ -226,12 +225,12 @@ class ForkCitesTest(unittest.TestCase):
                                    docs={**own, "docs/a.md": "`main.cpp:2`\n"})
         self.assertGreater(len(fork), 5)
         self.assertEqual((code, out, err),
-                         (0, "total 1, ok 0, moved 0, gone 0, outside 0, unchanged 1\n", ""))
+                         (0, "total 1, ok 0, moved 0, gone 0, outside 0, unchanged 1, skipped 0\n", ""))
 
     def test_a_name_the_fork_lacks_is_not_a_fork_cite(self):
         code, out, err = self.bump({"runtime/main.cpp": text(TEN)}, {},
                                    docs={"tools/t.py": "'guest panic: foo.c:12: boom'\n"})
-        self.assertEqual((code, out, err), (0, "total 0, ok 0, moved 0, gone 0, outside 0, unchanged 0\n", ""))
+        self.assertEqual((code, out, err), (0, "total 0, ok 0, moved 0, gone 0, outside 0, unchanged 0, skipped 0\n", ""))
 
     def test_a_file_added_at_new_resolves_a_bare_name(self):
         code, out, _ = self.bump({}, {"runtime/added.cpp": text(TEN)}, docs={"docs/a.md": "`added.cpp:2`\n"})

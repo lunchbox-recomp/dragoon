@@ -13,11 +13,11 @@ the working tree, for cites of gcn-recomp files by line. These forms count:
   , N or , N-M straight after a cite         a list, as in render_gl_batch.cpp:180, 522-523, when
                                              the number ends at ), comma, ; or a backtick
 A bare name Dragoon also has, such as CMakeLists.txt, needs the gcn-recomp/ prefix to count. A
-name two fork files share is skipped with a warning. So is a Markdown :N with no file:N cite
-before it on its line, even one whose file is named there without a line or on the line before,
-since the tool can't tell which file it means. PATH:N:M is a compiler's diagnostic, not a cite,
-and Markdown's fenced code blocks hold quoted output, so their lines are skipped. Paths with
-spaces aren't recognised.
+name two fork files share is listed as skipped, below. A Markdown :N with no file:N cite before
+it on its line is skipped with a warning on stderr, even one whose file is named there without a
+line or on the line before, since the tool can't tell which file it means. PATH:N:M is a
+compiler's diagnostic, not a cite, and Markdown's fenced code blocks hold quoted output, so their
+lines are skipped. Paths with spaces aren't recognised.
 
 Each cite's lines are read at OLD with git -C gcn-recomp show. A cite whose file changed between
 OLD and NEW is listed as one of:
@@ -27,16 +27,18 @@ OLD and NEW is listed as one of:
 Lines are compared with their leading and trailing whitespace stripped. Any cite, in a changed
 file or not, whose lines aren't all in the file at OLD is listed as
   outside DOC:LINE PATH:N-M, OLD has K lines   (or "not at OLD")
-since it was stale before the bump. Cites in unchanged files are only counted. The last line is
-"total T, ok O, moved M, gone G, outside X, unchanged U". DOC and PATH are relative to Dragoon
-and to gcn-recomp.
+since it was stale before the bump. A name two fork files at OLD or NEW share is listed as
+  skipped DOC:LINE NAME:N-M, names K fork files (PATH, PATH)
+since it can't be checked until the cite gives more of the path. Cites in unchanged files are
+only counted. The last line is
+"total T, ok O, moved M, gone G, outside X, unchanged U, skipped S". DOC and PATH are relative to
+Dragoon and to gcn-recomp.
 
 --repo names the Dragoon checkout, by default the one holding this tool. --at REV reads Dragoon's
 files at commit REV instead of the working tree, leaving out links. Name the commit that moved
 the pin to re-check a bump whose cites were already edited, since a cite moved by hand to NEW's
-lines reads as moved from OLD's. Exits 1 when a cite
-moved, is gone or is outside, 0 when none is, and 2 when gcn-recomp isn't checked out or git
-can't read OLD or NEW there.
+lines reads as moved from OLD's. Exits 1 when a cite moved, is gone, is outside or was skipped,
+0 when none is, and 2 when gcn-recomp isn't checked out or git can't read OLD or NEW there.
 """
 from __future__ import annotations
 
@@ -203,7 +205,7 @@ def run(repo: Path, old: str, new: str, at: Optional[str]) -> int:
         git(engine, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")
     fork = Fork(engine, old, new)
     dragoon, texts = dragoon_texts(repo, at)
-    counts = dict.fromkeys(("ok", "moved", "gone", "outside", "unchanged"), 0)
+    counts = dict.fromkeys(("ok", "moved", "gone", "outside", "unchanged", "skipped"), 0)
     for doc, body in texts.items():
         cites, strays = find(body, doc.endswith(".md"))
         for number, written in strays:
@@ -212,16 +214,17 @@ def run(repo: Path, old: str, new: str, at: Optional[str]) -> int:
         for cite in cites:
             path, several = resolve(cite.path, dragoon, fork)
             if several:
-                print(f"fork_cites.py: {doc}:{cite.line}: {cite.path} names {len(several)} fork "
-                      f"files ({', '.join(several)}), so it isn't checked", file=sys.stderr)
-            if path is None:
+                status, path = "skipped", cite.path
+                rest = f", names {len(several)} fork files ({', '.join(several)})"
+            elif path is None:
                 continue
-            status, rest = check(cite, path, fork)
+            else:
+                status, rest = check(cite, path, fork)
             counts[status] += 1
             if status != "unchanged":
                 print(f"{status} {doc}:{cite.line} {path}:{span(cite.first, cite.last)}{rest}")
     print(f"total {sum(counts.values())}, " + ", ".join(f"{k} {v}" for k, v in counts.items()))
-    return 1 if counts["moved"] or counts["gone"] or counts["outside"] else 0
+    return 0 if counts["ok"] + counts["unchanged"] == sum(counts.values()) else 1
 
 
 def main(argv: list[str]) -> int:
