@@ -37,7 +37,7 @@ analysis/out/
 __pycache__/
 # Each player's own controller settings
 /controls.txt
-# Each player's own picture settings, which the overlay menu's Display page saves
+# Each player's own picture and menu sound settings, which the overlay menu's Display page saves
 /settings.txt
 # The launcher's SwiftPM builds
 launcher/.build/

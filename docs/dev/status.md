@@ -16,12 +16,12 @@ frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `864d
 | Audio | Partial | The mixer runs the commands of the game's ucode (`07F88145`) with its compressor among them, and ten runs' 484,400 command lists held no unknown or skipped one (under Audio). Source type 0 voices, 98.9% of the voice time, resample through a polyphase filter whose coefficients the runtime works out because the console's are in the DSP's ROM, and the low-pass filter isn't applied. Nobody has listened for the sound's quality since the source type 2 fix or compared it with a console, and the click counts are in [`scorecard.md`](scorecard.md), last scored at gcn-recomp `dac449e` (`audio.md`) |
 | Controllers | Four ports, live | Each gamepad takes the port `saves/ports.txt` says it was last on, or else its SDL player number's or the lowest free one. The overlay menu's Controllers page swaps, removes and orders players by who presses A, and a notice says when a controller connects, disconnects or changes player (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with Air Ride's and City Trial's HUD anchored and the menus centered | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD keeps its 4:3 shape at the race, City Trial, 2P and 4P checkpoints, anchored to the edges of the screen or of its player's view, as all four showed on Dragoon `1ff85c8`. The title, the menus, the text boxes and the opening movie keep their 4:3 frame in the middle. On Dragoon `2d68a1e` the 16:9 output dumps of the text box, the movie and the course select went from 3414x1920 at 1.7781 to 2560x1920 at 1.3333 with bars of 427, the title from 2.1815 to 1.6351 (1.6358 at 4:3) and the mode select from 1.9094 to 1.4312 (1.4318). Top Ride's HUD, which it draws outside every render callback, and a menu over play stretch with the picture. On Dragoon `ec0004a` `drawlog.py hud` listed Top Ride's 38 HUD draws at 3600 as stretched, and the race after its finish at 8400, City Trial and 2P gave the same results as on `e79f475`. At an output narrower than 4:3 the menus stretch too (`widescreen.md`). The HUD the table anchors still remaps there, each piece widened from its anchor by 4/3 over the output's aspect (4/3 at 1:1). No run measured it |
-| Speed | Holds 60 fps | 526 and 524 frames a second in two runs of a race in a hidden window with `--fast`. `dragoon_bench`, which draws nothing, runs the race at 600. Four-player City Trial averages 16.69 and 16.68 ms a frame in two runs at the game's own speed, with one interval over 20 ms in each, the worst 48.61 ms. The stadium's scene changes stall the guest for up to 160 ms (under gcn-recomp `864d9d4`) |
+| Speed | Holds 60 fps | 525 and 524 frames a second in two runs of a race in a hidden window with `--fast`. `dragoon_bench`, which draws nothing, runs the race at 600. Four-player City Trial averages 16.69 and 16.68 ms a frame in two runs at the game's own speed, with one interval over 20 ms in each, the worst 48.61 ms, neither traced. The stadium's scene changes stall the guest for up to 160 ms (under gcn-recomp `864d9d4`) |
 | Build from the disc | Works | 23 s at gcn-recomp `67a7e30` (3.5 s to configure, 19.5 s for Ninja). That's before the build compiled SDL3 and Dear ImGui and before the default target ran the shader warm-up, which adds about 64 s (`CMakeLists.txt:69-78`, Player targets) |
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
 | Disc path with spaces | Works | Configures, and its `dragoon_bench` builds and runs |
-| Running from another directory | Works | The configured disc path is compiled in. The memory card and shader cache are in `saves/` in the current folder, so a run from another folder starts with a blank card and compiles shaders as it goes. The overlay menu's Display page writes `settings.txt` in the current folder when it changes the picture, and later runs started there read it |
+| Running from another directory | Works | The configured disc path is compiled in. The memory card and shader cache are in `saves/` in the current folder, so a run from another folder starts with a blank card and compiles shaders as it goes. The overlay menu's Display page writes `settings.txt` in the current folder when it changes the picture or its Menu sounds box, and later runs started there read it |
 | Network during the build | SDL and Dear ImGui | The first configure in a build directory downloads SDL 3.4.18's source release (15.7 MB) and Dear ImGui 1.92.9b's (2.1 MB), and checks the SHA-256 of each. `-DGCN_SYSTEM_SDL=ON` uses an installed SDL3 instead. Dear ImGui draws the overlay menu, and `-DGCN_OVERLAY=OFF` builds the game with no menu and doesn't download Dear ImGui |
 | Idle loop | Works | `recomp/idle.txt` 803D9FCC is the `IDLE_CHECK` branch in the generated C |
 
@@ -921,15 +921,16 @@ at `95e1c6b`.
 ## gcn-recomp `864d9d4`
 
 The pin moved from `1abcf10` to `864d9d4`, 94 commits. The overlay menu has a header with a pill
-for each page, turned by L1, R1, the triggers, Q and E, a footer of hints with Restart and Quit
-asking in a card, a focus ring that eases between items, controller glyphs in each family's
-colours, notices as toasts and sounds that are off until `menu_sounds on`. The held frame
-behind the menu is blurred on the GL path, and the Buttons view scrolls its rows between a
-header and footer that stay put. A theme or page a game gives from a static initializer is
-kept through the overlay's own (gcn-recomp #102). Without that, from the header's `8700d67`
-the Mods page had no pill and `GCN_OVERLAY_PAGE=2` opened Controllers. At `864d9d4` the Mods
-pill is back after Controllers, and page 2 is Mods. `GCN_PROGRESS` prints the presented-frame
-count. No route opens the menu, and `--dump-output` leaves out the blur.
+for each page, turned by L1, R1, the triggers, a GameCube pad's Z, L or R let go alone, Q and E,
+a footer of hints with Restart and Quit asking in a card, a focus ring that eases between items,
+controller glyphs in each family's colours, notices as toasts and sounds that stay off until the
+Display page's Menu sounds box turns them on, saved as `menu_sounds on`. The held frame behind
+the menu is blurred on the GL path, and the Buttons view scrolls its rows between a header and
+footer that stay put. A theme or page a game gives from a static initializer is kept through the
+overlay's own (gcn-recomp #102). Without that, from the header's `8700d67` the Mods page had no
+pill and `GCN_OVERLAY_PAGE=2` opened Controllers. At `864d9d4` the Mods pill is back after
+Controllers, and page 2 is Mods. `GCN_PROGRESS` prints the presented-frame count. No route opens
+the menu, and `--dump-output` leaves out the blur.
 
 Built on Dragoon `2525ea1`, `tools/frame_hashes.py check` matched all twenty-four routes and
 1,906 frames in 14 min 40 s. `tools/audio_hashes.py check` then matched all 48 rows in 14 min
@@ -941,7 +942,7 @@ None of the 24 bench logs has an `[interp]` line.
 The speed runs came after the checks on the same build, one game at a time, at 1-minute loads
 of 2.6 to 6.5. The race route ran hidden with `--fast` as
 `tools/probe.sh speed-race 40 tests/routes/air-ride-race.txt 60`, and its dumps of frames 3,600
-and 13,200 were written 18.27 s apart, 526 frames a second, at a load of 3.0 to 3.8. A second
+and 13,200 were written 18.27 s apart, 525 frames a second, at a load of 3.0 to 3.8. A second
 run, with the load at 6.5 as it ended, wrote them 18.33 s apart, 524 a second. In the audio
 check's `dragoon_bench` run of that route, the one-second samples from 8 s to 20 s averaged 600
 frames a second, between 565 and 722. Both are above the 463 to 498 and 527 at `1abcf10`, whose
