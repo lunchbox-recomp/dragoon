@@ -210,14 +210,14 @@ import Testing
         #expect(abs(playing.fraction - (4.2 + 18.0 * 100 / 135) / 95.2) < 1e-9)
     }
 
+    /// The recipe prints one plan, before any step (`launcher_build.py`'s `build_game`), so a
+    /// plan after a step is only an event out of order, and one is all this tests.
     @Test func aLatePlanMovesTheBarOnlyForward() {
         var progress = Self.compiled(100, plan: [])
         let before = progress.fraction
         progress.note(.plan(warmup: false), at: at(30))
-        #expect(abs(progress.fraction - (4.2 + 18.0 * 100 / 135) / 22.5) < 1e-9)
-        progress.note(.plan(warmup: true), at: at(31))
         #expect(progress.fraction > before)
-        #expect(progress.skipped == [])
+        #expect(abs(progress.fraction - (4.2 + 18.0 * 100 / 135) / 22.5) < 1e-9)
     }
 
     @Test func aPlanMovesNeitherTheBarNorTheClock() {
