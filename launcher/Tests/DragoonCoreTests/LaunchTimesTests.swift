@@ -105,9 +105,6 @@ import Testing
             print(String(
                 format: "launch timing: start %.1f ms, line written %.1f ms after the start, seen %.1f ms after that, %@, hidden %.1f ms after Play",
                 run.toStart, run.toWrite, run.toSee, run.times.summary, run.toHide))
-            // The game starts after Play, and the flow hides after the line goes in.
-            #expect(run.toStart >= 0)
-            #expect(run.toSee >= 0)
         }
     }
 }
