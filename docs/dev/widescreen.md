@@ -452,8 +452,42 @@ The course select's cursor (`--color FFF070 --within 12`) is 401x377 at 302 at 4
 
 The after runs centered 83 draws at 60, 1 at 600, 156 at 960, 214 at 1200 and 83 at 2100. The
 mode select's render to texture is the one draw left stretched. `drawlog.py hud` gave the same
-counts as before for the race at 4200 and 4P at 3480. `tools/ram_peek.py` read the scene, player 1's speed and place at 2400, 3600,
-4200 and 6000 of the race at 4:3 and at 16:9, and all 20 values matched.
+counts as before for the race at 4200 and 4P at 3480. `tools/ram_peek.py` read the scene,
+player 1's speed and place at 2400, 3600, 4200 and 6000 of the race at 4:3 and at 16:9, and all
+20 values matched.
+
+Play has narrow cameras over the screen too, so the menus' mark could reach a HUD drawn while
+the frame has no view. On Dragoon `e79f475` and `c78d444`, one run at a time at loads of 8 to 10,
+`drawlog.py hud` gave the same lines at both for these four, and the 16:9 output dumps of Top
+Ride and the race at 8400 were the same files.
+
+| Checkpoint | Anchored | Failed | Stretched | 16:9 dump, `picture_box.py` |
+|---|---|---|---|---|
+| Top Ride on Grass, 3600 | 0 | 0 | 38 | 3414x1920, bars 0 and 0 |
+| Race after the finish, 8400 | 11 | 3 | 0 | 3414x1627 from row 158, bars 0 and 0 |
+| City Trial, 3300 | 33 | 0 | 0 | 3414x1920, bars 0 and 0 |
+| 2P, 3480 | 54 | 0 | 1 | 3376x1764 at 19, bars 19 and 19 |
+
+Top Ride's 38 HUD draws go through fov 25 cameras at 1.25538 over the screen, which
+`fn_802CA894` and `kar_a2d_game_effect__80379f94` set up, and no world camera gives its frames
+a view, so those cameras' mark is the 4:3 frame. But Top Ride makes them current and draws its
+HUD outside every render callback. Their `[census]` lines name no callback, and none of the
+frame's 233 draws carries a callback's tag. A camera's mark goes only to a callback's draws, so
+the HUD stretches.
+
+After the race's finish the world camera that's drawn is set once, at 8,092. The module's call
+returning to `0x800C2884` still sets eight cameras that aren't drawn each frame to 13,061, and
+`ram_peek.py` read all eight with a 640x480 viewport at 8400, so every frame has the screen as
+its view. The table places the 11 HUD draws, all `fn_8011500C`'s. The three that fail are the
+banner's pieces under "What 16:9 still gets wrong".
+
+The views are forgotten as `CObjAmnesia` forgets the scene's cameras. Before that, the results'
+first frame at 13,062 read 13,061's view, and its 92 draws stretched while 91 of 13,063's were
+centered. On Dragoon `e523252` 91 of 13,062's are centered.
+
+At an output narrower than 4:3, as with `--aspect=1:1` or a tall window, no camera takes the
+mark. Centered, the frame would be wider than the window and lose about 107 of its 640 at each
+side at 1:1. So the menus stretch there, squeezed but whole. No run measured it.
 
 ## What 16:9 still gets wrong
 
@@ -468,9 +502,9 @@ loads of 4.2 to 5.0.
   The banner's dark stripe spans the screen at 4:3 but is drawn within one of the callback's
   joint trees, so at 16:9 it takes the tree's middle anchor and stops short of both sides.
 - In Top Ride the clock, the lap count and the four players' counters are 4/3 too wide. At
-  3600 `drawlog.py hud` listed all 38 of its HUD draws as stretched, since no callback in the
-  table draws them. Top Ride's census on Dragoon `701a2dd` has all 38 drawn by
-  `HSD_GObjJObjDisp`, the render callback of every model object, so the table can't name them.
+  3600 on Dragoon `c78d444` `drawlog.py hud` listed all 38 of its HUD draws as stretched. Top
+  Ride draws them outside every render callback, none of them carrying a callback's tag, so the
+  table, which keys on the callback, can't place them.
 - A HUD element that first shows goes by its root's place, or by joints still where the game made
   them, until its joints have drawn. That can anchor it to the wrong edge for a frame, as it can
   one that shows scaled to nothing after missing a frame. In the draw logs every tree
