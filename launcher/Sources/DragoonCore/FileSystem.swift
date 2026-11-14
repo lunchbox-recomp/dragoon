@@ -18,7 +18,7 @@ public protocol FileSystem: Sendable {
     /// `path` with every symlink in it resolved, or `path` itself when nothing is there.
     func resolvingSymlinks(at path: String) -> String
     func readData(at path: String) throws -> Data
-    /// Opens the file at `path` for reading, which throws when nothing readable is there.
+    /// Opens the file at `path` for reading, which throws when no regular file is there.
     func openReader(at path: String) throws -> any FileReader
     /// Replaces the file at `path` whole or not at all, making its directory first.
     func writeData(_ data: Data, to path: String) throws
@@ -113,12 +113,26 @@ public struct SystemFileSystem: FileSystem {
 
 /// A file opened with open(2) and read with pread(2), which takes its offset as an argument.
 /// Reads share no position, so two at once can't disturb each other.
+///
+/// Only a regular file opens. A directory throws `EISDIR` and anything else, such as a FIFO,
+/// `EFTYPE`. The open doesn't wait for a FIFO's writer.
 private final class SystemFileReader: FileReader {
     private let descriptor: Int32
 
     init(path: String) throws {
-        descriptor = open(path, O_RDONLY | O_CLOEXEC)
+        descriptor = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
         if descriptor < 0 { throw Self.error(errno) }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0 else {
+            let failure = errno
+            close(descriptor)
+            throw Self.error(failure)
+        }
+        let type = info.st_mode & S_IFMT
+        guard type == S_IFREG else {
+            close(descriptor)
+            throw Self.error(type == S_IFDIR ? EISDIR : EFTYPE)
+        }
     }
 
     deinit { close(descriptor) }

@@ -198,6 +198,18 @@ private func cleanUp(_ tree: any Tree) {
         }
     }
 
+    /// Only a regular file opens, and a FIFO that nothing writes to is refused at once.
+    @Test(.timeLimit(.minutes(1)))
+    func aRealReaderOpensOnlyARegularFile() throws {
+        let tree = try DiskTree()
+        defer { cleanUp(tree) }
+        try tree.file(tree.root + "/a dir/disc.gcm", "0123456789")
+        let fifo = tree.root + "/a fifo"
+        #expect(mkfifo(fifo, 0o600) == 0)
+        #expect(throws: POSIXError(.EISDIR)) { try tree.fs.openReader(at: tree.root + "/a dir") }
+        #expect(throws: POSIXError(.EFTYPE)) { try tree.fs.openReader(at: fifo) }
+    }
+
     @Test(arguments: Kind.allCases)
     func whatIsntThereIsReportedSo(_ kind: Kind) throws {
         let tree = try makeTree(kind)

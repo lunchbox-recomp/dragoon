@@ -50,6 +50,36 @@ private let discPath = "/Users/Test Player/Games/Kirby Air Ride (USA).gcm"
         #expect(fs.writes.isEmpty)
     }
 
+    @Test func aFolderExits1AndSaysItIsntADisc() {
+        let fs = FakeFileSystem()
+        fs.addDirectory(discPath)
+        let result = runDumpBanner(["--dump-banner", discPath, out], fs: fs)
+        #expect(result == CommandResult(
+            stdout: "", stderr: "\(discPath): is a folder, not a disc image\n", status: 1))
+        #expect(fs.writes.isEmpty)
+    }
+
+    /// On the real file system a folder says so, and a FIFO nothing writes to is refused at
+    /// once, where a plain open(2) would wait for a writer.
+    @Test(.timeLimit(.minutes(1)))
+    func aRealFolderOrFIFOExits1WithoutWaiting() throws {
+        let scratch = try ScratchDirectory("dump banner")
+        defer { scratch.remove() }
+        let folder = scratch.path + "/a folder.gcm"
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: false)
+        let fifo = scratch.path + "/a fifo.gcm"
+        #expect(mkfifo(fifo, 0o600) == 0)
+        let png = scratch.path + "/banner.png"
+
+        let fromFolder = runDumpBanner(["--dump-banner", folder, png])
+        #expect(fromFolder.status == 1)
+        #expect(fromFolder.stderr == "\(folder): is a folder, not a disc image\n")
+        let fromFIFO = runDumpBanner(["--dump-banner", fifo, png])
+        #expect(fromFIFO.status == 1)
+        #expect(fromFIFO.stderr.hasPrefix("\(fifo): can't be opened ("))
+        #expect(!FileManager.default.fileExists(atPath: png))
+    }
+
     @Test func aPNGThatCantBeWrittenExits1() {
         let fs = world()
         fs.failWrites(with: POSIXError(.EACCES))
