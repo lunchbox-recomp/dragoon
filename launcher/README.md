@@ -68,6 +68,8 @@ A banner is `BNR1` and 0x1960 bytes, or `BNR2` and 0x1FA0 bytes, the pairs Dolph
 
 The first time a disc passes its check with no banner cached, the launcher reads the banner and keeps the file as the disc holds it in `disc/opening.bnr` in `~/Library/Application Support/Dragoon`. It loads that file at start, so Library has the banner with the drive unplugged. A disc that fails its check is never read for one.
 
+When that first read brings a banner, its pixels fly in over 900 ms on the Build step, or on Library when the game is already built. Each sets off from up to 520 points down and to the left after a wait of up to 45% of the time and slows into place, trailing a streak of its own color. Under Reduce Motion the banner fades in instead. A banner loaded from the cache at start just shows.
+
 `Dragoon --dump-banner DISC OUT.png` writes the banner as a PNG and prints its format and names as JSON, with the time the read and decode took on stderr. It exits 0 when the PNG is written, 1 when the disc has no banner or the PNG can't be written, and 2 for a bad argument. On the supported disc on 2026-11-13 the read and decode took 0.21 ms, and the whole command 0.20 s.
 
 ## Running the recipe
@@ -165,9 +167,9 @@ That writes every PNG again. Look at each one before committing it.
 
 A view that animates reads `animationClock` from the environment, as `ClockedTimeline` does. The window runs on the display's frames, and the tests fix the clock at 2027-01-15 08:00 UTC, so a render draws the same frame every time. Library's streaks move with Core Animation in the window, which `ImageRenderer` can't draw, so under a fixed clock they're drawn in a `Canvas` at that moment. `library-reduce-motion` draws them at rest.
 
-The PNGs hold only the launcher's own UI. Library shows the disc's banner, and its fixtures use `TestBanner`, a made-up pattern the tests build, never a real banner.
+The PNGs hold only the launcher's own UI. Library and Build show the disc's banner, and their fixtures use `TestBanner`, a made-up pattern the tests build, never a real banner.
 
-The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 23 PNGs come to 632 KB, from 3 to 69 KB each.
+The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 24 PNGs come to 748 KB, from 3 to 112 KB each.
 
 Measured on 2026-11-13 on macOS 26.6.2 with the Command Line Tools 26.6 and Swift 6.3.3, `ImageRenderer` can't draw three of the views the window uses. The results are the same with `NSApplication.shared` made first.
 

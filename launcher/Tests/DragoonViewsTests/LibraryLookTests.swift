@@ -4,7 +4,7 @@ import Testing
 
 @testable import DragoonViews
 
-/// The hero's colors and motion.
+/// The hero's colors and motion, and the disc reveal partway through.
 @MainActor
 struct LibraryLookTests {
     @Test(arguments: [
@@ -81,5 +81,24 @@ struct LibraryLookTests {
         #expect(ProblemCard.fitsWithoutScrolling(Array(repeating: line, count: 8).joined(separator: "\n")))
         #expect(!ProblemCard.fitsWithoutScrolling(Array(repeating: "x", count: 9).joined(separator: "\n")))
         #expect(!ProblemCard.fitsWithoutScrolling(line + "x"))
+    }
+
+    /// The banner's pixels partway in, over the hero's backdrop.
+    @Test func theRevealPartwayLooksAsRecorded() throws {
+        let colors = HeroColors(palette: BannerPalette(banner: TestBanner.banner))
+        let view = ZStack {
+            HeroBackdrop(colors: colors)
+            BannerFlight(banner: TestBanner.banner, scale: 4, progress: 0.55)
+                .offset(x: 120)
+        }
+        try SnapshotTests.expectAsRecorded(
+            try #require(Snapshot.render(view)), name: "disc-reveal-partway")
+    }
+
+    @Test func theRevealDrawsNothingAtItsStart() throws {
+        let empty = try #require(Snapshot.render(Color.clear))
+        let start = try #require(Snapshot.render(
+            BannerFlight(banner: TestBanner.banner, scale: 4, progress: 0)))
+        #expect(start == empty)
     }
 }

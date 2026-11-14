@@ -60,7 +60,9 @@ let screenFixtures: [ScreenFixture] = [
     ScreenFixture(
         name: "disc-missing",
         state: state(.disc(.problem(.missing)), installed: InstalledGame(stamp: commits))),
-    ScreenFixture(name: "build-ready", state: state(.build(.ready))),
+    // The disc has just passed, so its banner is there.
+    ScreenFixture(
+        name: "build-ready", state: state(.build(.ready)) { $0.banner = TestBanner.banner }),
     ScreenFixture(name: "build-preparing", state: state(.build(.preparing), waiting: .space)),
     ScreenFixture(
         name: "build-low-space",

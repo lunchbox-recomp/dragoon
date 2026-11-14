@@ -33,12 +33,8 @@ struct LibraryView: View {
     private func content(_ colors: HeroColors) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Spacer(minLength: 0)
-            Group {
-                if let banner = state.banner {
-                    BannerLogo(banner: banner, scale: 4)
-                } else {
-                    Wordmark(colors: colors)
-                }
+            BannerReveal(banner: state.banner, scale: 4) {
+                Wordmark(colors: colors)
             }
             .padding(.bottom, 12)
             if let offer = state.rebuildOffer {

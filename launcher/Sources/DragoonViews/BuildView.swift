@@ -1,7 +1,8 @@
 import DragoonCore
 import SwiftUI
 
-/// The Build and Warm-up steps: ready to build, getting ready, running, or stopped.
+/// The Build and Warm-up steps: ready to build, getting ready, running, or stopped. The disc's
+/// banner flies in here once the disc passes.
 struct BuildView: View {
     let screen: BuildScreen
     let state: Flow.State
@@ -9,17 +10,22 @@ struct BuildView: View {
 
     var body: some View {
         StepPage(Strings.step(state.step ?? .build)) {
-            switch screen {
-            case .ready:
-                Text(Strings.buildReady)
-            case .preparing:
-                ProgressRow(Strings.buildPreparing)
-            case .lowSpace(let space):
-                Text(Strings.lowSpace(space, needed: Flow.neededSpace))
-            case .running(let progress):
-                RunningBuild(progress: progress)
-            case .failed(let failure, let lastLines):
-                FailedBuild(failure: failure, lastLines: lastLines)
+            // In a stack of its own, so the reveal takes no room until there's a banner.
+            VStack(alignment: .leading, spacing: 0) {
+                BannerReveal(banner: state.banner, scale: 3) { EmptyView() }
+                    .padding(.bottom, state.banner == nil ? 0 : 16)
+                switch screen {
+                case .ready:
+                    Text(Strings.buildReady)
+                case .preparing:
+                    ProgressRow(Strings.buildPreparing)
+                case .lowSpace(let space):
+                    Text(Strings.lowSpace(space, needed: Flow.neededSpace))
+                case .running(let progress):
+                    RunningBuild(progress: progress)
+                case .failed(let failure, let lastLines):
+                    FailedBuild(failure: failure, lastLines: lastLines)
+                }
             }
         } buttons: {
             if state.canGoBackToLibrary {
