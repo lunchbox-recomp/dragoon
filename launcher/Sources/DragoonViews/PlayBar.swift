@@ -1,31 +1,49 @@
 import DragoonCore
 import SwiftUI
 
-/// Play, what it's doing and the "..." menu with everything else Library does.
+/// Play, what it's doing and the "..." menu with everything else Library does. While the launch
+/// card is up, Play is the card, which grew out of it in `launchSpace`, and only its place stays.
 struct PlayBar: View {
     let state: Flow.State
     let send: Send
     let colors: HeroColors
+    /// Where the card's `matchedGeometryEffect` matches Play, or nil under Reduce Motion, where
+    /// the card only fades.
+    let launchSpace: Namespace.ID?
 
     var body: some View {
         HStack(spacing: 20) {
-            Button {
-                send(.playPressed)
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "play.fill")
-                    Text(state.playStatus == .playing ? Strings.playing : Strings.play)
+            ZStack {
+                playButton.hidden()
+                if state.handOff == nil {
+                    if let launchSpace {
+                        playButton
+                            .matchedGeometryEffect(id: LaunchCard.geometryID, in: launchSpace)
+                            .keyboardShortcut(.defaultAction)
+                    } else {
+                        playButton.keyboardShortcut(.defaultAction)
+                    }
                 }
             }
-            .buttonStyle(PlayButtonStyle(colors: colors))
-            .keyboardShortcut(.defaultAction)
-            .disabled(!state.libraryIsIdle)
             Text(Strings.playStatus(state.playStatus))
                 .font(.title3)
                 .foregroundStyle(.white.opacity(0.78))
             Spacer(minLength: 0)
             MoreMenu(state: state, send: send)
         }
+    }
+
+    private var playButton: some View {
+        Button {
+            send(.playPressed)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "play.fill")
+                Text(state.playStatus == .playing ? Strings.playing : Strings.play)
+            }
+        }
+        .buttonStyle(PlayButtonStyle(colors: colors))
+        .disabled(!state.libraryIsIdle)
     }
 }
 

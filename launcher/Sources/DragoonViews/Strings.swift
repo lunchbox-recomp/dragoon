@@ -218,6 +218,16 @@ public enum Strings {
         }
     }
 
+    /// The line under the logo on Play's launch card, or nil for none.
+    static func launchCard(_ handOff: Flow.HandOff) -> String? {
+        switch handOff {
+        case .charging: return discChecking
+        case .launched: return "Starting the game…"
+        case .hidden: return gameRunning
+        case .returning: return nil
+        }
+    }
+
     static let showPanic = "Show panic.txt"
     static let hidePanic = "Hide panic.txt"
     static let panicHeading = "The game wrote this in panic.txt"

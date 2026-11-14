@@ -139,6 +139,12 @@ let screenFixtures: [ScreenFixture] = [
     ScreenFixture(
         name: "library-fullest-558", state: fullest,
         size: CGSize(width: LauncherView.defaultSize.width, height: 558)),
+    // Play's launch card in each phase: idle as the window comes back after the game, charge
+    // while the disc is checked and launch once the game has started.
+    ScreenFixture(name: "launch-card-idle", state: library { $0.handOff = .returning }),
+    ScreenFixture(name: "launch-card-charge", state: charging()),
+    ScreenFixture(name: "launch-card-launch", state: launching()),
+    ScreenFixture(name: "launch-card-reduce-motion", state: launching(), reduceMotion: true),
 ]
 
 /// A first build running, with the test banner.
@@ -186,6 +192,24 @@ private let builtGame = progress([
     (1, .progress(step: "warmup", done: 8, total: 8)), (1, .step("package")),
     (0.4, .step("swap")), (0, .done(game: home + "/Library/Application Support/Dragoon/game/current/Dragoon.app")),
 ])
+
+/// Library with Play pressed and the bookmark being resolved.
+private func charging() -> Flow.State {
+    library {
+        $0.handOff = .charging
+        $0.intent = .play
+        $0.waiting = .bookmark
+    }
+}
+
+/// Library with the game started and no window line yet.
+private func launching() -> Flow.State {
+    library {
+        $0.handOff = .launched
+        $0.gameRunning = true
+        $0.launchNumber = 1
+    }
+}
 
 private let crash = GameProblem.exited(
     .signal(11), panic: GamePanic("Invalid read at 0x00000004\npc 0x80012345\nlr 0x80012300"))

@@ -2,11 +2,13 @@ import DragoonCore
 import SwiftUI
 
 /// Where every later launch opens: the hero in the banner's colors with the banner over it,
-/// then Play. Rebuild, Change Disc and Show Saves are in the "..." menu.
+/// then Play. Rebuild, Change Disc and Show Saves are in the "..." menu. Play grows into the
+/// launch card, which covers the rest until the window is back after the game.
 struct LibraryView: View {
     let state: Flow.State
     let send: Send
     @Environment(\.windowIsActive) private var windowIsActive
+    @Namespace private var launchSpace
 
     var body: some View {
         let colors = HeroColors(palette: BannerPalette(banner: state.banner))
@@ -15,8 +17,10 @@ struct LibraryView: View {
                 HeroBackdrop(colors: colors)
                 HeroStreaks(
                     colors: colors,
+                    // The card has streaks of its own.
                     paused: Motion.heroPaused(
-                        windowIsActive: windowIsActive, gameRunning: state.gameRunning,
+                        windowIsActive: windowIsActive,
+                        gameRunning: state.gameRunning || state.handOff != nil,
                         reduceMotion: reduceMotion),
                     still: reduceMotion
                 )
@@ -24,16 +28,34 @@ struct LibraryView: View {
                 LinearGradient(
                     colors: [.clear, colors.ground.opacity(0.9)], startPoint: .center,
                     endPoint: .bottom)
-                content(colors)
+                content(colors, launchSpace: reduceMotion ? nil : launchSpace)
+                if let handOff = state.handOff {
+                    card(handOff, colors: colors, reduceMotion: reduceMotion)
+                }
             }
+            .animation(
+                reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.45, bounce: 0.15),
+                value: state.handOff == nil)
             .ignoresSafeArea()
+        }
+    }
+
+    @ViewBuilder
+    private func card(_ handOff: Flow.HandOff, colors: HeroColors, reduceMotion: Bool) -> some View {
+        let card = LaunchCard(handOff: handOff, banner: state.banner, colors: colors)
+            .transition(.opacity)
+            .zIndex(1)
+        if reduceMotion {
+            card
+        } else {
+            card.matchedGeometryEffect(id: LaunchCard.geometryID, in: launchSpace)
         }
     }
 
     /// Play and the boxes above it always fit. The panic the player opened comes before the
     /// logo, so the logo shows only in what's left once the panic's scroller has its full
     /// height, and is left out when it doesn't fit there.
-    private func content(_ colors: HeroColors) -> some View {
+    private func content(_ colors: HeroColors, launchSpace: Namespace.ID?) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Spacer(minLength: 0).layoutPriority(-1)
             ViewThatFits(in: .vertical) {
@@ -51,7 +73,7 @@ struct LibraryView: View {
                 ProblemCard(problem: problem, panicShown: state.panicShown, send: send)
                     .layoutPriority(2)
             }
-            PlayBar(state: state, send: send, colors: colors)
+            PlayBar(state: state, send: send, colors: colors, launchSpace: launchSpace)
         }
         .padding(.horizontal, 40)
         .padding(.top, 40)
