@@ -473,7 +473,11 @@ Top Ride's 38 HUD draws go through fov 25 cameras at 1.25538 over the screen, wh
 a view, so those cameras' mark is the 4:3 frame. But Top Ride makes them current and draws its
 HUD outside every render callback. Their `[census]` lines name no callback, and none of the
 frame's 233 draws carries a callback's tag. A camera's mark goes only to a callback's draws, so
-the HUD stretches.
+the HUD stretches. This page once said Top Ride's census on Dragoon `701a2dd` had all 38 drawn
+by `HSD_GObjJObjDisp`, read off `drawlog.py cameras`, which names the callbacks of every census
+camera with the draws' field of view and viewport rather than the callback each draw was made
+in. The frame's 233 draws here are the HUD's 38 and the world's 195, where `a2ff7fd` above had
+236 with the world's 198.
 
 After the race's finish the world camera that's drawn is set once, at 8,092. The module's call
 returning to `0x800C2884` still sets eight cameras that aren't drawn each frame to 13,061, and
