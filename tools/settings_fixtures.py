@@ -98,6 +98,7 @@ COPIED = [
     ("main.cpp", "const int shape_w = aspect_window ? 4 : aspect_w, shape_h = aspect_window ? 3 : aspect_h;"),
     ("main.cpp", "const gx::WindowSize size = gx::aspect_window_size(960, shape_w, shape_h, usable.w, usable.h);"),
     ("main.cpp", "const bool place = !fullscreen && usable.w > 0 && usable.h > 0;"),
+    ("main.cpp", "SDL_Window* win = SDL_CreateWindow(GCN_APP_LABEL, size.w, size.h,"),
     ("main.cpp", "if (!SDL_GetWindowBordersSize(win, &top, &left, &bottom, &right) || "
                  "!(top || left || bottom || right)) {"),
     ("main.cpp", "top = kTitleBar;"),
