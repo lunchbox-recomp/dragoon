@@ -334,7 +334,12 @@ class ForkCitesTest(unittest.TestCase):
         code, out, _ = run_main(fork_cites.main, "--help")
         self.assertEqual(code, 0)
         self.assertIn("usage: fork_cites.py OLD NEW", out)
-        self.assertIn("continuation", out)
+        for form in ("gcn-recomp/PATH:N or gcn-recomp/PATH:N-M", "PATH:N or NAME:N", ":N or :N-M after a cite",
+                     ", N or , N-M straight after a cite", "PATH:N:M is a"):
+            self.assertIn(form, out)
+        for status in ("ok", "moved", "gone", "outside", "skipped"):
+            self.assertIn(f"  {status} DOC:LINE ", out)
+        self.assertIn('"total T, ok O, moved M, gone G, outside X, unchanged U, skipped S"', out)
 
 
 if __name__ == "__main__":

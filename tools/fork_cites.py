@@ -23,7 +23,8 @@ Each cite's lines are read at OLD with git -C gcn-recomp show. A cite whose file
 OLD and NEW is listed as one of:
   ok DOC:LINE PATH:N-M             the same text sits at N-M at NEW
   moved DOC:LINE PATH:N-M now A-B  it doesn't, and sits at A-B instead (each place, if several)
-  gone DOC:LINE PATH:N-M           it's nowhere in the file at NEW, or the file is gone
+  gone DOC:LINE PATH:N-M           NEW doesn't have the lines anywhere as one block, though
+                                   some may still be there, or the file is gone
 Lines are compared with their leading and trailing whitespace stripped. Any cite, in a changed
 file or not, whose lines aren't all in the file at OLD is listed as
   outside DOC:LINE PATH:N-M, OLD has K lines   (or "not at OLD")
