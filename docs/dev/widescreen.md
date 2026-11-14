@@ -491,7 +491,9 @@ centered. On Dragoon `7a0e1c6` 91 of 13,062's are centered.
 
 At an output narrower than 4:3, as with `--aspect=1:1` or a tall window, no camera takes the
 mark. Centered, the frame would be wider than the window and lose 80 of its 640 at each side at
-1:1, showing only x 80 to 560. So the menus stretch there, squeezed but whole. No run measured it.
+1:1, showing only x 80 to 560. So the menus stretch there, squeezed but whole. The HUD the table
+anchors still remaps there, each piece widened from its anchor by 4/3 over the output's aspect.
+No run measured either.
 
 ## What 16:9 still gets wrong
 
