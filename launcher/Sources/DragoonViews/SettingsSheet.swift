@@ -71,7 +71,7 @@ public struct SettingsSheet: View {
                             send(.pictureChosen(next))
                         }))
                     .toggleStyle(CheckStyle(colors: colors))
-                    note(Strings.windowNote(picture, display: display))
+                    note(Strings.windowNote(PicturePreview.layout(picture, display: display)))
                 }
                 .padding(.bottom, 8)
             }

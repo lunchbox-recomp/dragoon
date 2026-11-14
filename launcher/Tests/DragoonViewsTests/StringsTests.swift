@@ -21,10 +21,10 @@ struct StringsTests {
     /// The Settings sheet's sentences, which follow Library's rule.
     static let settingsSentences: [String] =
         (PictureSettings.aspects + ["5:4"]).map(Strings.aspectNote) + [
-            Strings.windowNote(PictureSettings(aspect: "16:9"), display: nil),
-            Strings.windowNote(PictureSettings(aspect: "16:9", fullscreen: true), display: nil),
-            Strings.windowNote(PictureSettings(aspect: "4:3", fullscreen: true), display: testDisplay),
-            Strings.windowNote(PictureSettings(aspect: "window", fullscreen: true), display: testDisplay),
+            Strings.windowNote(PicturePreview.layout(PictureSettings(aspect: "16:9"), display: nil)),
+            Strings.windowNote(PicturePreview.layout(PictureSettings(aspect: "16:9", fullscreen: true), display: nil)),
+            Strings.windowNote(PicturePreview.layout(PictureSettings(aspect: "4:3", fullscreen: true), display: testDisplay)),
+            Strings.windowNote(PicturePreview.layout(PictureSettings(aspect: "window", fullscreen: true), display: testDisplay)),
             Strings.scaleNote(2), Strings.settingsWhen, Strings.pictureFailure(.refused),
             Strings.pictureFailure(.unreadable("Permission denied.")),
             Strings.pictureFailure(.notWritten("No space left on device.")),

@@ -278,18 +278,20 @@ public enum Strings {
             return "settings.txt sets \(aspect), which isn't one of these."
         }
     }
-    /// Where the game's picture goes: its window, or the screen.
-    static func windowNote(_ picture: PictureSettings, display: PictureDisplay?) -> String {
-        guard picture.fullscreen else {
-            let size = PictureGeometry.window(aspect: picture.aspect, usable: display?.usable)
-            return "The game's window opens at \(size.width) x \(size.height) points."
+    /// Where the game's picture goes, its window or the screen, as the preview draws it.
+    static func windowNote(_ layout: PicturePreview.Layout) -> String {
+        let source = layout.source, fit = layout.fit
+        switch layout.shows {
+        case .window:
+            return "The game's window opens at \(source.width) x \(source.height) points."
+        case .unknownScreen:
+            return "The game fills the screen."
+        case .screen:
+            if fit.width == source.width && fit.height == source.height {
+                return "The game fills the \(source.width) x \(source.height) point screen."
+            }
+            return "The game fills the screen, with the picture \(fit.width) x \(fit.height) points in it."
         }
-        guard let display else { return "The game fills the screen." }
-        let fit = PictureGeometry.fullscreen(aspect: picture.aspect, display: display.frame)
-        if fit.width == display.frame.width && fit.height == display.frame.height {
-            return "The game fills the \(display.frame.width) x \(display.frame.height) point screen."
-        }
-        return "The game fills the screen, with the picture \(fit.width) x \(fit.height) points in it."
     }
     static func scaleNote(_ scale: Int) -> String {
         let size = PictureGeometry.internalSize(scale: scale)

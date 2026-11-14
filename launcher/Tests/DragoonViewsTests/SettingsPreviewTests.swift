@@ -102,17 +102,31 @@ struct SettingsPreviewTests {
         }
     }
 
-    @Test func theNotesNameTheEnginesSizes() {
+    @Test func theScaleNoteNamesTheInternalPicture() {
         for picture in Self.pictures {
             let inside = PictureGeometry.internalSize(scale: picture.scale)
             #expect(Strings.scaleNote(picture.scale).contains("drawn at \(inside.width) x \(inside.height),"))
-            let window = PictureGeometry.window(aspect: picture.aspect, usable: testDisplay.usable)
-            let note = Strings.windowNote(picture, display: testDisplay)
-            if picture.fullscreen {
-                let fit = PictureGeometry.fullscreen(aspect: picture.aspect, display: testDisplay.frame)
+        }
+    }
+
+    /// The note under Fullscreen says what the preview draws: the window at its size, the screen
+    /// with the picture in it, or a screen the sheet doesn't know the size of.
+    @Test(arguments: [testDisplay, laptop, nil])
+    func theWindowNoteSaysWhatThePreviewDraws(_ display: PictureDisplay?) {
+        for picture in Self.pictures {
+            let layout = PicturePreview.layout(picture, display: display)
+            let note = Strings.windowNote(layout)
+            let source = layout.source, fit = layout.fit
+            switch layout.shows {
+            case .window:
+                #expect(!picture.fullscreen)
+                #expect(note == "The game's window opens at \(source.width) x \(source.height) points.")
+            case .screen:
+                #expect(picture.fullscreen && display != nil)
                 #expect(note.contains("\(fit.width) x \(fit.height)"), "\(picture)")
-            } else {
-                #expect(note.contains("\(window.width) x \(window.height) points"), "\(picture)")
+            case .unknownScreen:
+                #expect(picture.fullscreen && display == nil)
+                #expect(note == "The game fills the screen.")
             }
         }
     }

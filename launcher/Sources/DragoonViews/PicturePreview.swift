@@ -22,7 +22,7 @@ public struct PicturePreview: View {
 
     /// The HUD's boxes in a 4:3 picture 12 units high and 16 across. `x` runs from the box's edge
     /// to its left side.
-    static let hudUnits: [(edge: HUDBox.Edge, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, dial: Bool)] = [
+    nonisolated static let hudUnits: [(edge: HUDBox.Edge, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, dial: Bool)] = [
         (.left, 0.6, 0.6, 3.4, 1.3, false),
         (.right, -4.0, 0.6, 3.4, 1.3, false),
         (.left, 0.6, 10.1, 4.4, 1.3, false),
@@ -53,7 +53,7 @@ public struct PicturePreview: View {
         public var hud: [HUDBox]
     }
 
-    public static func layout(_ settings: PictureSettings, display: PictureDisplay?) -> Layout {
+    nonisolated public static func layout(_ settings: PictureSettings, display: PictureDisplay?) -> Layout {
         let shows: Layout.Shows
         let source: WholeSize
         let fit: WholeRect
@@ -74,7 +74,6 @@ public struct PicturePreview: View {
         let menus = CGRect(
             x: picture.midX - menusWidth / 2, y: picture.minY, width: menusWidth, height: picture.height)
         let unit = picture.height / 12
-        // A loop, not a closure, which SwiftUI's View would make the main actor's.
         var hud: [HUDBox] = []
         for box in hudUnits {
             let edge = box.edge == .left ? picture.minX : picture.maxX
