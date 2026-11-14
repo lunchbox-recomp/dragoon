@@ -98,6 +98,14 @@ public struct PictureSettings: Equatable, Sendable {
         case unreadable(String)
         /// The new file couldn't be written or renamed over the old one, which is as it was.
         case notWritten(String)
+
+        /// The system's reason, or nil for a refusal.
+        public var reason: String? {
+            switch self {
+            case .refused: return nil
+            case .unreadable(let reason), .notWritten(let reason): return reason
+            }
+        }
     }
 
     /// Sets the four keys in `<dataDirectory>/settings.txt`, keeping every other line, through

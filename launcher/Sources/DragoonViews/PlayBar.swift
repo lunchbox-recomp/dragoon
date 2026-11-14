@@ -85,7 +85,7 @@ private struct PlayCapsule: View {
     }
 }
 
-/// Rebuild, Change Disc and Show Saves behind a round "..." button.
+/// Rebuild, Change Disc, Show Saves and Settings behind a round "..." button.
 struct MoreMenu: View {
     let state: Flow.State
     let send: Send
@@ -98,6 +98,8 @@ struct MoreMenu: View {
                 .disabled(!state.libraryIsIdle)
             Divider()
             Button(Strings.showSaves) { send(.showSavesPressed) }
+            Button(Strings.settings) { send(.settingsPressed) }
+                .disabled(!state.libraryIsIdle)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 20, weight: .bold))

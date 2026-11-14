@@ -252,6 +252,59 @@ public enum Strings {
         }
     }
 
+    // MARK: - Settings
+
+    static let settings = "Settings…"
+    static let settingsTitle = "Settings"
+    // The headings and labels are the game's Display page's own (overlay_display.cpp).
+    static let aspectHeading = "Aspect ratio"
+    static let fullscreen = "Fullscreen"
+    static let scaleHeading = "Scale"
+    static func aspectLabel(_ aspect: String) -> String {
+        aspect == "window" ? "Fill window" : aspect
+    }
+    static func scaleLabel(_ scale: Int) -> String { "\(scale)x" }
+    /// What the aspect does to the picture, under the preview.
+    static func aspectNote(_ aspect: String) -> String {
+        switch aspect {
+        case "4:3": return "4:3 is the console's own shape."
+        case "window": return "The picture takes the window's shape as it's resized. The window opens at 4:3."
+        default:
+            return "The track widens to \(aspect) and the race HUD keeps its 4:3 box. Top Ride's HUD and the menus stretch."
+        }
+    }
+    /// Where the game's picture goes: its window, or the screen.
+    static func windowNote(_ picture: PictureSettings, display: PictureDisplay?) -> String {
+        guard picture.fullscreen else {
+            let size = PictureGeometry.window(aspect: picture.aspect, usable: display?.usable)
+            return "The game's window opens at \(size.width) x \(size.height) points."
+        }
+        guard let display else { return "The game fills the screen." }
+        let fit = PictureGeometry.fullscreen(aspect: picture.aspect, display: display.frame)
+        if fit.width == display.frame.width && fit.height == display.frame.height {
+            return "The game fills the \(display.frame.width) x \(display.frame.height) point screen."
+        }
+        return "The game fills the screen, with the picture \(fit.width) x \(fit.height) points in it."
+    }
+    static func scaleNote(_ scale: Int) -> String {
+        let size = PictureGeometry.internalSize(scale: scale)
+        return "Each frame is drawn at \(size.width) x \(size.height) inside, then fit to the window."
+    }
+    /// The preview's name for VoiceOver.
+    static func previewLabel(_ size: WholeSize) -> String {
+        "The game's picture at \(size.width) x \(size.height) points"
+    }
+    static let settingsWhen = "The game reads these as it starts, and its Display page saves them too."
+    static let done = "Done"
+    /// Why the last change wasn't saved. The system's reason, when there is one, shows under it.
+    static func pictureFailure(_ failure: PictureSettings.SaveFailure) -> String {
+        switch failure {
+        case .refused: return "The game doesn't read these settings, so settings.txt wasn't changed."
+        case .unreadable: return "settings.txt is there and can't be read, so it wasn't changed."
+        case .notWritten: return "The change couldn't be saved, and settings.txt is as it was."
+        }
+    }
+
     // MARK: - Sizes
 
     static func bytes(_ count: Int64) -> String {

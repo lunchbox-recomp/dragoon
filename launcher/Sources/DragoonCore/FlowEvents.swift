@@ -53,6 +53,12 @@ extension Flow {
         case backToLibraryPressed
         /// Opens or closes the game problem's `panic.txt`.
         case showPanicPressed
+        /// Settings in Library's "..." menu.
+        case settingsPressed
+        /// The player picked these in the Settings sheet.
+        case pictureChosen(PictureSettings)
+        /// The Settings sheet's Done, or its close by Escape.
+        case settingsDonePressed
         case quitPressed
 
         // Results
@@ -89,6 +95,10 @@ extension Flow {
         case handOffTimedOut(launch: Int)
         /// `showWindow` has faded the window back in.
         case windowShown
+        /// `readPicture`'s result.
+        case pictureRead(PictureSettings)
+        /// `savePicture`'s result, nil when the file was saved.
+        case pictureSaved(PictureSettings.SaveFailure?)
     }
 
     /// What the app does for the flow. Each result comes back as an event.
@@ -137,6 +147,11 @@ extension Flow {
         case showSaves
         /// `OldBuilds.delete`, sent only while no game and no build is running.
         case deleteOldBuilds
+        /// `PictureSettings.load` from the data directory, which gives `pictureRead`.
+        case readPicture
+        /// `PictureSettings.save` to the data directory, sent only while Library is idle, so
+        /// never while the game runs. Gives `pictureSaved`.
+        case savePicture(PictureSettings)
         case quit
     }
 }

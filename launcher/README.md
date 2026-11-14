@@ -80,6 +80,16 @@ A save sets those four keys as `settings_save` does, through `SettingsText`, whi
 
 The 18 files in `Tests/DragoonCoreTests/SettingsFixtures/` came from a harness built against gcn-recomp's own `runtime/settings.cpp` and `runtime/platform.cpp` at e9b96fe. Its `settings_save` writes what the pinned 5e54665's does, which read the file with its own `fopen` in place of `plat_read_file`. Each `.in` is the file before a save, and each `.out` what the engine wrote over it with the values `cases.txt` gives. `PictureSettingsTests` saves the same values over each `.in` and checks the launcher writes the `.out` byte for byte.
 
+## The Settings sheet
+
+Settings in Library's "..." menu reads `settings.txt` and opens a sheet on it with the game's aspect, fullscreen and scale. The aspects are the game's Display page's, in its order and with its labels: 4:3, 16:9, 16:10, 21:9 and Fill window. Scale offers 1x to 8x, as the page does, since the renderer draws at 8x at most. A file's scale over 8 marks 8x, and an aspect the sheet doesn't offer marks none, until the player picks one.
+
+Each pick is saved at once. The flow saves only while Library is idle, so never while the game runs, which reads the file as it starts and saves it from its Display page. Settings is off while any game runs, an earlier launcher's included, and Play waits while the sheet is open. A save that fails says why in the sheet, and the file is as it was.
+
+The preview draws the game's window, or the screen when fullscreen is on, 120 points high and as wide as its shape. Its sizes come from `PictureGeometry` in `DragoonCore`, which follows gcn-recomp's `runtime/gx/aspect.h`. The window opens at 960 points high and as wide as the aspect makes that, or the largest of that shape that fits the display's usable area less a 40 point title bar, as `main.cpp` places it. Fill window opens at 4:3. Fullscreen fits the picture to the screen with `fit_aspect`'s bars, and Fill window fills it. In the frame is a horizon, a track and the race HUD's boxes, all sized by the picture's height, so a wider aspect shows more of the track at the sides while the HUD stays in its 4:3 box. Scale says what the renderer draws at, 640x480 times the scale, beside an edge drawn in pixels of that scale's size.
+
+From Settings to the sheet drawn takes 63 to 69 ms in `SettingsSheetTests`: the press, the read of a real `settings.txt`, its result and an `NSHostingView` laid out and drawn. The sheet's slide in isn't counted.
+
 ## Running the recipe
 
 `BuildRunner.run(_:)` runs the build recipe with the tools the tools check found and gives its JSON lines back as `BuildEvent` values. The command is `<python3> -B -s <bundle>/Contents/Resources/source/tools/launcher_build.py` and then the recipe's options as a list, so a path with spaces stays one argument. `-B` keeps `__pycache__` out of the signed bundle, `-s` keeps the player's user site-packages off the path, and the kit comes from `Contents/Resources/kit`.
@@ -129,7 +139,7 @@ Library fills the window, in the disc banner's colors.
 |---|---|
 | Hero | The banner's first hue fading down to near-black, with 56 speed streaks drifting up and to the right |
 | Logo | The banner at 4x, 384x128 points, with its pixels kept square, over a blurred copy of itself. With no banner, "Dragoon" set in type. Left out when the window is too short for it above the boxes and the bar. An open `panic.txt` comes first, so its scroller has its full 150 points before the logo shows |
-| Play bar | A 64 point Play button, a line saying what Play is doing and a "..." menu with Rebuild, Change Disc and Show Saves |
+| Play bar | A 64 point Play button, a line saying what Play is doing and a "..." menu with Rebuild, Change Disc, Show Saves and Settings |
 | Rebuild offer | A strip above the bar |
 | Game problem | A card above the bar, whose Show panic.txt opens the file's text |
 | Launch card | What Play grows into, over everything else, from Play until the game's window is up and again as the window comes back after the game |

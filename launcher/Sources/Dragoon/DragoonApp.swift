@@ -72,10 +72,20 @@ struct ModelView: View {
         LauncherView(state: model.state, send: { model.send($0) })
             .environment(\.windowIsActive, windowIsActive)
             .environment(\.windowIsVisible, windowIsVisible)
+            .environment(\.pictureDisplay, Self.primaryDisplay)
             .background(
                 WindowWatcher(isActive: $windowIsActive, isVisible: $windowIsVisible) {
                     model.attach($0)
                 })
             .onAppear { model.launch() }
+    }
+
+    /// The display with the menu bar, which the game opens on (`SDL_GetPrimaryDisplay`), with its
+    /// usable area as SDL takes it from `visibleFrame`.
+    private static var primaryDisplay: PictureDisplay? {
+        guard let screen = NSScreen.screens.first else { return nil }
+        return PictureDisplay(
+            frame: WholeSize(Int(screen.frame.width), Int(screen.frame.height)),
+            usable: WholeSize(Int(screen.visibleFrame.width), Int(screen.visibleFrame.height)))
     }
 }

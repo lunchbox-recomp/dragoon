@@ -45,6 +45,8 @@ extension Flow {
         /// A tools check. `disc` is set when a build starts as soon as the tools are ready.
         case tools(disc: String?)
         case build
+        /// `settings.txt` is being read for the Settings sheet.
+        case picture
     }
 
     /// Where Play's launch card is, from Play until the window is back after the game.
@@ -83,6 +85,10 @@ extension Flow {
         public var panicShown = false
         /// Play's launch card, or nil when Library shows none.
         public var handOff: HandOff?
+        /// What the Settings sheet shows while it's open, and nil while it's closed.
+        public var picture: PictureSettings?
+        /// Why the sheet's last change wasn't saved, until the next change or the sheet closes.
+        public var pictureFailure: PictureSettings.SaveFailure?
 
         public init() {}
 
@@ -100,9 +106,11 @@ extension Flow {
         public var libraryIsIdle: Bool { screen == .library && waiting == nil && !gameRunning }
 
         /// Whether Play does anything now: Library's, or the one a finished build's bar became.
+        /// Library's waits while the Settings sheet is open, so the game never starts while the
+        /// sheet can write `settings.txt`.
         public var canPlay: Bool {
             if case .build(.finished) = screen { return waiting == nil && !gameRunning }
-            return libraryIsIdle
+            return libraryIsIdle && picture == nil
         }
 
         /// Whether a step can go back to Library, which needs a game, no build running and no

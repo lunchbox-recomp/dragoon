@@ -211,6 +211,32 @@ extension Flow.State {
         case .windowShown:
             if handOff == .returning { handOff = nil }
             return []
+
+        case .settingsPressed:
+            guard libraryIsIdle, picture == nil else { return [] }
+            waiting = .picture
+            return [.readPicture]
+        case .pictureRead(let read):
+            guard waiting == .picture else { return [] }
+            waiting = nil
+            picture = read
+            pictureFailure = nil
+            return []
+        case .pictureChosen(let chosen):
+            // The game reads the file as it starts and its Display page saves it, so the
+            // launcher writes it only while no game runs.
+            guard let picture, libraryIsIdle, chosen != picture else { return [] }
+            self.picture = chosen
+            pictureFailure = nil
+            return [.savePicture(chosen)]
+        case .pictureSaved(let failure):
+            guard picture != nil else { return [] }
+            pictureFailure = failure
+            return []
+        case .settingsDonePressed:
+            picture = nil
+            pictureFailure = nil
+            return []
         }
     }
 

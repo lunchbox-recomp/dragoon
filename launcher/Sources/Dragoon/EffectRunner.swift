@@ -113,6 +113,18 @@ final class EffectRunner {
             NSWorkspace.shared.open(URL(fileURLWithPath: folder))
         case .deleteOldBuilds:
             Task.detached { OldBuilds.delete(dataDirectory: places.data, fs: fs) }
+        case .readPicture:
+            background { .pictureRead(PictureSettings.load(from: places.data, fs: fs)) }
+        case .savePicture(let picture):
+            // On the main actor, so each change is written in the order it was made. The file
+            // is a few lines.
+            var failure: PictureSettings.SaveFailure?
+            do {
+                try picture.save(to: places.data, fs: fs)
+            } catch {
+                failure = error
+            }
+            Task { [failure] in send(.pictureSaved(failure)) }
         case .quit:
             NSApplication.shared.terminate(nil)
         }

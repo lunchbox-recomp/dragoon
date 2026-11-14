@@ -2,8 +2,9 @@ import DragoonCore
 import SwiftUI
 
 /// Where every later launch opens: the hero in the banner's colors with the banner over it,
-/// then Play. Rebuild, Change Disc and Show Saves are in the "..." menu. Play grows into the
-/// launch card, which covers the rest until the window is back after the game.
+/// then Play. Rebuild, Change Disc, Show Saves and Settings are in the "..." menu. Play grows
+/// into the launch card, which covers the rest until the window is back after the game.
+/// Settings opens a sheet over it.
 struct LibraryView: View {
     let state: Flow.State
     let send: Send
@@ -37,6 +38,12 @@ struct LibraryView: View {
                 reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.45, bounce: 0.15),
                 value: state.handOff == nil)
             .ignoresSafeArea()
+        }
+        .sheet(isPresented: Binding(
+            get: { state.picture != nil },
+            set: { if !$0 { send(.settingsDonePressed) } })
+        ) {
+            SettingsSheet(state: state, send: send)
         }
     }
 
