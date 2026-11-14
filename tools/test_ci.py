@@ -72,7 +72,7 @@ class Jobs(unittest.TestCase):
             "clear_kit",
             ["cmake", "-S", ".", "-B", "build-kit", "-G", "Ninja", "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
              "-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0", "-DGAME_ISO="],
-            ["ninja", "-C", "build-kit", "runtime_check", "SDL3-static"],
+            ["ninja", "-C", "build-kit", "runtime_check", "gcn_imgui", "SDL3-static"],
             ["python3", "tools/engine_kit.py", "--build", "build-kit", "--out", os.path.abspath("engine kit"),
              "--strip-debug"],
             "link_stub"])

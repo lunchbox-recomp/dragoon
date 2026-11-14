@@ -754,15 +754,15 @@ It has no command line.
 
 ## engine_kit.py
 
-What does a player's Mac need to build the game without CMake or SDL's source? engine_kit.py packs `engine.o` (runtime_check's objects, Dragoon's `src/` among them), `libSDL3.a`, the two runtime headers, `kit.mk`, the Makefile from `launcher/kit/` and the licenses, from a build configured with no disc and a deployment target. launcher_build.py pairs a kit with a snapshot by `kit.mk`'s `ENGINE_COMMIT` and `SRC_SHA256`, and `--help` lists the rest of `kit.mk` and the builds it refuses.
+What does a player's Mac need to build the game without CMake or SDL's source? engine_kit.py packs `engine.o` (runtime_check's objects, Dragoon's `src/` and the overlay's menu among them, with Dear ImGui's from gcn_imgui), `libSDL3.a`, the two runtime headers, `kit.mk`, the Makefile from `launcher/kit/` and the licenses, from a build configured with no disc and a deployment target. launcher_build.py pairs a kit with a snapshot by `kit.mk`'s `ENGINE_COMMIT` and `SRC_SHA256`, and `--help` lists the rest of `kit.mk` and the builds it refuses.
 
 ```
 cmake -S . -B build-kit -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DGAME_ISO=
-ninja -C build-kit runtime_check SDL3-static
+ninja -C build-kit runtime_check gcn_imgui SDL3-static
 tools/engine_kit.py --build build-kit --out build-kit/kit --strip-debug
 ```
 
-CI's `kit` job runs these, links the kit against `tests/kit/stub_tables.c`, empty tables that stand in for the recompiler's output, and uploads the kit as the `engine-kit` artifact. A framework missing from `game_libs.txt` fails that link.
+CI's `kit` job runs these, links the kit against `tests/kit/stub_tables.c`, empty tables that stand in for the recompiler's output, and uploads the kit as the `engine-kit` artifact. A framework missing from `game_libs.txt` fails that link. `ninja runtime_check` alone doesn't build gcn_imgui, so the second line names it. A build whose `main.cpp` has no `GCN_OVERLAY`, from a gcn-recomp that leaves the menu out of runtime_check or a configure with `-DGCN_OVERLAY=OFF`, is refused, since its game would have no menu.
 
 On the player's side, launcher_build.py has the Command Line Tools' python3 run `extract_dol.py` and `recomp.py` into a directory, and then the kit's Makefile compiles `gen/*.c` there and links `./dragoon`. `KIT` is named on the command line, since make splits the Makefile's own path at its spaces, and the kit's path may have them:
 

@@ -3,11 +3,13 @@
 
 Usage: engine_kit.py --build DIR --out DIR [--strip-debug] [--ld FILE] [--strip FILE]
 
-CI runs this after `ninja runtime_check SDL3-static` in a build configured with no disc and
-with CMAKE_OSX_DEPLOYMENT_TARGET set. The kit is everything a player's Mac needs to build the
-game besides Apple's Command Line Tools and the recompiler's inputs. OUT gets:
-  engine.o    runtime_check's objects joined by `ld -r`, so the link takes every one of them,
-              main.o and the static initializers included
+CI runs this after `ninja runtime_check gcn_imgui SDL3-static` in a build configured with no
+disc and with CMAKE_OSX_DEPLOYMENT_TARGET set. The kit is everything a player's Mac needs to
+build the game besides Apple's Command Line Tools and the recompiler's inputs. OUT gets:
+  engine.o    runtime_check's objects and gcn_imgui's, Dear ImGui as gcn-recomp builds it from
+              the archive it pins, joined by `ld -r`, so the link takes every one of them,
+              main.o and the static initializers included. runtime_check has to compile
+              main.cpp with GCN_OVERLAY, which the overlay's menu needs
   libSDL3.a   SDL3-static as built
   include/    recomp.h and compat.h, the only runtime headers the generated C includes
   kit.mk      what gcn-recomp's configure wrote to <build>: GAME_CFLAGS from
@@ -22,15 +24,15 @@ game besides Apple's Command Line Tools and the recompiler's inputs. OUT gets:
               from PATH), and so is one with a file newer than runtime_check's objects of
               src/
   Makefile    launcher/kit/Makefile, which compiles gen/*.c and links the game
-  licenses/   gcn-recomp's, SDL's and that of the hidapi inside SDL
+  licenses/   gcn-recomp's, SDL's, that of the hidapi inside SDL and Dear ImGui's
 `ld -r` turns the objects' DWARF into a debug map naming the build's own .o files, which a
 player doesn't have. --strip-debug drops that map and libSDL3.a's DWARF too.
 
 A build with a GAME_ISO is refused, since main.o would carry the disc's path. So is one
 missing any of the three files, one whose game_libs.txt names a path, which a player's Mac
-may not have, and one whose gcn_engine_sha.h names no commit or one with changes to tracked
-files. OUT is written under a temporary name and renamed into place, so a failed run leaves
-no OUT.
+may not have, one whose gcn_engine_sha.h names no commit or one with changes to tracked
+files, and one with no overlay, whose game would have no menu. OUT is written under a
+temporary name and renamed into place, so a failed run leaves no OUT.
 
 Exits 0 when the kit is written, 1 when ld or strip failed, and 2 on a bad argument or a build
 it can't make a kit from.
@@ -50,11 +52,14 @@ import export_source
 ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE = ROOT / "launcher" / "kit" / "Makefile"
 HEADERS = ("recomp.h", "compat.h")
-OBJECT_LINE = re.compile(r"^build (CMakeFiles/runtime_check\.dir/\S+\.o): ", re.M)
-# The same lines with the source each object is compiled from, after the rule's name. Ninja
-# writes a space, a colon or a dollar sign in a path with a dollar sign before it.
-SOURCE_LINE = re.compile(r"^build (CMakeFiles/runtime_check\.dir/\S+\.o): \S+ ((?:\$.|\S)+)", re.M)
+# A target's objects in build.ninja, each with the source it's compiled from, after the rule's
+# name. Ninja writes a space, a colon or a dollar sign in a path with a dollar sign before it.
+OBJECT_LINE = r"^build (CMakeFiles/{}\.dir/\S+\.o): \S+ ((?:\$.|\S)+)"
 NINJA_ESCAPE = re.compile(r"\$(.)")
+# runtime_check's main.cpp and the variables Ninja compiles it with, an indented line each.
+MAIN_BLOCK = re.compile(r"^build CMakeFiles/runtime_check\.dir/(?:\S+/)?runtime/main\.cpp\.o: .*\n((?:  .*\n)*)",
+                        re.M)
+DEFINES = re.compile(r"^  DEFINES = (.*)$", re.M)
 CACHE_LINE = re.compile(r"([A-Za-z0-9_.+-]+):[A-Z]+=(.*)")
 VERSION = re.compile(r"\d+(\.\d+)*")
 # What gcn-recomp's gcn_engine_sha target writes for runtime_check, and the commit a kit names.
@@ -115,22 +120,52 @@ def game_libs(build: Path) -> str:
     return libs
 
 
-def engine_objects(build: Path) -> list[Path]:
+def read_ninja(build: Path) -> str:
     try:
-        ninja = (build / "build.ninja").read_text()
+        return (build / "build.ninja").read_text()
     except OSError:
         raise KitError(f"{build / 'build.ninja'} is missing: configure with -G Ninja") from None
-    objects = [build / name for name in OBJECT_LINE.findall(ninja)]
+
+
+def compiled(build: Path, ninja: str, target: str) -> dict[Path, Path]:
+    """Each object TARGET compiles, by its path, with the source it's compiled from."""
+    lines = re.findall(OBJECT_LINE.format(re.escape(target)), ninja, re.M)
+    return {build / name: build / NINJA_ESCAPE.sub(r"\1", source) for name, source in lines}
+
+
+def target_objects(build: Path, ninja: str, target: str) -> list[Path]:
+    objects = list(compiled(build, ninja, target))
     if not objects:
-        raise KitError(f"{build} has no runtime_check target")
+        raise KitError(f"{build} has no {target} target")
     missing = [o for o in objects if not o.is_file()]
     if missing:
-        raise KitError(f"runtime_check isn't built: {len(missing)} of {len(objects)} objects are missing,"
+        raise KitError(f"{target} isn't built: {len(missing)} of {len(objects)} objects are missing,"
                        f" {missing[0]} first")
     return objects
 
 
-def check_src(build: Path, dragoon: Path) -> None:
+def check_overlay(ninja: str) -> None:
+    """Refuses a runtime_check whose main.cpp was compiled without the overlay, which opens the
+    menu."""
+    main = MAIN_BLOCK.search(ninja)
+    if not main:
+        raise KitError("runtime_check compiles no main.cpp")
+    defines = DEFINES.search(main[1])
+    if not defines or "-DGCN_OVERLAY" not in defines[1].split():
+        raise KitError("runtime_check compiles main.cpp without GCN_OVERLAY, so a game linked from the kit"
+                       " would have no menu: this gcn-recomp leaves the overlay out of runtime_check, or"
+                       " the build was configured with -DGCN_OVERLAY=OFF")
+
+
+def imgui_license(build: Path, ninja: str) -> Path:
+    """The license beside the imgui.cpp gcn_imgui compiles, at the top of Dear ImGui's archive."""
+    sources = [s for s in compiled(build, ninja, "gcn_imgui").values() if s.name == "imgui.cpp"]
+    if not sources:
+        raise KitError("gcn_imgui compiles no imgui.cpp")
+    return sources[0].parent / "LICENSE.txt"
+
+
+def check_src(build: Path, ninja: str, dragoon: Path) -> None:
     """Refuses a src/ under DRAGOON other than the one runtime_check compiled from a commit,
     so that its digest names what engine.o holds."""
     src = dragoon / "src"
@@ -142,9 +177,7 @@ def check_src(build: Path, dragoon: Path) -> None:
         line = done.stdout.splitlines()[0]
         raise KitError(f"git status shows {line!r} in {src}: make the kit from a clean checkout, with"
                        " nothing untracked, ignored or changed in src/")
-    ninja = (build / "build.ninja").read_text()
-    objects = [build / name for name, source in SOURCE_LINE.findall(ninja)
-               if (build / NINJA_ESCAPE.sub(r"\1", source)).is_relative_to(src)]
+    objects = [o for o, source in compiled(build, ninja, "runtime_check").items() if source.is_relative_to(src)]
     if not objects:
         raise KitError(f"runtime_check compiles nothing in {src}, so engine.o would have no hooks")
     built = min(o.stat().st_mtime_ns for o in objects)
@@ -189,7 +222,10 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
     flags = build_flags(build, "game_cflags.txt", CFLAGS_MISSING)
     ldflags = build_flags(build, "game_ldflags.txt", LINK_MISSING)
     libs = game_libs(build)
-    objects = engine_objects(build)
+    ninja = read_ninja(build)
+    objects = target_objects(build, ninja, "runtime_check")
+    check_overlay(ninja)
+    objects += target_objects(build, ninja, "gcn_imgui")
     engine = engine_commit(build)
     try:
         dragoon_src = Path(cache["dragoon_SOURCE_DIR"])
@@ -201,12 +237,13 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
     copies = {sdl_lib: "libSDL3.a", MAKEFILE: "Makefile",
               engine_src / "LICENSE": "licenses/gcn-recomp.txt",
               sdl_src / "LICENSE.txt": "licenses/SDL3.txt",
-              sdl_src / "src" / "hidapi" / "LICENSE-bsd.txt": "licenses/hidapi.txt"}
+              sdl_src / "src" / "hidapi" / "LICENSE-bsd.txt": "licenses/hidapi.txt",
+              imgui_license(build, ninja): "licenses/imgui.txt"}
     copies.update({engine_src / "runtime" / h: f"include/{h}" for h in HEADERS})
     for src in copies:
         if not src.is_file():
             raise KitError(f"{src} is missing")
-    check_src(build, dragoon_src)
+    check_src(build, ninja, dragoon_src)
     src_sha = export_source.src_digest(dragoon_src)
 
     tmp = Path(tempfile.mkdtemp(prefix=f".{out.name}.", dir=out.parent))

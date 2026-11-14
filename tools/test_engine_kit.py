@@ -28,20 +28,37 @@ LIBS = "-framework OpenGL -lm -Xlinker -weak_framework -Xlinker CoreHaptics -lpt
 SDK = "/Applications/Xcode 26.5.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 RUNTIME = "CMakeFiles/runtime_check.dir/gcn-recomp/runtime"
 SRC_OBJECT = "CMakeFiles/runtime_check.dir/src/hooks.cpp.o"
+IMGUI = "CMakeFiles/gcn_imgui.dir/_deps/imgui-src"
+IMGUI_OBJECTS = ("imgui.cpp.o", "backends/imgui_impl_sdl3.cpp.o")
 ENGINE = "5ca1ab1e" * 5
+# main.cpp's definitions as gcn-recomp's runtime_check compiles it with the overlay on.
+OVERLAY_DEFINES = r'-DGCN_APP_LABEL=\"Dragoon\" -DGCN_GAME_TITLE="\"Kirby Air Ride\"" -DGCN_OVERLAY'
 NINJA = f"""build {RUNTIME}/a.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo a.cpp
   FLAGS = -O2 -g
 build {RUNTIME}/hw/b.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo b.cpp
+build {RUNTIME}/main.cpp.o: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo main.cpp || order_depends
+  CONFIG = RelWithDebInfo
+  DEFINES = {OVERLAY_DEFINES}
+  FLAGS = -O2 -g
 build CMakeFiles/gcn_core.dir/gcn-recomp/runtime/a.cpp.o: CXX_COMPILER__gcn_core a.cpp
 """
 # The Dragoon checkout the build was configured from. Ninja writes the space in its path as "$ ".
 CHECKOUT = "dragoon checkout"
 
 
+def imgui_lines(build: Path) -> str:
+    """gcn_imgui's lines in build.ninja, each compiling a source in the archive FetchContent
+    unpacked into the build."""
+    return "".join(f"build {IMGUI}/{name}: CXX_COMPILER__gcn_imgui_unscanned_RelWithDebInfo "
+                   f"{str(build / '_deps' / 'imgui-src' / name[:-2]).replace(' ', '$ ')} || order_depends\n"
+                   for name in IMGUI_OBJECTS)
+
+
 def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
-    """A no-disc build as CMake and Ninja leave it, runtime_check's three objects compiled from
-    one-line C with debug info, beside the Dragoon, gcn-recomp and SDL sources its cache names.
-    The Dragoon checkout is a git repository with src/ committed and older than the objects."""
+    """A no-disc build as CMake and Ninja leave it, runtime_check's four objects and gcn_imgui's
+    two compiled from one-line C with debug info, beside the Dragoon, gcn-recomp, SDL and Dear
+    ImGui sources its cache and build.ninja name. The Dragoon checkout is a git repository with
+    src/ committed and older than the objects."""
     build, dragoon, engine, sdl = root / "build", root / CHECKOUT, root / "gcn-recomp", root / "sdl"
     sdl_build = build / "_deps" / "sdl3-build"
     if not (dragoon / ".git").exists():
@@ -50,12 +67,16 @@ def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
                        engine / "runtime" / "recomp.h": "/* recomp */\n",
                        engine / "runtime" / "compat.h": "/* compat */\n",
                        sdl / "LICENSE.txt": "zlib SDL\n",
-                       sdl / "src" / "hidapi" / "LICENSE-bsd.txt": "BSD hidapi\n"}.items():
+                       sdl / "src" / "hidapi" / "LICENSE-bsd.txt": "BSD hidapi\n",
+                       build / "_deps" / "imgui-src" / "LICENSE.txt": "MIT Dear ImGui\n"}.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     compile_c("int engine_a(int x) { return x + 1; }\n", build / RUNTIME / "a.cpp.o")
     compile_c("int engine_b(int x) { return x * 2; }\n", build / RUNTIME / "hw" / "b.cpp.o")
+    compile_c("int engine_main(void) { return 0; }\n", build / RUNTIME / "main.cpp.o")
     compile_c("int hook(void) { return 0; }\n", build / SRC_OBJECT)
+    compile_c("int imgui_core(void) { return 4; }\n", build / IMGUI / IMGUI_OBJECTS[0])
+    compile_c("int imgui_backend(void) { return 5; }\n", build / IMGUI / IMGUI_OBJECTS[1])
     archive(sdl_build / "libSDL3.a", compile_c("int SDL_Fake(void) { return 3; }\n", sdl_build / "fake.o"))
     write_file(build, "CMakeCache.txt",
                f"GAME_ISO:FILEPATH={disc}\nCMAKE_OSX_DEPLOYMENT_TARGET:STRING={target}\n"
@@ -63,8 +84,8 @@ def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
                f"gcn_recomp_SOURCE_DIR:STATIC={engine}\nSDL3_SOURCE_DIR:STATIC={sdl}\n"
                f"SDL3_BINARY_DIR:STATIC={sdl_build}\n")
     hooks = str(dragoon / "src" / "hooks.cpp").replace(" ", "$ ")
-    write_file(build, "build.ninja",
-               NINJA + f"build {SRC_OBJECT}: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo {hooks}\n")
+    write_file(build, "build.ninja", NINJA + imgui_lines(build)
+               + f"build {SRC_OBJECT}: CXX_COMPILER__runtime_check_unscanned_RelWithDebInfo {hooks}\n")
     write_file(build, "game_cflags.txt", FLAGS + "\n")
     write_file(build, "game_ldflags.txt", LDFLAGS + "\n")
     write_file(build, "game_libs.txt", LIBS + "\n")
@@ -104,14 +125,15 @@ class EngineKitTest(unittest.TestCase):
         defined = subprocess.run([NM, "-g", "--defined-only", str(self.out / "engine.o")],
                                  capture_output=True, text=True, check=True).stdout
         self.assertEqual(sorted(line.split()[-1] for line in defined.splitlines()),
-                         ["_engine_a", "_engine_b", "_hook"])
+                         ["_engine_a", "_engine_b", "_engine_main", "_hook", "_imgui_backend", "_imgui_core"])
         copies = {"libSDL3.a": build / "_deps/sdl3-build/libSDL3.a",
                   "Makefile": engine_kit.MAKEFILE,
                   "include/recomp.h": self.root / "gcn-recomp/runtime/recomp.h",
                   "include/compat.h": self.root / "gcn-recomp/runtime/compat.h",
                   "licenses/gcn-recomp.txt": self.root / "gcn-recomp/LICENSE",
                   "licenses/SDL3.txt": self.root / "sdl/LICENSE.txt",
-                  "licenses/hidapi.txt": self.root / "sdl/src/hidapi/LICENSE-bsd.txt"}
+                  "licenses/hidapi.txt": self.root / "sdl/src/hidapi/LICENSE-bsd.txt",
+                  "licenses/imgui.txt": build / "_deps/imgui-src/LICENSE.txt"}
         for rel, src in copies.items():
             self.assertEqual((self.out / rel).read_bytes(), src.read_bytes(), rel)
         mk = (self.out / "kit.mk").read_text().splitlines()
@@ -156,8 +178,39 @@ class EngineKitTest(unittest.TestCase):
 
     def test_refuses_a_runtime_check_that_compiles_nothing_in_src(self) -> None:
         build = fake_build(self.root)
-        write_file(build, "build.ninja", NINJA)
+        write_file(build, "build.ninja", NINJA + imgui_lines(build))
         self.assert_refused(build, "runtime_check compiles nothing in")
+
+    def test_refuses_a_runtime_check_whose_main_has_no_overlay(self) -> None:
+        """A gcn-recomp that leaves the menu out of runtime_check, or a build configured with
+        -DGCN_OVERLAY=OFF. A definition that only starts the same is no overlay either."""
+        build = fake_build(self.root)
+        ninja = (build / "build.ninja").read_text()
+        for name, defines in (("none", r'-DGCN_APP_LABEL=\"Dragoon\"'), ("test only", "-DGCN_OVERLAY_TEST")):
+            with self.subTest(name):
+                write_file(build, "build.ninja", ninja.replace(OVERLAY_DEFINES, defines))
+                self.assert_refused(build, "runtime_check compiles main.cpp without GCN_OVERLAY")
+        write_file(build, "build.ninja", ninja.replace(f"  DEFINES = {OVERLAY_DEFINES}\n", ""))
+        self.assert_refused(build, "runtime_check compiles main.cpp without GCN_OVERLAY")
+        write_file(build, "build.ninja", ninja.replace(f"{RUNTIME}/main.cpp.o", f"{RUNTIME}/other.cpp.o"))
+        (build / RUNTIME / "main.cpp.o").rename(build / RUNTIME / "other.cpp.o")
+        self.assert_refused(build, "runtime_check compiles no main.cpp")
+
+    def test_refuses_a_build_with_no_gcn_imgui(self) -> None:
+        build = fake_build(self.root)
+        ninja = (build / "build.ninja").read_text()
+        write_file(build, "build.ninja", ninja.replace(imgui_lines(build), ""))
+        self.assert_refused(build, f"{build} has no gcn_imgui target")
+
+    def test_refuses_gcn_imgui_unbuilt(self) -> None:
+        build = fake_build(self.root)
+        (build / IMGUI / IMGUI_OBJECTS[1]).unlink()
+        self.assert_refused(build, "gcn_imgui isn't built: 1 of 2 objects are missing")
+
+    def test_refuses_a_dear_imgui_with_no_license(self) -> None:
+        build = fake_build(self.root)
+        (build / "_deps" / "imgui-src" / "LICENSE.txt").unlink()
+        self.assert_refused(build, f"{build / '_deps' / 'imgui-src' / 'LICENSE.txt'} is missing")
 
     def test_refuses_a_src_outside_a_git_checkout(self) -> None:
         build = fake_build(self.root)
@@ -187,10 +240,12 @@ class EngineKitTest(unittest.TestCase):
         self.out.rename(self.root / "unstripped")
         self.assertEqual(self.kit(build, "--strip-debug")[0], 0)
         engine, sdl = (self.out / "engine.o").read_bytes(), (self.out / "libSDL3.a").read_bytes()
-        self.assertNotIn(str(build / RUNTIME).encode(), engine)
+        self.assertIn(str(build / IMGUI).encode(), as_built["engine.o"])
+        self.assertNotIn(str(build / "CMakeFiles").encode(), engine)
         self.assertNotIn(b"__debug_info", sdl)
         self.assertLess(len(engine), len(as_built["engine.o"]))
         self.assertIn(b"_engine_b", engine)
+        self.assertIn(b"_imgui_core", engine)
 
     def test_refuses_a_build_with_a_disc(self) -> None:
         self.assert_refused(fake_build(self.root, disc="/discs/game.iso"), "GAME_ISO=/discs/game.iso")
@@ -244,7 +299,7 @@ class EngineKitTest(unittest.TestCase):
     def test_refuses_runtime_check_unbuilt(self) -> None:
         build = fake_build(self.root)
         (build / RUNTIME / "hw" / "b.cpp.o").unlink()
-        self.assert_refused(build, "1 of 3 objects are missing")
+        self.assert_refused(build, "runtime_check isn't built: 1 of 4 objects are missing")
 
     def test_refuses_an_out_that_exists(self) -> None:
         build = fake_build(self.root)

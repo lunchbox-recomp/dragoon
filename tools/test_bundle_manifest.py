@@ -112,7 +112,8 @@ class RealManifestTest(unittest.TestCase):
         names = {p[len(kit):] for p in self.m.files | self.m.objects if p.startswith(kit)}
         self.assertEqual(names, {"engine.o", "libSDL3.a", "kit.mk", "Makefile",
                                  *(f"include/{h}" for h in engine_kit.HEADERS),
-                                 "licenses/gcn-recomp.txt", "licenses/SDL3.txt", "licenses/hidapi.txt"})
+                                 "licenses/gcn-recomp.txt", "licenses/SDL3.txt", "licenses/hidapi.txt",
+                                 "licenses/imgui.txt"})
         self.assertEqual(posixpath.dirname(kit.rstrip("/")), posixpath.dirname(self.m.source))
 
     def test_the_app_budget_stays_under_what_the_generated_c_alone_weighs(self):

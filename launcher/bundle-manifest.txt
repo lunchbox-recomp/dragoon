@@ -37,6 +37,7 @@ file Contents/Resources/kit/include/compat.h
 file Contents/Resources/kit/licenses/gcn-recomp.txt
 file Contents/Resources/kit/licenses/SDL3.txt
 file Contents/Resources/kit/licenses/hidapi.txt
+file Contents/Resources/kit/licenses/imgui.txt
 
 # Sparkle (L14). Laid out as Sparkle 2.9.1 ships, read from an installed copy. L14 pins the
 # release and checks this against it. The XPC services are left out because make_app.py removes
