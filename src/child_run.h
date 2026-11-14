@@ -19,8 +19,11 @@ struct ChildResult {
 ChildResult child_run(const std::vector<std::string>& argv, const std::vector<std::string>& env, int timeout_ms);
 
 // Kills the group of every run still going. The game's quit and restart call it (plat_at_exit),
-// since a group of its own goes on past both. Each run then returns signaled with SIGKILL. True
-// if there was one.
+// since a group of its own goes on past both. Each run then returns signaled with SIGKILL, and
+// a run asked for after it doesn't start: not_started with ECANCELED. True if there was one.
 bool child_run_kill_running();
+
+// For the tests alone: lets runs start again after child_run_kill_running.
+void child_run_reopen();
 
 }  // namespace dragoon

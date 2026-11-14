@@ -18,8 +18,14 @@ namespace {
 
 using dragoon::ChildResult;
 using dragoon::child_run;
-using dragoon::child_run_kill_running;
 using End = ChildResult::End;
+
+// The kill on the game's way out, after which runs start again, for the tests that follow.
+bool kill_running() {
+    const bool killed = dragoon::child_run_kill_running();
+    dragoon::child_run_reopen();
+    return killed;
+}
 
 timeval now() {
     timeval t;
@@ -165,7 +171,7 @@ TEST(ChildRun, TheKillOnTheWayOutEndsARunAndWhatItStarted) {
         }
         if (sleeper == 0) std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    const bool killed = child_run_kill_running();
+    const bool killed = kill_running();
     running.join();
     const timeval returned = now();
     unlink(named.c_str());
@@ -180,13 +186,24 @@ TEST(ChildRun, TheKillOnTheWayOutEndsARunAndWhatItStarted) {
 
 TEST(ChildRun, ARunThatEndedIsntKilledOnTheWayOut) {
     child_run({"/bin/echo"}, {}, 5000);
-    EXPECT_FALSE(child_run_kill_running());
+    EXPECT_FALSE(kill_running());
     child_run({"/bin/sh", "-c", "exec /bin/sleep 30"}, {}, 100);
-    EXPECT_FALSE(child_run_kill_running());
+    EXPECT_FALSE(kill_running());
     child_run({"/bin/sh", "-c", "exec >&-; exec /bin/sleep 30"}, {}, 100);
-    EXPECT_FALSE(child_run_kill_running());
+    EXPECT_FALSE(kill_running());
     child_run({"/nonexistent/python3"}, {}, 5000);
-    EXPECT_FALSE(child_run_kill_running());
+    EXPECT_FALSE(kill_running());
+}
+
+TEST(ChildRun, NoRunStartsAfterTheKillOnTheWayOut) {
+    dragoon::child_run_kill_running();
+    const ChildResult r = child_run({"/bin/echo", "late"}, {}, 5000);
+    dragoon::child_run_reopen();
+    EXPECT_EQ(r.end, End::not_started);
+    EXPECT_EQ(r.code, ECANCELED);
+    EXPECT_EQ(r.out, "");
+    // And the tests' reopen lets one start again.
+    EXPECT_EQ(child_run({"/bin/echo"}, {}, 5000).end, End::exited);
 }
 
 TEST(ChildRun, StopsARunThatClosedStdoutButGoesOn) {

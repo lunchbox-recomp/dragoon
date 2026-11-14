@@ -22,6 +22,8 @@ using Clock = std::chrono::steady_clock;
 // child_run_kill_running never reaches another process's group.
 std::mutex g_running_lock;
 std::vector<pid_t> g_running;
+// Set by child_run_kill_running, after which no run starts.
+bool g_closed = false;
 
 void kill_group(pid_t pid) {
     std::lock_guard<std::mutex> lock(g_running_lock);
@@ -106,9 +108,9 @@ ChildResult child_run(const std::vector<std::string>& argv, const std::vector<st
     pid_t pid;
     int failed;
     {
-        // A kill of every run can't come between the spawn and the list.
+        // A kill of every run can't come between the spawn and the list, and none starts after it.
         std::lock_guard<std::mutex> lock(g_running_lock);
-        failed = posix_spawn(&pid, argv[0].c_str(), &files, &attr, args.data(), vars.data());
+        failed = g_closed ? ECANCELED : posix_spawn(&pid, argv[0].c_str(), &files, &attr, args.data(), vars.data());
         if (!failed) g_running.push_back(pid);
     }
     posix_spawnattr_destroy(&attr);
@@ -152,8 +154,14 @@ ChildResult child_run(const std::vector<std::string>& argv, const std::vector<st
 
 bool child_run_kill_running() {
     std::lock_guard<std::mutex> lock(g_running_lock);
+    g_closed = true;
     for (pid_t pid : g_running) kill(-pid, SIGKILL);
     return !g_running.empty();
+}
+
+void child_run_reopen() {
+    std::lock_guard<std::mutex> lock(g_running_lock);
+    g_closed = false;
 }
 
 }  // namespace dragoon
