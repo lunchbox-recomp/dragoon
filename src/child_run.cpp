@@ -43,6 +43,13 @@ void read_until(int fd, Clock::time_point deadline, std::string& out) {
     }
 }
 
+bool reap(pid_t pid, int& status) {
+    pid_t got;
+    while ((got = waitpid(pid, &status, 0)) < 0 && errno == EINTR) {
+    }
+    return got == pid;
+}
+
 }  // namespace
 
 ChildResult child_run(const std::vector<std::string>& argv, const std::vector<std::string>& env, int timeout_ms) {
@@ -88,14 +95,19 @@ ChildResult child_run(const std::vector<std::string>& argv, const std::vector<st
     read_until(out[0], deadline, r.out);
     close(out[0]);
     int status = 0;
+    if (ms_left(deadline) == 0) {
+        // Something in the group held stdout to the deadline, though the child itself may have
+        // ended. The kill comes before the reap, which frees the group's id for reuse.
+        kill(-pid, SIGKILL);
+        reap(pid, status);
+        r.end = ChildResult::End::timed_out;
+        return r;
+    }
     while (waitpid(pid, &status, WNOHANG) != pid) {
         if (ms_left(deadline) == 0) {
             kill(-pid, SIGKILL);
-            pid_t got;
-            while ((got = waitpid(pid, &status, 0)) < 0 && errno == EINTR) {
-            }
             // A child that ended by itself just before the kill keeps its own end.
-            if (got == pid && !(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)) break;
+            if (reap(pid, status) && !(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)) break;
             r.end = ChildResult::End::timed_out;
             return r;
         }

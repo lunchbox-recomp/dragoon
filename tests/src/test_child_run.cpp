@@ -6,7 +6,10 @@
 #include <csignal>
 #include <cstdlib>
 #include <fcntl.h>
+#include <libproc.h>
 #include <pthread.h>
+#include <sys/proc.h>
+#include <sys/time.h>
 #include <thread>
 #include <unistd.h>
 
@@ -15,6 +18,32 @@ namespace {
 using dragoon::ChildResult;
 using dragoon::child_run;
 using End = ChildResult::End;
+
+timeval now() {
+    timeval t;
+    gettimeofday(&t, nullptr);
+    return t;
+}
+
+// A live process at `pid` that started before `by`. One that started later took a freed pid.
+bool started_before(pid_t pid, timeval by) {
+    proc_bsdinfo info;
+    if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != (int)sizeof(info)) return false;
+    if (info.pbi_status == SZOMB) return false;
+    return info.pbi_start_tvsec < (uint64_t)by.tv_sec ||
+           (info.pbi_start_tvsec == (uint64_t)by.tv_sec && info.pbi_start_tvusec < (uint64_t)by.tv_usec);
+}
+
+// Whether the process a run started, which printed its pid before `returned`, is gone within
+// two seconds. One that's left is killed, so a failure leaves no process behind.
+bool gone_by(pid_t pid, timeval returned) {
+    for (int i = 0; i < 200; i++) {
+        if (!started_before(pid, returned)) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (started_before(pid, returned)) kill(pid, SIGKILL);
+    return false;
+}
 
 TEST(ChildRun, KeepsStdoutAndTheExitCode) {
     const auto start = std::chrono::steady_clock::now();
@@ -97,16 +126,21 @@ TEST(ChildRun, StopsARunPastItsTime) {
 TEST(ChildRun, ATimeoutEndsWhatTheRunStarted) {
     // The shell prints the pid of a sleep it starts, then waits for it.
     const ChildResult r = child_run({"/bin/sh", "-c", "/bin/sleep 30 & echo $!; wait"}, {}, 300);
-    ASSERT_EQ(r.end, End::timed_out);
+    const timeval returned = now();
     const pid_t sleeper = (pid_t)atoi(r.out.c_str());
     ASSERT_GT(sleeper, 0);
-    // launchd reaps it soon after it's killed.
-    bool gone = false;
-    for (int i = 0; i < 200 && !gone; i++) {
-        gone = kill(sleeper, 0) != 0 && errno == ESRCH;
-        if (!gone) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    EXPECT_TRUE(gone);
+    EXPECT_TRUE(gone_by(sleeper, returned));
+    EXPECT_EQ(r.end, End::timed_out);
+}
+
+TEST(ChildRun, ATimeoutEndsWhatTheRunLeftHoldingStdout) {
+    // The shell exits at once, and the sleep it started keeps stdout open past the limit.
+    const ChildResult r = child_run({"/bin/sh", "-c", "/bin/sleep 30 & echo $!"}, {}, 300);
+    const timeval returned = now();
+    const pid_t sleeper = (pid_t)atoi(r.out.c_str());
+    ASSERT_GT(sleeper, 0);
+    EXPECT_TRUE(gone_by(sleeper, returned));
+    EXPECT_EQ(r.end, End::timed_out);
 }
 
 TEST(ChildRun, StopsARunThatClosedStdoutButGoesOn) {
