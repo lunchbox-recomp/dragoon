@@ -105,10 +105,10 @@ class CopiedLinesTest(unittest.TestCase):
                          (2, "", "gcn-recomp/runtime/main.cpp: no line \"constexpr int kTitleBar = 40;\", "
                                  "which settings_fixtures.cpp copies\n"))
 
-    def test_each_copied_line_changed_is_named(self) -> None:
+    def test_each_copied_line_commented_out_is_named(self) -> None:
         for name, line in settings_fixtures.COPIED:
             with self.subTest(line=line):
-                self.assertEqual(self.check_with(name, line, line.replace(";", " + 1;", 1)),
+                self.assertEqual(self.check_with(name, line, "// " + line),
                                  (2, "", f"gcn-recomp/runtime/{name}: no line \"{line}\", "
                                          "which settings_fixtures.cpp copies\n"))
 

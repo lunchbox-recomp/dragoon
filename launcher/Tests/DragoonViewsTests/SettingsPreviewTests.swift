@@ -134,7 +134,7 @@ struct SettingsPreviewTests {
     /// At 16:9 on the test display, the window is 213.375 points across in the preview against
     /// 160 at 4:3, so a right box sits 53.375 further right, the middle one half that and a left
     /// box doesn't move.
-    @Test func sixteenByNinesRightBoxesMoveWithTheRightEdge() {
+    @Test func sixteenByNinesMiddleAndRightBoxesMoveWithTheirPlace() {
         let wide = PicturePreview.layout(PictureSettings(aspect: "16:9"), display: testDisplay)
         let narrow = PicturePreview.layout(PictureSettings(aspect: "4:3"), display: testDisplay)
         #expect(narrow.frame.width == 160)
