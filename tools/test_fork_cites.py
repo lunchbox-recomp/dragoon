@@ -19,7 +19,8 @@ def text(lines: list[str]) -> str:
 
 class FindTest(unittest.TestCase):
     """find() gives (cites, strays), a stray being a Markdown :N with no cite before it on its
-    line, as (line, the :N as written)."""
+    line or with a name of a file without a line between it and that cite, as (line, the :N as
+    written, the name or None)."""
 
     def test_a_path_under_gcn_recomp_with_a_range(self):
         self.assertEqual(fork_cites.find("see `gcn-recomp/runtime/main.cpp:404-407` here\n", True),
@@ -40,12 +41,30 @@ class FindTest(unittest.TestCase):
 
     def test_a_continuation_never_crosses_a_line_and_in_markdown_is_a_stray(self):
         self.assertEqual(fork_cites.find("`ax.cpp:1`\n`:3`, `:5-6`\n", True),
-                         ([Cite(1, "ax.cpp", 1, 1)], [(2, ":3"), (2, ":5-6")]))
+                         ([Cite(1, "ax.cpp", 1, 1)], [(2, ":3", None), (2, ":5-6", None)]))
         self.assertEqual(fork_cites.find("`ax.cpp:1`\n`:3`\n", False), ([Cite(1, "ax.cpp", 1, 1)], []))
 
     def test_a_continuation_after_a_file_named_without_a_line_is_a_stray(self):
         self.assertEqual(fork_cites.find("`ax.cpp` mixes (`:442-443`), then `ax.cpp:9`, `:10`\n", True),
-                         ([Cite(1, "ax.cpp", 9, 9), Cite(1, "ax.cpp", 10, 10)], [(1, ":442-443")]))
+                         ([Cite(1, "ax.cpp", 9, 9), Cite(1, "ax.cpp", 10, 10)], [(1, ":442-443", None)]))
+
+    def test_a_continuation_after_a_file_named_without_a_line_since_the_cite_is_a_stray(self):
+        self.assertEqual(fork_cites.find("`ax.cpp:617` hands it on (`dsp_hle.cpp` `:65`)\n", True),
+                         ([Cite(1, "ax.cpp", 617, 617)], [(1, ":65", "dsp_hle.cpp")]))
+        self.assertEqual(fork_cites.find("`ax.cpp:1`, then runtime/hw/dsp.cpp. At :4, `:5`\n", True),
+                         ([Cite(1, "ax.cpp", 1, 1)], [(1, ":4", "runtime/hw/dsp.cpp"),
+                                                      (1, ":5", "runtime/hw/dsp.cpp")]))
+        self.assertEqual(fork_cites.find("`ax.cpp:617` (`dsp_hle.cpp` `:65`)\n", False),
+                         ([Cite(1, "ax.cpp", 617, 617), Cite(1, "ax.cpp", 65, 65)], []))
+
+    def test_a_cite_after_a_file_named_without_a_line_starts_afresh(self):
+        self.assertEqual(fork_cites.find("`ax.cpp:1`, `dsp.cpp`, `dsp.cpp:3`, `:4`, so ax.cpp:5-6\n", True),
+                         ([Cite(1, "ax.cpp", 1, 1), Cite(1, "dsp.cpp", 3, 3), Cite(1, "dsp.cpp", 4, 4),
+                           Cite(1, "ax.cpp", 5, 6)], []))
+
+    def test_words_with_dots_that_are_not_file_names_leave_a_continuation_be(self):
+        self.assertEqual(fork_cites.find("`ax.cpp:1` at 3.5 ms, `x.y:2:3`, `:4`\n", True),
+                         ([Cite(1, "ax.cpp", 1, 1), Cite(1, "ax.cpp", 4, 4)], []))
 
     def test_a_continuation_of_any_cite_on_its_line_is_not_a_stray(self):
         self.assertEqual(fork_cites.find("(`tests/hashes/manifest.txt:15-16`, `:33`)\n", True),
@@ -73,7 +92,7 @@ class FindTest(unittest.TestCase):
 
     def test_times_ratios_and_bare_colons_are_not_cites(self):
         line = "at 16:01:02, in 16:9, x :3 and dragoon[5150:20a1]\n"
-        self.assertEqual(fork_cites.find(line, True), ([], [(1, ":3")]))
+        self.assertEqual(fork_cites.find(line, True), ([], [(1, ":3", None)]))
         self.assertEqual(fork_cites.find(line, False), ([], []))
 
     def test_markdown_skips_fenced_blocks_and_other_files_do_not(self):
@@ -231,6 +250,14 @@ class ForkCitesTest(unittest.TestCase):
                               "total 2, ok 0, moved 2, gone 0, outside 0, unchanged 0, skipped 0, stray 1\n")
         self.assertEqual(err, "fork_cites.py: docs/a.md:2: :3 has no file:N cite before it on its "
                               "line, so it isn't checked\n")
+
+    def test_a_continuation_after_a_file_named_without_a_line_is_warned_about(self):
+        code, out, err = self.bump({"runtime/main.cpp": text(TEN), "runtime/ax.cpp": text(TEN)}, {},
+                                   docs={"docs/a.md": "x\n`main.cpp:2` hands it to `ax.cpp` (`:3`)\n"})
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "total 1, ok 0, moved 0, gone 0, outside 0, unchanged 1, skipped 0, stray 1\n")
+        self.assertEqual(err, "fork_cites.py: docs/a.md:2: :3 follows ax.cpp, named with no line after "
+                              "the last file:N cite on its line, so it isn't checked\n")
 
     def test_a_stray_alone_exits_1_and_is_left_out_of_the_total(self):
         code, out, err = self.bump({"runtime/main.cpp": text(TEN)}, {},

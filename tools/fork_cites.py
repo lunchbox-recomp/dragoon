@@ -15,7 +15,9 @@ the working tree, for cites of gcn-recomp files by line. These forms count:
 A bare name Dragoon also has, such as CMakeLists.txt, needs the gcn-recomp/ prefix to count. A
 name two fork files share is listed as skipped, below. A Markdown :N with no file:N cite before
 it on its line is a stray, skipped with a warning on stderr, even one whose file is named there
-without a line or on the line before, since the tool can't tell which file it means. PATH:N:M is a
+without a line or on the line before, since the tool can't tell which file it means. So is a
+Markdown :N with a file named without a line between it and the cite before it, as :65 in
+ax.cpp:617 (dsp_hle.cpp, :65), which may mean either file. PATH:N:M is a
 compiler's diagnostic, not a cite, and Markdown's fenced code blocks hold quoted output, so their
 lines are skipped. Paths with spaces aren't recognised.
 
@@ -61,6 +63,8 @@ OWN = ("tools/fork_cites.py", "tools/test_fork_cites.py")
 # A cite can't follow a path character, and a digit or ":digit" after it makes it something else.
 CITE = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.[A-Za-z]\w*):(\d+)(?:-(\d+))?(?!\d|:\d)")
 CONTINUATION = re.compile(r"(?<![\w./:-]):(\d+)(?:-(\d+))?(?!\d|:\d)")
+# A file named with no line: a path as CITE has it, then no more path and no ":digit".
+NAME = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.[A-Za-z]\w*)(?![\w/-]|\.\w|:\d)")
 LIST = re.compile(r",\s*(\d+)(?:-(\d+))?(?=[),;\x60]|$)")
 FENCE = re.compile(r"\s*(\x60{3}|~{3})")
 
@@ -72,12 +76,13 @@ class Cite(NamedTuple):
     last: int
 
 
-def find(text: str, markdown: bool) -> tuple[list[Cite], list[tuple[int, str]]]:
+def find(text: str, markdown: bool) -> tuple[list[Cite], list[tuple[int, str, Optional[str]]]]:
     """TEXT's cites in order, each continuation and list item carrying its file's path as
     written, and its strays. MARKDOWN skips fenced code blocks and finds strays, each :N with
-    no cite before it on its line, as (line, the :N as written)."""
+    no cite before it on its line or with a file named without a line between it and that cite,
+    as (line, the :N as written, that file's name or None)."""
     cites: list[Cite] = []
-    strays: list[tuple[int, str]] = []
+    strays: list[tuple[int, str, Optional[str]]] = []
     fenced = False
     for number, line in enumerate(text.splitlines(), 1):
         if markdown and FENCE.match(line):
@@ -88,12 +93,18 @@ def find(text: str, markdown: bool) -> tuple[list[Cite], list[tuple[int, str]]]:
         found = [(m.start(), m.end(), m.group(1), m.group(2), m.group(3)) for m in CITE.finditer(line)]
         found += [(m.start(), m.end(), None, m.group(1), m.group(2))
                   for m in CONTINUATION.finditer(line)]
-        path = None
+        if markdown:
+            found += [(m.start(), m.end(), m.group(1), None, None) for m in NAME.finditer(line)]
+        path = named = None
         for start, end, written, first, last in sorted(found):
-            path = written or path
-            if path is None:
+            if first is None:
+                named = written if path else None
+                continue
+            if written:
+                path, named = written, None
+            elif path is None or named:
                 if markdown:
-                    strays.append((number, line[start:end]))
+                    strays.append((number, line[start:end], named))
                 continue
             cites.append(Cite(number, path, int(first), int(last or first)))
             while True:
@@ -210,9 +221,10 @@ def run(repo: Path, old: str, new: str, at: Optional[str]) -> int:
     for doc, body in texts.items():
         cites, strays = find(body, doc.endswith(".md"))
         stray += len(strays)
-        for number, written in strays:
-            print(f"fork_cites.py: {doc}:{number}: {written} has no file:N cite before it on its line, "
-                  "so it isn't checked", file=sys.stderr)
+        for number, written, named in strays:
+            why = (f"follows {named}, named with no line after the last file:N cite on its line"
+                   if named else "has no file:N cite before it on its line")
+            print(f"fork_cites.py: {doc}:{number}: {written} {why}, so it isn't checked", file=sys.stderr)
         for cite in cites:
             path, several = resolve(cite.path, dragoon, fork)
             if several:
