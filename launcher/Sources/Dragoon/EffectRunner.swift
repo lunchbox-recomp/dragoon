@@ -148,7 +148,13 @@ final class EffectRunner {
     /// Starts the game and watches its ready file, whose marks come back as events until both
     /// lines are in or the game ends, and then its one result. The flow hides the window and
     /// brings it back. The launch times go in the log once the watch ends.
+    ///
+    /// The launcher opts out of App Nap until the game ends. With its window clear and another app
+    /// active, App Nap held the game's exit for 26 s to over 2 minutes before its termination
+    /// handler ran. Nothing runs between events, so the opt-out costs no CPU.
     private func play(disc: String, launch: Int) {
+        let awake = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiatedAllowingIdleSystemSleep, reason: "Waiting for the game to end")
         var started: UInt64?
         let session = games.play(
             game: places.game, disc: disc, data: places.data, readyFile: places.readyFile
@@ -178,6 +184,7 @@ final class EffectRunner {
                     send(.gameCouldNotStart(launch: launch, reason: Strings.gameStart(failure)))
                 }
             }
+            ProcessInfo.processInfo.endActivity(awake)
         }
     }
 
