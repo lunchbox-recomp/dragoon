@@ -66,6 +66,12 @@ class FindTest(unittest.TestCase):
         self.assertEqual(fork_cites.find("`ax.cpp:1` at 3.5 ms, `x.y:2:3`, `:4`\n", True),
                          ([Cite(1, "ax.cpp", 1, 1), Cite(1, "ax.cpp", 4, 4)], []))
 
+    def test_only_a_path_a_cite_could_hold_names_a_file(self):
+        line = "`ax.cpp:1`, `view.cpp:2:3`, `a.b/c`, `x.cpp-y`, `lib.so.1`, `/usr/x.cpp`, `:4`\n"
+        self.assertEqual(fork_cites.find(line, True),
+                         ([Cite(1, "ax.cpp", 1, 1), Cite(1, "ax.cpp", 4, 4)], []))
+        self.assertEqual(fork_cites.find("`x.cpp-y:3`, `lib.so.1:3`, `/usr/x.cpp:3`\n", True), ([], []))
+
     def test_a_continuation_of_any_cite_on_its_line_is_not_a_stray(self):
         self.assertEqual(fork_cites.find("(`tests/hashes/manifest.txt:15-16`, `:33`)\n", True),
                          ([Cite(1, "tests/hashes/manifest.txt", 15, 16),

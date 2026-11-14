@@ -19,7 +19,9 @@ without a line or on the line before, since the tool can't tell which file it me
 Markdown :N with a file named without a line between it and the cite before it, as :65 in
 ax.cpp:617 (dsp_hle.cpp, :65), which may mean either file. PATH:N:M is a
 compiler's diagnostic, not a cite, and Markdown's fenced code blocks hold quoted output, so their
-lines are skipped. Paths with spaces aren't recognised.
+lines are skipped. Paths with spaces aren't recognised. A file named without a line is only a
+path a cite could hold, so x.cpp-y, lib.so.1 and /usr/x.cpp name no file, just as x.cpp-y:3,
+lib.so.1:3 and /usr/x.cpp:3 aren't cites.
 
 Each cite's lines are read at OLD with git -C gcn-recomp show. A cite whose file changed between
 OLD and NEW is listed as one of:
