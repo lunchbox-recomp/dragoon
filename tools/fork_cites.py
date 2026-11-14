@@ -38,7 +38,8 @@ since it was stale before the bump. A name two fork files at OLD or NEW share is
   skipped DOC:LINE NAME:N-M, names K fork files (PATH, PATH)
 since it can't be checked until the cite gives more of the path. A fork file that moves to
 another folder between OLD and NEW is two such files, so each bare cite of it is skipped too,
-and its cites of the old path, with gcn-recomp/ or fork-relative as hw/ax.cpp:2, are gone.
+and its cites of the old path, with gcn-recomp/ or fork-relative as hw/ax.cpp:2, are gone, or
+skipped when the new path still ends in the old one.
 Cites in unchanged files are only counted. The last line is
 "total T, ok O, moved M, gone G, outside X, unchanged U, skipped S, stray W", W counting the
 strays, which aren't cites and so aren't in T. DOC and PATH are relative to Dragoon and to
