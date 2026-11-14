@@ -2,8 +2,8 @@ import DragoonCore
 import Foundation
 
 /// Every string the window shows the player, in one place so they can be read together.
-enum Strings {
-    static let appName = "Dragoon"
+public enum Strings {
+    public static let appName = "Dragoon"
     static let quit = "Quit"
     static let backToLibrary = "Back to Library"
     static let checkAgain = "Check Again"
@@ -180,7 +180,7 @@ enum Strings {
     }
 
     /// Why the game couldn't start, after "The game couldn't start."
-    static func gameStart(_ failure: GameStartFailure) -> String {
+    public static func gameStart(_ failure: GameStartFailure) -> String {
         switch failure {
         case .missing(let path): return "There's no game at \(path)."
         case .failed(let reason): return reason

@@ -2,7 +2,7 @@ import DragoonCore
 import SwiftUI
 
 /// How a view hands what the player did to the flow.
-typealias Send = @MainActor (Flow.Event) -> Void
+public typealias Send = @MainActor (Flow.Event) -> Void
 
 /// The right side of the window: a title, what the step says and its buttons at the bottom.
 struct StepPage<Content: View, Buttons: View>: View {

@@ -1,4 +1,5 @@
 import DragoonCore
+import DragoonViews
 import Foundation
 import SwiftUI
 
@@ -40,8 +41,18 @@ struct DragoonApp: App {
 
     var body: some Scene {
         Window(Strings.appName, id: "main") {
-            LauncherView(model: model)
+            ModelView(model: model)
                 .frame(minWidth: 720, minHeight: 460)
         }
+    }
+}
+
+/// The window for the model's state, which launches the flow when it first appears.
+struct ModelView: View {
+    let model: LauncherModel
+
+    var body: some View {
+        LauncherView(state: model.state, send: { model.send($0) })
+            .onAppear { model.launch() }
     }
 }

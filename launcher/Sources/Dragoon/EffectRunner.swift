@@ -1,5 +1,6 @@
 import AppKit
 import DragoonCore
+import DragoonViews
 import Foundation
 import UniformTypeIdentifiers
 

@@ -3,28 +3,29 @@ import SwiftUI
 
 /// The window: the steps on the left and the current one on the right. A launcher that has to
 /// move, or can't read its source, shows only that.
-struct LauncherView: View {
-    let model: LauncherModel
+public struct LauncherView: View {
+    let state: Flow.State
+    let send: Send
 
-    var body: some View {
-        let state = model.state
-        Group {
-            if let step = state.step {
-                HStack(spacing: 0) {
-                    StepList(current: step)
-                    Divider()
-                    page(state)
-                }
-            } else {
-                page(state)
+    public init(state: Flow.State, send: @escaping Send) {
+        self.state = state
+        self.send = send
+    }
+
+    public var body: some View {
+        if let step = state.step {
+            HStack(spacing: 0) {
+                StepList(current: step)
+                Divider()
+                page
             }
+        } else {
+            page
         }
-        .onAppear { model.launch() }
     }
 
     @ViewBuilder
-    private func page(_ state: Flow.State) -> some View {
-        let send: Send = { model.send($0) }
+    private var page: some View {
         switch state.screen {
         case .starting:
             Color.clear

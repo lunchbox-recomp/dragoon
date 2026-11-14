@@ -8,8 +8,10 @@ let package = Package(
         .executable(name: "Dragoon", targets: ["Dragoon"]),
     ],
     targets: [
-        // The SwiftUI app, kept thin. Everything it does that can be tested lives in DragoonCore.
-        .executableTarget(name: "Dragoon", dependencies: ["DragoonCore"]),
+        // The SwiftUI app, kept thin. Everything it does that can be tested lives in DragoonCore,
+        // and the window's views and strings in DragoonViews, so tests can render them.
+        .executableTarget(name: "Dragoon", dependencies: ["DragoonCore", "DragoonViews"]),
+        .target(name: "DragoonViews", dependencies: ["DragoonCore"]),
         .target(name: "DragoonCore"),
         .testTarget(name: "DragoonCoreTests", dependencies: ["DragoonCore"]),
     ]

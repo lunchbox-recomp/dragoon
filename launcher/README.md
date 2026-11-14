@@ -1,6 +1,6 @@
 # Launcher
 
-The macOS launcher for Dragoon, as a SwiftPM package that builds with the Command Line Tools alone. `Dragoon` is the SwiftUI app and stays thin, and `DragoonCore` holds everything that can be tested. That includes the `ProcessRunner` and `FileSystem` protocols, which each have a real version in `Sources/DragoonCore/` and a fake in `Tests/DragoonCoreTests/`, and one set of tests runs against both file systems.
+The macOS launcher for Dragoon, as a SwiftPM package that builds with the Command Line Tools alone. `Dragoon` is the SwiftUI app and stays thin. `DragoonViews` holds the window's views and strings so tests can render them. `DragoonCore` holds everything else that can be tested. That includes the `ProcessRunner` and `FileSystem` protocols, which each have a real version in `Sources/DragoonCore/` and a fake in `Tests/DragoonCoreTests/`, and one set of tests runs against both file systems.
 
 ```
 swift build --package-path launcher
@@ -95,7 +95,7 @@ A launcher whose path holds `/AppTranslocation/`, or that's on a read-only volum
 
 Library offers a rebuild when `game/current/stamp.json` names other commits than the app's `source-info.json` or can't be read, and the old game plays until a rebuild starts. A rebuild that fails or is canceled leaves the old game current. Builds other than the current one are deleted while no game or build is running.
 
-`launcher.json` in `~/Library/Application Support/Dragoon` keeps the disc's bookmark and whether Welcome was seen. Every string the window shows is in `Sources/Dragoon/Strings.swift`.
+`launcher.json` in `~/Library/Application Support/Dragoon` keeps the disc's bookmark and whether Welcome was seen. Every string the window shows is in `Sources/DragoonViews/Strings.swift`.
 
 ## Launching the game
 
