@@ -4,6 +4,7 @@ import os
 import shutil
 import stat
 import subprocess
+import time
 import unittest
 from pathlib import Path
 
@@ -427,10 +428,14 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue((self.run_dir() / "ran-build-dragoon").exists())
 
-    def test_a_game_that_exits_ends_the_run_early(self):
-        self.add_game("dragoon", "exit 0\n")
+    def test_a_game_that_exits_ends_the_run_at_the_next_one_second_tick(self):
+        # The game outlives probe.sh's first look, so the run waits out at least one tick. A tick
+        # of 8 s fails this however fast the machine is, and one of 1 s leaves 6 s for the load.
+        self.add_game("dragoon", "sleep 1\n")
+        began = time.monotonic()
         r = probe(NAME, SECONDS, script=self.script)  # RUN_LIMIT is well short of SECONDS
         self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertLess(time.monotonic() - began, 8)
 
     def test_a_new_run_starts_with_no_settings_ports_or_pads_file(self):
         # A player's own files, where a game run from the repo would read them
