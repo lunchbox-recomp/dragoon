@@ -659,7 +659,7 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, under Chained course passes) | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`) | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `1abcf10` on Dragoon `b567ae0` (under gcn-recomp `1abcf10`) | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `1abcf10` on Dragoon `b567ae0`, the bump before its rebase onto #93's fixes, with the same code in `src/` (under gcn-recomp `1abcf10`) | Pass |
 | World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `45c52c5` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
 | Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `45c52c5` at loads of 2.7 to 6.3) | Pass |
 | Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1) | Pass |
@@ -890,8 +890,9 @@ patch list is missing is skipped for the run, and the engine kit's `runtime_chec
 overlay. The other commits add tests or rework docs. A probe run is hidden, so it shows no
 splash, and no route opens the menu or names a patch list.
 
-Built on Dragoon `b567ae0`, `tools/frame_hashes.py check` matched all twenty-four routes and
-1,906 frames in 14 min 40 s. `tools/audio_hashes.py check` then matched all 48 rows in 14 min
+These runs were on Dragoon `b567ae0`, this bump before its rebase onto #93's fixes, with the
+same code in `src/` and the same pin. Built there, `tools/frame_hashes.py check` matched all
+twenty-four routes and 1,906 frames in 14 min 40 s. `tools/audio_hashes.py check` then matched all 48 rows in 14 min
 27 s, so no golden was recorded. The 1-minute load was 16.4 as the frame check began, just
 after the build, 7.0 between the checks and 6.5 after the audio check.
 
