@@ -117,6 +117,39 @@ import Testing
         #expect(run.state.gameRunning)
     }
 
+    /// Back from a finished build, then Rebuild: the second build starts its bar and clock
+    /// again, keeps nothing of the first, and finishes on its own page too.
+    @Test func aSecondBuildFromTheFinishedPageStartsAfresh() {
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        let first = Date(timeIntervalSinceReferenceDate: 100)
+        run.send(.build(.plan(warmup: false), at: first))
+        run.send(.build(.step("recompile"), at: first))
+        run.send(.build(.step("swap"), at: first.addingTimeInterval(30)))
+        run.send(.build(.done(game: "/x/game/current/Dragoon.app"), at: first.addingTimeInterval(31)))
+        run.send(.buildEnded(nil))
+        #expect(run.send(.buildPressed) == [])  // the finished page has no Build button
+        #expect(run.send(.backToLibraryPressed) == [.deleteOldBuilds])
+        #expect(run.screen == .library)
+
+        for (event, effects) in rebuildToRunning { #expect(run.send(event) == effects) }
+        #expect(run.screen == .build(.running(BuildProgress())))
+        let second = Date(timeIntervalSinceReferenceDate: 500)
+        run.send(.build(.step("recompile"), at: second))
+        #expect(run.progress?.started == second)
+        #expect(run.progress?.finishedSteps == [])
+        #expect(run.progress?.warmupPlays == true)
+        #expect(run.progress?.fraction == 0)
+        run.send(.build(.done(game: "/x/game/current/Dragoon.app"), at: second.addingTimeInterval(40)))
+        #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
+        guard case .build(.finished(let progress)) = run.screen else {
+            Issue.record("the second build didn't finish on its page: \(run.screen)")
+            return
+        }
+        #expect(progress.elapsed(at: Date()) == 40)
+        #expect(run.state.canPlay)
+    }
+
     @Test func theBuildPageTakesEachEventsMoment() {
         var run = launched()
         for (event, _) in rebuildToRunning { run.send(event) }
