@@ -634,6 +634,18 @@ TEST(CameraMark, NoneAtFourByThree) {
     EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 21.0f / 9.0f), dragoon::kMenuFrame);
 }
 
+// After the race's finish the world camera that's drawn gets its aspect once, at frame 8,092.
+// The camera module still sets eight others over the screen each frame to 13,061, so each frame
+// has the screen as a view and the narrow HUD 3D camera marks nothing, as at 8,400.
+TEST(CameraMark, TheRaceAfterItsFinishKeepsTheModulesView) {
+    dragoon::WorldViews w;
+    for (uint32_t f = 8093; f <= 8400; f++) {
+        for (int cam = 0; cam < 8; cam++) w.add(f, dragoon::kScreen);
+        EXPECT_EQ(dragoon::camera_mark(narrow(25), w.at(f), kWide), Mark{}) << "frame " << f;
+        EXPECT_EQ(dragoon::camera_mark(narrow(25), w.at(f + 1), kWide), Mark{}) << "frame " << f + 1;
+    }
+}
+
 TEST(HudCallbacks, AStretchedCallbackTakesTheCamerasMark) {
     dragoon::HudCallbacks h;
     h.set_camera(dragoon::kMenuFrame);
@@ -681,6 +693,22 @@ TEST(HudCallbacks, AStretchedCallbacksTreesKeepTheCamerasMark) {
     EXPECT_FALSE(h.tree_begin());
     h.tree_end();
     EXPECT_EQ(h.mark(), dragoon::kMenuFrame);
+}
+
+// Top Ride on Grass at frame 3,600: its 38 HUD draws go through fov 25 cameras at 1.25538 over
+// the screen, and no world camera gives the frame a view, so the camera's mark is the 4:3 frame.
+// But Top Ride makes them current and draws its HUD outside every render callback, so nothing is
+// marked and the HUD stretches, its joint trees included.
+TEST(HudCallbacks, TopRidesHudOutsideEveryCallbackStretches) {
+    dragoon::HudCallbacks h;
+    const Mark m = dragoon::camera_mark(narrow(25), {}, kWide);
+    ASSERT_EQ(m, dragoon::kMenuFrame);
+    h.set_camera(m);
+    EXPECT_EQ(h.mark(), Mark{});
+    EXPECT_FALSE(h.tree_begin());
+    EXPECT_EQ(h.mark(), Mark{});
+    h.tree_end();
+    EXPECT_EQ(h.mark(), Mark{});
 }
 
 }  // namespace
