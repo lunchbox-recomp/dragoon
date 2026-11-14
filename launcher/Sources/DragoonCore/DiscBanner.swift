@@ -95,21 +95,20 @@ public struct DiscBanner: Equatable, Sendable {
 
 // MARK: - Finding the file
 
-private enum DiscLayout {
-    static let headerLength = 0x440
-    static let idLength = 6
+/// The file system table, past what `DiscLayout` holds for the disc check.
+extension DiscLayout {
     /// The file system table's offset and size, big-endian words. GameCube shifts neither.
-    static let fstOffsetWord = 0x424
-    static let fstSizeWord = 0x428
-    static let smallestFST = 12
-    static let largestFST = 1 << 20
+    fileprivate static let fstOffsetWord = 0x424
+    fileprivate static let fstSizeWord = 0x428
+    fileprivate static let smallestFST = 12
+    fileprivate static let largestFST = 1 << 20
     /// An entry is three big-endian words. Word 0's high byte says it's a directory and its
     /// low 24 bits are where its name is in the string table. For a file, word 1 is its offset
     /// on the disc and word 2 its size. For a directory, word 2 is the index past its last
     /// entry. Entry 0 is the root, whose word 2 is the entry count, and the string table
     /// follows the last entry.
-    static let entryLength = 12
-    static let bannerName = Array("opening.bnr".utf8) + [0]
+    fileprivate static let entryLength = 12
+    fileprivate static let bannerName = Array("opening.bnr".utf8) + [0]
 }
 
 extension DiscBanner {
@@ -145,8 +144,7 @@ extension DiscBanner {
         -> (offset: UInt32, size: Int)?
     {
         func word(_ entry: Int, _ index: Int) -> UInt32 {
-            let at = entry * DiscLayout.entryLength + 4 * index
-            return (at..<at + 4).reduce(0) { $0 << 8 | UInt32(fst[$1]) }
+            bigEndianWord(fst, at: entry * DiscLayout.entryLength + 4 * index)
         }
         let count = Int(word(0, 2))
         let stringTable = count * DiscLayout.entryLength

@@ -99,7 +99,7 @@ public func checkDisc(
 // MARK: - The check
 
 /// Where things are on a disc and in a DOL, from `extract_dol.py`.
-private enum Layout {
+enum DiscLayout {
     static let idLength = 6
     static let headerLength = 0x440
     static let dolOffsetWord = 0x420
@@ -148,20 +148,20 @@ private func inspect(
     case .plain: image = plain
     }
 
-    let header = try image.read(at: 0, count: Layout.headerLength, orFailWith: .cutShort)
-    let found = header.prefix(Layout.idLength)
+    let header = try image.read(at: 0, count: DiscLayout.headerLength, orFailWith: .cutShort)
+    let found = header.prefix(DiscLayout.idLength)
     guard found.elementsEqual(expectedID.utf8) else {
         return .wrongGame(foundID: printable(found))
     }
 
-    let dolOffset = UInt64(bigEndianWord(header, at: Layout.dolOffsetWord))
+    let dolOffset = UInt64(bigEndianWord(header, at: DiscLayout.dolOffsetWord))
     let dolHeader = try image.read(
-        at: dolOffset, count: Layout.dolHeaderLength, orFailWith: .pointsPastTheEnd)
+        at: dolOffset, count: DiscLayout.dolHeaderLength, orFailWith: .pointsPastTheEnd)
     var dolLength: UInt64 = 0
-    for section in 0..<Layout.dolSectionCount {
-        let size = UInt64(bigEndianWord(dolHeader, at: Layout.dolSizesAt + 4 * section))
+    for section in 0..<DiscLayout.dolSectionCount {
+        let size = UInt64(bigEndianWord(dolHeader, at: DiscLayout.dolSizesAt + 4 * section))
         if size == 0 { continue }
-        let offset = UInt64(bigEndianWord(dolHeader, at: Layout.dolOffsetsAt + 4 * section))
+        let offset = UInt64(bigEndianWord(dolHeader, at: DiscLayout.dolOffsetsAt + 4 * section))
         dolLength = max(dolLength, offset + size)
     }
     guard dolLength > 0 else {
@@ -171,7 +171,7 @@ private func inspect(
     var hash = Insecure.SHA1()
     var done: UInt64 = 0
     while done < dolLength {
-        let count = Int(min(dolLength - done, UInt64(Layout.chunkLength)))
+        let count = Int(min(dolLength - done, UInt64(DiscLayout.chunkLength)))
         hash.update(
             data: try image.read(
                 at: dolOffset + done, count: count, orFailWith: .pointsPastTheEnd))
@@ -190,9 +190,11 @@ private func littleEndianWord(_ data: Data, at offset: Int) -> UInt32 {
     return (0..<4).reduce(0) { $0 | UInt32(data[start + $1]) << (8 * UInt32($1)) }
 }
 
-func bigEndianWord(_ data: Data, at offset: Int) -> UInt32 {
-    let start = data.startIndex + offset
-    return (0..<4).reduce(0) { $0 << 8 | UInt32(data[start + $1]) }
+/// The big-endian word `offset` bytes into `bytes`, which may be `Data` or `[UInt8]`.
+func bigEndianWord<Bytes: RandomAccessCollection<UInt8>>(_ bytes: Bytes, at offset: Int) -> UInt32
+where Bytes.Index == Int {
+    let start = bytes.startIndex + offset
+    return (0..<4).reduce(0) { $0 << 8 | UInt32(bytes[start + $1]) }
 }
 
 // MARK: - The image as a run of bytes
