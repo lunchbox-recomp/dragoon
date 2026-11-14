@@ -615,6 +615,36 @@ TEST(MenuCamera, NotOverOneView) {
     EXPECT_FALSE(dragoon::menu_camera(l));
 }
 
+TEST(MenuCamera, EachSideOfTheViewportCounts) {
+    for (int i = 0; i < 4; i++) {
+        Lens p = narrow(25), o = lens(dragoon::kOrtho, 0, -480, 0, 640);
+        p.viewport[i] += 1;
+        o.viewport[i] += 1;
+        EXPECT_FALSE(dragoon::menu_camera(p)) << "side " << i;
+        EXPECT_FALSE(dragoon::menu_camera(o)) << "side " << i;
+    }
+}
+
+TEST(MenuCamera, EachValueOfTheFrameCounts) {
+    for (int i = 0; i < 4; i++) {
+        Lens o = lens(dragoon::kOrtho, 0, -480, 0, 640);
+        o.proj[i] += 1;
+        EXPECT_FALSE(dragoon::menu_camera(o)) << "value " << i;
+    }
+}
+
+TEST(MenuCamera, TheNarrowAspectToWithinATenThousandth) {
+    Lens l = narrow(25);
+    l.proj[1] = 1.25538f + 0.00005f;
+    EXPECT_TRUE(dragoon::menu_camera(l));
+    l.proj[1] = 1.25538f - 0.00005f;
+    EXPECT_TRUE(dragoon::menu_camera(l));
+    l.proj[1] = 1.25538f + 0.0002f;
+    EXPECT_FALSE(dragoon::menu_camera(l));
+    l.proj[1] = 1.25538f - 0.0002f;
+    EXPECT_FALSE(dragoon::menu_camera(l));
+}
+
 constexpr float kWide = 16.0f / 9.0f;
 
 TEST(CameraMark, AMenuCameraCentersTheFrameWhileNoWorldIsShown) {
