@@ -57,6 +57,14 @@ class FindTest(unittest.TestCase):
                          ([Cite(1, "render_gl_batch.cpp", 180, 180),
                            Cite(1, "render_gl_batch.cpp", 522, 523)], []))
 
+    def test_a_list_runs_on_past_its_first_item(self):
+        self.assertEqual(fork_cites.find("(`ax.cpp:1, 3, 5-6`)\n", True),
+                         ([Cite(1, "ax.cpp", 1, 1), Cite(1, "ax.cpp", 3, 3), Cite(1, "ax.cpp", 5, 6)], []))
+
+    def test_the_last_number_of_an_ipv6_address_is_not_a_continuation(self):
+        self.assertEqual(fork_cites.find("`ax.cpp:5` listens on ::1\n", True), ([Cite(1, "ax.cpp", 5, 5)], []))
+        self.assertEqual(fork_cites.find("listens on ::1\n", True), ([], []))
+
     def test_a_comma_and_a_count_are_not_a_list(self):
         self.assertEqual(fork_cites.find("ax.cpp:42, 3 voices\n", False), ([Cite(1, "ax.cpp", 42, 42)], []))
 
@@ -153,6 +161,23 @@ class ForkCitesTest(unittest.TestCase):
                                  docs={"docs/a.md": "`gcn-recomp/runtime/old.cpp:2`\n"})
         self.assertEqual((code, self.report(out)), (1, ["gone docs/a.md:1 runtime/old.cpp:2"]))
 
+    def test_a_file_renamed_at_new_is_gone_from_its_old_path(self):
+        code, out, _ = self.bump({"runtime/old.cpp": text(TEN)}, {"runtime/new.cpp": text(TEN)},
+                                 removed=("runtime/old.cpp",),
+                                 docs={"docs/a.md": "`gcn-recomp/runtime/old.cpp:2`\n"})
+        self.assertEqual((code, self.report(out)), (1, ["gone docs/a.md:1 runtime/old.cpp:2"]))
+
+    def test_a_cite_of_the_last_line_is_inside(self):
+        code, out, _ = self.bump({"runtime/same.cpp": text(TEN)}, {},
+                                 docs={"docs/a.md": "`runtime/same.cpp:10`, `:9-10`\n"})
+        self.assertEqual((code, out), (0, "total 2, ok 0, moved 0, gone 0, outside 0, unchanged 2, skipped 0\n"))
+
+    def test_a_name_is_a_whole_file_name_and_not_the_end_of_one(self):
+        code, out, _ = self.bump({"runtime/max.cpp": text(TEN), "runtime/hw/ax.cpp": text(TEN)},
+                                 {"runtime/max.cpp": text(["x"] + TEN), "runtime/hw/ax.cpp": text(["x"] + TEN)},
+                                 docs={"tools/lax.cpp": "int x;\n", "docs/a.md": "`ax.cpp:2`\n"})
+        self.assertEqual((code, self.report(out)), (1, ["moved docs/a.md:1 runtime/hw/ax.cpp:2 now 3"]))
+
     def test_a_cite_past_the_end_at_old_is_outside_even_in_an_unchanged_file(self):
         code, out, _ = self.bump({"runtime/same.cpp": text(TEN)}, {},
                                  docs={"docs/a.md": "`runtime/same.cpp:10-11`, `:0`\n"})
@@ -244,12 +269,20 @@ class ForkCitesTest(unittest.TestCase):
         code, out, _ = self.run_tool()
         self.assertEqual((code, self.report(out)), (1, ["moved docs/a.md:1 runtime/main.cpp:1 now 2"]))
 
+    def test_a_tracked_link_in_the_working_tree_is_not_read(self):
+        self.bump({"runtime/main.cpp": text(TEN)}, {"runtime/main.cpp": text(["x"] + TEN)},
+                  docs={"docs/a.md": "`main.cpp:2`\n"})
+        os.symlink("docs/a.md", self.repo / "a link.md")
+        git(self.repo, "add", "a link.md")
+        code, out, _ = self.run_tool()
+        self.assertEqual((code, self.report(out)), (1, ["moved docs/a.md:1 runtime/main.cpp:2 now 3"]))
+
     def test_at_reads_a_dragoon_commit_and_not_the_working_tree(self):
         self.bump({"runtime/main.cpp": text(TEN)}, {"runtime/main.cpp": text(["x"] + TEN)},
                   docs={"docs/a.md": "`main.cpp:2`\n", "a link.md": "`main.cpp:4`\n"})
         before = git(self.repo, "rev-parse", "HEAD")
         (self.repo / "a link.md").unlink()
-        os.symlink("docs/a.md", self.repo / "a link.md")
+        os.symlink("main.cpp:6", self.repo / "a link.md")
         git(self.repo, "add", "a link.md")
         commit(self.repo, {"docs/a.md": "`main.cpp:3`\n", "docs/b.md": "`main.cpp:5`\n"})
         write_file(self.repo / "docs", "a.md", "`main.cpp:1`\n")

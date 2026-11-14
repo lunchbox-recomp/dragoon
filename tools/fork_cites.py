@@ -201,8 +201,6 @@ def run(repo: Path, old: str, new: str, at: Optional[str]) -> int:
         top = ""
     if not top or Path(top).resolve() != engine.resolve():
         raise ValueError(f"{engine} isn't a git checkout")
-    for sha in (old, new):
-        git(engine, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")
     fork = Fork(engine, old, new)
     dragoon, texts = dragoon_texts(repo, at)
     counts = dict.fromkeys(("ok", "moved", "gone", "outside", "unchanged", "skipped"), 0)
