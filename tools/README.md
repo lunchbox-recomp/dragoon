@@ -762,7 +762,7 @@ ninja -C build-kit runtime_check gcn_imgui SDL3-static
 tools/engine_kit.py --build build-kit --out build-kit/kit --strip-debug
 ```
 
-CI's `kit` job runs these, links the kit against `tests/kit/stub_tables.c`, empty tables that stand in for the recompiler's output, and uploads the kit as the `engine-kit` artifact. A framework missing from `game_libs.txt` fails that link. `ninja runtime_check` alone doesn't build gcn_imgui, so the second line names it. A build whose `main.cpp` has no `GCN_OVERLAY`, from a gcn-recomp that leaves the menu out of runtime_check or a configure with `-DGCN_OVERLAY=OFF`, is refused, since its game would have no menu.
+CI's `kit` job runs these, links the kit against `tests/kit/stub_tables.c`, empty tables that stand in for the recompiler's output, and uploads the kit as the `engine-kit` artifact. A framework missing from `game_libs.txt` fails that link. `ninja runtime_check` alone doesn't build gcn_imgui, so the second line names it. A build whose `main.cpp` has no `GCN_OVERLAY`, from a gcn-recomp that leaves the menu out of runtime_check, is refused, since its game would have no menu. A configure with `-DGCN_OVERLAY=OFF` stops sooner, at the second line: it makes no gcn_imgui, so ninja says `unknown target 'gcn_imgui'`. Built without that target, it's refused for its `main.cpp` the same way.
 
 On the player's side, launcher_build.py has the Command Line Tools' python3 run `extract_dol.py` and `recomp.py` into a directory, and then the kit's Makefile compiles `gen/*.c` there and links `./dragoon`. `KIT` is named on the command line, since make splits the Makefile's own path at its spaces, and the kit's path may have them:
 
