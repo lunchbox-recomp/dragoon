@@ -29,9 +29,9 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 # [session] line, writes an input log that ends in `# end POLL FRAME` on the ways out the engine
 # writes one on, and on SIGTERM ends the way probe.sh and the game do: the probe is gone at once
 # and the game goes on for half a second, as on_interrupt does. It records what it saw in
-# record.json, and whether the link was still open when the game looked. Once its interpreter
-# is up and it has a plan to play, it writes `booted`, which starts the RunClock. A plan is
-# {"frames": [N, ...]} and any of these:
+# record.json, the CLOCK_MONOTONIC it was sent SIGTERM at (term_at) and whether the link was
+# still open when the game looked. Once its interpreter is up and it has a plan to play, it
+# writes `booted`, which starts the RunClock. A plan is {"frames": [N, ...]} and any of these:
 #   "after"          what it does once its frames are done: "exit" (the default), "linger" (waits
 #                    out SECONDS with the link open and sends no frame), "shutdown" (the console
 #                    shutdown the game asks for), "died" (no `# end`, as after an abort),
@@ -53,6 +53,7 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #   "bad_data"       answers a read with what isn't a data line
 #   "mute_reads"     never answers a read, and waits on for the bot's next line
 #   "slow_reads"     seconds to wait before it answers each read
+#   "late"           {"N": seconds}: how long it waits before it sends frame N
 #   "ignore_hangup"  waits instead of exiting when the bot hangs up
 #   "moving"         makes RAM change from frame to frame
 #   "kind"           what a reset says it is: "restart" (the default), "hot reset" or "shutdown"
@@ -82,9 +83,10 @@ with open("pid.txt", "w") as f:
     f.write(str(os.getpid()))
 
 
-def save():
-    with open("record.json", "w") as f:
+def save():  # whole, so a test that reads it while the game is shutting down reads one save
+    with open("record.json.new", "w") as f:
         json.dump(rec, f)
+    os.replace("record.json.new", "record.json")
 
 
 atexit.register(save)
@@ -127,6 +129,8 @@ def end_log():
 def on_term(signum, frame):
     # probe.sh exits at once on SIGTERM and leaves the game to shut down by itself, so the
     # probe is gone here and a child plays the game, which looks at the link a moment later.
+    rec["term_at"] = time.clock_gettime(time.CLOCK_MONOTONIC)
+    save()  # as the probe goes, since run doesn't wait for the game once its link is closed
     if os.fork():
         os._exit(1)
     devnull = os.open(os.devnull, os.O_RDWR)  # the game's output goes to a file, not probe.sh's pipes
@@ -168,6 +172,7 @@ def ram(addr, length, frame):
 
 
 def step(frame):
+    time.sleep(plan.get("late", {}).get(str(frame), 0))
     conn.sendall(("frame %d\n" % frame).encode())
     if not plan.get("forever"):
         rec["events"].append("frame %d" % frame)
@@ -359,6 +364,14 @@ class RunClock:
         assert self.behind is not None, "the clock never saw the game up"
         return self.monotonic() - self.start
 
+    def at(self, system: float) -> float:
+        """The run's seconds since the game was up at SYSTEM, a CLOCK_MONOTONIC time another
+        process took, such as the fake. It's one clock for every process, which time.monotonic
+        isn't under macOS's Python 3.9, where it counts from the process's first call."""
+        assert self.behind is not None, "the clock never saw the game up"
+        real = system - (time.clock_gettime(time.CLOCK_MONOTONIC) - time.monotonic())
+        return real - self.behind - self.start
+
 
 class FakeProbeCase(unittest.TestCase):
     """A temp tree with a fake probe.sh in tools/, the way test_probe.py makes one, under a time
@@ -395,6 +408,11 @@ class FakeProbeCase(unittest.TestCase):
 
     def record(self, name: str = "t") -> dict:
         return json.loads((self.run_dir(name) / "record.json").read_text())
+
+    def ended_at(self) -> float:
+        """The run's seconds since the game was up when the run sent it SIGTERM. go returns as much
+        as half a second later, while the game shuts down with the link open."""
+        return self.clock.at(self.record()["term_at"])
 
 
 class PadTest(unittest.TestCase):
@@ -743,6 +761,16 @@ class OutcomeTest(FakeProbeCase):
         self.assertGreater(outcome.frames, 1)
         self.assertEqual(self.record()["link_at_term"], "open")
 
+    def test_the_time_limit_comes_seconds_after_the_game_is_up(self):
+        self.plan([0], forever=True)
+
+        def bot(link: Link) -> dict[int, Pad]:  # answers frame N at N * 1.05 s of the run
+            self.clock.advance(max(0.0, link.frame * 1.05 - self.clock.since_boot()))
+            return {1: Pad()}
+
+        outcome = self.go(bot, seconds=1)  # frame 1 comes before 1 s, and frame 2 after it
+        self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.TIME_LIMIT, 2, 1))
+
     def test_the_time_limit_ends_a_game_whose_sigterm_does_not_interrupt_its_wait(self):
         # CPython runs a Python handler only between bytecodes, so a SIGTERM taken just before the
         # fake's recv would leave it waiting on a link run holds open until the game exits, as
@@ -774,6 +802,7 @@ class OutcomeTest(FakeProbeCase):
         self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 20})
         outcome = self.go(neutral, hang=0.5)
         self.assertLess(self.clock.since_boot(), bot_link.DEADLINE_SLACK)
+        self.assertGreaterEqual(self.ended_at(), 0.5)
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 2, 1))
         self.assertEqual(outcome.detail, "no new connection for 0.5 s after the link closed, and its last line "
                                          f"is '[session] {self.run_dir() / 'session' / 'run-2'}'")
@@ -783,7 +812,14 @@ class OutcomeTest(FakeProbeCase):
         self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 20, "session_first": True})
         outcome = self.go(neutral, hang=0.5)
         self.assertLess(self.clock.since_boot(), bot_link.DEADLINE_SLACK)
+        self.assertGreaterEqual(self.ended_at(), 0.5)
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.HANG, 2))
+
+    def test_a_game_that_resets_and_connects_again_later_than_the_hang_is_a_hang(self):
+        self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 2.5})
+        outcome = self.go(neutral, hang=1)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.HANG, 2))
+        self.assertTrue(outcome.detail.startswith("no new connection for 1 s after the link closed"), outcome.detail)
 
     def test_a_reset_line_is_a_restart_or_a_hot_reset_and_not_a_shutdown(self):
         for kind, expected in (("restart", True), ("hot reset", True), ("shutdown", False)):
@@ -825,6 +861,7 @@ class OutcomeTest(FakeProbeCase):
         self.plan([0, 1, 2], after="linger")
         outcome = self.go(neutral, hang=0.5)
         self.assertLess(self.clock.since_boot(), 5)  # not the 30 s of the run
+        self.assertGreaterEqual(self.ended_at(), 0.5)
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 3, 2))
         self.assertEqual(outcome.detail, "no frame for 0.5 s after frame 2")
         self.assertEqual(self.record()["link_at_term"], "open")
@@ -870,10 +907,22 @@ class OutcomeTest(FakeProbeCase):
         outcome = self.go(slow, hang=5)  # well over the fake's answer, however loaded the machine
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 3))
 
+    def test_a_frame_late_but_within_the_hang_is_no_hang(self):
+        self.plan([0, 1, 2], late={"1": 0.5})
+        outcome = self.go(neutral, hang=3)
+        self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 3))
+
+    def test_a_frame_later_than_the_hang_is_a_hang(self):
+        self.plan([0, 1, 2], late={"1": 1.5})
+        outcome = self.go(neutral, hang=1)
+        self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame, outcome.detail),
+                         (bot_link.HANG, 1, 0, "no frame for 1 s after frame 0"))
+
     def test_a_read_the_game_does_not_answer_is_a_hang_with_the_link_open(self):
         self.plan([0, 1], mute_reads=True)
         outcome = self.go(read_one, hang=0.5)
         self.assertLess(self.clock.since_boot(), 5)  # not the 30 s of the run
+        self.assertGreaterEqual(self.ended_at(), 0.5)
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 0, 0))
         self.assertEqual(outcome.detail, "no answer to a read for 0.5 s at frame 0")
         self.assertEqual(self.record()["link_at_term"], "open")
@@ -901,6 +950,11 @@ class OutcomeTest(FakeProbeCase):
         self.plan([0], slow_reads=0.5)
         outcome = self.go(read_one, hang=3)
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 1))
+
+    def test_a_read_answered_later_than_the_hang_is_a_hang(self):
+        self.plan([0], slow_reads=1.5)
+        outcome = self.go(read_one, hang=1)
+        self.assertEqual((outcome.reason, outcome.detail), (bot_link.HANG, "no answer to a read for 1 s at frame 0"))
 
     def test_the_time_the_bot_takes_before_a_read_is_not_the_games_hang(self):
         self.plan([0, 1, 2])
