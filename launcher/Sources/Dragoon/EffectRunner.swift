@@ -98,7 +98,8 @@ final class EffectRunner {
         case .showWindow:
             showWindow()
         case .watchEarlierGame(let pid):
-            // App Nap can hold this game's end as it held the end of one the launcher started.
+            // The activity keeps the launcher from napping while it waits. Whether App Nap delays
+            // a kqueue exit event for a process that isn't its child hasn't been measured.
             let awake = ProcessInfo.processInfo.beginActivity(
                 options: .userInitiatedAllowingIdleSystemSleep,
                 reason: "Waiting for an earlier game to end")
