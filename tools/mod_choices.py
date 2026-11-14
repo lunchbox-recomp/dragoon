@@ -143,9 +143,13 @@ def sweep_temps(data):
     """
     stale = time.time() - 60
     for path in data.glob('.mods-*'):
-        info = path.lstat()
-        if stat.S_ISREG(info.st_mode) and info.st_mtime < stale:
-            path.unlink()
+        # Another run's write can replace or remove its temp file after the glob.
+        try:
+            info = path.lstat()
+            if stat.S_ISREG(info.st_mode) and info.st_mtime < stale:
+                path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def disc_from_cache():

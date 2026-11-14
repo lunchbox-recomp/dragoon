@@ -573,6 +573,30 @@ class FakeEngineTest(unittest.TestCase):
         self.assertTrue(folder.is_dir())
         self.assertTrue(other.exists())
 
+    def stale_temp(self, name):
+        path = self.data / name
+        path.write_text('a.xml:opt=0\n')
+        old = time.time() - 120
+        os.utime(path, (old, old))
+        return path
+
+    def test_sweep_skips_a_temp_file_gone_before_its_lstat(self):
+        # Another run's write replaced it between the glob and the lstat.
+        gone = self.data / '.mods-gone1234'
+        stale = self.stale_temp('.mods-stale123')
+        with mock.patch.object(type(self.data), 'glob', return_value=[gone, stale]):
+            mod_choices.sweep_temps(self.data)
+        self.assertFalse(stale.exists())
+
+    def test_sweep_skips_a_temp_file_gone_before_its_unlink(self):
+        # Another run's write replaced the first between its lstat and its unlink, and the sweep
+        # goes on to the second.
+        self.stale_temp('.mods-first123')
+        self.stale_temp('.mods-second12')
+        with mock.patch.object(type(self.data), 'unlink', side_effect=[FileNotFoundError, None]) as unlink:
+            mod_choices.sweep_temps(self.data)
+        self.assertEqual(unlink.call_count, 2)
+
     def test_apply_time_includes_list(self):
         script = ('import time\n'
                   'if sys.argv[1] == "list":\n'
