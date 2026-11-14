@@ -1027,10 +1027,10 @@ real game's own time to its window isn't here.
 | Play to the game's process starting in a release app, by its logged times less the fake's 500 ms | none set | 57 to 77 ms | Recorded |
 | An engine that writes no ready file, Play to the hide | the 20 s timeout and a log line | 5.0 s and the line, when the timeout was 5 s; not measured at 20 s | Not measured at 20 s |
 | The game ending to the window back in, App Nap held off | 0.5 s | 265 and 380 ms | Pass |
-| The same before App Nap was held off | 0.5 s | 270 ms, or 26 s to over 2 minutes | Fail, fixed in `f78a8d3` |
+| The same before App Nap was held off | 0.5 s | 270 ms, or 26 s to over 2 minutes | Fail, fixed in `424da2f` |
 | Launcher's share of a core while clear, the game running | 0.2% | 0.02% | Pass |
 | Hiding with neither a `window` line nor the timeout | never | never, in `FlowHandOffTests` | Pass |
-| The bars above on the real game | an engine that writes `GCN_READY_FILE`, which gcn-recomp `1abcf10` brings; the launcher's commits land on the pin bump to it | Not measured | Not measured |
+| The bars above on the real game | an engine that writes `GCN_READY_FILE`, which gcn-recomp `1abcf10` brings; the launcher's commits sit on the pin at `864d9d4`, past it | Not measured | Not measured |
 
 The first two rows are from 2026-11-14, ten runs of `LaunchTimingTests`, five alone and five in
 the full suite. It prints each run's times and holds none to a bar, as a loaded runner can
@@ -1047,7 +1047,7 @@ clicks through, and did the same with `activate` called before Play.
 Once the launcher had called `activate`, its 80 s runs got the game's end late, by 57 s and
 26 s. In a third the game sat as a zombie and the termination handler hadn't run 2 minutes
 after it exited. Runs of 20 s and 80 s that never called `activate` were on time. App Nap fits
-what was seen, so since `f78a8d3` the launcher holds a `ProcessInfo` activity until the game
+what was seen, so since `424da2f` the launcher holds a `ProcessInfo` activity until the game
 ends. With it, two 80 s runs after `activate` were on time, one of them with a fake that
 writes no ready file. The share is `launcher/tools/idle_cpu.py` over 60 s while the
 window was clear, 0.00% before the activity and 0.02% with it.
