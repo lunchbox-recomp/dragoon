@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
 import fcntl
 import json
 import os
+import select
 import shutil
 import socket
 import sys
@@ -27,7 +29,8 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 # [session] line, writes an input log that ends in `# end POLL FRAME` on the ways out the engine
 # writes one on, and on SIGTERM ends the way probe.sh and the game do: the probe is gone at once
 # and the game goes on for half a second, as on_interrupt does. It records what it saw in
-# record.json, and whether the link was still open when the game looked. A plan is
+# record.json, and whether the link was still open when the game looked. Once its interpreter
+# is up and it has a plan to play, it writes `booted`, which starts the RunClock. A plan is
 # {"frames": [N, ...]} and any of these:
 #   "after"          what it does once its frames are done: "exit" (the default), "linger" (waits
 #                    out SECONDS with the link open and sends no frame), "shutdown" (the console
@@ -243,6 +246,7 @@ def play(frames, forever=False, connect_after=0, begun=False):
 if plan.get("refuse"):
     print(plan["refuse"], file=sys.stderr)
     sys.exit(2)
+open("booted", "w").close()  # the interpreter is up, which starts the test's RunClock
 play(plan["frames"], plan.get("forever", False), plan.get("connect_after", 0))
 if plan.get("last_says"):
     say(plan["last_says"])
@@ -325,9 +329,38 @@ SAID = '\'[OS] assertion "made_up != 0" failed\', \'[OS]  in made_up.cpp on line
 AFTER = "[audio] underrun at output frame 0 frames=512\n" * 3000
 
 
+class RunClock:
+    """time.monotonic for bot_link in a test. It stands still until the fake game is up, when its
+    `booted` file is in RUN_DIR, and then runs with the real clock plus what `advance` adds. So a
+    run's SECONDS and its hang count from the game's start and not from its interpreter's, which
+    takes seconds on a loaded machine, and a bot can take seconds of the run without sleeping."""
+
+    def __init__(self, run_dir: Path) -> None:
+        self.booted = run_dir / "booted"
+        self.booted.unlink(missing_ok=True)  # an earlier run's
+        self.start = time.monotonic()
+        self.behind: float | None = None  # how far the run's clock is behind the real one, once up
+
+    def monotonic(self) -> float:
+        now = time.monotonic()
+        if self.behind is None:
+            if not self.booted.exists():
+                return self.start
+            self.behind = now - self.start
+        return now - self.behind
+
+    def advance(self, seconds: float) -> None:
+        assert self.behind is not None, "the game isn't up"
+        self.behind -= seconds
+
+    def since_boot(self) -> float:
+        """The run's seconds since the game was up."""
+        return self.monotonic() - self.start
+
+
 class FakeProbeCase(unittest.TestCase):
     """A temp tree with a fake probe.sh in tools/, the way test_probe.py makes one, under a time
-    limit of `limit` seconds."""
+    limit of `limit` seconds. Its runs are on a RunClock, `self.clock`."""
 
     limit = RUN_LIMIT
 
@@ -346,8 +379,14 @@ class FakeProbeCase(unittest.TestCase):
     def plan(self, frames: list[int], **more: object) -> None:
         write_file(self.probe.parent.parent, "plan.json", json.dumps({"frames": frames, **more}))
 
+    def clocked(self, name: str = "t") -> contextlib.AbstractContextManager:
+        """bot_link's clock patched to a new RunClock for a run of NAME."""
+        self.clock = RunClock(bot_link.run_directory(name, self.probe))
+        return mock.patch.object(bot_link, "time", self.clock)
+
     def go(self, bot, name: str = "t", seconds: int = 30, **kwargs) -> Outcome:
-        return run(name, seconds, bot, probe=self.probe, **kwargs)
+        with self.clocked(name):
+            return run(name, seconds, bot, probe=self.probe, **kwargs)
 
     def run_dir(self, name: str = "t") -> Path:
         return self.root / "build" / "probe" / name
@@ -688,9 +727,8 @@ class OutcomeTest(FakeProbeCase):
 
     def test_a_game_that_runs_to_the_time_limit_is_cut_off_there_with_the_link_open(self):
         self.plan([0, 1], after="linger")
-        began = time.monotonic()
         outcome = self.go(neutral, seconds=1, settings=["--exit-after=1500"])
-        self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)  # run's deadline, not probe's
+        self.assertLess(self.clock.since_boot(), bot_link.DEADLINE_SLACK)  # run's deadline, not probe's
         self.assertEqual((outcome.reason, outcome.frames, outcome.detail),
                          (bot_link.TIME_LIMIT, 2, "the time limit, 1 s"))
         self.assertEqual(self.record()["link_at_term"], "open")
@@ -714,9 +752,8 @@ class OutcomeTest(FakeProbeCase):
 
     def test_a_game_that_has_not_connected_when_the_time_is_up_never_linked_and_says_where_it_got_to(self):
         self.plan([0], connect_after=20)
-        began = time.monotonic()
         outcome = self.go(neutral, seconds=1)
-        self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)
+        self.assertLess(self.clock.since_boot(), bot_link.DEADLINE_SLACK)
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.NEVER_LINKED, 0, None))
         self.assertEqual(outcome.detail, "the game hadn't connected when the time limit came, and its last line "
                                          f"is '[session] {self.run_dir() / 'session'}'")
@@ -733,9 +770,8 @@ class OutcomeTest(FakeProbeCase):
 
     def test_a_game_that_resets_and_does_not_connect_again_is_a_hang_when_hang_is_set(self):
         self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 20})
-        began = time.monotonic()
         outcome = self.go(neutral, hang=0.5)
-        self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)
+        self.assertLess(self.clock.since_boot(), bot_link.DEADLINE_SLACK)
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 2, 1))
         self.assertEqual(outcome.detail, "no new connection for 0.5 s after the link closed, and its last line "
                                          f"is '[session] {self.run_dir() / 'session' / 'run-2'}'")
@@ -743,9 +779,8 @@ class OutcomeTest(FakeProbeCase):
 
     def test_the_hang_clock_is_armed_by_a_reset_even_when_the_new_process_has_already_said_its_session(self):
         self.plan([0, 1], after="reset", then={"frames": [0], "connect_after": 20, "session_first": True})
-        began = time.monotonic()
         outcome = self.go(neutral, hang=0.5)
-        self.assertLess(time.monotonic() - began, bot_link.DEADLINE_SLACK)
+        self.assertLess(self.clock.since_boot(), bot_link.DEADLINE_SLACK)
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.HANG, 2))
 
     def test_a_reset_line_is_a_restart_or_a_hot_reset_and_not_a_shutdown(self):
@@ -786,9 +821,8 @@ class OutcomeTest(FakeProbeCase):
 
     def test_a_game_that_stops_sending_frames_is_a_hang_with_the_link_open(self):
         self.plan([0, 1, 2], after="linger")
-        began = time.monotonic()
         outcome = self.go(neutral, hang=0.5)
-        self.assertLess(time.monotonic() - began, 5)  # not the 30 s of the run
+        self.assertLess(self.clock.since_boot(), 5)  # not the 30 s of the run
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 3, 2))
         self.assertEqual(outcome.detail, "no frame for 0.5 s after frame 2")
         self.assertEqual(self.record()["link_at_term"], "open")
@@ -828,17 +862,16 @@ class OutcomeTest(FakeProbeCase):
         self.plan([0, 1, 2])
 
         def slow(link: Link) -> dict[int, Pad]:
-            time.sleep(0.4)
+            self.clock.advance(6)
             return {1: Pad()}
 
-        outcome = self.go(slow, hang=0.3)
+        outcome = self.go(slow, hang=5)  # well over the fake's answer, however loaded the machine
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 3))
 
     def test_a_read_the_game_does_not_answer_is_a_hang_with_the_link_open(self):
         self.plan([0, 1], mute_reads=True)
-        began = time.monotonic()
         outcome = self.go(read_one, hang=0.5)
-        self.assertLess(time.monotonic() - began, 5)  # not the 30 s of the run
+        self.assertLess(self.clock.since_boot(), 5)  # not the 30 s of the run
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.HANG, 0, 0))
         self.assertEqual(outcome.detail, "no answer to a read for 0.5 s at frame 0")
         self.assertEqual(self.record()["link_at_term"], "open")
@@ -855,12 +888,11 @@ class OutcomeTest(FakeProbeCase):
         self.plan([0], mute_reads=True)
 
         def late(link: Link) -> dict[int, Pad]:
-            time.sleep(1.2)
+            self.clock.advance(1.2)
             return read_one(link)
 
-        began = time.monotonic()
         outcome = self.go(late, seconds=1)
-        self.assertLess(time.monotonic() - began, 8)
+        self.assertLess(self.clock.since_boot(), 8)
         self.assertEqual((outcome.reason, outcome.frames, outcome.last_frame), (bot_link.TIME_LIMIT, 0, 0))
 
     def test_a_read_answered_late_but_within_the_hang_is_no_hang(self):
@@ -872,10 +904,10 @@ class OutcomeTest(FakeProbeCase):
         self.plan([0, 1, 2])
 
         def slow(link: Link) -> dict[int, Pad]:
-            time.sleep(0.4)
+            self.clock.advance(6)
             return read_one(link)
 
-        outcome = self.go(slow, hang=0.3)
+        outcome = self.go(slow, hang=5)
         self.assertEqual((outcome.reason, outcome.frames), (bot_link.GAME_EXITED, 3))
 
     def test_a_game_that_never_connects_says_what_probe_said_and_a_hang_is_not_asked_of_it(self):
@@ -912,8 +944,8 @@ class OutcomeTest(FakeProbeCase):
         self.plan([0, 1, 2], die_at=1)
 
         def bot(link: Link) -> dict[int, Pad]:
-            if link.frame == 1:
-                time.sleep(0.3)  # the game exits meanwhile, so the send finds nobody
+            if link.frame == 1:  # the game has exited by the time the send goes, so it finds nobody
+                select.select([link._conn], [], [])  # it sends nothing more, so this is the link's end
             return {1: Pad()}
 
         outcome = self.go(bot)
@@ -1338,7 +1370,8 @@ class RealProbeTest(unittest.TestCase):
 
 class CommandTest(FakeProbeCase):
     def main(self, *args: str) -> tuple[int, str, str]:
-        return run_main(bot_link.main, "--probe", str(self.probe), *args)
+        with self.clocked():  # every run here is named t
+            return run_main(bot_link.main, "--probe", str(self.probe), *args)
 
     def test_a_run_that_ended_by_itself_exits_0_and_prints_where_how_and_the_input_log(self):
         self.plan([0, 1, 2])
