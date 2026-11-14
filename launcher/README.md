@@ -64,7 +64,7 @@ The image is read through a file handle at most 1 MiB at a time, so a 1.4 GB dis
 
 There's no banner when the table is under 12 bytes or over 1 MiB, its entries don't fit in it, its last byte isn't NUL or a name starts past its end. Only the root's own files count, and the name has to be `opening.bnr` exactly.
 
-A banner is `BNR1` and 0x1960 bytes, or `BNR2` and 0x1FA0 bytes, the pairs Dolphin's `VolumeGC.cpp` takes. Its 96x32 picture decodes from RGB5A3 tiles to RGBA. Dolphin lays the picture on black, and here it keeps its alpha. Its strings are Shift-JIS when the disc ID's fourth character is `J` and Windows-1252 otherwise.
+A banner is `BNR1` and 0x1960 bytes, or `BNR2` and 0x1FA0 bytes, the pairs Dolphin's `VolumeGC.cpp` takes. Its 96x32 picture decodes from RGB5A3 tiles to RGBA. Dolphin lays the picture on black, and here it keeps its alpha. Its strings are Shift-JIS when the disc ID's fourth character is `J` and Windows-1252 otherwise. Dolphin picks Shift-JIS by the region word at 0x458 instead, when it says NTSC-J (`Volume.cpp`'s `DecodeString` and `VolumeGC.cpp`'s `GetRegion`), so the two differ only on a disc whose ID and region word disagree.
 
 The first time a disc passes its check with no banner cached, the launcher reads the banner and keeps the file as the disc holds it in `disc/opening.bnr` in `~/Library/Application Support/Dragoon`. It loads that file at start, so Library has the banner with the drive unplugged. A disc that fails its check is never read for one.
 
