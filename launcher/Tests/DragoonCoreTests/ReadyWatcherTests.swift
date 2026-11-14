@@ -42,6 +42,25 @@ private func given(
     }
 }
 
+/// How many of this process's descriptors are open on `path`, by `proc_pidinfo`'s list of them
+/// and the path of each. Other tests open and close descriptors meanwhile, so only `path` counts.
+private func descriptors(on path: String) -> Int {
+    let pid = getpid()
+    let stride = MemoryLayout<proc_fdinfo>.stride
+    let needed = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
+    guard needed > 0 else { return -1 }
+    // Room for those opened since.
+    var list = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(needed) / stride + 64)
+    let filled = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &list, Int32(list.count * stride))
+    guard filled > 0 else { return -1 }
+    return list.prefix(Int(filled) / stride).filter { info in
+        guard info.proc_fdtype == UInt32(PROX_FDTYPE_VNODE) else { return false }
+        var found = [UInt8](repeating: 0, count: Int(MAXPATHLEN))
+        guard fcntl(info.proc_fd, F_GETPATH, &found) == 0 else { return false }
+        return String(decoding: found.prefix { $0 != 0 }, as: UTF8.self) == path
+    }.count
+}
+
 /// `ReadyWatcher` on a scratch folder whose path has spaces, as the data folder's does.
 @Suite(.timeLimit(.minutes(1))) struct ReadyWatcherTests {
     @Test func linesTheEngineWritesComeInOrderAndTheWatchEndsWithBoth() async throws {
@@ -113,6 +132,22 @@ private func given(
             try FileManager.default.removeItem(atPath: path)
         }
         #expect(marks == [ReadyMarks(window: 3)])
+    }
+
+    /// The launcher cancels the task reading the watch when the game ends before both lines.
+    /// That closes the folder's descriptor, so no watch is left reading the folder at each later
+    /// change in it, and no descriptor stays open for each launch.
+    @Test func cancelingTheTaskReadingTheWatchClosesTheFolder() async throws {
+        let scratch = try ScratchDirectory("ready")
+        defer { scratch.remove() }
+        let stream = ReadyWatcher.watch(scratch.path + "/ready.txt")
+        #expect(descriptors(on: scratch.path) == 1)
+        let reading = Task {
+            for await _ in stream {}
+        }
+        reading.cancel()
+        await reading.value
+        #expect(await Processes.eventually(timeout: 2) { descriptors(on: scratch.path) == 0 })
     }
 
     @Test func aFolderThatIsNotThereEndsTheWatchAtOnce() async throws {
