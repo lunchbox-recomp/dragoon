@@ -170,6 +170,35 @@ import Testing
         #expect(abs(left - (10 + 0.6)) < 1e-9)
     }
 
+    /// The compile, 5 files a second, as the time left counts it with and without the warm-up.
+    static func compiling(plan: [(Double, BuildEvent)]) -> BuildProgress {
+        replay(plan + [(0, .step("recompile")), (4.2, .step("compile"))]
+            + (1...3).map { (4.2 + Double($0) * 0.2, .progress(step: "compile", done: $0, total: 135)) })
+    }
+
+    @Test func aPlanWithoutTheWarmUpLeavesItOutOfTheTimeLeft() throws {
+        let skipping = Self.compiling(plan: [(0, .plan(warmup: false))])
+        #expect(!skipping.warmupPlays)
+        let left = try #require(skipping.remaining)
+        // 132 files at 5 a second, then package and swap at this Mac's ratio of 1.
+        #expect(abs(left - (132.0 / 5 + 0.1 + 0.2)) < 1e-9)
+    }
+
+    @Test(arguments: [[(0.0, BuildEvent.plan(warmup: true))], []])
+    func aPlanWithTheWarmUpOrNoneCountsIt(plan: [(Double, BuildEvent)]) throws {
+        let playing = Self.compiling(plan: plan)
+        #expect(playing.warmupPlays)
+        let left = try #require(playing.remaining)
+        #expect(abs(left - (132.0 / 5 + 72.7 + 0.1 + 0.2)) < 1e-9)
+    }
+
+    @Test func aPlanMovesNeitherTheBarNorTheClock() {
+        let progress = Self.replay([(3, .plan(warmup: false))])
+        #expect(progress.step == nil)
+        #expect(progress.started == nil)
+        #expect(progress.fraction == 0)
+    }
+
     /// A build as the recipe prints it, 135 files and 8 warm-up runs that finish in clumps.
     static let wholeBuild: [(Double, BuildEvent)] = {
         var events: [(Double, BuildEvent)] = [(0, .step("recompile")), (4.3, .step("compile"))]

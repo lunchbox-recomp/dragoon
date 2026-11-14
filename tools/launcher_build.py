@@ -29,11 +29,15 @@ removes it. Earlier builds stay in <data>/game for the launcher to delete. After
 the intermediates in <cache> are deleted, except build/ under --keep-build.
 
 Prints one JSON object per line on stdout:
+  {"event": "plan", "warmup": false}
   {"event": "step", "step": "recompile"}
   {"event": "progress", "step": "compile", "done": 12, "total": 135}
   {"event": "done", "game": "<data>/game/current/Dragoon.app"}
   {"event": "error", "step": "compile", "message": "...", "log": "<file>"}
   {"event": "warning", "step": "swap", "message": "...", "log": "<file>"}
+The plan comes first and says whether the warm-up will play its passes. It won't under
+--no-warmup, or when the player's saves hold a shader cache whose stamp warm_shaders.py finds
+current, by the check warm_shaders.py makes. A stamp that can't be worked out counts as playing.
 --log gets every line every tool prints, with each command, and each step's time and what
 <data> and <cache> hold after it. A build that loses the lock doesn't open it. A step's closing
 note and a warning's note are lost if --log can't take them, so a full disk fails no build
@@ -269,6 +273,19 @@ def warm_up(b: Build, a: argparse.Namespace, game: Path, warm: Path) -> None:
           progress=progress)
 
 
+def warmup_plays(a: argparse.Namespace) -> bool:
+    """Whether the warm-up will play its passes: not under --no-warmup, and not when the
+    player's saves hold a cache and a stamp warm_shaders.py finds current. The check is the
+    warm_shaders.py beside this file, which in the launcher's snapshot is the one the warm-up
+    runs. A stamp that can't be worked out counts as playing, and the warm-up step says why."""
+    if a.no_warmup:
+        return False
+    try:
+        return not warm_shaders.is_current(a.data / "saves", warm_shaders.wanted_stamp())
+    except (OSError, ValueError):
+        return True
+
+
 def new_build_dir(games: Path, commit: str) -> Path:
     """A new games/<time>-<commit>, with -2, -3 and on added when a build in the same second
     already took the name."""
@@ -340,6 +357,7 @@ def build_game(b: Build, a: argparse.Namespace, info: dict[str, str]) -> Path:
     """Every step in order. Returns the game's path."""
     warm = a.cache / "warm" / "saves"
     build = a.cache / "build"
+    emit(event="plan", warmup=warmup_plays(a))
     with b.stage("recompile"):
         remove(warm.parent)  # from a build that was killed, which the swap mustn't install from
         recompile(b, a, info, build)

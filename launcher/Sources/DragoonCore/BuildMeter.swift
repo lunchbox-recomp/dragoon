@@ -98,17 +98,17 @@ public enum BuildMeter {
         return counted.reduce(0) { $0 + $1.seconds } / measured
     }
 
-    /// Seconds left in the build: this step's work at its rate, and every later step's
-    /// measured time scaled by `speedRatio`. Nil for a step that counts nothing, and before
-    /// the step has `samplesForEstimate` samples.
+    /// Seconds left in the build: this step's work at its rate, and the measured time of every
+    /// later step but the `skipped` ones, scaled by `speedRatio`. Nil for a step that counts
+    /// nothing, and before the step has `samplesForEstimate` samples.
     public static func remaining(
         segment: BuildSegment, done: Int, total: Int, samples: [BuildSample],
-        finished: [FinishedStep]
+        finished: [FinishedStep], skipped: Set<BuildSegment> = []
     ) -> TimeInterval? {
         guard segment.counts, samples.count >= samplesForEstimate, let rate = rate(samples)
         else { return nil }
         let here = Double(max(total - done, 0)) / rate
-        let later = BuildSegment.allCases.filter { $0 > segment }
+        let later = BuildSegment.allCases.filter { $0 > segment && !skipped.contains($0) }
             .reduce(0) { $0 + $1.referenceSeconds }
         return here + later * speedRatio(finished)
     }

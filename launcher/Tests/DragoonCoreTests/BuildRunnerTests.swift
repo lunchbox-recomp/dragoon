@@ -9,6 +9,7 @@ import Testing
         let fixture = try RecipeFixture()
         try fixture.install(
             #"""
+            echo '{"event": "plan", "warmup": false}'
             echo '{"event": "step", "step": "recompile"}'
             echo '{"event": "step", "step": "compile"}'
             echo '{"event": "progress", "step": "compile", "done": 12, "total": 135}'
@@ -19,12 +20,24 @@ import Testing
         let finished = await collect(fixture.runner().run(fixture.request()))
         #expect(
             finished.events == [
-                .step("recompile"), .step("compile"),
+                .plan(warmup: false), .step("recompile"), .step("compile"),
                 .progress(step: "compile", done: 12, total: 135),
                 .progress(step: "compile", done: 135, total: 135), .step("swap"),
                 .done(game: "/data/game/current/Dragoon.app"),
             ])
         #expect(finished.failure == nil)
+    }
+
+    @Test func thePlanSaysWhetherTheWarmUpPlays() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.install(
+            #"""
+            echo '{"event": "plan", "warmup": true}'
+            echo '{"event": "plan", "warmup": false}'
+            echo '{"event": "done", "game": "/g"}'
+            """#)
+        let finished = await collect(fixture.runner().run(fixture.request()))
+        #expect(finished.events == [.plan(warmup: true), .plan(warmup: false), .done(game: "/g")])
     }
 
     @Test func theRecipeRunsUnderPythonWithBAndSFirstAndEveryArgumentWhole() async throws {
@@ -118,6 +131,8 @@ import Testing
             echo '{"event": "unheard-of", "step": "x"}'
             echo '{"event": "warning", "step": "swap", "message": "no room", "log": "/l"}'
             echo '{"event": "progress", "step": "compile", "done": "many"}'
+            echo '{"event": "plan", "warmup": "no"}'
+            echo '{"event": "plan"}'
             echo ''
             echo 'plain text'
             echo 'a warning on stderr' >&2
@@ -133,6 +148,8 @@ import Testing
             "[stdout] a last line with no newline",
             "[stdout] make: warning: clock skew detected",
             "[stdout] plain text",
+            "[stdout] {\"event\": \"plan\", \"warmup\": \"no\"}",
+            "[stdout] {\"event\": \"plan\"}",
             "[stdout] {\"event\": \"progress\", \"step\": \"compile\", \"done\": \"many\"}",
             "[stdout] {\"event\": \"step\"",
             "[stdout] {\"event\": \"unheard-of\", \"step\": \"x\"}",

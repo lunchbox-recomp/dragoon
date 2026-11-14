@@ -356,6 +356,16 @@ class WarmTest(WarmTestCase):
         self.assertEqual(self.warm("--force")[0], 0)
         self.assertEqual(len(self.game_lines()), 4)
 
+    def test_the_stamp_a_run_writes_is_the_wanted_one_and_is_current(self):
+        self.assertFalse(warm_shaders.is_current(self.saves, warm_shaders.wanted_stamp()))
+        self.assertEqual(self.warm()[0], 0)
+        want = warm_shaders.wanted_stamp()
+        self.assertEqual((self.saves / warm_shaders.STAMP).read_text(), want + "\n")
+        self.assertTrue(warm_shaders.is_current(self.saves, want))
+        self.assertFalse(warm_shaders.is_current(self.saves, want + "x"))
+        (self.saves / warm_shaders.CACHE).unlink()
+        self.assertFalse(warm_shaders.is_current(self.saves, want))
+
     def warm_until_current(self) -> None:
         """Warm once, then check a second run is skipped as current."""
         self.assertEqual(self.warm()[0], 0)

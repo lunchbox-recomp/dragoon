@@ -52,6 +52,9 @@ public struct BuildRequest: Equatable, Sendable {
 
 /// One line of the recipe's JSON output.
 public enum BuildEvent: Equatable, Sendable {
+    /// Before the first step, whether the warm-up will play its passes. It won't under
+    /// `--no-warmup` or when the player's shader cache is current already.
+    case plan(warmup: Bool)
     /// A step began. The steps are recompile, compile, warmup, package and swap.
     case step(String)
     case progress(step: String, done: Int, total: Int)
@@ -75,6 +78,9 @@ extension BuildEvent {
             let kind = object["event"] as? String
         else { return nil }
         switch kind {
+        case "plan":
+            guard let warmup = object["warmup"] as? Bool else { return nil }
+            self = .plan(warmup: warmup)
         case "step":
             guard let step = object["step"] as? String else { return nil }
             self = .step(step)
@@ -333,7 +339,7 @@ private final class RunState: @unchecked Sendable {
             lock.withLock { error = RecipeError(step: step, message: message, log: log) }
         case .done:
             lock.withLock { done = true }
-        case .step, .progress:
+        case .plan, .step, .progress:
             break
         }
     }

@@ -117,6 +117,17 @@ func at(_ seconds: Double) -> Date {
         #expect(abs(left - (115.0 / 5 + later)) < 1e-9)
     }
 
+    @Test func aSkippedStepIsLeftOutOfTheTimeLeft() throws {
+        let samples = [
+            BuildSample(time: at(5), done: 10), BuildSample(time: at(6), done: 15),
+            BuildSample(time: at(7), done: 20),
+        ]
+        let left = try #require(BuildMeter.remaining(
+            segment: .compile, done: 20, total: 135, samples: samples, finished: [],
+            skipped: [.warmup]))
+        #expect(abs(left - (115.0 / 5 + 0.1 + 0.2)) < 1e-9)
+    }
+
     @Test func aStepThatCountsNothingHasNoTimeLeft() {
         let samples = (0..<3).map { BuildSample(time: at(Double($0)), done: $0 + 1) }
         #expect(BuildMeter.remaining(

@@ -32,6 +32,8 @@ OLD = "20260101-000000-old"
 # Three routes and two passes, since the title's pass plays the menu too.
 ROUTES = "title 20 60 960\nmenu 20 60 1200 warm-from=title\ncity-trial-4p 30 60 3480 --pads=4\n"
 STEPS = ["recompile", "compile", "warmup", "package", "swap"]
+# The stamp the fake warm-up finds current, as warm_shaders.wanted_stamp gives it in these tests.
+CURRENT_STAMP = "current stamp"
 
 # Each fake appends what it was given to RECORDS, then does its job unless FAIL exists. If TERM
 # exists it sends the recipe a SIGTERM instead, as the launcher's cancel does, and lingers.
@@ -177,9 +179,12 @@ class RecipeTestCase(unittest.TestCase):
         self.data = self.dir / "Application Support" / "Dragoon"
         self.cache = self.dir / "Caches" / "Dragoon"
         self.log = self.dir / "Logs" / "build 1.log"
-        patch = mock.patch.object(launcher_build, "CODESIGN", str(codesign))
-        patch.start()
-        self.addCleanup(patch.stop)
+        # The stamp the fake warm-up takes as current, so the recipe's plan agrees with it.
+        for patch in (mock.patch.object(launcher_build, "CODESIGN", str(codesign)),
+                      mock.patch.object(launcher_build.warm_shaders, "wanted_stamp",
+                                        lambda: CURRENT_STAMP)):
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def fake(self, tool: str, body: str, directory: Path | None = None, name: str = "") -> Path:
         text = FAKE_HEAD.format(python=sys.executable, records=str(self.records), tool=tool,
@@ -484,20 +489,62 @@ class GoodRunTest(RecipeTestCase):
 
     def test_the_players_stamp_reaches_the_warmup_so_a_current_cache_is_skipped(self):
         self.old_game()
-        write_file(self.data / "saves", ".shader-warmup", "current stamp\n")
+        write_file(self.data / "saves", ".shader-warmup", CURRENT_STAMP + "\n")
         before = tree(self.data / "saves")
         code, events, _ = self.build()
         self.assertEqual(code, 0)
+        self.assertEqual(events[0], {"event": "plan", "warmup": False})
         self.assertEqual(len(self.records_of("warm_shaders")), 1)
         self.assertEqual(self.of(events, "progress", "warmup"), [])  # no pass ran
         self.assertEqual(tree(self.data / "saves"), before)
         self.assertNotEqual(self.current(), OLD)
+
+    def test_the_plan_comes_before_the_first_step_and_plays_the_warmup_with_no_cache(self):
+        code, events, _ = self.build()
+        self.assertEqual(code, 0)
+        self.assertEqual(events[:2], [{"event": "plan", "warmup": True},
+                                      {"event": "step", "step": "recompile"}])
+        self.assertEqual(self.of(events, "plan"), [events[0]])
+
+    def test_the_plan_plays_the_warmup_for_a_stamp_that_isnt_current(self):
+        self.old_game()  # its stamp is an old one
+        _, events, _ = self.build()
+        self.assertEqual(events[0], {"event": "plan", "warmup": True})
+        self.assertEqual(len(self.of(events, "progress", "warmup")), 2)
+
+    def test_the_plan_plays_the_warmup_for_a_current_stamp_with_no_cache(self):
+        self.old_game()
+        write_file(self.data / "saves", ".shader-warmup", CURRENT_STAMP + "\n")
+        (self.data / "saves" / "shaders.bin").unlink()
+        _, events, _ = self.build()
+        self.assertEqual(events[0], {"event": "plan", "warmup": True})
+
+    def test_the_plan_reads_the_stamp_through_warm_shaders_own_check(self):
+        self.old_game()
+        write_file(self.data / "saves", ".shader-warmup", CURRENT_STAMP + "\n")
+        with mock.patch.object(launcher_build.warm_shaders, "is_current",
+                               wraps=launcher_build.warm_shaders.is_current) as check:
+            _, events, _ = self.build()
+        check.assert_called_once_with(self.data / "saves", CURRENT_STAMP)
+        self.assertEqual(events[0], {"event": "plan", "warmup": False})
+
+    def test_a_stamp_that_cant_be_worked_out_plays_the_warmup_and_the_build_goes_on(self):
+        self.old_game()
+        write_file(self.data / "saves", ".shader-warmup", CURRENT_STAMP + "\n")
+        no_engine = mock.patch.object(launcher_build.warm_shaders, "wanted_stamp",
+                                      side_effect=ValueError("no gcn-recomp checkout"))
+        with no_engine:
+            code, events, _ = self.build()
+        self.assertEqual(code, 0)
+        self.assertEqual(events[0], {"event": "plan", "warmup": True})
+        self.assertEqual([e["step"] for e in self.of(events, "step")], STEPS)
 
     def test_no_warmup_skips_it_and_installs_nothing(self):
         self.old_game()
         before = tree(self.data / "saves")
         code, events, _ = self.build("--no-warmup")
         self.assertEqual(code, 0)
+        self.assertEqual(events[0], {"event": "plan", "warmup": False})
         self.assertNotIn("warmup", [e["step"] for e in self.of(events, "step")])
         self.assertEqual(self.records_of("warm_shaders"), [])
         self.assertEqual(tree(self.data / "saves"), before)
@@ -687,7 +734,7 @@ class SigtermTest(RecipeTestCase):
         code, events, _ = self.build()
         self.assertEqual(code, 143)
         self.assertEqual([e["step"] for e in self.of(events, "step")], steps)
-        self.assertEqual([e for e in events if e["event"] not in ("step", "progress")], [])
+        self.assertEqual([e for e in events if e["event"] not in ("plan", "step", "progress")], [])
         self.assertEqual(signal.getsignal(signal.SIGTERM), handler)
         with (self.cache / "build.lock").open("a") as lock:  # the lock is free again
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

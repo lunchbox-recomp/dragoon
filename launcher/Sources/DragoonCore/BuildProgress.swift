@@ -28,6 +28,9 @@ public struct BuildProgress: Equatable, Sendable {
     public private(set) var finishedSteps: [FinishedStep] = []
     /// The bar's fill, from 0 to 1.
     public private(set) var fraction = 0.0
+    /// Whether the warm-up will play its passes, as the recipe's plan says. Without a plan it
+    /// counts as playing them.
+    public private(set) var warmupPlays = true
 
     public init(canceling: Bool = false) {
         self.canceling = canceling
@@ -49,11 +52,14 @@ public struct BuildProgress: Equatable, Sendable {
         guard !isDone, let segment else { return nil }
         return BuildMeter.remaining(
             segment: segment, done: done, total: total, samples: samples,
-            finished: finishedSteps)
+            finished: finishedSteps, skipped: warmupPlays ? [] : [.warmup])
     }
 
     public mutating func note(_ event: BuildEvent, at time: Date) {
         switch event {
+        case .plan(let warmup):
+            warmupPlays = warmup
+            return
         case .step(let name):
             begin(name, at: time)
         case .progress(let name, let newDone, let newTotal):

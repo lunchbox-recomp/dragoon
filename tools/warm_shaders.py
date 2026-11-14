@@ -129,6 +129,22 @@ def stamp(engine_rev: str, inputs_text: str, tool_sha: str) -> str:
     return f"{engine_rev} {hashlib.sha1(inputs_text.encode()).hexdigest()} {tool_sha}"
 
 
+def wanted_stamp() -> str:
+    """The stamp a run from this tree writes: its engine, manifest, route files and tool.
+    Raises ValueError for a bad manifest or no engine to name, OSError for a missing file."""
+    manifest_text = MANIFEST.read_text()
+    routes = parse_manifest(manifest_text)
+    inputs_text = manifest_text + "".join(script_text(route_file(r.name)) for r in routes)
+    return stamp(engine_rev(), inputs_text, tool_sha())
+
+
+def is_current(saves: Path, want: str) -> bool:
+    """Whether SAVES holds a cache and a stamp that says WANT, so a run without --force skips."""
+    stamp_path = saves / STAMP
+    return (stamp_path.exists() and (saves / CACHE).exists()
+            and stamp_path.read_text().strip() == want)
+
+
 def tool_sha() -> str:
     return hashlib.sha1(Path(__file__).read_bytes()).hexdigest()
 
@@ -403,14 +419,9 @@ def main(argv: list[str]) -> int:
             raise ValueError(f"{args.game}: no such game, build it first")
         if args.disc and not args.disc.is_file():
             raise ValueError(f"{args.disc}: no such disc image")
-        manifest_text = MANIFEST.read_text()
-        routes = parse_manifest(manifest_text)
-        plan = passes(routes)
-        inputs_text = manifest_text + "".join(script_text(route_file(r.name)) for r in routes)
-        want = stamp(engine_rev(), inputs_text, tool_sha())
-        stamp_path = args.saves / STAMP
-        if not args.force and stamp_path.exists() \
-                and (args.saves / CACHE).exists() and stamp_path.read_text().strip() == want:
+        plan = passes(parse_manifest(MANIFEST.read_text()))
+        want = wanted_stamp()
+        if not args.force and is_current(args.saves, want):
             print("shader cache is current, nothing to do (--force to rerun)")
             return 0
         start = time.monotonic()
@@ -421,7 +432,7 @@ def main(argv: list[str]) -> int:
             print(f"shader warm-up failed, {args.saves} left as it was: {e}\n{SKIP_HINT}",
                   file=sys.stderr)
             return 1
-        stamp_path.write_text(want + "\n")
+        (args.saves / STAMP).write_text(want + "\n")
         size = (args.saves / CACHE).stat().st_size
         print(f"warm: {len(plan)} passes, {args.saves / CACHE} is {size} bytes, "
               f"{time.monotonic() - start:.1f} s")
