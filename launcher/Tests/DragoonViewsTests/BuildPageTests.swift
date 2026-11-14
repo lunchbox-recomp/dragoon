@@ -72,6 +72,7 @@ struct BuildPageTests {
     /// The failed page's bar keeps the running build's plan: the fill stops where the failed
     /// step's segment starts on a bar without the skipped steps, and the failed step's segment is
     /// drawn even when the plan skipped it.
+    @MainActor
     @Test(arguments: [
         ("package", [.warmup], .package, [.warmup], 22.2 / 22.5),
         ("compile", [.warmup], .compile, [.warmup], 4.2 / 22.5),
@@ -89,6 +90,7 @@ struct BuildPageTests {
         #expect(abs(bar.fraction - fraction) < 1e-9)
     }
 
+    @MainActor
     @Test func aBuildThatStoppedAtNoStepDrawsNoBar() {
         #expect(FailedBuild.bar(.couldNotStart("no python3"), skipped: [.warmup]) == nil)
     }
