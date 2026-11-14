@@ -115,9 +115,14 @@ class RealProcessTest(unittest.TestCase):
         self.assertGreaterEqual(elapsed, 0.5)
         self.assertLess(cpu / elapsed, 0.05)
 
-    def test_a_busy_process_uses_most_of_a_core(self) -> None:
-        cpu, elapsed = idle_cpu.measure(self.start("/usr/bin/yes").pid, 1.0)
-        self.assertGreater(cpu / elapsed, 0.5)
+    def test_a_busy_process_uses_more_than_a_sleeping_one(self) -> None:
+        """A spinning `yes` against a `sleep` measured over the same second. On a loaded Mac
+        `yes` has had as little as 16% of a core, so the bar is 5% above the sleeper."""
+        busy, sleeper = self.start("/usr/bin/yes").pid, self.start("/bin/sleep", "30").pid
+        sleeper_before = idle_cpu.read_cputime(sleeper)
+        cpu, elapsed = idle_cpu.measure(busy, 1.0)
+        sleeper_cpu = idle_cpu.read_cputime(sleeper) - sleeper_before
+        self.assertGreater(cpu / elapsed, sleeper_cpu / elapsed + 0.05)
 
     def test_a_process_that_has_exited_exits_1(self) -> None:
         child = subprocess.Popen(["/usr/bin/true"])
