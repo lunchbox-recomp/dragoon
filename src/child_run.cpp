@@ -49,17 +49,17 @@ std::vector<char*> pointers(const std::vector<std::string>& strings) {
     return out;
 }
 
-// What the child writes until it closes stdout or the deadline passes.
-void read_until(int fd, Clock::time_point deadline, std::string& out) {
+// What the child writes until it closes stdout or the deadline passes. True if it saw the close.
+bool read_until(int fd, Clock::time_point deadline, std::string& out) {
     for (;;) {
         pollfd p{fd, POLLIN, 0};
         const int ready = poll(&p, 1, ms_left(deadline));
         if (ready < 0 && errno == EINTR) continue;
-        if (ready <= 0) return;
+        if (ready <= 0) return false;
         char buf[4096];
         const ssize_t got = read(fd, buf, sizeof(buf));
         if (got < 0 && errno == EINTR) continue;
-        if (got <= 0) return;
+        if (got <= 0) return got == 0;
         out.append(buf, (size_t)got);
     }
 }
@@ -119,10 +119,10 @@ ChildResult child_run(const std::vector<std::string>& argv, const std::vector<st
         r.code = failed;
         return r;
     }
-    read_until(out[0], deadline, r.out);
+    const bool closed = read_until(out[0], deadline, r.out);
     close(out[0]);
     int status = 0;
-    if (ms_left(deadline) == 0) {
+    if (!closed) {
         // Something in the group held stdout to the deadline, though the child itself may have
         // ended. The kill comes before the reap, which frees the group's id for reuse.
         kill_group(pid);

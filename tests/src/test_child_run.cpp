@@ -194,6 +194,28 @@ TEST(ChildRun, StopsARunThatClosedStdoutButGoesOn) {
     EXPECT_EQ(r.end, End::timed_out);
 }
 
+void hold_a_second(int) {
+    const timespec second{1, 0};
+    nanosleep(&second, nullptr);
+}
+
+TEST(ChildRun, AnEndReadPastTheLimitKeepsItsExit) {
+    // A signal holds the thread running it past the limit while the child ends, so it reads the
+    // close of stdout only after the deadline.
+    struct sigaction hold {}, was{};
+    hold.sa_handler = hold_a_second;
+    sigemptyset(&hold.sa_mask);
+    sigaction(SIGUSR1, &hold, &was);
+    ChildResult r;
+    std::thread running([&r] { r = child_run({"/bin/sleep", "0.1"}, {}, 400); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    pthread_kill(running.native_handle(), SIGUSR1);
+    running.join();
+    sigaction(SIGUSR1, &was, nullptr);
+    EXPECT_EQ(r.end, End::exited);
+    EXPECT_EQ(r.code, 0);
+}
+
 TEST(ChildRun, SaysWhichSignalEndedIt) {
     const ChildResult r = child_run({"/bin/sh", "-c", "kill -TERM $$"}, {}, 5000);
     EXPECT_EQ(r.end, End::signaled);
