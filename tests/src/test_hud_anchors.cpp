@@ -581,8 +581,9 @@ TEST(MenuCamera, TheNarrowCameraOverTheScreen) {
     EXPECT_TRUE(dragoon::menu_camera(narrow(30)));
 }
 
-TEST(MenuCamera, TheTextLibrarysSixFortyByFourEightyFrame) {
+TEST(MenuCamera, TheSixFortyByFourEightyFrameEitherWayUp) {
     EXPECT_TRUE(dragoon::menu_camera(lens(dragoon::kOrtho, 0, -480, 0, 640)));  // the text library's
+    EXPECT_TRUE(dragoon::menu_camera(lens(dragoon::kOrtho, 0, 480, 0, 640)));   // the opening movie's
 }
 
 TEST(MenuCamera, NotAWorldCamera) {

@@ -273,15 +273,16 @@ inline bool to_screen(const Lens& l, const float p[3], float* sx, float* sy) {
 // world cameras widen away from it at a wider output, and Top Ride's holds 1.18.
 constexpr float kNarrowAspect = 1.25538f;
 
-// Whether a camera draws the menus and the text in the game's own 4:3 frame: the narrow
-// perspective camera over the whole screen, at fov 25 on the menus and 30 on the title, or the
-// 640 by 480 orthographic frame over it, which the text library draws through. The menu's 256
-// by 192 render to texture has a frame and a viewport of its own, so it isn't one.
+// Whether a camera draws the menus, the text and the movies in the game's own 4:3 frame: the
+// narrow perspective camera over the whole screen, at fov 25 on the menus and 30 on the title,
+// or the 640 by 480 orthographic frame over it, which the text library and the opening movie
+// draw through with y either way up. The menu's 256 by 192 render to texture has a frame and a
+// viewport of its own, so it isn't one.
 inline bool menu_camera(const Lens& l) {
     if (l.viewport[0] != 0.0f || l.viewport[1] != 640.0f || l.viewport[2] != 0.0f || l.viewport[3] != 480.0f)
         return false;
     if (l.type == kPerspective) return std::fabs(l.proj[1] - kNarrowAspect) < 1e-4f;
-    return l.type == kOrtho && l.proj[0] == 0.0f && l.proj[1] == -480.0f && l.proj[2] == 0.0f &&
+    return l.type == kOrtho && l.proj[0] == 0.0f && std::fabs(l.proj[1]) == 480.0f && l.proj[2] == 0.0f &&
            l.proj[3] == 640.0f;
 }
 
@@ -290,9 +291,10 @@ constexpr Mark kMenuFrame{gx::Anchor::Center, 0.0f, 640.0f};
 
 // The mark a camera gives what's drawn through it outside the HUD's table at output aspect
 // `output`: the frame centered for a menu camera while the frame shows no world, as on the
-// title and the menus, and else Stretch. During play the HUD 3D camera is a narrow one too, and
-// the table places what it draws. At 4:3 it's Stretch, since a centered frame is the identity
-// there and each mark pads the write-gather pipe, which moves the frames a movie shows.
+// title, the menus and the movies, and else Stretch. During play the HUD 3D camera is a narrow
+// one too, and the table places what it draws. At 4:3 it's Stretch, since a centered frame is
+// the identity there and each mark pads the write-gather pipe, which moves the frames a movie
+// shows (docs/dev/widescreen.md).
 inline Mark camera_mark(const Lens& l, const std::vector<Rect>& world_views, float output) {
     if (gx::anchor_scale(output, false) == 1.0f) return {};
     return world_views.empty() && menu_camera(l) ? kMenuFrame : Mark{};
