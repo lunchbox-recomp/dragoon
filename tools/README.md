@@ -14,7 +14,7 @@ Every tool with a command line takes `--help` and prints its usage and what it r
 | 1 | It ran and found what it checks for, such as a changed frame or a frame over budget |
 | 2 | It couldn't run: a bad argument, or an input it can't read or doesn't understand |
 
-frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py, ax_stats.py, stream_voices.py, session_report.py and pad_report.py only report, so they never exit 1.
+frametime.py, shader_cache.py, audio_clicks.py, audio_scorecard.py, block_clicks.py, click_diff.py, noise_blocks.py, clip_signs.py, ax_stats.py, stream_voices.py, session_report.py, pad_report.py and picture_box.py only report, so they never exit 1.
 
 ## probe.sh
 
@@ -286,6 +286,14 @@ framediff takes a tolerance. frame_hashes is an exact check against committed go
 
 ```
 tools/framediff.py build/probe/before build/probe/after --tolerance 3 --budget 0.001
+```
+
+## picture_box.py
+
+Where does the picture sit in an output dump, and what shape is it? For each PNG it prints the box holding every pixel brighter than `--dark`, its width over its height and the bars left and right of it. `--color RRGGBB` boxes one colour instead, such as a button's outline, to compare one element's shape and place with a 4:3 dump's. The output stretch blurs the picture's edge into the bars by a few pixels, so `--dark 128` counts a pixel only once it's half lit.
+
+```
+tools/picture_box.py --dark 128 build/probe/wide/output_01200.png
 ```
 
 ## drawlog.py
