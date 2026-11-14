@@ -12,7 +12,10 @@ struct StringsTests {
         Strings.playStatus(.ready), Strings.playStatus(.checkingDisc),
         Strings.playStatus(.playing), Strings.rebuildOffer(.otherVersion),
         Strings.rebuildOffer(.unknownVersion), Strings.gameFailed(crash),
-        Strings.gameFailed(.exited(.status(1), panic: nil)), Strings.panicCut,
+        Strings.gameFailed(.exited(.status(1), panic: nil)),
+        Strings.gameFailed(.couldNotStart(
+            reason: Strings.gameStart(.missing(path: "/Users/Test Player/Dragoon.app")))),
+        Strings.panicCut,
     ]
 
     @Test(arguments: librarySentences)
