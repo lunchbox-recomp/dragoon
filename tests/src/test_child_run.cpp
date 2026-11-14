@@ -189,7 +189,9 @@ TEST(ChildRun, ARunThatEndedIsntKilledOnTheWayOut) {
     EXPECT_FALSE(kill_running());
     child_run({"/bin/sh", "-c", "exec /bin/sleep 30"}, {}, 100);
     EXPECT_FALSE(kill_running());
-    child_run({"/bin/sh", "-c", "exec >&-; exec /bin/sleep 30"}, {}, 100);
+    // A run stopped while it waits, after stdout's close. 100 ms can pass under load before the
+    // shell closes it, and the run then stops in the read instead.
+    child_run({"/bin/sh", "-c", "exec >&-; exec /bin/sleep 30"}, {}, 1000);
     EXPECT_FALSE(kill_running());
     child_run({"/nonexistent/python3"}, {}, 5000);
     EXPECT_FALSE(kill_running());
