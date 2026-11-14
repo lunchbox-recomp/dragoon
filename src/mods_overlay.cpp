@@ -121,7 +121,10 @@ void start_read(Page& page) {
 }
 
 // settings.txt names no output while `set` and `apply` run, since an apply cut short can remove
-// a file it names, and a start would then stop on it. Both writes are on the draw thread, as the
+// a file it names. Since gcn-recomp ed82ff0 a start skips such a line rather than stopping on it,
+// which settings.h gives this menu as the reason for. The lines are still emptied first, so a
+// start after a cut-short apply loads nothing that apply left in mods/.out, and the page says the
+// game started without these mods (docs/dev/mods.md). Both writes are on the draw thread, as the
 // Display page's are.
 void start_apply(Page& page) {
     if (!script_here()) return fail(page, Phase::ready, kNoScript);
