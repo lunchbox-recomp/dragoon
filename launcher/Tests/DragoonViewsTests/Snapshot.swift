@@ -11,6 +11,9 @@ enum Snapshot {
     /// How far a color channel may be off, out of 255, before the pixel counts as different.
     /// Text drawn by another macOS can shift its edges a little.
     static let channelTolerance = 16
+    /// A recorded PNG keeps each channel to the nearest multiple of this, which moves it at
+    /// most 4 of the 16 the comparison allows.
+    static let recordStep = 8
     /// How many pixels may differ, as a fraction of the image.
     static let pixelTolerance = 0.002
 
@@ -26,17 +29,18 @@ enum Snapshot {
 
     static var recording: Bool { ProcessInfo.processInfo.environment["RECORD"] == "1" }
 
-    /// The view at the window's size, scale 2 and light appearance, on the window's gray, with
-    /// its animations stopped at `moment`.
+    /// The view at the window's size and dark appearance, on the window's gray, with its
+    /// animations stopped at `moment`. It renders at scale 2, then each 2x2 block of pixels
+    /// becomes one, so text is drawn as on a Retina screen and the PNGs stay a quarter the size.
     @MainActor
     static func render(_ view: some View) -> Bitmap? {
         let renderer = ImageRenderer(
             content: view
                 .frame(width: size.width, height: size.height)
-                .background(Color(white: 0.93))
-                .environment(\.colorScheme, .light)
+                .background(Color(white: 0.12))
+                .environment(\.colorScheme, .dark)
                 .environment(\.animationClock, .fixed(moment)))
         renderer.scale = scale
-        return renderer.cgImage.flatMap(Bitmap.init)
+        return renderer.cgImage.flatMap(Bitmap.init)?.halved()
     }
 }

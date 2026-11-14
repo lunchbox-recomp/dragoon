@@ -8,7 +8,9 @@ import Testing
 @MainActor
 struct SnapshotTests {
     static func render(_ fixture: ScreenFixture) -> Bitmap? {
-        Snapshot.render(LauncherView(state: fixture.state, send: { _ in }))
+        Snapshot.render(
+            LauncherView(state: fixture.state, send: { _ in })
+                .environment(\.reducesMotion, fixture.reduceMotion))
     }
 
     static func file(_ name: String) -> URL {
@@ -17,12 +19,16 @@ struct SnapshotTests {
 
     @Test(arguments: screenFixtures)
     func screenLooksAsRecorded(_ fixture: ScreenFixture) throws {
-        let image = try #require(Self.render(fixture))
-        let file = Self.file(fixture.name)
+        try Self.expectAsRecorded(try #require(Self.render(fixture)), name: fixture.name)
+    }
+
+    /// Writes `image` as the PNG called `name` when recording, and otherwise compares the two.
+    static func expectAsRecorded(_ image: Bitmap, name: String) throws {
+        let file = Self.file(name)
         if Snapshot.recording {
             try FileManager.default.createDirectory(
                 at: Snapshot.directory, withIntermediateDirectories: true)
-            try image.write(to: file)
+            try image.rounded(to: Snapshot.recordStep).write(to: file)
             return
         }
         let recorded = try #require(
@@ -31,11 +37,11 @@ struct SnapshotTests {
         let allowed = Snapshot.allowedPixels(image)
         guard let differing, differing <= allowed else {
             let actual = FileManager.default.temporaryDirectory
-                .appendingPathComponent("Dragoon snapshot \(fixture.name).png")
+                .appendingPathComponent("Dragoon snapshot \(name).png")
             try image.write(to: actual)
             let found = differing.map { "\($0) pixels differ" } ?? "it's another size"
             Issue.record(
-                "\(fixture.name) isn't as recorded: \(found), and \(allowed) may. This run's image is at \(actual.path).")
+                "\(name) isn't as recorded: \(found), and \(allowed) may. This run's image is at \(actual.path).")
             return
         }
     }

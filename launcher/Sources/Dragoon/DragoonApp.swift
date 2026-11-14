@@ -51,17 +51,23 @@ struct DragoonApp: App {
     var body: some Scene {
         Window(Strings.appName, id: "main") {
             ModelView(model: model)
-                .frame(minWidth: 720, minHeight: 460)
+                .frame(minWidth: 820, minHeight: 520)
         }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 960, height: 600)
+        .windowResizability(.contentMinSize)
     }
 }
 
 /// The window for the model's state, which launches the flow when it first appears.
 struct ModelView: View {
     let model: LauncherModel
+    @State private var windowIsActive = true
 
     var body: some View {
         LauncherView(state: model.state, send: { model.send($0) })
+            .environment(\.windowIsActive, windowIsActive)
+            .background(WindowWatcher(isActive: $windowIsActive))
             .onAppear { model.launch() }
     }
 }

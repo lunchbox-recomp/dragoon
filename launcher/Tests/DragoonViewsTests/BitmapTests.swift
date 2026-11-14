@@ -50,6 +50,26 @@ struct BitmapTests {
         #expect(pattern.differingPixels(from: padded, tolerance: Snapshot.channelTolerance) == 0)
     }
 
+    @Test func halvingAveragesEachBlockAndDropsAnOddEdge() {
+        // 3x2: the first two columns make one pixel, and the third is dropped.
+        let half = pattern.halved()
+        #expect(half.width == 1 && half.height == 1)
+        // (0 + 40 + 120 + 160) / 4, (255 + 225 + 165 + 135) / 4, (3 + 10 + 24 + 31) / 4 = 17.
+        #expect(Array(half.bytes.prefix(3)) == [80, 195, 17])
+        let rounding = Bitmap(width: 2, height: 2, bytes: [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        #expect(rounding.halved().bytes[0] == 1)
+    }
+
+    @Test func roundingKeepsEachChannelWithinHalfAStep() {
+        let ramp = Bitmap(width: 64, height: 1, bytes: (0..<256).map { UInt8($0) })
+        let rounded = ramp.rounded(to: Snapshot.recordStep)
+        for (before, after) in zip(ramp.bytes, rounded.bytes) {
+            #expect(Int(after) % Snapshot.recordStep == 0 || after == 255)
+            #expect(abs(Int(after) - Int(before)) <= Snapshot.recordStep / 2)
+        }
+        #expect(ramp.differingPixels(from: rounded, tolerance: Snapshot.recordStep / 2) == 0)
+    }
+
     @Test func anotherSizeIsNoComparison() {
         let wide = Bitmap(width: 6, height: 1, bytes: pattern.bytes)
         #expect(pattern.differingPixels(from: wide, tolerance: Snapshot.channelTolerance) == nil)

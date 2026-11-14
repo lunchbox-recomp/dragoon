@@ -61,6 +61,32 @@ struct Bitmap: Equatable {
         return Bitmap(image)
     }
 
+    /// Half the width and height, each pixel the mean of the 2x2 block it covers. An odd last
+    /// row or column is dropped.
+    func halved() -> Bitmap {
+        let half = (width: width / 2, height: height / 2)
+        var out = [UInt8](repeating: 0, count: half.width * half.height * 4)
+        for y in 0..<half.height {
+            for x in 0..<half.width {
+                for channel in 0..<4 {
+                    let at = { (dx: Int, dy: Int) in
+                        Int(bytes[((2 * y + dy) * width + 2 * x + dx) * 4 + channel])
+                    }
+                    let sum = at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1)
+                    out[(y * half.width + x) * 4 + channel] = UInt8((sum + 2) / 4)
+                }
+            }
+        }
+        return Bitmap(width: half.width, height: half.height, bytes: out)
+    }
+
+    /// Each color channel rounded to the nearest multiple of `step`, at most 255. A gradient
+    /// SwiftUI dithers is noise in the low bits, which deflate can't shrink.
+    func rounded(to step: Int) -> Bitmap {
+        let rounded = bytes.map { UInt8(min(255, (Int($0) + step / 2) / step * step)) }
+        return Bitmap(width: width, height: height, bytes: rounded)
+    }
+
     func write(to url: URL) throws {
         try PNGEncoder.encode(self).write(to: url)
     }

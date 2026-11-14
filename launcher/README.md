@@ -109,11 +109,37 @@ Library offers a rebuild when `game/current/stamp.json` names other commits than
 
 `launcher.json` in `~/Library/Application Support/Dragoon` keeps the disc's bookmark and whether Welcome was seen. Every string the window shows is in `Sources/DragoonViews/Strings.swift`.
 
+The window is dark whatever the system's appearance. Its title bar is hidden, and it opens at 960x600 points and goes no smaller than 820x520.
+
+## Library
+
+Library fills the window, in the disc banner's colors.
+
+| Part | What it is |
+|---|---|
+| Hero | The banner's first hue fading down to near-black, with 56 speed streaks drifting up and to the right |
+| Logo | The banner at 4x, 384x128 points, with its pixels kept square, over a blurred copy of itself. With no banner, "Dragoon" set in type |
+| Play bar | A 64 point Play button, a line saying what Play is doing and a "..." menu with Rebuild, Change Disc and Show Saves |
+| Rebuild offer | A strip above the bar |
+| Game problem | A card above the bar, whose Show panic.txt opens the file's text |
+
+`BannerPalette` in `DragoonCore` picks the two hues. Each opaque pixel whose channels are at least 48 of 255 apart goes into one of 12 buckets 30° wide, by its hue. The fullest bucket gives the first hue and the next fullest the second, each the mean hue of its pixels. The two buckets beside the first never give the second. With no banner, or no pixel with a hue, they're teal and magenta. Play's text is white when that has 4.5:1 against the button's lighter end, and near-black otherwise.
+
+The streaks are Core Animation layers that the window server moves at up to 30 frames a second, so a frame costs the launcher nothing. They stop while the window isn't key or is covered and while the game runs. Under Reduce Motion they're drawn at rest. A SwiftUI `Canvas` in a `TimelineView` at 30 frames a second, as first designed, cost 4 to 7% of a core, nearly all of it AppKit's layout and display pass for each frame.
+
+Measured on 2026-11-13 on macOS 26.6.2 with `idle_cpu.py` over 60 seconds, on a release build with the disc's banner. The window can't be made key from a script, so the moving streaks were measured on a copy built to keep them moving without it.
+
+| Library | Share of a core |
+|---|---|
+| Streaks moving | 0.02% |
+| Window not key, streaks stopped | 0.02% |
+| App hidden | 0.02% |
+
 ## Launching the game
 
 `GameLauncher.play(game:disc:data:)` starts `<data>/game/current/Dragoon.app/Contents/MacOS/dragoon` with `Process`, where `<data>` is `~/Library/Application Support/Dragoon`. The disc image's path is its one argument and `<data>` is its working directory, since the runtime finds `saves/` and writes `panic.txt` relative to that. What the game prints on stdout and stderr goes to `~/Library/Logs/Dragoon/game-<time>.log`, and the newest 10 game logs stay, pruned by the same code as the build logs.
 
-Each launch ends in one result, which says how the game ended or why it couldn't start. After a nonzero exit or a signal, Library shows the code or the signal's number and name with the text of `panic.txt` when the runtime wrote one. A zero exit shows nothing.
+Each launch ends in one result, which says how the game ended or why it couldn't start. After a nonzero exit or a signal, Library shows the code or the signal's number and name, and Show panic.txt opens the text of `panic.txt` when the runtime wrote one. A zero exit shows nothing.
 
 Only a regular file at `panic.txt` is read. A link isn't followed and a FIFO isn't waited on. Library shows at most the file's first 64 KB, with a note when there's more.
 
@@ -129,7 +155,7 @@ A `game.pid` that's garbled is removed and ignored, and so is one whose process 
 
 ## Snapshots
 
-`SnapshotTests` renders the window on each screen in `Tests/DragoonViewsTests/ScreenFixtures.swift` with SwiftUI's `ImageRenderer`, at 960x600 points and scale 2, in light appearance on a fixed gray. It compares each render with the PNG of the same name in `Tests/DragoonViewsTests/Snapshots/`. A render passes when at most 0.2% of its pixels have a color channel more than 16 of 255 away from the PNG's, so text drawn a little differently on another macOS still passes. A failing render is written to the temporary directory, and the failure names the file.
+`SnapshotTests` renders the window on each screen in `Tests/DragoonViewsTests/ScreenFixtures.swift` with SwiftUI's `ImageRenderer`, at 960x600 points and scale 2 in dark appearance on a fixed dark gray, then averages each 2x2 block of pixels into one. It compares each render with the PNG of the same name in `Tests/DragoonViewsTests/Snapshots/`. A render passes when at most 0.2% of its pixels have a color channel more than 16 of 255 away from the PNG's, so text drawn a little differently on another macOS still passes. A failing render is written to the temporary directory, and the failure names the file.
 
 ```
 RECORD=1 launcher/tools/swift_test.py --filter SnapshotTests
@@ -137,19 +163,21 @@ RECORD=1 launcher/tools/swift_test.py --filter SnapshotTests
 
 That writes every PNG again. Look at each one before committing it.
 
-A view that animates draws inside `ClockedTimeline`, which reads `animationClock` from the environment. The window runs it on the display's frames, and the tests fix it at 2027-01-15 08:00 UTC, so a render draws the same frame every time. The PNGs hold only the launcher's own UI. No screen shows a disc's banner yet, and when one does its fixture gets a made-up test pattern, never a real banner.
+A view that animates reads `animationClock` from the environment, as `ClockedTimeline` does. The window runs on the display's frames, and the tests fix the clock at 2027-01-15 08:00 UTC, so a render draws the same frame every time. Library's streaks move with Core Animation in the window, which `ImageRenderer` can't draw, so under a fixed clock they're drawn in a `Canvas` at that moment. `library-reduce-motion` draws them at rest.
 
-The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for the 19 screens. These come to 886 KB, from 9 to 80 KB each. The three Library PNGs are one file to git.
+The PNGs hold only the launcher's own UI. Library shows the disc's banner, and its fixtures use `TestBanner`, a made-up pattern the tests build, never a real banner.
+
+The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 23 PNGs come to 632 KB, from 3 to 69 KB each.
 
 Measured on 2026-11-13 on macOS 26.6.2 with the Command Line Tools 26.6 and Swift 6.3.3, `ImageRenderer` can't draw three of the views the window uses. The results are the same with `NSApplication.shared` made first.
 
 | View | Drawn as | Where |
 |---|---|---|
 | `ProgressView`, spinning or as a bar | A yellow box with a red "no" sign, SwiftUI's stand-in for a view AppKit draws | The checking screens and the running build |
-| `GroupBox` | Nothing, its contents included | Library's rebuild offer and the game's problem |
-| `ScrollView` | Nothing, its contents included | The end of a failed build's log, and `panic.txt` |
+| `GroupBox` | Nothing, its contents included | Nowhere now |
+| `ScrollView` | Nothing, its contents included | The end of a failed build's log, and a `panic.txt` of over 8 lines or with a line over 100 characters |
 
-So the three Library snapshots are the same picture today. Apple's documentation says `ImageRenderer` doesn't draw views that AppKit provides. That wasn't checked with Xcode, which this Mac doesn't have.
+So Library draws its strip and card in shapes and a short `panic.txt` as plain text, and its snapshots show them. Apple's documentation says `ImageRenderer` doesn't draw views that AppKit provides. That wasn't checked with Xcode, which this Mac doesn't have.
 
 ## Why a wrapper runs the tests
 

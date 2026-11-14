@@ -152,6 +152,9 @@ public enum Strings {
     static let libraryReady = "The game is built and ready to play."
     static let gameRunning = "The game is running."
     static let play = "Play"
+    static let playing = "Playing"
+    /// The "..." menu's name for VoiceOver.
+    static let more = "More"
     static let rebuild = "Rebuild"
     static let showSaves = "Show Saves"
     static let changeDisc = "Change Disc…"
@@ -165,6 +168,17 @@ public enum Strings {
     }
     static let rebuildNow = "Rebuild Now"
     static let later = "Later"
+    /// The line beside Play.
+    static func playStatus(_ status: PlayStatus) -> String {
+        switch status {
+        case .ready: return libraryReady
+        case .checkingDisc: return discChecking
+        case .playing: return gameRunning
+        }
+    }
+
+    static let showPanic = "Show panic.txt"
+    static let hidePanic = "Hide panic.txt"
     static let panicHeading = "The game wrote this in panic.txt"
     static let panicCut = "panic.txt is longer than this, so only its first \(GamePanic.limit / 1024) KB are shown."
 

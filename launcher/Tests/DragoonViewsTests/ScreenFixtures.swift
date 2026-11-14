@@ -2,10 +2,12 @@ import DragoonCore
 import Foundation
 import Testing
 
-/// A state the window can show, named for its snapshot file.
+/// A state the window can show, named for its snapshot file, drawn as Reduce Motion would when
+/// `reduceMotion` is set.
 struct ScreenFixture: CustomTestStringConvertible, Sendable {
     let name: String
     let state: Flow.State
+    var reduceMotion = false
 
     var testDescription: String { name }
 }
@@ -72,14 +74,29 @@ let screenFixtures: [ScreenFixture] = [
         state: state(.build(.failed(
             .failed(step: "compile", message: "make exited with status 2.", log: log),
             lastLines: ["clang: error: linker command failed with exit code 1", "make: *** [dragoon] Error 1"])))),
-    ScreenFixture(name: "library", state: state(.library, installed: InstalledGame(stamp: commits))),
+    ScreenFixture(name: "library", state: library()),
+    ScreenFixture(name: "library-reduce-motion", state: library(), reduceMotion: true),
+    ScreenFixture(name: "library-no-banner", state: library { $0.banner = nil }),
+    ScreenFixture(name: "library-playing", state: library { $0.gameRunning = true }),
     ScreenFixture(
         name: "library-rebuild-offer",
-        state: state(.library, installed: InstalledGame(stamp: nil))),
+        state: library { $0.installed = InstalledGame(stamp: nil) }),
+    ScreenFixture(name: "library-game-problem", state: library { $0.gameProblem = crash }),
     ScreenFixture(
-        name: "library-game-problem",
-        state: state(.library, installed: InstalledGame(stamp: commits)) {
-            $0.gameProblem = .exited(
-                .signal(11), panic: GamePanic("Invalid read at 0x00000004\npc 0x80012345"))
+        name: "library-panic",
+        state: library {
+            $0.gameProblem = crash
+            $0.panicShown = true
         }),
 ]
+
+private let crash = GameProblem.exited(
+    .signal(11), panic: GamePanic("Invalid read at 0x00000004\npc 0x80012345\nlr 0x80012300"))
+
+/// Library with a game built from this source and the test banner.
+private func library(change: (inout Flow.State) -> Void = { _ in }) -> Flow.State {
+    state(.library, installed: InstalledGame(stamp: commits)) {
+        $0.banner = TestBanner.banner
+        change(&$0)
+    }
+}

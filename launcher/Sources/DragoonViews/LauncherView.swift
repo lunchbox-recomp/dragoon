@@ -1,8 +1,8 @@
 import DragoonCore
 import SwiftUI
 
-/// The window: the steps on the left and the current one on the right. A launcher that has to
-/// move, or can't read its source, shows only that.
+/// The window: during setup the steps on the left and the current one on the right, and Library
+/// on its own. A launcher that has to move, or can't read its source, shows only that.
 public struct LauncherView: View {
     let state: Flow.State
     let send: Send
@@ -12,16 +12,21 @@ public struct LauncherView: View {
         self.send = send
     }
 
+    /// The window is dark whatever the system's appearance.
     public var body: some View {
-        if let step = state.step {
-            HStack(spacing: 0) {
-                StepList(current: step)
-                Divider()
+        Group {
+            if let step = state.step {
+                HStack(spacing: 0) {
+                    StepList(current: step)
+                    Divider()
+                    page
+                }
+            } else {
                 page
             }
-        } else {
-            page
         }
+        .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder

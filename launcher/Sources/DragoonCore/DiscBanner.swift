@@ -66,17 +66,21 @@ public struct DiscBanner: Equatable, Sendable {
         return try? find(in: file)
     }
 
+    /// The pixels as an image with straight alpha, in sRGB.
+    public func cgImage() -> CGImage? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+            let provider = CGDataProvider(data: Data(rgba) as CFData)
+        else { return nil }
+        return CGImage(
+            width: Self.width, height: Self.height, bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: Self.width * 4, space: space,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+    }
+
     /// The pixels as a PNG with straight alpha, tagged sRGB.
     public func png() -> Data? {
-        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
-            let provider = CGDataProvider(data: Data(rgba) as CFData),
-            let image = CGImage(
-                width: Self.width, height: Self.height, bitsPerComponent: 8, bitsPerPixel: 32,
-                bytesPerRow: Self.width * 4, space: space,
-                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
-                provider: provider, decode: nil, shouldInterpolate: false,
-                intent: .defaultIntent)
-        else { return nil }
+        guard let image = cgImage() else { return nil }
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
             data, "public.png" as CFString, 1, nil)

@@ -1,58 +1,57 @@
 import DragoonCore
 import SwiftUI
 
-/// Where every later launch opens: Play, Rebuild, Show Saves and Change Disc.
+/// Where every later launch opens: the hero in the banner's colors with the banner over it,
+/// then Play. Rebuild, Change Disc and Show Saves are in the "..." menu.
 struct LibraryView: View {
     let state: Flow.State
     let send: Send
+    @Environment(\.windowIsActive) private var windowIsActive
 
     var body: some View {
-        StepPage(Strings.libraryTitle) {
-            Text(state.gameRunning ? Strings.gameRunning : Strings.libraryReady)
-            if let offer = state.rebuildOffer {
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(Strings.rebuildOffer(offer))
-                        HStack {
-                            Spacer()
-                            Button(Strings.later) { send(.rebuildLaterPressed) }
-                            Button(Strings.rebuildNow) { send(.rebuildPressed) }
-                                .disabled(!state.libraryIsIdle)
-                        }
-                    }
-                    .padding(4)
+        let colors = HeroColors(palette: BannerPalette(banner: state.banner))
+        ReduceMotionReader { reduceMotion in
+            ZStack {
+                HeroBackdrop(colors: colors)
+                HeroStreaks(
+                    colors: colors,
+                    paused: Motion.heroPaused(
+                        windowIsActive: windowIsActive, gameRunning: state.gameRunning,
+                        reduceMotion: reduceMotion),
+                    still: reduceMotion
+                )
+                // The lower part darkens so the bar reads over any banner's colors.
+                LinearGradient(
+                    colors: [.clear, colors.ground.opacity(0.9)], startPoint: .center,
+                    endPoint: .bottom)
+                content(colors)
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    private func content(_ colors: HeroColors) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Spacer(minLength: 0)
+            Group {
+                if let banner = state.banner {
+                    BannerLogo(banner: banner, scale: 4)
+                } else {
+                    Wordmark(colors: colors)
                 }
+            }
+            .padding(.bottom, 12)
+            if let offer = state.rebuildOffer {
+                RebuildStrip(offer: offer, idle: state.libraryIsIdle, send: send, colors: colors)
             }
             if let problem = state.gameProblem {
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(Strings.gameFailed(problem)).textSelection(.enabled)
-                        if case .exited(_, let panic?) = problem {
-                            Text(Strings.panicHeading).font(.headline)
-                            ScrollView {
-                                Text(panic.text)
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .frame(maxHeight: 160)
-                            if panic.cut {
-                                Text(Strings.panicCut)
-                            }
-                        }
-                    }
-                    .padding(4)
-                }
+                ProblemCard(problem: problem, panicShown: state.panicShown, send: send)
             }
-        } buttons: {
-            Button(Strings.showSaves) { send(.showSavesPressed) }
-            Button(Strings.changeDisc) { send(.changeDiscPressed) }
-                .disabled(!state.libraryIsIdle)
-            Button(Strings.rebuild) { send(.rebuildPressed) }
-                .disabled(!state.libraryIsIdle)
-            Button(Strings.play) { send(.playPressed) }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!state.libraryIsIdle)
+            PlayBar(state: state, send: send, colors: colors)
         }
+        .padding(.horizontal, 40)
+        .padding(.top, 40)
+        .padding(.bottom, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 }
