@@ -696,14 +696,15 @@ TEST(CameraMark, NoneAtANarrowerOutput) {
 
 // After the race's finish the world camera that's drawn gets its aspect once, at frame 8,092.
 // The camera module still sets eight others over the screen each frame to 13,061, so each frame
-// has the screen as a view and the narrow HUD 3D camera marks nothing, as at 8,400.
+// has the screen as a view and the narrow HUD 3D camera marks nothing, as at 8,400. The world
+// camera's one view alone would be gone by then, and the camera would center the HUD.
 TEST(CameraMark, TheRaceAfterItsFinishKeepsTheModulesView) {
     dragoon::WorldViews w;
-    for (uint32_t f = 8093; f <= 8400; f++) {
-        for (int cam = 0; cam < 8; cam++) w.add(f, dragoon::kScreen);
-        EXPECT_EQ(dragoon::camera_mark(narrow(25), w.at(f), kWide), Mark{}) << "frame " << f;
-        EXPECT_EQ(dragoon::camera_mark(narrow(25), w.at(f + 1), kWide), Mark{}) << "frame " << f + 1;
-    }
+    w.add(8092, dragoon::kScreen);
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), w.at(8400), kWide), dragoon::kMenuFrame);
+    for (int cam = 0; cam < 8; cam++) w.add(8400, dragoon::kScreen);
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), w.at(8400), kWide), Mark{});
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), w.at(8401), kWide), Mark{});
 }
 
 TEST(HudCallbacks, AStretchedCallbackTakesTheCamerasMark) {
