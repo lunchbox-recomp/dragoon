@@ -1,8 +1,8 @@
 # Status
 
 What's true of Dragoon, measured on one Mac. Most sections name the Dragoon or gcn-recomp
-commits they were measured at. The pin is gcn-recomp `1abcf10`, where all twenty-four routes'
-frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `1abcf10`).
+commits they were measured at. The pin is gcn-recomp `864d9d4`, where all twenty-four routes'
+frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `864d9d4`).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -659,7 +659,7 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, under Chained course passes) | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`) | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `1abcf10` on Dragoon `b567ae0`, the bump before its rebase onto #93's fixes, with the same code in `src/` (under gcn-recomp `1abcf10`) | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `864d9d4` on Dragoon `2525ea1` (under gcn-recomp `864d9d4`) | Pass |
 | World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `45c52c5` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
 | Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `45c52c5` at loads of 2.7 to 6.3) | Pass |
 | Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1) | Pass |
@@ -917,6 +917,26 @@ started with an empty shader cache and reached frame 21,551. From frame 4,400 th
 averaged 16.71 ms, and 7 intervals went over 20 ms. The four longest were 106 ms at frame
 15,614, 120 ms at 16,203, 155 ms at 16,502 and 160 ms at 20,054, within a frame of the four
 at `95e1c6b`.
+
+## gcn-recomp `864d9d4`
+
+The pin moved from `1abcf10` to `864d9d4`, 94 commits. The overlay menu has a header with a pill
+for each page, turned by L1, R1, the triggers, Q and E, a footer of hints with Restart and Quit
+asking in a card, a focus ring that eases between items, controller glyphs in each family's
+colours, notices as toasts and sounds that are off until `menu_sounds on`. The held frame
+behind the menu is blurred on the GL path, and the Buttons view scrolls its rows between a
+header and footer that stay put. A theme or page a game gives from a static initializer is
+kept through the overlay's own (gcn-recomp #102). Without that, from the header's `8700d67`
+the Mods page had no pill and `GCN_OVERLAY_PAGE=2` opened Controllers. At `864d9d4` the Mods
+pill is back after Controllers, and page 2 is Mods. `GCN_PROGRESS` prints the presented-frame
+count. No route opens the menu, and `--dump-output` leaves out the blur.
+
+Built on Dragoon `2525ea1`, `tools/frame_hashes.py check` matched all twenty-four routes and
+1,906 frames in 14 min 40 s. `tools/audio_hashes.py check` then matched all 48 rows in 14 min
+27 s, so no golden was recorded. The 1-minute load was 23.0 as the frame check began, 5.8
+between the checks and 3.7 after the audio check.
+
+None of the 24 bench logs has an `[interp]` line.
 
 ## Disc reads
 
