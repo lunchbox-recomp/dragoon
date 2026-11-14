@@ -622,6 +622,35 @@ class FakeEngineTest(unittest.TestCase):
             mod_choices.sweep_temps(self.data)
         self.assertEqual(unlink.call_count, 2)
 
+    def test_sweep_keeps_a_link_named_like_a_temp_file(self):
+        # Both the link and the file it names are old. Only a regular file of its own goes.
+        target = self.stale_temp('kept.txt')
+        link = self.data / '.mods-link1234'
+        link.symlink_to(target)
+        old = time.time() - 120
+        os.utime(link, (old, old), follow_symlinks=False)
+        mod_choices.sweep_temps(self.data)
+        self.assertTrue(link.is_symlink())
+        self.assertTrue(target.exists())
+
+    def test_sweep_takes_a_temp_file_just_over_a_minute_old(self):
+        under = self.stale_temp('.mods-under123', age=58)
+        over = self.stale_temp('.mods-over1234', age=62)
+        mod_choices.sweep_temps(self.data)
+        self.assertTrue(under.exists())
+        self.assertFalse(over.exists())
+
+    def test_apply_sweeps_with_no_mods_folder(self):
+        (self.data / 'mods').rmdir()
+        stale = self.stale_temp('.mods-stale123')
+        output = io.StringIO()
+        with mock.patch.object(mod_choices, 'call_engine', side_effect=AssertionError('ran')), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(mod_choices.main(['apply', '--data', str(self.data),
+                                               '--disc', str(self.image)]), 0)
+        self.assertIsNone(json.loads(output.getvalue())['overlay'])
+        self.assertFalse(stale.exists())
+
     def test_apply_time_includes_list(self):
         script = ('import time\n'
                   'if sys.argv[1] == "list":\n'
