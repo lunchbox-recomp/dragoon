@@ -158,12 +158,12 @@ Measured on 2026-11-14 with `idle_cpu.py` over 60 seconds, on a release build of
 
 | Build page | Share of a core |
 |---|---|
-| Recompile, shimmer and clock | 0.20% |
+| Recompile, shimmer and clock | 0.22% |
 | Warm-up between runs, clock only | 0.20% |
 | Recompile, window seen but not key, clock only | 0.20% |
 | Window covered or hidden, nothing moving | 0.00% |
 | Finished, after the pulse | 0.00% |
-| 8 compile events a second | 3.6% |
+| 8 compile events a second | 2.8-3.4% |
 
 The page first used 11.2% of a core through the compile. Rolling make's count with `.numericText()` on each file kept SwiftUI drawing, and so did easing the banner's color on each step. A count now rolls only when it changes at most twice a second, as the warm-up's do. The banner eases only into and out of gray.
 
