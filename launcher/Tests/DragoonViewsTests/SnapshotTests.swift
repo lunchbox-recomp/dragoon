@@ -64,10 +64,7 @@ struct SnapshotTests {
     /// A failing render goes in the package's `.build`, never the temporary directory every
     /// program shares.
     @Test func failingRendersGoInThePackagesBuildFolder() {
-        let package = Snapshot.directory.deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent()
-        #expect(Snapshot.failures.deletingLastPathComponent().path
-            == package.appendingPathComponent(".build").path)
+        #expect(Snapshot.failures.standardized.path.hasSuffix("/launcher/.build/snapshot-failures"))
         #expect(!Snapshot.failures.path.hasPrefix(FileManager.default.temporaryDirectory.path))
     }
 
