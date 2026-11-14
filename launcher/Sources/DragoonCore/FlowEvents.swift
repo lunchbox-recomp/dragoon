@@ -12,10 +12,13 @@ extension Flow {
         public var installed: InstalledGame?
         /// The pid of a game an earlier launcher started that's still running, or nil.
         public var earlierGame: Int32?
+        /// The disc's banner from `BannerCache`, or nil when there's none.
+        public var banner: DiscBanner?
 
         public init(
             appPath: String, onReadOnlyVolume: Bool, settings: LauncherSettings,
-            source: SourceInfo?, installed: InstalledGame?, earlierGame: Int32? = nil
+            source: SourceInfo?, installed: InstalledGame?, earlierGame: Int32? = nil,
+            banner: DiscBanner? = nil
         ) {
             self.appPath = appPath
             self.onReadOnlyVolume = onReadOnlyVolume
@@ -23,6 +26,7 @@ extension Flow {
             self.source = source
             self.installed = installed
             self.earlierGame = earlierGame
+            self.banner = banner
         }
     }
 
@@ -61,6 +65,8 @@ extension Flow {
         case discPanelCanceled
         case bookmarkResolved(BookmarkResolution)
         case discChecked(path: String, check: DiscCheck)
+        /// `readBanner`'s result, nil when the disc had no banner that could be read.
+        case bannerRead(DiscBanner?)
         case spaceChecked(FreeSpace)
         case build(BuildEvent)
         /// The build's stream ended, with nil when the new game is current.
@@ -92,6 +98,9 @@ extension Flow {
         case resolveBookmark(Data)
         /// `checkDisc`, which gives `discChecked`.
         case checkDisc(path: String, expected: ExpectedDisc)
+        /// `BannerCache.readAndKeep` on the disc at the path, which passed its check. Gives
+        /// `bannerRead`.
+        case readBanner(String)
         /// The free space where the game is built, which gives `spaceChecked`.
         case checkSpace
         /// `BuildRunner.run`, whose events come back as `build` and whose end comes back as

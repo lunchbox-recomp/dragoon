@@ -66,6 +66,8 @@ There's no banner when the table is under 12 bytes or over 1 MiB, its entries do
 
 A banner is `BNR1` and 0x1960 bytes, or `BNR2` and 0x1FA0 bytes, the pairs Dolphin's `VolumeGC.cpp` takes. Its 96x32 picture decodes from RGB5A3 tiles to RGBA. Dolphin lays the picture on black, and here it keeps its alpha. Its strings are Shift-JIS when the disc ID's fourth character is `J` and Windows-1252 otherwise.
 
+The first time a disc passes its check with no banner cached, the launcher reads the banner and keeps the file as the disc holds it in `disc/opening.bnr` in `~/Library/Application Support/Dragoon`. It loads that file at start, so Library has the banner with the drive unplugged. A disc that fails its check is never read for one.
+
 `Dragoon --dump-banner DISC OUT.png` writes the banner as a PNG and prints its format and names as JSON, with the time the read and decode took on stderr. It exits 0 when the PNG is written, 1 when the disc has no banner or the PNG can't be written, and 2 for a bad argument. On the supported disc on 2026-11-13 the read and decode took 0.21 ms, and the whole command 0.20 s.
 
 ## Running the recipe

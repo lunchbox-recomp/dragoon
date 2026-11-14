@@ -52,6 +52,8 @@ extension Flow {
         public var settings = LauncherSettings()
         public var source: SourceInfo?
         public var installed: InstalledGame?
+        /// The disc's banner, from the cache at launch or read once a disc passes its check.
+        public var banner: DiscBanner?
         public var intent: Intent?
         public var waiting: Waiting?
         /// The game is starting or running, from the `play` effect until `gameExited` or

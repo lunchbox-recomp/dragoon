@@ -44,18 +44,22 @@ struct FlowRun {
     }
 }
 
+/// A banner made up for the tests, as the cache would hold one.
+let flowBanner = DiscBanner(bytes: makeBNR(pixels: distinctPixels), discID: "GKYE01")!
+
 /// A launch with what's given. By default the player has built a game from this source, seen
-/// Welcome and has a bookmark to their disc.
+/// Welcome, has a bookmark to their disc and has its banner in the cache.
 func launched(
     settings: LauncherSettings = LauncherSettings(welcomeSeen: true, disc: flowBookmark),
     installed: InstalledGame? = InstalledGame(stamp: sourceCommits),
     appPath: String = flowApp, onReadOnlyVolume: Bool = false,
-    source: SourceInfo? = flowSource, earlierGame: Int32? = nil
+    source: SourceInfo? = flowSource, earlierGame: Int32? = nil,
+    banner: DiscBanner? = flowBanner
 ) -> FlowRun {
     var run = FlowRun()
     run.send(.launched(Flow.Launch(
         appPath: appPath, onReadOnlyVolume: onReadOnlyVolume, settings: settings, source: source,
-        installed: installed, earlierGame: earlierGame)))
+        installed: installed, earlierGame: earlierGame, banner: banner)))
     return run
 }
 

@@ -20,12 +20,16 @@ final class LauncherModel {
     /// Sends `launched` with what the app finds on disk. A second call changes nothing.
     func launch() {
         let fs = SystemFileSystem()
+        let source = SourceInfo.read(at: places.sourceInfo, fs: fs)
         send(.launched(Flow.Launch(
             appPath: places.bundle, onReadOnlyVolume: Volume.isReadOnly(places.bundle),
             settings: LauncherSettings.load(from: places.data, fs: fs),
-            source: SourceInfo.read(at: places.sourceInfo, fs: fs),
+            source: source,
             installed: InstalledGame.read(dataDirectory: places.data, fs: fs),
-            earlierGame: GameRecord.runningGame(game: places.game, data: places.data, fs: fs))))
+            earlierGame: GameRecord.runningGame(game: places.game, data: places.data, fs: fs),
+            banner: source.flatMap {
+                BannerCache.load(data: places.data, discID: $0.disc.id, fs: fs)
+            })))
     }
 
     func send(_ event: Flow.Event) {

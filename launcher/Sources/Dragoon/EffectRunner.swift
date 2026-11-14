@@ -54,6 +54,8 @@ final class EffectRunner {
                 .discChecked(path: path, check: checkDisc(
                     at: path, expectedID: expected.id, expectedDOLSHA1: expected.dolSHA1, fs: fs))
             }
+        case .readBanner(let disc):
+            background { .bannerRead(BannerCache.readAndKeep(disc: disc, data: places.data, fs: fs)) }
         case .checkSpace:
             background { .spaceChecked(Volume.freeSpace(at: places.data)) }
         case .startBuild(let toolchain, let disc):

@@ -107,7 +107,12 @@ extension Flow.State {
                 settings.disc = bookmark
                 effects.append(.saveSettings(settings))
             }
-            return effects + discReady(path)
+            // The banner is read once, and only from a disc that passed.
+            let readBanner = banner == nil ? [Effect.readBanner(path)] : []
+            return effects + discReady(path) + readBanner
+        case .bannerRead(let read):
+            if let read { banner = read }
+            return []
 
         case .buildPressed:
             guard waiting == nil else { return [] }
@@ -195,6 +200,7 @@ extension Flow.State {
         settings = launch.settings
         source = launch.source
         installed = launch.installed
+        banner = launch.banner
         if let reason = MoveReason(appPath: launch.appPath, onReadOnlyVolume: launch.onReadOnlyVolume) {
             screen = .mustMove(reason)
             return []
