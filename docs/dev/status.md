@@ -1003,10 +1003,14 @@ macOS 26.6.2.
 | Library's share of a core, streaks moving | 3% | 0.02% | Pass |
 | Window not key, streaks stopped | 0.2% | 0.02% | Pass |
 | App hidden | 0.2% | 0.02% | Pass |
+| Window covered, streaks stopped | 0.2% | Not measured | Not measured |
+| Reduce Motion, streaks at rest | 0.2% | Not measured | Not measured |
 | Reading and decoding the disc's banner | 20 ms | 0.21 ms, and 0.20 s for the whole `Dragoon --dump-banner` | Pass |
 
 Each share is `launcher/tools/idle_cpu.py` over 60 s on a release build's Library as it has
 been since Dragoon `b05a2fa`, with the disc's banner. `ps` counts CPU time in hundredths of a second, so 0.02% is
-0.01 s in 60 s, the least it shows above nothing. A window can't be made key from a script, so
-the moving streaks were measured on a copy built to keep them moving without it. The banner
+0.01 s in 60 s, the least it shows above nothing. The not-key and hidden rows ran the release
+build as it ships. A window can't be made key from a script, so the moving streaks were
+measured on a copy built to keep them moving without it. Covering the window and turning on
+Reduce Motion both need the user's screen, so those two rows haven't been measured. The banner
 time is what `--dump-banner`, added in `00a86f0`, prints for the supported disc.
