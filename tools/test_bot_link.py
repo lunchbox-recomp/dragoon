@@ -354,7 +354,9 @@ class RunClock:
         self.behind -= seconds
 
     def since_boot(self) -> float:
-        """The run's seconds since the game was up."""
+        """The run's seconds since the game was up. bot_link has to have looked at the clock with
+        the game up, or this would start the clock now and be about 0."""
+        assert self.behind is not None, "the clock never saw the game up"
         return self.monotonic() - self.start
 
 
