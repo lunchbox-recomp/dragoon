@@ -21,6 +21,11 @@ enum Snapshot {
     static let directory = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().appendingPathComponent("Snapshots")
 
+    /// Where a render that fails is written: `launcher/.build/snapshot-failures`, which git
+    /// ignores and `swift package clean` removes.
+    static let failures = directory.deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().appendingPathComponent(".build/snapshot-failures")
+
     /// The moment every animated view draws, 2027-01-15 08:00 UTC.
     static let moment = Date(timeIntervalSince1970: 1_800_000_000)
 

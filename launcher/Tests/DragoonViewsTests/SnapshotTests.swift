@@ -24,7 +24,10 @@ struct SnapshotTests {
     }
 
     /// Writes `image` as the PNG called `name` when recording, and otherwise compares the two.
-    static func expectAsRecorded(_ image: Bitmap, name: String) throws {
+    /// A render that fails is written in `failures` under the same name.
+    static func expectAsRecorded(
+        _ image: Bitmap, name: String, failures: URL = Snapshot.failures
+    ) throws {
         let file = Self.file(name)
         if Snapshot.recording {
             try FileManager.default.createDirectory(
@@ -37,8 +40,8 @@ struct SnapshotTests {
         let differing = image.differingPixels(from: recorded, tolerance: Snapshot.channelTolerance)
         let allowed = Snapshot.allowedPixels
         guard let differing, differing <= allowed else {
-            let actual = FileManager.default.temporaryDirectory
-                .appendingPathComponent("Dragoon snapshot \(name).png")
+            try FileManager.default.createDirectory(at: failures, withIntermediateDirectories: true)
+            let actual = failures.appendingPathComponent(name + ".png")
             try image.write(to: actual)
             let found = differing.map { "\($0) pixels differ" } ?? "it's another size"
             Issue.record(
@@ -55,6 +58,29 @@ struct SnapshotTests {
         let differing = try #require(
             image.differingPixels(from: other, tolerance: Snapshot.channelTolerance))
         #expect(differing > Snapshot.allowedPixels)
+    }
+
+    /// A failing render goes in the package's `.build`, never the temporary directory every
+    /// program shares.
+    @Test func failingRendersGoInThePackagesBuildFolder() {
+        let package = Snapshot.directory.deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        #expect(Snapshot.failures.deletingLastPathComponent().path
+            == package.appendingPathComponent(".build").path)
+        #expect(!Snapshot.failures.path.hasPrefix(FileManager.default.temporaryDirectory.path))
+    }
+
+    @Test(.disabled(if: Snapshot.recording))
+    func aFailingRenderIsWrittenUnderItsName() throws {
+        let folder = Snapshot.failures.appendingPathComponent("test \(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let width = Int(Snapshot.size.width), height = Int(Snapshot.size.height)
+        let white = Bitmap(
+            width: width, height: height, bytes: [UInt8](repeating: 255, count: width * height * 4))
+        withKnownIssue {
+            try Self.expectAsRecorded(white, name: "disc-checking", failures: folder)
+        }
+        #expect(Bitmap.read(folder.appendingPathComponent("disc-checking.png")) == white)
     }
 
     /// One word changed on a button, as Quit to Exit on the must-move screen, is past what may
