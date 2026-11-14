@@ -294,7 +294,7 @@ constexpr Mark kMenuFrame{gx::Anchor::Center, kScreen.x0, kScreen.x1};
 // one too, and the table places what it draws. At 4:3 it's Stretch, since a centered frame is
 // the identity there and each mark pads the write-gather pipe, which moves the frames a movie
 // shows (docs/dev/widescreen.md). At a narrower output it's Stretch too, since a centered frame
-// would be wider than the window and lose about 107 of its 640 at each side at 1:1.
+// would be wider than the window and lose 80 of its 640 at each side at 1:1, showing x 80 to 560.
 inline Mark camera_mark(const Lens& l, const std::vector<Rect>& world_views, float output) {
     if (gx::anchor_scale(output, false) >= 1.0f) return {};
     return world_views.empty() && menu_camera(l) ? kMenuFrame : Mark{};

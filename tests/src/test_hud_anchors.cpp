@@ -682,8 +682,12 @@ TEST(CameraMark, NoneAtFourByThree) {
 }
 
 TEST(CameraMark, NoneAtANarrowerOutput) {
-    // Centered at 1:1 the frame would widen by 4/3 and lose about 107 of its 640 at each side.
-    // Stretched, it all shows, squeezed.
+    // Centered at 1:1 the frame would widen by 4/3, so only its x 80 to 560 would show and it
+    // would lose 80 of its 640 at each side. Stretched, it all shows, squeezed.
+    const float k = gx::anchor_scale(1.0f, false);
+    const dragoon::Rect s = dragoon::kScreen;
+    EXPECT_NEAR(gx::anchor_x(gx::Anchor::Center, 80.0f, s.x0, s.x1, k), s.x0, 1e-3f);
+    EXPECT_NEAR(gx::anchor_x(gx::Anchor::Center, 560.0f, s.x0, s.x1, k), s.x1, 1e-3f);
     EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 1.0f), Mark{});
     EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 3.0f / 4.0f), Mark{});
     EXPECT_EQ(dragoon::camera_mark(lens(dragoon::kOrtho, 0, -480, 0, 640), {}, 1.0f), Mark{});

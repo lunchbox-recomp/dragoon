@@ -486,8 +486,8 @@ first frame at 13,062 read 13,061's view, and its 92 draws stretched while 91 of
 centered. On Dragoon `7a0e1c6` 91 of 13,062's are centered.
 
 At an output narrower than 4:3, as with `--aspect=1:1` or a tall window, no camera takes the
-mark. Centered, the frame would be wider than the window and lose about 107 of its 640 at each
-side at 1:1. So the menus stretch there, squeezed but whole. No run measured it.
+mark. Centered, the frame would be wider than the window and lose 80 of its 640 at each side at
+1:1, showing only x 80 to 560. So the menus stretch there, squeezed but whole. No run measured it.
 
 ## What 16:9 still gets wrong
 
