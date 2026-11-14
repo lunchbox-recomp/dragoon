@@ -269,6 +269,35 @@ inline bool to_screen(const Lens& l, const float p[3], float* sx, float* sy) {
     return view_to_screen(l, v, sx, sy);
 }
 
+// The aspect the game gives its narrow cameras, 1.062 times narrower than the 4:3 screen. The
+// world cameras widen away from it at a wider output, and Top Ride's holds 1.18.
+constexpr float kNarrowAspect = 1.25538f;
+
+// Whether a camera draws the menus and the text in the game's own 4:3 frame: the narrow
+// perspective camera over the whole screen, at fov 25 on the menus and 30 on the title, or the
+// 640 by 480 orthographic frame over it, which the text library draws through. The menu's 256
+// by 192 render to texture has a frame and a viewport of its own, so it isn't one.
+inline bool menu_camera(const Lens& l) {
+    if (l.viewport[0] != 0.0f || l.viewport[1] != 640.0f || l.viewport[2] != 0.0f || l.viewport[3] != 480.0f)
+        return false;
+    if (l.type == kPerspective) return std::fabs(l.proj[1] - kNarrowAspect) < 1e-4f;
+    return l.type == kOrtho && l.proj[0] == 0.0f && l.proj[1] == -480.0f && l.proj[2] == 0.0f &&
+           l.proj[3] == 640.0f;
+}
+
+// The game's 4:3 frame, centered on the screen.
+constexpr Mark kMenuFrame{gx::Anchor::Center, 0.0f, 640.0f};
+
+// The mark a camera gives what's drawn through it outside the HUD's table at output aspect
+// `output`: the frame centered for a menu camera while the frame shows no world, as on the
+// title and the menus, and else Stretch. During play the HUD 3D camera is a narrow one too, and
+// the table places what it draws. At 4:3 it's Stretch, since a centered frame is the identity
+// there and each mark pads the write-gather pipe, which moves the frames a movie shows.
+inline Mark camera_mark(const Lens& l, const std::vector<Rect>& world_views, float output) {
+    if (gx::anchor_scale(output, false) == 1.0f) return {};
+    return world_views.empty() && menu_camera(l) ? kMenuFrame : Mark{};
+}
+
 // The world's views, the viewports of the world cameras the game set up in the latest frame
 // that set any. A frame's HUD reads those of its own frame, or of the one before when the game
 // hasn't set its cameras yet. Older ones are gone, so a menu after a race has none.
@@ -295,12 +324,20 @@ private:
 
 // The HUD callbacks being drawn, nested as render callbacks can be, each with its placement and
 // the mark its draws carry. Outside every callback nothing is placed and the mark is Stretch.
+// A callback the table doesn't place takes the current camera's mark (camera_mark).
 class HudCallbacks {
 public:
-    // A callback is called. Its draws are unmarked until it displays something.
+    // A callback is called. A placed one's draws are unmarked until it displays something, and
+    // the others carry the camera's mark.
     void enter(Placement p) {
         outer_.push_back(top_);
-        top_ = {p, {}};
+        top_ = {p, own_mark(p)};
+    }
+    // The game makes a camera current, whose mark is `m`. A callback the table doesn't place
+    // marks what it draws through it from here.
+    void set_camera(const Mark& m) {
+        camera_ = m;
+        if (!outer_.empty() && top_.placement == Placement::Stretch) top_.mark = m;
     }
     // It returns, and its caller's mark is back.
     void leave() {
@@ -316,10 +353,11 @@ public:
     // HSD_JObjDispAll is called, as it is again for each child. True for the outermost call in
     // a placed callback, whose joint tree the hook places.
     bool tree_begin() { return trees_++ == 0 && top_.placement != Placement::Stretch; }
-    // It returns. After the outermost call the callback's own mark, Stretch, is back for what
-    // it draws itself, as a callback outside the table draws.
+    // It returns. After the outermost call the callback's own mark is back for what it draws
+    // itself: Stretch in a placed one, as a callback outside the table draws through a camera
+    // that isn't a menu's.
     void tree_end() {
-        if (--trees_ == 0) top_.mark = {};
+        if (--trees_ == 0 && !outer_.empty()) top_.mark = own_mark(top_.placement);
     }
 
 private:
@@ -327,8 +365,10 @@ private:
         Placement placement = Placement::Stretch;
         Mark mark;
     };
+    Mark own_mark(Placement p) const { return p == Placement::Stretch ? camera_ : Mark{}; }
     std::vector<Level> outer_;
     Level top_;
+    Mark camera_;         // the current camera's mark
     uint32_t trees_ = 0;  // HSD_JObjDispAll calls under way
 };
 

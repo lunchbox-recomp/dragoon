@@ -1,10 +1,11 @@
 # addr  C statement replacing the original instruction at addr (one per line)
 # Hooks are declared here because the generated code is C and sees only recomp.h.
 # HSD_CObjSetCurrent on entry, r3 the camera it makes current. The world cameras widened once
-# follow a change of output aspect (src/cameras.cpp), then the camera census logs the camera
+# follow a change of output aspect (src/cameras.cpp), the HUD anchors take the camera's mark
+# (src/hud_anchors.cpp), then the camera census logs the camera
 # (src/census.cpp, DRAGOON_CENSUS=1). Restates the store of the stack frame and the store
 # watch the recompiler puts after it.
-80401150 { void dragoon_cameras_follow(void); void dragoon_census_camera(uint32_t); dragoon_cameras_follow(); dragoon_census_camera(c->r[3]); } { uint32_t ea = (c->r[1] + (uint32_t)-336); ST32(ea, c->r[1]); c->r[1] = ea; } WATCH_STORE(0x80401150u, c->r[1]);
+80401150 { void dragoon_cameras_follow(void); void dragoon_hud_camera(uint32_t); void dragoon_census_camera(uint32_t); dragoon_cameras_follow(); dragoon_hud_camera(c->r[3]); dragoon_census_camera(c->r[3]); } { uint32_t ea = (c->r[1] + (uint32_t)-336); ST32(ea, c->r[1]); c->r[1] = ea; } WATCH_STORE(0x80401150u, c->r[1]);
 # GObj_SetTextureCamera, before it calls an object's render callback, r24 the object and r12
 # the callback, for the camera census and the HUD anchors (src/hud_anchors.cpp). Restates the
 # move of the callback to ctr.

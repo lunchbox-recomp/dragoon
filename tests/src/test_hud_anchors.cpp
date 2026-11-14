@@ -573,4 +573,113 @@ TEST(HudCallbacks, WhatACallbackDrawsAfterATreeIsStretched) {
     EXPECT_EQ(h.mark(), Mark{});
 }
 
+// The menus' cameras as the census found them on the title, the mode select and the course select.
+Lens narrow(float fov) { return lens(dragoon::kPerspective, fov, 1.25538f, 0, 0); }
+
+TEST(MenuCamera, TheNarrowCameraOverTheScreen) {
+    EXPECT_TRUE(dragoon::menu_camera(narrow(25)));
+    EXPECT_TRUE(dragoon::menu_camera(narrow(30)));
+}
+
+TEST(MenuCamera, TheTextLibrarysSixFortyByFourEightyFrame) {
+    EXPECT_TRUE(dragoon::menu_camera(lens(dragoon::kOrtho, 0, -480, 0, 640)));  // the text library's
+}
+
+TEST(MenuCamera, NotAWorldCamera) {
+    EXPECT_FALSE(dragoon::menu_camera(lens(dragoon::kPerspective, 78, 1.67383f, 0, 0)));  // the race's at 16:9
+    EXPECT_FALSE(dragoon::menu_camera(lens(dragoon::kPerspective, 30, 1.18f, 0, 0)));     // Top Ride's at 4:3
+    EXPECT_FALSE(dragoon::menu_camera(lens(dragoon::kPerspective, 30, 1.57333f, 0, 0)));  // and at 16:9
+}
+
+TEST(MenuCamera, NotTheOtherFrames) {
+    EXPECT_FALSE(dragoon::menu_camera(lens(dragoon::kPerspective, 60, 1.33333f, 0, 0)));
+    EXPECT_FALSE(dragoon::menu_camera(hud_frame()));
+    EXPECT_FALSE(dragoon::menu_camera(lens(dragoon::kOrtho, -20, 500, -20, 660)));
+    EXPECT_FALSE(dragoon::menu_camera(lens(dragoon::kFrustum, 0, -480, 0, 640)));
+}
+
+TEST(MenuCamera, NotTheRenderToTexture) {
+    Lens l = lens(dragoon::kOrtho, 0, 192, 0, 256);
+    l.viewport[1] = 256;
+    l.viewport[3] = 192;
+    EXPECT_FALSE(dragoon::menu_camera(l));
+}
+
+TEST(MenuCamera, NotOverOneView) {
+    Lens l = narrow(25);
+    l.viewport[0] = 10;
+    l.viewport[1] = 318;
+    l.viewport[2] = 16;
+    l.viewport[3] = 224;
+    EXPECT_FALSE(dragoon::menu_camera(l));
+}
+
+constexpr float kWide = 16.0f / 9.0f;
+
+TEST(CameraMark, AMenuCameraCentersTheFrameWhileNoWorldIsShown) {
+    const Mark frame{Anchor::Center, 0, 640};
+    EXPECT_EQ(dragoon::kMenuFrame, frame);
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, kWide), frame);
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), {dragoon::kScreen}, kWide), Mark{});
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), kFourViews, kWide), Mark{});
+    EXPECT_EQ(dragoon::camera_mark(hud_frame(), {}, kWide), Mark{});
+}
+
+TEST(CameraMark, NoneAtFourByThree) {
+    // A mark pads the write-gather pipe, which moves the movies' frames, and at 4:3 it would
+    // anchor nothing.
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 4.0f / 3.0f), Mark{});
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 0.0f), Mark{});
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 21.0f / 9.0f), dragoon::kMenuFrame);
+}
+
+TEST(HudCallbacks, AStretchedCallbackTakesTheCamerasMark) {
+    dragoon::HudCallbacks h;
+    h.set_camera(dragoon::kMenuFrame);
+    EXPECT_EQ(h.mark(), Mark{});  // outside every callback
+    h.enter(dragoon::Placement::Stretch);
+    EXPECT_EQ(h.mark(), dragoon::kMenuFrame);
+    h.leave();
+    EXPECT_EQ(h.mark(), Mark{});
+    h.set_camera({});
+    h.enter(dragoon::Placement::Stretch);
+    EXPECT_EQ(h.mark(), Mark{});
+}
+
+TEST(HudCallbacks, APlacedCallbackIgnoresTheCamerasMark) {
+    dragoon::HudCallbacks h;
+    h.set_camera(dragoon::kMenuFrame);
+    h.enter(dragoon::Placement::Edge);
+    EXPECT_EQ(h.mark(), Mark{});
+    h.set_camera(dragoon::kMenuFrame);
+    EXPECT_EQ(h.mark(), Mark{});
+    ASSERT_TRUE(h.tree_begin());
+    h.set_mark({Anchor::Right, 0, 640});
+    h.tree_end();
+    EXPECT_EQ(h.mark(), Mark{});
+    h.enter(dragoon::Placement::Stretch);  // nested in it
+    EXPECT_EQ(h.mark(), dragoon::kMenuFrame);
+}
+
+TEST(HudCallbacks, ACameraMadeCurrentInAStretchedCallbackMarksWhatFollows) {
+    dragoon::HudCallbacks h;
+    h.enter(dragoon::Placement::Stretch);
+    h.set_camera(dragoon::kMenuFrame);
+    EXPECT_EQ(h.mark(), dragoon::kMenuFrame);
+    h.set_camera({});
+    EXPECT_EQ(h.mark(), Mark{});
+    h.leave();
+    h.set_camera(dragoon::kMenuFrame);
+    EXPECT_EQ(h.mark(), Mark{});
+}
+
+TEST(HudCallbacks, AStretchedCallbacksTreesKeepTheCamerasMark) {
+    dragoon::HudCallbacks h;
+    h.set_camera(dragoon::kMenuFrame);
+    h.enter(dragoon::Placement::Stretch);
+    EXPECT_FALSE(h.tree_begin());
+    h.tree_end();
+    EXPECT_EQ(h.mark(), dragoon::kMenuFrame);
+}
+
 }  // namespace

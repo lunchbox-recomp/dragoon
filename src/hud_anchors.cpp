@@ -165,6 +165,18 @@ void place_tree(uint32_t jobj) {
 
 }  // namespace
 
+// HSD_CObjSetCurrent (0x80401150) on entry, from recomp/patches.txt, with the camera it makes
+// current. Through a menu camera, with no world in the frame, a callback outside the table
+// draws the game's 4:3 frame centered: the title, the menus and the text library's boxes. The
+// menu's 256 by 192 render to texture draws through a camera of its own and stays unanchored,
+// so its copy holds what the game drew.
+extern "C" void dragoon_hud_camera(uint32_t cobj) {
+    dragoon::Mark m;
+    if (in_ram(cobj)) m = dragoon::camera_mark(lens_of(cobj), g_views.at(this_frame()), gx::output_aspect());
+    g_hud.set_camera(m);
+    send(g_hud.mark());
+}
+
 // GObj_SetTextureCamera, about to call an object's render callback.
 extern "C" void dragoon_hud_enter(uint32_t cb) {
     g_hud.enter(placement_of(cb));
