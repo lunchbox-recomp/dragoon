@@ -24,6 +24,9 @@ private func expectHues(_ palette: BannerPalette, _ primary: Double, _ secondary
             sourceLocation: sourceLocation)
     #expect(apart(palette.secondary, secondary) < 1e-9, "secondary \(palette.secondary * 360)°",
             sourceLocation: sourceLocation)
+    // A hue past a full turn has to come back round, not run on past 1.
+    #expect((0..<1).contains(palette.primary) && (0..<1).contains(palette.secondary),
+            sourceLocation: sourceLocation)
 }
 
 /// The hero's two hues from the banner's opaque, colored pixels.
@@ -41,6 +44,7 @@ private func expectHues(_ palette: BannerPalette, _ primary: Double, _ secondary
         expectHues(BannerPalette(rgba: pixels(10, 255, 0, 0)), 0, turn(60))
         // Past a full turn it wraps.
         expectHues(BannerPalette(rgba: pixels(10, 255, 0, 255)), turn(300), 0)
+        expectHues(BannerPalette(rgba: pixels(10, 200, 0, 100)), turn(330), turn(30))
     }
 
     @Test func onlyOpaquePixelsCount() {
