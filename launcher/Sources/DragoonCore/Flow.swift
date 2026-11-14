@@ -14,9 +14,9 @@ public enum Flow {
     public static let toolsCheckInterval: TimeInterval = 5
     /// Seconds after the game starts that the launcher hides with no window line, as it does for
     /// an engine from before the ready file. The engine writes that line at its window's first
-    /// frame, which a slow disc or a first run's shader compiles hold back, and a fake game's
-    /// line went in over 5 s after its start in a loaded test run. 20 s leaves room for those
-    /// and still ends the wait on an engine that writes no file.
+    /// frame. At 5 s the wait cut off a fake game's line, which went in over 5 s after its start
+    /// under a loaded test runner. How long a slow disc or a first run's shader compiles hold the
+    /// line back hasn't been measured. 20 s still ends the wait on an engine that writes no file.
     public static let handOffTimeout: TimeInterval = 20
 
     public static func reduce(_ state: State, _ event: Event) -> (State, [Effect]) {
