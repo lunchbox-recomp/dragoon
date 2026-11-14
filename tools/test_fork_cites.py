@@ -274,6 +274,16 @@ class ForkCitesTest(unittest.TestCase):
                               "(runtime/a/twin.cpp, runtime/b/twin.cpp)\n"
                               "total 2, ok 0, moved 0, gone 0, outside 0, unchanged 1, skipped 1, stray 0\n")
 
+    def test_a_bare_name_of_a_file_that_moved_folders_is_skipped(self):
+        code, out, _ = self.bump({"runtime/hw/ax.cpp": text(TEN)}, {"runtime/audio/ax.cpp": text(TEN)},
+                                 removed=("runtime/hw/ax.cpp",),
+                                 docs={"docs/a.md": "`ax.cpp:2` and `gcn-recomp/runtime/hw/ax.cpp:2`\n"})
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "skipped docs/a.md:1 ax.cpp:2, names 2 fork files "
+                              "(runtime/audio/ax.cpp, runtime/hw/ax.cpp)\n"
+                              "gone docs/a.md:1 runtime/hw/ax.cpp:2\n"
+                              "total 2, ok 0, moved 0, gone 1, outside 0, unchanged 0, skipped 1, stray 0\n")
+
     def test_its_own_two_files_are_left_out(self):
         own = {name: (fork_cites.ROOT / name).read_text()
                for name in ("tools/fork_cites.py", "tools/test_fork_cites.py")}
