@@ -97,8 +97,8 @@ extension Flow {
         case windowShown
         /// `readPicture`'s result.
         case pictureRead(PictureSettings)
-        /// `savePicture`'s result, nil when the file was saved.
-        case pictureSaved(PictureSettings.SaveFailure?)
+        /// `savePicture`'s result: the settings it saved, and nil when the file was saved.
+        case pictureSaved(PictureSettings, PictureSettings.SaveFailure?)
     }
 
     /// What the app does for the flow. Each result comes back as an event.

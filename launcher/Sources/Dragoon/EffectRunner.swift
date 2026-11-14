@@ -124,7 +124,7 @@ final class EffectRunner {
             } catch {
                 failure = error
             }
-            Task { [failure] in send(.pictureSaved(failure)) }
+            Task { [failure] in send(.pictureSaved(picture, failure)) }
         case .quit:
             NSApplication.shared.terminate(nil)
         }

@@ -220,6 +220,7 @@ extension Flow.State {
             guard waiting == .picture else { return [] }
             waiting = nil
             picture = read
+            savedPicture = read
             pictureFailure = nil
             return []
         case .pictureChosen(let chosen):
@@ -229,12 +230,20 @@ extension Flow.State {
             self.picture = chosen
             pictureFailure = nil
             return [.savePicture(chosen)]
-        case .pictureSaved(let failure):
+        case .pictureSaved(let tried, let failure):
             guard picture != nil else { return [] }
+            if failure == nil {
+                savedPicture = tried
+            } else if picture == tried, let savedPicture {
+                // The file is as it was, so the sheet shows what it holds, and picking the
+                // same again saves again. A later pick on its way keeps its own result.
+                picture = savedPicture
+            }
             pictureFailure = failure
             return []
         case .settingsDonePressed:
             picture = nil
+            savedPicture = nil
             pictureFailure = nil
             return []
         }

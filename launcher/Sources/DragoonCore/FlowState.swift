@@ -87,6 +87,9 @@ extension Flow {
         public var handOff: HandOff?
         /// What the Settings sheet shows while it's open, and nil while it's closed.
         public var picture: PictureSettings?
+        /// What settings.txt holds as of the sheet's read or its last save, which the sheet goes
+        /// back to when a change isn't saved. Nil while the sheet is closed.
+        public var savedPicture: PictureSettings?
         /// Why the sheet's last change wasn't saved, until the next change or the sheet closes.
         public var pictureFailure: PictureSettings.SaveFailure?
 

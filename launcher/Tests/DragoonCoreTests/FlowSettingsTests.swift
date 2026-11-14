@@ -114,16 +114,52 @@ private let wide = PictureSettings(aspect: "16:9", fullscreen: false, scale: 3)
     @Test func aFailedSaveShowsUntilTheNextChangeOrTheSheetCloses() {
         var run = sheetOpen()
         run.send(.pictureChosen(wide))
-        run.send(.pictureSaved(.notWritten("No space left on device")))
+        run.send(.pictureSaved(wide, .notWritten("No space left on device")))
         #expect(run.state.pictureFailure == .notWritten("No space left on device"))
         var next = wide
         next.scale = 4
         run.send(.pictureChosen(next))
         #expect(run.state.pictureFailure == nil)
-        run.send(.pictureSaved(.unreadable("Permission denied")))
+        run.send(.pictureSaved(next, .unreadable("Permission denied")))
         run.send(.settingsDonePressed)
         #expect(run.state.pictureFailure == nil)
-        run.send(.pictureSaved(.refused))
+        run.send(.pictureSaved(next, .refused))
+        #expect(run.state.pictureFailure == nil)
+    }
+
+    /// The file is as it was after a failed save, so the sheet goes back to what it holds, and
+    /// picking the same aspect again tries again.
+    @Test func aFailedSaveGoesBackToTheFileAndTheSamePickRetries() {
+        var run = sheetOpen()
+        #expect(run.send(.pictureChosen(wide)) == [.savePicture(wide)])
+        run.send(.pictureSaved(wide, .notWritten("No space left on device")))
+        #expect(run.state.picture == PictureSettings())
+        #expect(run.send(.pictureChosen(wide)) == [.savePicture(wide)])
+        run.send(.pictureSaved(wide, nil))
+        #expect(run.state.picture == wide)
+        #expect(run.state.pictureFailure == nil)
+        // The next failure goes back to the last pick saved, not to what the sheet opened on.
+        var next = wide
+        next.aspect = "21:9"
+        run.send(.pictureChosen(next))
+        run.send(.pictureSaved(next, .notWritten("No space left on device")))
+        #expect(run.state.picture == wide)
+        #expect(run.send(.pictureChosen(next)) == [.savePicture(next)])
+    }
+
+    /// Each save's result comes after the next pick when picks come quickly, and a failed one
+    /// leaves the pick that followed it.
+    @Test func aFailureForAnEarlierPickLeavesTheLaterOne() {
+        var run = sheetOpen()
+        var next = wide
+        next.aspect = "21:9"
+        run.send(.pictureChosen(wide))
+        run.send(.pictureChosen(next))
+        run.send(.pictureSaved(wide, .notWritten("No space left on device")))
+        #expect(run.state.picture == next)
+        run.send(.pictureSaved(next, nil))
+        #expect(run.state.picture == next)
+        #expect(run.state.savedPicture == next)
         #expect(run.state.pictureFailure == nil)
     }
 
