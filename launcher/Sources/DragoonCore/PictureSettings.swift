@@ -95,6 +95,20 @@ public struct PictureSettings: Equatable, Sendable {
         return PictureSettings(parsing: data)
     }
 
+    /// The settings in `<dataDirectory>/settings.txt`, as `load` gives them, and whether the file
+    /// has an `aspect` line of any value, which the player or the game's Display page wrote. A
+    /// file that's there and can't be read counts as having one, since what it sets isn't known.
+    public static func loadWithAspectLine(
+        from dataDirectory: String, fs: any FileSystem
+    ) -> (settings: PictureSettings, aspectLine: Bool) {
+        let path = path(in: dataDirectory)
+        guard let data = try? fs.readData(at: path) else {
+            return (PictureSettings(), fs.fileExists(at: path))
+        }
+        let aspectLine = SettingsText.entries(in: data).contains { $0.key == Array("aspect".utf8) }
+        return (PictureSettings(parsing: data), aspectLine)
+    }
+
     static func path(in dataDirectory: String) -> String {
         dataDirectory + "/" + SettingsText.fileName
     }

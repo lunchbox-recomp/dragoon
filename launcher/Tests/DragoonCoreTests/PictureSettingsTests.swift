@@ -167,6 +167,33 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
         #expect(PictureSettings.ratio(of: aspect) == nil)
     }
 
+    /// The Picture card's read: any `aspect` line counts, one the engine refuses or one under
+    /// spaces and a CR included, and a comment that names it doesn't.
+    @Test(arguments: [
+        ("aspect 16:9\n", true), ("  aspect\t4:3\r\n", true), ("aspect 5:4\n", true), ("aspect nonsense\n", true),
+        ("aspect\n", true), ("scale 3\nfullscreen 1\n", false), ("# aspect 16:9\n", false), ("aspects 16:9\n", false),
+        ("", false),
+    ] as [(String, Bool)])
+    func theCardsReadSaysWhetherTheFileHasAnAspectLine(_ text: String, _ aspectLine: Bool) {
+        let fs = FakeFileSystem()
+        fs.addFile(path, Data(text.utf8))
+        let read = PictureSettings.loadWithAspectLine(from: fakeData, fs: fs)
+        #expect(read.aspectLine == aspectLine)
+        #expect(read.settings == PictureSettings(parsing: Data(text.utf8)))
+    }
+
+    @Test func theCardsReadOfNoFileIsTheDefaultsWithNoAspectLine() {
+        let read = PictureSettings.loadWithAspectLine(from: fakeData, fs: FakeFileSystem())
+        #expect(read.settings == PictureSettings())
+        #expect(!read.aspectLine)
+    }
+
+    @Test func theCardsReadOfAFileThatCantBeReadCountsAsAnAspectLine() {
+        let fs = FakeFileSystem()
+        fs.addDirectory(path)
+        #expect(PictureSettings.loadWithAspectLine(from: fakeData, fs: fs).aspectLine)
+    }
+
     @Test func theAspectsAreTheDisplayPagesInItsOrder() {
         #expect(PictureSettings.aspects == ["4:3", "16:9", "16:10", "21:9", "window"])
     }

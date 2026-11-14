@@ -47,6 +47,24 @@ extension Flow {
         case build
         /// `settings.txt` is being read for the Settings sheet.
         case picture
+        /// `settings.txt` is being read for the Picture card, or the card's pick saved.
+        case pictureCard
+    }
+
+    /// The one-time "Picture: 4:3 or 16:9" card on the Ready to Play page after the first build.
+    public struct PictureCard: Equatable, Sendable {
+        /// The aspects the card offers. The others are in the Settings sheet.
+        public static let aspects = ["4:3", "16:9"]
+
+        /// What settings.txt held as the card read it, which a pick saves with its aspect.
+        public var picture: PictureSettings
+        /// Why the last pick wasn't saved, until the next pick.
+        public var failure: PictureSettings.SaveFailure?
+
+        public init(picture: PictureSettings, failure: PictureSettings.SaveFailure? = nil) {
+            self.picture = picture
+            self.failure = failure
+        }
     }
 
     /// Where Play's launch card is, from Play until the window is back after the game.
@@ -92,6 +110,8 @@ extension Flow {
         public var savedPicture: PictureSettings?
         /// Why the sheet's last change wasn't saved, until the next change or the sheet closes.
         public var pictureFailure: PictureSettings.SaveFailure?
+        /// The Picture card the Ready to Play page shows, or nil when it shows none.
+        public var pictureCard: PictureCard?
 
         public init() {}
 
@@ -107,6 +127,13 @@ extension Flow {
         /// Whether Library's Play, Rebuild and Change Disc do anything now, which needs no result
         /// on its way and no game running.
         public var libraryIsIdle: Bool { screen == .library && waiting == nil && !gameRunning }
+
+        /// Whether the Picture card's picks do anything now, which needs it up on the Ready to
+        /// Play page, no result on its way and no game running, as `libraryIsIdle` does.
+        public var pictureCardIsIdle: Bool {
+            guard pictureCard != nil, case .build(.finished) = screen else { return false }
+            return waiting == nil && !gameRunning
+        }
 
         /// Whether Play does anything now: Library's, or the one a finished build's bar became.
         /// Library's waits while the Settings sheet is open, so the game never starts while the

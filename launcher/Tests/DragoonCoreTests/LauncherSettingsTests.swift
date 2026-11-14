@@ -31,6 +31,16 @@ import Testing
         #expect(LauncherSettings.load(from: fakeData, fs: fs) == LauncherSettings())
     }
 
+    @Test func thePictureCardBeingShownIsSavedAndLoadsBack() throws {
+        let fs = FakeFileSystem()
+        let settings = LauncherSettings(welcomeSeen: true, pictureCardShown: true)
+        try settings.save(to: fakeData, fs: fs)
+        let text = String(decoding: try fs.readData(at: fakeData + "/launcher.json"), as: UTF8.self)
+        #expect(text.contains("\"pictureCardShown\" : true"))
+        #expect(LauncherSettings.load(from: fakeData, fs: fs) == settings)
+        #expect(!fs.fileExists(at: fakeData + "/settings.txt"))
+    }
+
     @Test func aFieldThatIsMissingIsItsDefault() {
         let fs = FakeFileSystem()
         fs.addFile(fakeData + "/launcher.json", Data("{\"welcomeSeen\": true}".utf8))

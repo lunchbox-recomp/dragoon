@@ -59,6 +59,10 @@ extension Flow {
         case pictureChosen(PictureSettings)
         /// The Settings sheet's Done, or its close by Escape.
         case settingsDonePressed
+        /// The player picked this aspect, 4:3 or 16:9, on the Picture card.
+        case pictureCardPicked(String)
+        /// The Picture card's Keep 4:3, which writes nothing.
+        case pictureCardSkipped
         case quitPressed
 
         // Results
@@ -99,6 +103,9 @@ extension Flow {
         case pictureRead(PictureSettings)
         /// `savePicture`'s result: the settings it saved, and nil when the file was saved.
         case pictureSaved(PictureSettings, PictureSettings.SaveFailure?)
+        /// `readPictureCard`'s result: what settings.txt holds, and whether it has an `aspect`
+        /// line or can't be read.
+        case pictureCardRead(PictureSettings, aspectLine: Bool)
     }
 
     /// What the app does for the flow. Each result comes back as an event.
@@ -149,9 +156,12 @@ extension Flow {
         case deleteOldBuilds
         /// `PictureSettings.load` from the data directory, which gives `pictureRead`.
         case readPicture
-        /// `PictureSettings.save` to the data directory, sent only while Library is idle, so
-        /// never while the game runs. Gives `pictureSaved`.
+        /// `PictureSettings.save` to the data directory, sent only while Library or the Picture
+        /// card is idle, so never while the game runs. Gives `pictureSaved`.
         case savePicture(PictureSettings)
+        /// `PictureSettings.loadWithAspectLine` from the data directory, which gives
+        /// `pictureCardRead`.
+        case readPictureCard
         case quit
     }
 }

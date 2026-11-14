@@ -172,6 +172,8 @@ extension Flow.State {
 
         case .playPressed:
             guard canPlay else { return [] }
+            // Play on the Ready to Play page passes the Picture card by.
+            pictureCard = nil
             gameProblem = nil
             panicShown = false
             handOff = .charging
@@ -231,6 +233,7 @@ extension Flow.State {
             pictureFailure = nil
             return [.savePicture(chosen)]
         case .pictureSaved(let tried, let failure):
+            if waiting == .pictureCard { return pictureCardSaved(tried, failure) }
             guard picture != nil else { return [] }
             if failure == nil {
                 savedPicture = tried
@@ -246,7 +249,45 @@ extension Flow.State {
             savedPicture = nil
             pictureFailure = nil
             return []
+
+        case .pictureCardRead(let read, let aspectLine):
+            guard waiting == .pictureCard else { return [] }
+            waiting = nil
+            // An aspect the player or the game already set stays as it is, and the card never
+            // shows while a game runs, which reads the file.
+            guard !aspectLine, !gameRunning, case .build(.finished) = screen else { return [] }
+            pictureCard = Flow.PictureCard(picture: read)
+            settings.pictureCardShown = true
+            return [.saveSettings(settings)]
+        case .pictureCardPicked(let aspect):
+            guard pictureCardIsIdle, var card = pictureCard, Flow.PictureCard.aspects.contains(aspect)
+            else { return [] }
+            card.picture.aspect = aspect
+            card.failure = nil
+            pictureCard = card
+            waiting = .pictureCard
+            return [.savePicture(card.picture)]
+        case .pictureCardSkipped:
+            guard pictureCardIsIdle else { return [] }
+            pictureCard = nil
+            return []
         }
+    }
+
+    /// The Picture card's pick was saved, so the card goes, or it wasn't, so it stays and says
+    /// why.
+    private mutating func pictureCardSaved(
+        _ tried: PictureSettings, _ failure: PictureSettings.SaveFailure?
+    ) -> [Effect] {
+        waiting = nil
+        guard var card = pictureCard, card.picture == tried else { return [] }
+        if failure == nil {
+            pictureCard = nil
+        } else {
+            card.failure = failure
+            pictureCard = card
+        }
+        return []
     }
 
     // MARK: - Launch and Library
@@ -285,6 +326,7 @@ extension Flow.State {
         screen = .library
         intent = nil
         waiting = nil
+        pictureCard = nil
         return deleteOldBuildsIfIdle()
     }
 
@@ -399,10 +441,15 @@ extension Flow.State {
         if case .build(.running(let last)) = screen { progress = last }
         switch failure {
         case nil:
+            let firstGame = installed == nil
             installed = InstalledGame(stamp: source?.commits)
             // The bar becomes Play, so the build ends on its own page.
             screen = .build(.finished(progress))
-            return deleteOldBuildsIfIdle()
+            let effects = deleteOldBuildsIfIdle()
+            // The first game's page offers the Picture card once, after a look at settings.txt.
+            guard firstGame, !settings.pictureCardShown, !gameRunning else { return effects }
+            waiting = .pictureCard
+            return effects + [.readPictureCard]
         case .cancelled?:
             // A rebuild that was canceled leaves the old game current.
             if installed != nil { return showLibrary() }

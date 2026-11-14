@@ -86,8 +86,11 @@ import Testing
         #expect(run.send(.build(.done(game: "/x/game/current/Dragoon.app"))) == [])
         #expect(run.progress?.fraction == 1)
 
-        // The bar becomes Play on the build's own page, with Library current in the list.
-        #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
+        // The bar becomes Play on the build's own page, with Library current in the list, and
+        // the page looks at settings.txt for the Picture card, which FlowPictureCardTests
+        // covers.
+        #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds, .readPictureCard])
+        #expect(run.send(.pictureCardRead(PictureSettings(aspect: "16:9"), aspectLine: true)) == [])
         guard case .build(.finished(let progress)) = run.screen else {
             Issue.record("the build didn't finish on its page: \(run.screen)")
             return

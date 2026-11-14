@@ -125,6 +125,11 @@ final class EffectRunner {
                 failure = error
             }
             Task { [failure] in send(.pictureSaved(picture, failure)) }
+        case .readPictureCard:
+            background {
+                let read = PictureSettings.loadWithAspectLine(from: places.data, fs: fs)
+                return .pictureCardRead(read.settings, aspectLine: read.aspectLine)
+            }
         case .quit:
             NSApplication.shared.terminate(nil)
         }
