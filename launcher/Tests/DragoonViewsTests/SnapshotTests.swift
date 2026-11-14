@@ -12,7 +12,7 @@ struct SnapshotTests {
         Snapshot.render(
             LauncherView(state: fixture.state, send: { _ in })
                 .environment(\.reducesMotion, fixture.reduceMotion),
-            size: fixture.size)
+            size: fixture.size, at: fixture.moment)
     }
 
     static func file(_ name: String) -> URL {

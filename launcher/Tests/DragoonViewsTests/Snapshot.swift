@@ -28,21 +28,25 @@ enum Snapshot {
 
     /// The moment every animated view draws, 2027-01-15 08:00 UTC.
     static let moment = Date(timeIntervalSince1970: 1_800_000_000)
+    /// The moment the build page's fixtures draw, half a shimmer on from `moment`, which falls
+    /// on a whole period. The band sits in the middle of its segment, and the Reduce Motion fade
+    /// is at its brightest. `BuildPageTests` checks it's half of `Shimmer.period`.
+    static let buildMoment = moment.addingTimeInterval(0.8)
 
     static var recording: Bool { ProcessInfo.processInfo.environment["RECORD"] == "1" }
 
     /// The view at `size`, the window's opening size unless another is given, in dark
-    /// appearance on the window's gray, with its animations stopped at `moment`. It renders at
-    /// scale 2, then each 2x2 block of pixels becomes one, so text is drawn as on a Retina
-    /// screen and the PNGs stay a quarter the size.
+    /// appearance on the window's gray, with its animations stopped at `time`, `moment` unless
+    /// given. It renders at scale 2, then each 2x2 block of pixels becomes one, so text is drawn
+    /// as on a Retina screen and the PNGs stay a quarter the size.
     @MainActor
-    static func render(_ view: some View, size: CGSize = size) -> Bitmap? {
+    static func render(_ view: some View, size: CGSize = size, at time: Date = moment) -> Bitmap? {
         let renderer = ImageRenderer(
             content: view
                 .frame(width: size.width, height: size.height)
                 .background(Color(white: 0.12))
                 .environment(\.colorScheme, .dark)
-                .environment(\.animationClock, .fixed(moment)))
+                .environment(\.animationClock, .fixed(time)))
         renderer.scale = scale
         return renderer.cgImage.flatMap(Bitmap.init)?.halved()
     }

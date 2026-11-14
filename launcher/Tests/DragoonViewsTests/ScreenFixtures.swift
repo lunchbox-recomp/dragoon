@@ -4,12 +4,13 @@ import Foundation
 import Testing
 
 /// A state the window can show at `size`, named for its snapshot file, drawn as Reduce Motion
-/// would when `reduceMotion` is set.
+/// would when `reduceMotion` is set, with its animations at `moment`.
 struct ScreenFixture: CustomTestStringConvertible, Sendable {
     let name: String
     let state: Flow.State
     var reduceMotion = false
     var size = LauncherView.defaultSize
+    var moment = Snapshot.moment
 
     var testDescription: String { name }
 }
@@ -70,15 +71,19 @@ let screenFixtures: [ScreenFixture] = [
     ScreenFixture(
         name: "build-low-space",
         state: state(.build(.lowSpace(FreeSpace(available: 1_200_000_000, volume: "Macintosh HD"))))),
-    ScreenFixture(name: "build-start", state: building(startingBuild)),
-    ScreenFixture(name: "build-start-reduce-motion", state: building(startingBuild), reduceMotion: true),
-    ScreenFixture(name: "build-compile", state: building(compiling)),
-    ScreenFixture(name: "build-warmup", state: building(warmingUp)),
+    // The build page draws at `Snapshot.buildMoment`, where the shimmer shows.
+    ScreenFixture(name: "build-start", state: building(startingBuild), moment: Snapshot.buildMoment),
+    ScreenFixture(
+        name: "build-start-reduce-motion", state: building(startingBuild), reduceMotion: true,
+        moment: Snapshot.buildMoment),
+    ScreenFixture(name: "build-compile", state: building(compiling), moment: Snapshot.buildMoment),
+    ScreenFixture(name: "build-warmup", state: building(warmingUp), moment: Snapshot.buildMoment),
     ScreenFixture(
         name: "build-done",
         state: state(.build(.finished(builtGame)), installed: InstalledGame(stamp: commits)) {
             $0.banner = TestBanner.banner
-        }),
+        },
+        moment: Snapshot.buildMoment),
     ScreenFixture(
         name: "build-failed",
         state: state(.build(.failed(
@@ -112,10 +117,12 @@ private func building(_ progress: BuildProgress) -> Flow.State {
     state(.build(.running(progress)), waiting: .build) { $0.banner = TestBanner.banner }
 }
 
-/// A build's progress after `events`, each the given seconds before the snapshots' moment.
+/// A build's progress after `events`, each the given seconds before the build page's moment.
 private func progress(_ events: [(Double, BuildEvent)]) -> BuildProgress {
     var progress = BuildProgress()
-    for (ago, event) in events { progress.note(event, at: Snapshot.moment.addingTimeInterval(-ago)) }
+    for (ago, event) in events {
+        progress.note(event, at: Snapshot.buildMoment.addingTimeInterval(-ago))
+    }
     return progress
 }
 

@@ -1,5 +1,6 @@
 import DragoonCore
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import DragoonViews
@@ -73,6 +74,62 @@ struct BuildPageTests {
         let paused = Motion.buildPaused(windowIsActive: active, windowIsVisible: visible)
         #expect(paused.shimmer == shimmerPaused)
         #expect(paused.clock == clockPaused)
+    }
+
+    static let barWidth = 400
+
+    /// The bar alone, empty, at the build page's moment and one pixel a point.
+    @MainActor
+    static func bar(shimmering: BuildSegment?, fades: Bool) -> Bitmap? {
+        let renderer = ImageRenderer(
+            content: SegmentedBar(
+                fraction: 0, colors: HeroColors(palette: BannerPalette(banner: nil)),
+                shimmering: shimmering, reduceMotion: fades)
+                .frame(width: CGFloat(barWidth))
+                .background(Color(white: 0.12))
+                .environment(\.animationClock, .fixed(Snapshot.buildMoment)))
+        return renderer.cgImage.flatMap(Bitmap.init)
+    }
+
+    /// How many pixels differ between `one` and `other`, left of `x` and from `x` on.
+    static func differing(_ one: Bitmap, _ other: Bitmap, splitAt x: Int) -> (left: Int, right: Int) {
+        var counts = (left: 0, right: 0)
+        for row in 0..<one.height {
+            for column in 0..<one.width {
+                let pixel = (row * one.width + column) * 4
+                let off = (0..<3).contains {
+                    abs(Int(one.bytes[pixel + $0]) - Int(other.bytes[pixel + $0]))
+                        > Snapshot.channelTolerance
+                }
+                if off && column < x { counts.left += 1 } else if off { counts.right += 1 }
+            }
+        }
+        return counts
+    }
+
+    @MainActor
+    @Test func theBuildPageDrawsHalfAShimmerOn() {
+        // As `Shimmer` takes its phase from a fixed clock.
+        let phase = (Snapshot.buildMoment.timeIntervalSinceReferenceDate / Shimmer.period)
+            .truncatingRemainder(dividingBy: 1)
+        #expect(abs(phase - 0.5) < 1e-6)
+    }
+
+    /// The whole page's snapshot can't see a shimmer in a segment this small, so the bar is
+    /// drawn on its own: the band, or under Reduce Motion the fade, lights the running step's
+    /// segment and nothing else.
+    @MainActor
+    @Test(arguments: [false, true])
+    func theShimmerLightsOnlyTheRunningStepsSegment(fades: Bool) throws {
+        let still = try #require(Self.bar(shimmering: nil, fades: fades))
+        let lit = try #require(Self.bar(shimmering: .recompile, fades: fades))
+        #expect(still.width == Self.barWidth && lit.width == Self.barWidth)
+        let usable = Double(Self.barWidth) - Double(SegmentedBar.gap) * 3
+        let end = Int((usable * BuildSegment.recompile.width).rounded(.up))
+        let segmentPixels = end * Int(SegmentedBar.height)
+        let counts = Self.differing(still, lit, splitAt: end)
+        #expect(counts.left > segmentPixels / 3, "\(counts.left) of \(segmentPixels) lit")
+        #expect(counts.right == 0)
     }
 
     @Test(arguments: [(0.0, 0.0), (0.25, 0.0), (0.5, 0.5), (0.75, 1.0), (1.0, 1.0)])
