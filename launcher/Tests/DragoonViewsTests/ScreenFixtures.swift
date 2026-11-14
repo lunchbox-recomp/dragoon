@@ -77,6 +77,10 @@ let screenFixtures: [ScreenFixture] = [
         name: "build-start-reduce-motion", state: building(startingBuild), reduceMotion: true,
         moment: Snapshot.buildMoment),
     ScreenFixture(name: "build-compile", state: building(compiling), moment: Snapshot.buildMoment),
+    // Three segments, the warm-up left out as the plan says, the compile's three-quarters full.
+    ScreenFixture(
+        name: "build-compile-skip-warmup", state: building(compilingWithoutWarmup),
+        moment: Snapshot.buildMoment),
     ScreenFixture(name: "build-warmup", state: building(warmingUp), moment: Snapshot.buildMoment),
     ScreenFixture(
         name: "build-done",
