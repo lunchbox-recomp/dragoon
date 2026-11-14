@@ -84,11 +84,14 @@ let screenFixtures: [ScreenFixture] = [
             $0.banner = TestBanner.banner
         },
         moment: Snapshot.buildMoment),
+    // With the banner, in as much color as the bar had before the failed step: nearly gray here.
     ScreenFixture(
         name: "build-failed",
         state: state(.build(.failed(
             .failed(step: "compile", message: "make exited with status 2.", log: log),
-            lastLines: ["clang: error: linker command failed with exit code 1", "make: *** [dragoon] Error 1"])))),
+            lastLines: ["clang: error: linker command failed with exit code 1", "make: *** [dragoon] Error 1"]))) {
+            $0.banner = TestBanner.banner
+        }),
     ScreenFixture(name: "library", state: library()),
     ScreenFixture(name: "library-reduce-motion", state: library(), reduceMotion: true),
     ScreenFixture(name: "library-no-banner", state: library { $0.banner = nil }),
