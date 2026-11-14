@@ -63,7 +63,7 @@ public struct DiscBanner: Equatable, Sendable {
         -> DiscBanner?
     {
         guard let file = try? fs.openReader(at: path) else { return nil }
-        return (try? find(in: file)) ?? nil
+        return try? find(in: file)
     }
 
     /// The pixels as a PNG with straight alpha, tagged sRGB.
