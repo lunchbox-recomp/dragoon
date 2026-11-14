@@ -73,7 +73,9 @@ import Testing
         run.send(.build(.step("recompile")))
         run.send(.build(.step("compile")))
         run.send(.build(.progress(step: "compile", done: 12, total: 135)))
-        #expect(run.screen == .build(.running(BuildProgress(step: "compile", done: 12, total: 135))))
+        #expect(run.progress?.step == "compile")
+        #expect(run.progress?.done == 12)
+        #expect(run.progress?.total == 135)
         #expect(run.state.step == .build)
         run.send(.build(.step("warmup")))
         run.send(.build(.progress(step: "warmup", done: 3, total: 8)))
@@ -82,16 +84,66 @@ import Testing
         run.send(.build(.step("swap")))
         #expect(run.state.step == .warmup)
         #expect(run.send(.build(.done(game: "/x/game/current/Dragoon.app"))) == [])
+        #expect(run.progress?.fraction == 1)
 
+        // The bar becomes Play on the build's own page, with Library current in the list.
         #expect(run.send(.buildEnded(nil)) == [.deleteOldBuilds])
-        #expect(run.screen == .library)
-        #expect(run.state.step == nil)
+        guard case .build(.finished(let progress)) = run.screen else {
+            Issue.record("the build didn't finish on its page: \(run.screen)")
+            return
+        }
+        #expect(progress.isDone)
+        #expect(run.state.step == .library)
         #expect(run.state.installed == InstalledGame(stamp: sourceCommits))
         #expect(run.state.rebuildOffer == nil)
+        #expect(run.state.canPlay)
+        #expect(run.state.canGoBackToLibrary)
+        #expect(run.send(.backToLibraryPressed) == [.deleteOldBuilds])
+        #expect(run.screen == .library)
+        #expect(run.state.step == nil)
+    }
+
+    @Test func playOnAFinishedBuildStartsTheGame() {
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        run.send(.build(.done(game: "/x/game/current/Dragoon.app")))
+        run.send(.buildEnded(nil))
+        #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
+        #expect(run.state.playStatus == .checkingDisc)
+        #expect(!run.state.canPlay)
+        run.send(.bookmarkResolved(.found(flowDisc)))
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc, launch: 1)])
+        #expect(run.screen == .library)
+        #expect(run.state.gameRunning)
+    }
+
+    @Test func theBuildPageTakesEachEventsMoment() {
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        let start = Date(timeIntervalSinceReferenceDate: 100)
+        run.send(.build(.step("recompile"), at: start))
+        run.send(.build(.step("compile"), at: start.addingTimeInterval(4)))
+        run.send(.build(.progress(step: "compile", done: 41, total: 135), at: start.addingTimeInterval(9)))
+        #expect(run.progress?.started == start)
+        #expect(run.progress?.elapsed(at: start.addingTimeInterval(30)) == 30)
+        #expect(run.progress?.finishedSteps
+            == [FinishedStep(segment: .recompile, seconds: 4, complete: true)])
+        #expect(run.progress?.samples
+            == [BuildSample(time: start.addingTimeInterval(9), done: 41)])
+        #expect(run.progress?.fraction == BuildMeter.fraction(step: "compile", done: 41, total: 135))
+    }
+
+    @Test func anErrorEventLeavesTheBarWhereItWas() {
+        var run = launched()
+        for (event, _) in rebuildToRunning { run.send(event) }
+        run.send(.build(.step("compile")))
+        let before = run.state
+        #expect(run.send(.build(.error(step: "compile", message: "bad", log: flowLog))) == [])
+        #expect(run.state == before)
     }
 
     /// The list's current step only moves down, so the package and swap steps after the warm-up
-    /// stay on Warm-up. Library ends setup and shows no list.
+    /// stay on Warm-up, and a finished build marks Library.
     @Test func theStepListNeverGoesBackOnTheFirstRun() {
         var run = launched(settings: LauncherSettings(), installed: nil)
         var steps = [run.state.step]
@@ -108,12 +160,11 @@ import Testing
             run.send(event)
             steps.append(run.state.step)
         }
-        #expect(run.screen == .library)
-        #expect(steps.last == .some(nil))
-        let listed = steps.dropLast().compactMap { $0 }
-        #expect(listed.count == steps.count - 1)
+        #expect(steps.last == .library)
+        let listed = steps.compactMap { $0 }
+        #expect(listed.count == steps.count)
         #expect(listed == listed.sorted())
-        #expect(Set(listed) == Set(Flow.Step.allCases).subtracting([.library]))
+        #expect(Set(listed) == Set(Flow.Step.allCases))
     }
 
     @Test(arguments: ["package", "swap"])

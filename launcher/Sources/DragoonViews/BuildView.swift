@@ -1,19 +1,24 @@
 import DragoonCore
 import SwiftUI
 
-/// The Build and Warm-up steps: ready to build, getting ready, running, or stopped. The disc's
-/// banner flies in here once the disc passes.
+/// The Build and Warm-up steps: ready to build, getting ready, running, finished or stopped.
+/// The disc's banner flies in here once the disc passes, and comes into color as the build
+/// goes.
 struct BuildView: View {
     let screen: BuildScreen
     let state: Flow.State
     let send: Send
 
     var body: some View {
-        StepPage(Strings.step(state.step ?? .build)) {
+        let colors = HeroColors(palette: BannerPalette(banner: state.banner))
+        StepPage(title) {
             // In a stack of its own, so the reveal takes no room until there's a banner.
             VStack(alignment: .leading, spacing: 0) {
-                BannerReveal(banner: state.banner, scale: 3) { EmptyView() }
-                    .padding(.bottom, state.banner == nil ? 0 : 16)
+                BuildBanner(
+                    banner: state.banner, saturation: saturation, colors: colors,
+                    finished: isFinished
+                )
+                .padding(.bottom, state.banner == nil ? 0 : 20)
                 switch screen {
                 case .ready:
                     Text(Strings.buildReady)
@@ -21,10 +26,13 @@ struct BuildView: View {
                     ProgressRow(Strings.buildPreparing)
                 case .lowSpace(let space):
                     Text(Strings.lowSpace(space, needed: Flow.neededSpace))
-                case .running(let progress):
-                    RunningBuild(progress: progress)
+                case .running(let progress), .finished(let progress):
+                    // One view for both, so the bar can become Play.
+                    BuildMeterView(
+                        progress: progress, finished: isFinished, colors: colors,
+                        canPlay: state.canPlay, send: send)
                 case .failed(let failure, let lastLines):
-                    FailedBuild(failure: failure, lastLines: lastLines)
+                    FailedBuild(failure: failure, lastLines: lastLines, colors: colors)
                 }
             }
         } buttons: {
@@ -45,6 +53,9 @@ struct BuildView: View {
                     send(.cancelBuildPressed)
                 }
                 .disabled(progress.canceling)
+            case .finished:
+                // Play is where the bar was.
+                EmptyView()
             case .failed(let failure, _):
                 if failure.log != nil {
                     Button(Strings.copyLog) { send(.copyLogPressed) }
@@ -55,34 +66,46 @@ struct BuildView: View {
             }
         }
     }
-}
 
-/// The recipe's step and how far through it the build is.
-private struct RunningBuild: View {
-    let progress: BuildProgress
+    private var isFinished: Bool {
+        if case .finished = screen { return true }
+        return false
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(progress.step.map(Strings.running) ?? Strings.buildStarting)
-            if let step = progress.step, progress.total > 0 {
-                ProgressView(value: Double(progress.done), total: Double(progress.total))
-                Text(Strings.progress(done: progress.done, total: progress.total, step: step))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ProgressView().progressViewStyle(.linear)
-            }
+    private var title: String {
+        isFinished ? Strings.buildFinishedTitle : Strings.step(state.step ?? .build)
+    }
+
+    /// Gray while the build gets ready, coming into color with the bar, and in full color
+    /// before a build and once it's done.
+    private var saturation: Double {
+        switch screen {
+        case .ready, .lowSpace, .finished: return 1
+        case .preparing: return 0
+        case .running(let progress): return progress.fraction
+        case .failed(let failure, _): return FailedBuild.stoppedAt(failure)?.start ?? 0
         }
     }
 }
 
-/// The step that failed, the end of its log and where the whole log is.
+/// The bar stopped at the step that failed, what happened, the end of its log and where the
+/// whole log is.
 private struct FailedBuild: View {
     let failure: BuildFailure
     let lastLines: [String]
+    let colors: HeroColors
+
+    /// The bar's segment for the step the build stopped at, or nil when it stopped at none.
+    static func stoppedAt(_ failure: BuildFailure) -> BuildSegment? {
+        failure.step.flatMap(BuildSegment.init(rawValue:))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let stopped = Self.stoppedAt(failure) {
+                SegmentedBar(fraction: stopped.start, colors: colors, stopped: stopped)
+                    .padding(.bottom, 8)
+            }
             Text(Strings.buildFailure(failure)).textSelection(.enabled)
             if let log = failure.log {
                 Text(Strings.logPlace(log))

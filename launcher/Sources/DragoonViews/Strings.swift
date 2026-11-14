@@ -121,8 +121,49 @@ public enum Strings {
         }
     }
 
-    static func progress(done: Int, total: Int, step: String) -> String {
-        step == BuildProgress.warmupStep ? "Pass \(done) of \(total)" : "\(done) of \(total)"
+    /// A step's count with its unit. Compile counts each file as make starts it, and the
+    /// warm-up each run as it ends.
+    static func count(step: String, done: Int, total: Int) -> String {
+        switch step {
+        case "compile": return "\(done) of \(total) files"
+        case BuildProgress.warmupStep: return "\(done) of \(total) runs done"
+        default: return "\(done) of \(total)"
+        }
+    }
+
+    /// The time a build has taken, and the time left once there's an estimate.
+    static func buildTime(elapsed: TimeInterval, left: TimeInterval?) -> String {
+        guard let left else { return clock(elapsed) }
+        return clock(elapsed) + "  ·  " + timeLeft(left)
+    }
+
+    /// Minutes and seconds, as 1:05, and hours too past an hour, as 1:02:05.
+    static func clock(_ seconds: TimeInterval) -> String {
+        let whole = Int(max(seconds, 0))
+        let (hours, minutes, rest) = (whole / 3600, whole / 60 % 60, whole % 60)
+        let tail = String(format: "%02d", rest)
+        return hours > 0
+            ? "\(hours):" + String(format: "%02d", minutes) + ":" + tail : "\(minutes):" + tail
+    }
+
+    /// Under a minute in steps of 5 seconds, rounded up, and in whole minutes past that.
+    static func timeLeft(_ seconds: TimeInterval) -> String {
+        if seconds <= 55 { return "About \(max(Int((seconds / 5).rounded(.up)) * 5, 5)) s left" }
+        return "About \(Int((seconds / 60).rounded())) min left"
+    }
+
+    static let buildFinishedTitle = "Ready to Play"
+    static let buildFinished = "The game is built."
+
+    static func buildTook(_ seconds: TimeInterval) -> String {
+        "The build took \(clock(seconds))."
+    }
+
+    /// The bar's name and value for VoiceOver.
+    static let buildMeter = "Build progress"
+
+    static func percent(_ fraction: Double) -> String {
+        "\(Int((fraction * 100).rounded(.down)))%"
     }
 
     static func buildFailure(_ failure: BuildFailure) -> String {

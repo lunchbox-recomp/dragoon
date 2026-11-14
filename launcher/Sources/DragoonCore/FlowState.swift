@@ -85,6 +85,12 @@ extension Flow {
         /// on its way and no game running.
         public var libraryIsIdle: Bool { screen == .library && waiting == nil && !gameRunning }
 
+        /// Whether Play does anything now: Library's, or the one a finished build's bar became.
+        public var canPlay: Bool {
+            if case .build(.finished) = screen { return waiting == nil && !gameRunning }
+            return libraryIsIdle
+        }
+
         /// Whether a step can go back to Library, which needs a game, no build running and no
         /// disc panel open.
         public var canGoBackToLibrary: Bool {
@@ -108,6 +114,7 @@ extension Flow {
             case .disc: return .disc
             case .build(.running(let progress)): return Self.listStep(forBuildStep: progress.step)
             case .build(.failed(let failure, _)): return Self.listStep(forBuildStep: failure.step)
+            case .build(.finished): return .library
             case .build: return .build
             // Library has its own layout, and the list is for setup.
             case .library: return nil
@@ -164,28 +171,8 @@ public enum BuildScreen: Equatable, Sendable {
     case preparing
     case lowSpace(FreeSpace)
     case running(BuildProgress)
+    /// The new game is current. The bar has become Play.
+    case finished(BuildProgress)
     /// `lastLines` is the end of the log, once it has been read.
     case failed(BuildFailure, lastLines: [String])
-}
-
-/// Where a running build is, from the recipe's events.
-public struct BuildProgress: Equatable, Sendable {
-    /// The recipe's name for its warm-up step.
-    public static let warmupStep = "warmup"
-    /// The recipe's warm-up and the steps it runs after it.
-    public static let stepsFromWarmup: Set<String> = [warmupStep, "package", "swap"]
-
-    /// The recipe's step, or nil before its first event.
-    public var step: String?
-    public var done = 0
-    public var total = 0
-    /// Cancel was pressed and the build hasn't stopped yet.
-    public var canceling = false
-
-    public init(step: String? = nil, done: Int = 0, total: Int = 0, canceling: Bool = false) {
-        self.step = step
-        self.done = done
-        self.total = total
-        self.canceling = canceling
-    }
 }

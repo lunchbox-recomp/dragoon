@@ -137,6 +137,35 @@ Measured on 2026-11-13 on macOS 26.6.2 with `idle_cpu.py` over 60 seconds, on a 
 | Window not key, streaks stopped | 0.02% |
 | App hidden | 0.02% |
 
+## The build page
+
+A build shows one bar in segments, each as wide as its step took on the Mac it was measured on. Recompile took 4.2 s there and compile and link 18.0 s. The warm-up took 72.7 s, and package and swap make a sliver at the end. `BuildProgress` in `DragoonCore` keeps the recipe's events and the moments they came. The bar moves only on an event and never goes back. It's full only once `done` comes.
+
+| Step | What the recipe tells the bar | What the page shows |
+|---|---|---|
+| Recompile | Its start | A shimmer in its segment, since it prints no progress |
+| Compile | A progress event as make starts each file | "41 of 135 files" |
+| Warm-up | A progress event as each run ends | "3 of 8 runs done" |
+| Package, swap | Their start | Nothing more |
+
+The time left comes once a step has 3 counts. It's the step's rate across its newest 30 counts, as DuckStation's loading screen takes it (`fullscreenui_widgets.cpp:7144-7181`), plus each later step's measured time scaled by this Mac's ratio on the steps it has finished. A step that didn't count all its work, as a warm-up whose cache was current, stays out of the ratio. The estimate changes only on an event.
+
+Make prints quickly, so `ProgressThrottle` lets a progress event through at most every 0.1 s and holds the newest in between. The banner goes from gray to its own colors with the bar. When the build is done the glow behind it pulses once and the bar becomes Play. The page stays until Play or Back to Library, with Library current in the list. Under Reduce Motion the shimmer fades up and down in place, the glow only fades up and the bar fades into Play.
+
+The clock ticks once a second. It and the shimmer stop while the window isn't key or is covered.
+
+Measured on 2026-11-14 with `idle_cpu.py` over 60 seconds, on a release build of a scratch copy that opens on the build page with the test banner and made-up events, and that counts the window as key unless noted.
+
+| Build page | Share of a core |
+|---|---|
+| Recompile, shimmer and clock | 0.20% |
+| Warm-up between runs, clock only | 0.20% |
+| Window not key | 0.00% |
+| Finished, after the pulse | 0.00% |
+| 8 compile events a second | 3.6% |
+
+The page first used 11.2% of a core through the compile. Rolling make's count with `.numericText()` on each file kept SwiftUI drawing, and so did easing the banner's color on each step. A count now rolls only when it changes at most twice a second, as the warm-up's do. The banner eases only into and out of gray.
+
 ## Launching the game
 
 `GameLauncher.play(game:disc:data:)` starts `<data>/game/current/Dragoon.app/Contents/MacOS/dragoon` with `Process`, where `<data>` is `~/Library/Application Support/Dragoon`. The disc image's path is its one argument and `<data>` is its working directory, since the runtime finds `saves/` and writes `panic.txt` relative to that. What the game prints on stdout and stderr goes to `~/Library/Logs/Dragoon/game-<time>.log`, and the newest 10 game logs stay, pruned by the same code as the build logs.
@@ -169,13 +198,13 @@ Library's streaks are the one view that reads `animationClock` from the environm
 
 The PNGs hold only the launcher's own UI. Library and Build show the disc's banner, and their fixtures use `TestBanner`, a made-up pattern the tests build, never a real banner.
 
-The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 28 PNGs come to 975 KB, from 3 to 112 KB each.
+The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 32 PNGs come to 1,066 KB, from 3 to 112 KB each.
 
 Measured on 2026-11-13 on macOS 26.6.2 with the Command Line Tools 26.6 and Swift 6.3.3, `ImageRenderer` can't draw three of the views the window uses. The results are the same with `NSApplication.shared` made first.
 
 | View | Drawn as | Where |
 |---|---|---|
-| `ProgressView`, spinning or as a bar | A yellow box with a red "no" sign, SwiftUI's stand-in for a view AppKit draws | The checking screens and the running build |
+| `ProgressView`, spinning or as a bar | A yellow box with a red "no" sign, SwiftUI's stand-in for a view AppKit draws | The checking screens |
 | `GroupBox` | Nothing, its contents included | Nowhere now |
 | `ScrollView` | Nothing, its contents included | The end of a failed build's log, and a `panic.txt` of over 8 lines or with a line over 100 characters |
 

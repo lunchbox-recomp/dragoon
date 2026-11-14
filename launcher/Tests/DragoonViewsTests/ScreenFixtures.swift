@@ -70,10 +70,15 @@ let screenFixtures: [ScreenFixture] = [
     ScreenFixture(
         name: "build-low-space",
         state: state(.build(.lowSpace(FreeSpace(available: 1_200_000_000, volume: "Macintosh HD"))))),
+    ScreenFixture(name: "build-start", state: building(startingBuild)),
+    ScreenFixture(name: "build-start-reduce-motion", state: building(startingBuild), reduceMotion: true),
+    ScreenFixture(name: "build-compile", state: building(compiling)),
+    ScreenFixture(name: "build-warmup", state: building(warmingUp)),
     ScreenFixture(
-        name: "build-running",
-        state: state(.build(.running(BuildProgress(step: "compile", done: 41, total: 135))),
-                     waiting: .build)),
+        name: "build-done",
+        state: state(.build(.finished(builtGame)), installed: InstalledGame(stamp: commits)) {
+            $0.banner = TestBanner.banner
+        }),
     ScreenFixture(
         name: "build-failed",
         state: state(.build(.failed(
@@ -101,6 +106,44 @@ let screenFixtures: [ScreenFixture] = [
         name: "library-fullest-558", state: fullest,
         size: CGSize(width: LauncherView.defaultSize.width, height: 558)),
 ]
+
+/// A first build running, with the test banner.
+private func building(_ progress: BuildProgress) -> Flow.State {
+    state(.build(.running(progress)), waiting: .build) { $0.banner = TestBanner.banner }
+}
+
+/// A build's progress after `events`, each the given seconds before the snapshots' moment.
+private func progress(_ events: [(Double, BuildEvent)]) -> BuildProgress {
+    var progress = BuildProgress()
+    for (ago, event) in events { progress.note(event, at: Snapshot.moment.addingTimeInterval(-ago)) }
+    return progress
+}
+
+private func compileFiles(_ count: Int, from start: Double, every gap: Double) -> [(Double, BuildEvent)] {
+    (1...count).map { (start - Double($0 - 1) * gap, .progress(step: "compile", done: $0, total: 135)) }
+}
+
+/// Recompile 3 seconds in, which prints no progress.
+private let startingBuild = progress([(3, .step("recompile"))])
+
+/// 41 of 135 files 14 seconds in, five a second.
+private let compiling = progress(
+    [(14, .step("recompile")), (9.6, .step("compile"))] + compileFiles(41, from: 9.5, every: 0.2))
+
+/// 3 of 8 warm-up runs done a minute in.
+private let warmingUp = progress(
+    [(60, .step("recompile")), (55.6, .step("compile"))] + compileFiles(135, from: 55.5, every: 0.1)
+        + [(37, .step("warmup")), (10, .progress(step: "warmup", done: 1, total: 8)),
+           (6, .progress(step: "warmup", done: 2, total: 8)),
+           (2, .progress(step: "warmup", done: 3, total: 8))])
+
+/// A whole build that took 1:36.
+private let builtGame = progress([
+    (96, .step("recompile")), (91.6, .step("compile")),
+    (73, .progress(step: "compile", done: 135, total: 135)), (73, .step("warmup")),
+    (1, .progress(step: "warmup", done: 8, total: 8)), (1, .step("package")),
+    (0.4, .step("swap")), (0, .done(game: home + "/Library/Application Support/Dragoon/game/current/Dragoon.app")),
+])
 
 private let crash = GameProblem.exited(
     .signal(11), panic: GamePanic("Invalid read at 0x00000004\npc 0x80012345\nlr 0x80012300"))

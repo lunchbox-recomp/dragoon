@@ -131,15 +131,9 @@ extension Flow.State {
                 return []
             }
             return resolveDisc()
-        case .build(let buildEvent):
+        case .build(let buildEvent, let time):
             guard waiting == .build, case .build(.running(var progress)) = screen else { return [] }
-            switch buildEvent {
-            case .step(let step): progress = BuildProgress(step: step, canceling: progress.canceling)
-            case .progress(let step, let done, let total):
-                progress = BuildProgress(
-                    step: step, done: done, total: total, canceling: progress.canceling)
-            case .done, .error: return []
-            }
+            progress.note(buildEvent, at: time)
             screen = .build(.running(progress))
             return []
         case .cancelBuildPressed:
@@ -170,7 +164,7 @@ extension Flow.State {
             return [.showLog(log)]
 
         case .playPressed:
-            guard libraryIsIdle else { return [] }
+            guard canPlay else { return [] }
             gameProblem = nil
             panicShown = false
             return begin(.play)
@@ -337,7 +331,11 @@ extension Flow.State {
         switch failure {
         case nil:
             installed = InstalledGame(stamp: source?.commits)
-            return showLibrary()
+            // The bar becomes Play, so the build ends on its own page.
+            var progress = BuildProgress()
+            if case .build(.running(let last)) = screen { progress = last }
+            screen = .build(.finished(progress))
+            return deleteOldBuildsIfIdle()
         case .cancelled?:
             // A rebuild that was canceled leaves the old game current.
             if installed != nil { return showLibrary() }

@@ -32,6 +32,14 @@ struct FlowRun {
 
     var screen: Flow.Screen { state.screen }
 
+    /// The build's progress while it runs or once it has finished, or nil on any other screen.
+    var progress: BuildProgress? {
+        switch screen {
+        case .build(.running(let progress)), .build(.finished(let progress)): return progress
+        default: return nil
+        }
+    }
+
     @discardableResult
     mutating func send(_ event: Flow.Event) -> [Flow.Effect] {
         (state, effects) = Flow.reduce(state, event)
@@ -41,6 +49,16 @@ struct FlowRun {
     /// Sends each event in turn, and returns the effects of each.
     mutating func send(_ events: [Flow.Event]) -> [[Flow.Effect]] {
         events.map { send($0) }
+    }
+}
+
+/// When the Flow tests' build events come, for tests where the moment doesn't matter.
+let flowBuildTime = Date(timeIntervalSinceReferenceDate: 0)
+
+extension Flow.Event {
+    /// A recipe event that came at `flowBuildTime`.
+    static func build(_ event: BuildEvent) -> Flow.Event {
+        .build(event, at: flowBuildTime)
     }
 }
 

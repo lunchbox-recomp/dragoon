@@ -140,17 +140,52 @@ final class EffectRunner {
         }
     }
 
+    /// Sends the build's events through a throttle of its own, so the page redraws at most every
+    /// `ProgressThrottle.interval` seconds.
     private func startBuild(_ request: BuildRequest) {
         let stream = builds.run(request)
+        let throttle = ThrottledSend(send: { [weak self] in self?.send($0) })
         Task {
             do {
-                for try await event in stream { send(.build(event)) }
+                for try await event in stream { throttle.offer(event, at: Date()) }
                 send(.buildEnded(nil))
             } catch let failure as BuildFailure {
                 send(.buildEnded(failure))
             } catch {
                 send(.buildEnded(.couldNotStart(error.localizedDescription)))
             }
+        }
+    }
+}
+
+/// A `ProgressThrottle` that sends each event it lets through as `Flow.Event.build`, and sends a
+/// held one once it is due.
+@MainActor
+private final class ThrottledSend {
+    private var throttle = ProgressThrottle()
+    private var flushing = false
+    private let send: (Flow.Event) -> Void
+
+    init(send: @escaping (Flow.Event) -> Void) {
+        self.send = send
+    }
+
+    func offer(_ event: BuildEvent, at time: Date) {
+        throttle.offer(event, at: time).forEach { send(.build($0.event, at: $0.time)) }
+        flushWhenDue()
+    }
+
+    private func flushWhenDue() {
+        guard !flushing, let due = throttle.due else { return }
+        flushing = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(due.timeIntervalSinceNow, 0)))
+            guard let self else { return }
+            self.flushing = false
+            if let held = self.throttle.flush(at: Date()) {
+                self.send(.build(held.event, at: held.time))
+            }
+            self.flushWhenDue()
         }
     }
 }

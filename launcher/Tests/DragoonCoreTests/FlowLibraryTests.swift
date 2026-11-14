@@ -46,11 +46,12 @@ private let oldCommits = Commits(
         run.send(.build(.step("compile")))
         #expect(run.send(.cancelBuildPressed) == [.cancelBuild])
         run.send(.build(.step("warmup")))
-        #expect(run.screen == .build(.running(BuildProgress(step: "warmup", canceling: true))))
+        #expect(run.progress?.step == "warmup")
+        #expect(run.progress?.canceling == true)
         #expect(run.send(.cancelBuildPressed) == [])
         run.send(.build(.progress(step: "warmup", done: 1, total: 8)))
-        #expect(run.screen == .build(.running(BuildProgress(
-            step: "warmup", done: 1, total: 8, canceling: true))))
+        #expect(run.progress?.done == 1)
+        #expect(run.progress?.canceling == true)
     }
 
     @Test func aLogTailForAnotherLogIsIgnored() {

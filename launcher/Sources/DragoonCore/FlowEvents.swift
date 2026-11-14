@@ -70,7 +70,8 @@ extension Flow {
         /// `readBanner`'s result, nil when the disc had no banner that could be read.
         case bannerRead(DiscBanner?)
         case spaceChecked(FreeSpace)
-        case build(BuildEvent)
+        /// A line of the recipe's output, and when it came.
+        case build(BuildEvent, at: Date)
         /// The build's stream ended, with nil when the new game is current.
         case buildEnded(BuildFailure?)
         case logTailRead(path: String, lines: [String])
@@ -105,8 +106,8 @@ extension Flow {
         case readBanner(String)
         /// The free space where the game is built, which gives `spaceChecked`.
         case checkSpace
-        /// `BuildRunner.run`, whose events come back as `build` and whose end comes back as
-        /// `buildEnded`.
+        /// `BuildRunner.run`, whose events come back as `build` through a `ProgressThrottle` and
+        /// whose end comes back as `buildEnded`.
         case startBuild(toolchain: Toolchain, disc: String)
         case cancelBuild
         /// Gives `logTailRead`.
