@@ -240,7 +240,8 @@ class ForkCitesTest(unittest.TestCase):
                               "total 2, ok 0, moved 0, gone 0, outside 0, unchanged 1, skipped 1\n")
 
     def test_its_own_two_files_are_left_out(self):
-        own = {name: (fork_cites.ROOT / name).read_text() for name in fork_cites.OWN}
+        own = {name: (fork_cites.ROOT / name).read_text()
+               for name in ("tools/fork_cites.py", "tools/test_fork_cites.py")}
         paths = {c.path[len(fork_cites.PREFIX):] if c.path.startswith(fork_cites.PREFIX) else c.path
                  for body in own.values() for c in fork_cites.find(body, False)[0]}
         fork = {path for path in paths if "/" in path}
