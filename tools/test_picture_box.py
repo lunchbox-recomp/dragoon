@@ -41,6 +41,16 @@ class PictureBoxTest(unittest.TestCase):
         _, out, _ = run_main(picture_box.main, path, "--dark", "15")
         self.assertIn("box 0..6 by 0..4", out)
 
+    def test_dark_takes_the_brightest_channel(self):
+        # One pixel lit at 16 in one channel alone, the rest black.
+        for color in ((16, 0, 0), (0, 16, 0), (0, 0, 16)):
+            with self.subTest(color=color):
+                path = self.png("one.png", 5, 4, lambda x, y: color if (x, y) == (3, 2) else BLACK)
+                _, out, _ = run_main(picture_box.main, path, "--dark", "15")
+                self.assertEqual(out, f"{path}: 5x4, box 3..4 by 2..3, 1x1, ratio 1.0000, bars 3 and 1\n")
+                _, out, _ = run_main(picture_box.main, path, "--dark", "16")
+                self.assertEqual(out, f"{path}: 5x4, no pixel matched\n")
+
     def test_an_rgba_dump_reads_four_bytes_a_pixel(self):
         # The window's dumps are RGBA. The alpha isn't opaque and decides nothing: the bars are
         # black at full alpha and the picture is cream at a quarter.
