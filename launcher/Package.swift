@@ -14,5 +14,8 @@ let package = Package(
         .target(name: "DragoonViews", dependencies: ["DragoonCore"]),
         .target(name: "DragoonCore"),
         .testTarget(name: "DragoonCoreTests", dependencies: ["DragoonCore"]),
+        .testTarget(
+            name: "DragoonViewsTests", dependencies: ["DragoonViews", "DragoonCore"],
+            exclude: ["Snapshots"]),
     ]
 )

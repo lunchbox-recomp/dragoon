@@ -115,6 +115,30 @@ While the game runs, `<data>/game.pid` holds its pid and the time its process st
 
 A `game.pid` that's garbled is removed and ignored, and so is one whose process has gone or isn't the game.
 
+## Snapshots
+
+`SnapshotTests` renders the window on each screen in `Tests/DragoonViewsTests/ScreenFixtures.swift` with SwiftUI's `ImageRenderer`, at 960x600 points and scale 2, in light appearance on a fixed gray. It compares each render with the PNG of the same name in `Tests/DragoonViewsTests/Snapshots/`. A render passes when at most 0.2% of its pixels have a color channel more than 16 of 255 away from the PNG's, so text drawn a little differently on another macOS still passes. A failing render is written to the temporary directory, and the failure names the file.
+
+```
+RECORD=1 launcher/tools/swift_test.py --filter SnapshotTests
+```
+
+That writes every PNG again. Look at each one before committing it.
+
+A view that animates draws inside `ClockedTimeline`, which reads `animationClock` from the environment. The window runs it on the display's frames, and the tests fix it at 2027-01-15 08:00 UTC, so a render draws the same frame every time. The PNGs hold only the launcher's own UI. No screen shows a disc's banner yet, and when one does its fixture gets a made-up test pattern, never a real banner.
+
+The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for the 19 screens. These come to 886 KB, from 9 to 80 KB each. The three Library PNGs are one file to git.
+
+Measured on 2026-11-13 on macOS 26.6.2 with the Command Line Tools 26.6 and Swift 6.3.3, `ImageRenderer` can't draw three of the views the window uses. The results are the same with `NSApplication.shared` made first.
+
+| View | Drawn as | Where |
+|---|---|---|
+| `ProgressView`, spinning or as a bar | A yellow box with a red "no" sign, SwiftUI's stand-in for a view AppKit draws | The checking screens and the running build |
+| `GroupBox` | Nothing, its contents included | Library's rebuild offer and the game's problem |
+| `ScrollView` | Nothing, its contents included | The end of a failed build's log, and `panic.txt` |
+
+So the three Library snapshots are the same picture today. Apple's documentation says `ImageRenderer` doesn't draw views that AppKit provides. That wasn't checked with Xcode, which this Mac doesn't have.
+
 ## Why a wrapper runs the tests
 
 The Command Line Tools keep `Testing.framework` and `lib_TestingInterop.dylib` where neither the compiler nor the test runner looks. `swift_test.py` asks `xcode-select -p` which developer directory is selected. If that directory holds `Library/Developer/Frameworks/Testing.framework` and has no `Platforms` directory, whatever it's called, it runs `swift test --package-path launcher` with these added, for that directory:
