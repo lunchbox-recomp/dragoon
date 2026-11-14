@@ -88,6 +88,16 @@ let screenFixtures: [ScreenFixture] = [
             $0.banner = TestBanner.banner
         },
         moment: Snapshot.buildMoment),
+    // The first game's page with the Picture card, at the window's opening size and its
+    // smallest, and with a pick that wasn't saved.
+    ScreenFixture(name: "build-done-picture-card", state: pictureCard(), moment: Snapshot.buildMoment),
+    ScreenFixture(
+        name: "build-done-picture-card-smallest", state: pictureCard(), size: LauncherView.minimumSize,
+        moment: Snapshot.buildMoment),
+    ScreenFixture(
+        name: "build-done-picture-card-failed",
+        state: pictureCard(failure: .notWritten("The operation couldn’t be completed. No space left on device")),
+        moment: Snapshot.buildMoment),
     // With the banner, in as much color as the bar had before the failed step: nearly gray here.
     ScreenFixture(
         name: "build-failed",
@@ -192,6 +202,14 @@ private let builtGame = progress([
     (1, .progress(step: "warmup", done: 8, total: 8)), (1, .step("package")),
     (0.4, .step("swap")), (0, .done(game: home + "/Library/Application Support/Dragoon/game/current/Dragoon.app")),
 ])
+
+/// The first game's Ready to Play page with the Picture card up on settings.txt's defaults.
+private func pictureCard(failure: PictureSettings.SaveFailure? = nil) -> Flow.State {
+    state(.build(.finished(builtGame)), installed: InstalledGame(stamp: commits)) {
+        $0.banner = TestBanner.banner
+        $0.pictureCard = Flow.PictureCard(picture: PictureSettings(), failure: failure)
+    }
+}
 
 /// Library with Play pressed and the bookmark being resolved.
 private func charging() -> Flow.State {

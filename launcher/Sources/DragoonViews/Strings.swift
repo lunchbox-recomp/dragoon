@@ -315,6 +315,15 @@ public enum Strings {
         }
     }
 
+    // MARK: - Picture card
+
+    static let pictureCardTitle = "Picture: 4:3 or 16:9"
+    // The first sentence is the sheet's 4:3 note, and the second its 16:9 note's first part.
+    static let pictureCardNote = "4:3 is the console's own shape. At 16:9 the world widens and the race HUD keeps its 4:3 size. Settings in Library's … menu has 16:10, 21:9 and Fill window."
+    static let pictureCardKeep = "Keep 4:3"
+    /// A preview's button for VoiceOver.
+    static func pictureCardUse(_ aspect: String) -> String { "Use \(aspect)" }
+
     // MARK: - Sizes
 
     static func bytes(_ count: Int64) -> String {

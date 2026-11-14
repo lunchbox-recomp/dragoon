@@ -8,7 +8,8 @@ import SwiftUI
 /// 16:9, and a dashed 4:3 frame in the middle is where the menus stay. The frame has the shape
 /// of the window the game opens, or of the screen when it's fullscreen.
 public struct PicturePreview: View {
-    /// The frame's height in points. Its width follows the window's or the screen's shape.
+    /// The frame's height in points in the Settings sheet. Its width follows the window's or the
+    /// screen's shape.
     nonisolated public static let height: CGFloat = 120
 
     /// One of the race HUD's boxes, by the place in the picture it keeps.
@@ -56,7 +57,10 @@ public struct PicturePreview: View {
         public var hud: [HUDBox]
     }
 
-    nonisolated public static func layout(_ settings: PictureSettings, display: PictureDisplay?) -> Layout {
+    /// The layout at `frameHeight` points high, the sheet's `height` unless another is given.
+    nonisolated public static func layout(
+        _ settings: PictureSettings, display: PictureDisplay?, frameHeight: CGFloat = height
+    ) -> Layout {
         let shows: Layout.Shows
         let source: WholeSize
         let fit: WholeRect
@@ -69,7 +73,7 @@ public struct PicturePreview: View {
             source = PictureGeometry.window(aspect: settings.aspect, usable: display?.usable)
             fit = WholeRect(x: 0, y: 0, width: source.width, height: source.height)
         }
-        let scale = height / CGFloat(source.height)
+        let scale = frameHeight / CGFloat(source.height)
         let picture = CGRect(
             x: CGFloat(fit.x) * scale, y: CGFloat(fit.y) * scale, width: CGFloat(fit.width) * scale,
             height: CGFloat(fit.height) * scale)
@@ -92,7 +96,7 @@ public struct PicturePreview: View {
         }
         return Layout(
             shows: shows, source: source, fit: fit,
-            frame: CGSize(width: CGFloat(source.width) * scale, height: height), picture: picture, menus: menus,
+            frame: CGSize(width: CGFloat(source.width) * scale, height: frameHeight), picture: picture, menus: menus,
             hud: hud)
     }
 
@@ -100,8 +104,10 @@ public struct PicturePreview: View {
     let colors: HeroColors
     @Environment(\.colorSchemeContrast) private var contrast
 
-    init(_ settings: PictureSettings, display: PictureDisplay?, colors: HeroColors) {
-        layout = Self.layout(settings, display: display)
+    init(
+        _ settings: PictureSettings, display: PictureDisplay?, colors: HeroColors, frameHeight: CGFloat = height
+    ) {
+        layout = Self.layout(settings, display: display, frameHeight: frameHeight)
         self.colors = colors
     }
 

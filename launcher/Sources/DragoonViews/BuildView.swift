@@ -31,6 +31,11 @@ struct BuildView: View {
                     BuildMeterView(
                         progress: progress, finished: isFinished, colors: colors,
                         canPlay: state.canPlay, send: send)
+                    if isFinished, let card = state.pictureCard, !state.gameRunning {
+                        PictureCardView(card: card, idle: state.pictureCardIsIdle, colors: colors, send: send)
+                            .padding(.top, 16)
+                            .transition(.opacity)
+                    }
                 case .failed(let failure, let skipped, let lastLines):
                     FailedBuild(
                         failure: failure, skipped: skipped, lastLines: lastLines, colors: colors)
