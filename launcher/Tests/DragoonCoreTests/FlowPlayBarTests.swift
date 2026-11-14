@@ -45,7 +45,7 @@ private let panic = GamePanic("Invalid read at 0x00000004")
 
     @Test func thePanicShowsOnlyWhenAskedAndHidesAgain() {
         var run = launched()
-        run.send(playToStarting)
+        _ = run.send(playToStarting)
         run.send(.gameExited(launch: 1, exit: .signal(11), panic: panic))
         #expect(!run.state.panicShown)
         #expect(run.send(.showPanicPressed) == [])
@@ -56,13 +56,13 @@ private let panic = GamePanic("Invalid read at 0x00000004")
 
     @Test func aNewGameOrANewProblemStartsWithThePanicHidden() {
         var run = launched()
-        run.send(playToStarting)
+        _ = run.send(playToStarting)
         run.send(.gameExited(launch: 1, exit: .signal(11), panic: panic))
         run.send(.showPanicPressed)
         run.send(.playPressed)
         #expect(!run.state.panicShown)
 
-        run.send([.bookmarkResolved(.found(flowDisc)), .discChecked(path: flowDisc, check: .ok)])
+        _ = run.send([.bookmarkResolved(.found(flowDisc)), .discChecked(path: flowDisc, check: .ok)])
         run.send(.gameExited(launch: 2, exit: .signal(6), panic: panic))
         #expect(!run.state.panicShown)
     }
@@ -72,7 +72,7 @@ private let panic = GamePanic("Invalid read at 0x00000004")
     ])
     func thereIsNoPanicToShowWithoutOne(_ problem: GameProblem?) {
         var run = launched()
-        run.send(playToStarting)
+        _ = run.send(playToStarting)
         switch problem {
         case .exited(let ending, let panic)?:
             run.send(.gameExited(launch: 1, exit: ending, panic: panic))

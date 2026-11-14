@@ -11,7 +11,7 @@ import Testing
 
     @Test func theFirstDiscThatPassesHasItsBannerRead() {
         var run = launched(settings: LauncherSettings(welcomeSeen: true), installed: nil, banner: nil)
-        run.send([
+        _ = run.send([
             .toolsDetected(.ready(flowToolchain)), .chooseDiscPressed,
             .discChosen(path: flowDisc, bookmark: flowBookmark),
         ])
@@ -29,7 +29,7 @@ import Testing
 
     @Test func aRebuildWithNoBannerReadsItBeforeTheTools() {
         var run = launched(banner: nil)
-        run.send([.rebuildPressed, .spaceChecked(enoughSpace), .bookmarkResolved(.found(flowDisc))])
+        _ = run.send([.rebuildPressed, .spaceChecked(enoughSpace), .bookmarkResolved(.found(flowDisc))])
         #expect(run.send(.discChecked(path: flowDisc, check: .ok))
             == [.detectTools, .readBanner(flowDisc)])
     }
@@ -45,14 +45,14 @@ import Testing
     ])
     func aDiscThatFailsItsCheckHasNoBannerRead(_ check: DiscCheck) {
         var run = launched(banner: nil)
-        run.send([.playPressed, .bookmarkResolved(.found(flowDisc))])
+        _ = run.send([.playPressed, .bookmarkResolved(.found(flowDisc))])
         let effects = run.send(.discChecked(path: flowDisc, check: check))
         #expect(effects == [])
     }
 
     @Test func theBannerReadIsKeptAndNotReadAgain() {
         var run = launched(banner: nil)
-        run.send(playToStarting)
+        _ = run.send(playToStarting)
         let before = run.state
         #expect(run.send(.bannerRead(flowBanner)) == [])
         var expected = before
@@ -65,7 +65,7 @@ import Testing
 
     @Test func aBannerThatCouldntBeReadLeavesItToTheNextCheck() {
         var run = launched(banner: nil)
-        run.send(playToStarting)
+        _ = run.send(playToStarting)
         let before = run.state
         #expect(run.send(.bannerRead(nil)) == [])
         #expect(run.state == before)
