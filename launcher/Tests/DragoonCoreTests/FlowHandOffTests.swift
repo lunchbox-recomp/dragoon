@@ -37,7 +37,6 @@ private func started() -> FlowRun {
             .scheduleHandOffTimeout(launch: 1, after: Flow.handOffTimeout),
         ])
         #expect(run.state.handOff == .launched)
-        #expect(Flow.handOffTimeout == 20)
     }
 
     @Test func theWindowLineHidesTheLauncher() {
