@@ -120,7 +120,7 @@ Library fills the window, in the disc banner's colors.
 | Part | What it is |
 |---|---|
 | Hero | The banner's first hue fading down to near-black, with 56 speed streaks drifting up and to the right |
-| Logo | The banner at 4x, 384x128 points, with its pixels kept square, over a blurred copy of itself. With no banner, "Dragoon" set in type. Left out when the window is too short for it above the boxes and the bar |
+| Logo | The banner at 4x, 384x128 points, with its pixels kept square, over a blurred copy of itself. With no banner, "Dragoon" set in type. Left out when the window is too short for it above the boxes and the bar. An open `panic.txt` comes first, so its scroller has its full 150 points before the logo shows |
 | Play bar | A 64 point Play button, a line saying what Play is doing and a "..." menu with Rebuild, Change Disc and Show Saves |
 | Rebuild offer | A strip above the bar |
 | Game problem | A card above the bar, whose Show panic.txt opens the file's text |
@@ -157,7 +157,7 @@ A `game.pid` that's garbled is removed and ignored, and so is one whose process 
 
 ## Snapshots
 
-`SnapshotTests` renders the window on each screen in `Tests/DragoonViewsTests/ScreenFixtures.swift` with SwiftUI's `ImageRenderer`, at 960x600 points and scale 2 in dark appearance on a fixed dark gray, then averages each 2x2 block of pixels into one. It compares each render with the PNG of the same name in `Tests/DragoonViewsTests/Snapshots/`. Library with the rebuild offer and a 40-line panic shown also renders at 820x520, the smallest the window goes. A render passes when at most 100 of its pixels, of 576,000 at 960x600, have a color channel more than 16 of 255 away from the PNG's. On the Mac that recorded them every screen has 0. Quit changed to Exit on the must-move screen has 223 against its PNG, and the two buttons rendered alone have 211. Changing "play." to "play!" beside Play moves fewer than 100, so `StringsTests` checks that each of Library's sentences ends in a full stop or an ellipsis. The 100 leave room for text edges another macOS draws a little differently, which hasn't been measured. A failing render is written to `launcher/.build/snapshot-failures/` under its name, and the failure names the file.
+`SnapshotTests` renders the window on each screen in `Tests/DragoonViewsTests/ScreenFixtures.swift` with SwiftUI's `ImageRenderer`, at 960x600 points and scale 2 in dark appearance on a fixed dark gray, then averages each 2x2 block of pixels into one. It compares each render with the PNG of the same name in `Tests/DragoonViewsTests/Snapshots/`. Library with the rebuild offer and a 40-line panic shown also renders at 820x520, the smallest the window goes, and at 960x558. `ImageRenderer` draws the panic's scroller as nothing, so `LibraryLayoutTests` lays that state out in an `NSHostingView` at every height from 520 to 700 points and checks the scroller is 150 points at each. A render passes when at most 100 of its pixels, of 576,000 at 960x600, have a color channel more than 16 of 255 away from the PNG's. On the Mac that recorded them every screen has 0. Quit changed to Exit on the must-move screen has 223 against its PNG, and the two buttons rendered alone have 211. Changing "play." to "play!" beside Play moves fewer than 100, so `StringsTests` checks that each of Library's sentences ends in a full stop or an ellipsis. The 100 leave room for text edges another macOS draws a little differently, which hasn't been measured. A failing render is written to `launcher/.build/snapshot-failures/` under its name, and the failure names the file.
 
 ```
 RECORD=1 launcher/tools/swift_test.py --filter SnapshotTests
@@ -169,7 +169,7 @@ Library's streaks are the one view that reads `animationClock` from the environm
 
 The PNGs hold only the launcher's own UI. Library and Build show the disc's banner, and their fixtures use `TestBanner`, a made-up pattern the tests build, never a real banner.
 
-The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 27 PNGs come to 916 KB, from 3 to 112 KB each.
+The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 28 PNGs come to 975 KB, from 3 to 112 KB each.
 
 Measured on 2026-11-13 on macOS 26.6.2 with the Command Line Tools 26.6 and Swift 6.3.3, `ImageRenderer` can't draw three of the views the window uses. The results are the same with `NSApplication.shared` made first.
 

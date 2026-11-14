@@ -29,8 +29,8 @@ struct RebuildStrip: View {
 /// How the last game ended, with its `panic.txt` behind a button.
 struct ProblemCard: View {
     static let alert = Color(red: 1, green: 0.45, blue: 0.38)
-    /// A long panic's scroller is 150 points tall when the window has room and shrinks to 60
-    /// when it hasn't.
+    /// A long panic's scroller is 150 points tall when the window has room, before the logo
+    /// gets any, and shrinks to 60 when it hasn't.
     static let scrollerHeights: ClosedRange<CGFloat> = 60...150
 
     let problem: GameProblem

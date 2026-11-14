@@ -93,10 +93,13 @@ let screenFixtures: [ScreenFixture] = [
             $0.gameProblem = crash
             $0.panicShown = true
         }),
-    // Library's fullest: the rebuild offer and a long panic shown, at the window's opening size
-    // and at the smallest it goes.
+    // Library's fullest: the rebuild offer and a long panic shown, at the window's opening size,
+    // at the smallest it goes, and at 558 points tall, where the logo once took the panic's room.
     ScreenFixture(name: "library-fullest", state: fullest),
     ScreenFixture(name: "library-fullest-smallest", state: fullest, size: LauncherView.minimumSize),
+    ScreenFixture(
+        name: "library-fullest-558", state: fullest,
+        size: CGSize(width: LauncherView.defaultSize.width, height: 558)),
 ]
 
 private let crash = GameProblem.exited(

@@ -30,8 +30,9 @@ struct LibraryView: View {
         }
     }
 
-    /// Play and the boxes above it always fit. The logo comes before them, and the panic's
-    /// scroller shrinks to make room for it, and when it still doesn't fit it's left out.
+    /// Play and the boxes above it always fit. The panic the player opened comes before the
+    /// logo, so the logo shows only in what's left once the panic's scroller has its full
+    /// height, and is left out when it doesn't fit there.
     private func content(_ colors: HeroColors) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Spacer(minLength: 0).layoutPriority(-1)
@@ -48,6 +49,7 @@ struct LibraryView: View {
             }
             if let problem = state.gameProblem {
                 ProblemCard(problem: problem, panicShown: state.panicShown, send: send)
+                    .layoutPriority(2)
             }
             PlayBar(state: state, send: send, colors: colors)
         }
