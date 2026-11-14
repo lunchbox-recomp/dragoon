@@ -404,6 +404,57 @@ its right, with the clock at the left of the bars.
 cameras' maths.
 `tests/src/test_draw_marks.cpp` checks the padding.
 
+## Menus, text and the movie
+
+The census of the race route at 16:9, at the first text box (60), the opening movie (600), the
+title (960), the mode select (1200) and the course select (2100), found these cameras outside
+play.
+
+| Camera | Viewport | What it draws |
+|---|---|---|
+| Perspective at an aspect of 1.25538, `p` 25 or 30 | 640x480 | The menus |
+| Ortho, `p=0,-480,0,640` | 640x480 | Text boxes and menu text, through `HSD_SisLib_803A84BC` |
+| Ortho, `p=0,480,0,640` | 640x480 | The opening movie, through `kar_gmautodemo__near_8000cde0` once `kar_gmautodemo_start_opening_movie` (0x8000D26C) has started it |
+| Ortho, 256 by 192 | 256x192 | A render to texture, set by no object |
+| Perspective at 1.33333, `p` 60 | | Nothing |
+| Ortho, 680 by 520 | | Nothing |
+
+`recomp/patches.txt` calls `dragoon_hud_camera` at 80401150, after the world cameras follow.
+While the frame has no world view, it centers every draw under one of the first three cameras
+in its 640x480 frame, and the HUD table's callbacks under it take the same mark unless the table
+places them. The render to texture keeps no anchor, and no run logs an `[anchor]` copy line.
+`tests/src/test_hud_anchors.cpp` checks which cameras take the mark.
+
+At 4:3 no camera takes it. A mark pads the write-gather pipe, and on the menus the game sees
+that. With the marks set at 4:3 the frame check failed on every route. The opening movie's
+frames differed from 360 to 900, or 400 to 900 on the `-courses` routes. The mode movies
+differed from 1620 to 1860 in Air Ride, 1860 to 2100 in City Trial and 1740 to 1980 in Top
+Ride, and the stadium routes at 3600. At 600 the movie showed another frame, with 89% of its
+pixels changed. With no mark at 4:3, all 24 routes and their 1,906 frames matched on Dragoon
+`2d68a1e` in 14 min 36 s, at loads of 2.9 to 4.4.
+
+On Dragoon `2d68a1e` at gcn-recomp `5e54665`, `tools/picture_box.py --dark 128` measured the
+output dumps at 4:3 (2560x1920) and at 16:9 (3414x1920), before and after. A centered 4:3
+picture leaves bars of 427 at each side.
+
+| Checkpoint | 4:3 | 16:9 before | 16:9 after |
+|---|---|---|---|
+| Text box, 60 | 2560x1920, 1.3333 | 3414x1920, 1.7781 | 2560x1920 at 427, 1.3333, bars 427 and 427 |
+| Opening movie, 600 | 2560x1920, 1.3333 | 3414x1920, 1.7781 | 2560x1920 at 427, 1.3333, bars 427 and 427 |
+| Title, 960 | 2560x1565, 1.6358 | 3414x1565, 2.1815 | 2559x1565 at 428, 1.6351, bars 428 and 427 |
+| Mode select, 1200 | 2560x1788, 1.4318 | 3414x1788, 1.9094 | 2559x1788 at 427, 1.4312, bars 427 and 428 |
+| Course select, 2100 | 2560x1920, 1.3333 | 3414x1920, 1.7781 | 2560x1920 at 427, 1.3333, bars 427 and 427 |
+
+Two elements were measured by color. The text box's orange button (`--color FF8000 --within
+24`) is 764x167 at 434 at 4:3, 1020x167 at 578 before and 764x167 at 861 after, 434 plus 427.
+The course select's cursor (`--color FFF070 --within 12`) is 401x377 at 302 at 4:3, 535x377 at
+403 before and 397x377 at 732 after, 4 output pixels narrower, about 1 at 480 high.
+
+The after runs centered 83 draws at 60, 1 at 600, 156 at 960, 214 at 1200 and 83 at 2100. The
+mode select's render to texture is the one draw left stretched. `drawlog.py hud` gave the same
+counts as before for the race at 4200 and 4P at 3480. `tools/ram_peek.py` read the scene, player 1's speed and place at 2400, 3600,
+4200 and 6000 of the race at 4:3 and at 16:9, and all 20 values matched.
+
 ## What 16:9 still gets wrong
 
 These come from the output dumps at 16:9 of the race at 4200 and 8400, City Trial at 3300, 2P
@@ -430,7 +481,9 @@ loads of 4.2 to 5.0.
   third past it. One that stops less than a quarter of a third past the line shows the edge it
   came from for 29 frames and takes its nearest edge on the 30th, and a still element with a
   blinking joint never rests, so it keeps the edge it came with. No dump caught any of these.
-- The title and menus stretch with everything else. The mode select's frame dump at 16:9
-  matches its 4:3 golden, so only presentation changes it.
+- A menu drawn over a world view, such as the pause menu, stretches, since the menu cameras are
+  only centered while the frame has none. No dump checked one.
+- At 16:9 the marks still pad the pipe, so a movie may show other frames than at 4:3. No run
+  compared them.
 - The test that culls the world wasn't found, so pop-in at the sides while moving needs a person
   to watch.
