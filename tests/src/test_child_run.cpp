@@ -226,8 +226,8 @@ TEST(ChildRun, AnEndReadPastTheLimitKeepsItsExit) {
     sigemptyset(&hold.sa_mask);
     sigaction(SIGUSR1, &hold, &was);
     ChildResult r;
-    std::thread running([&r] { r = child_run({"/bin/sleep", "0.1"}, {}, 400); });
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::thread running([&r] { r = child_run({"/bin/sleep", "0.3"}, {}, 400); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
     pthread_kill(running.native_handle(), SIGUSR1);
     running.join();
     sigaction(SIGUSR1, &was, nullptr);
