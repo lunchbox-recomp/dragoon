@@ -584,11 +584,13 @@ class FakeEngineTest(unittest.TestCase):
         # Only NamedTemporaryFile's shape: .mods- and eight of its letters, digits and _.
         backup = self.stale_temp('.mods-backup.txt', age=3600)
         short = self.stale_temp('.mods-abc1234')
+        long = self.stale_temp('.mods-abcd12345')
         upper = self.stale_temp('.mods-ABCD1234')
         temp = self.stale_temp('.mods-abcd_123')
         mod_choices.sweep_temps(self.data)
         self.assertTrue(backup.exists())
         self.assertTrue(short.exists())
+        self.assertTrue(long.exists())
         self.assertTrue(upper.exists())
         self.assertFalse(temp.exists())
 
