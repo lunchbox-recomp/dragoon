@@ -58,6 +58,16 @@ The magics that name a `needsConversion` format come from Dolphin's `Source/Core
 
 The image is read through a file handle at most 1 MiB at a time, so a 1.4 GB disc never costs 1.4 GB of memory.
 
+## The disc banner
+
+`DiscBanner.read(at:)` reads the `opening.bnr` on a disc's root, from a plain image or a CISO. The only reads are the disc's first 0x440 bytes, its file system table and the banner. On the supported disc that's 0x440 + 0x2478 + 0x1960 bytes.
+
+There's no banner when the table is under 12 bytes or over 1 MiB, its entries don't fit in it, its last byte isn't NUL or a name starts past its end. Only the root's own files count, and the name has to be `opening.bnr` exactly.
+
+A banner is `BNR1` and 0x1960 bytes, or `BNR2` and 0x1FA0 bytes, the pairs Dolphin's `VolumeGC.cpp` takes. Its 96x32 picture decodes from RGB5A3 tiles to RGBA. Dolphin lays the picture on black, and here it keeps its alpha. Its strings are Shift-JIS when the disc ID's fourth character is `J` and Windows-1252 otherwise.
+
+`Dragoon --dump-banner DISC OUT.png` writes the banner as a PNG and prints its format and names as JSON, with the time the read and decode took on stderr. It exits 0 when the PNG is written, 1 when the disc has no banner or the PNG can't be written, and 2 for a bad argument. On the supported disc on 2026-11-13 the read and decode took 0.21 ms, and the whole command 0.20 s.
+
 ## Running the recipe
 
 `BuildRunner.run(_:)` runs the build recipe with the tools the tools check found and gives its JSON lines back as `BuildEvent` values. The command is `<python3> -B -s <bundle>/Contents/Resources/source/tools/launcher_build.py` and then the recipe's options as a list, so a path with spaces stays one argument. `-B` keeps `__pycache__` out of the signed bundle, `-s` keeps the player's user site-packages off the path, and the kit comes from `Contents/Resources/kit`.

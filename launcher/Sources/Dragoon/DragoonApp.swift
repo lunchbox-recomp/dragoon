@@ -12,9 +12,18 @@ enum Launch {
     /// image at PATH against the `source-info.json` in the app's source snapshot, or FILE when
     /// that is given, and the two flags come in either order. It exits 0 for an `ok` disc, 1 for
     /// any other result and 2 for a bad argument or a source-info it can't use.
+    ///
+    /// `--dump-banner DISC OUT.png` writes the disc's banner as a PNG and exits 0, or exits 1
+    /// when it has none or the PNG can't be written, and 2 for a bad argument.
     @MainActor
     static func main() {
         let arguments = Array(CommandLine.arguments.dropFirst())
+        if arguments.contains("--dump-banner") {
+            let result = runDumpBanner(arguments)
+            print(result.stdout, terminator: "")
+            FileHandle.standardError.write(Data(result.stderr.utf8))
+            exit(result.status)
+        }
         if arguments.contains("--check-disc") {
             let result = runCheckDisc(
                 arguments,
