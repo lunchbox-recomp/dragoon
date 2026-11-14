@@ -60,11 +60,14 @@ struct LaunchCard: View {
                     rate: LaunchLook(rest).streakRate)
                 VStack(spacing: 36) {
                     logo(rest: rest, reduceMotion: reduceMotion)
-                    if let line = Strings.launchCard(handOff) {
-                        Text(line)
-                            .font(.title2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
+                    // On the way back there's no line, but its height stays, so the logo stays
+                    // where it was.
+                    let line = Strings.launchCard(handOff)
+                    Text(line ?? " ")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .opacity(line == nil ? 0 : 1)
+                        .accessibilityHidden(line == nil)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
