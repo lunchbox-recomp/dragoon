@@ -46,8 +46,8 @@ class Frame:
 
 def parse(lines) -> dict[int, Frame]:
     """Frames keyed by their [rt] number. [ft] fN is printed before the engine counts the
-    frame (xf.cpp:1928-1935) and [rt] after (render_gl.cpp:3981), so the batch [ft] fN
-    describes is drawn as [rt] f(N+1)."""
+    frame (xf.cpp:1892-1899) and [rt] after (render_gl_batch.cpp:180, 522-523), so the
+    batch [ft] fN describes is drawn as [rt] f(N+1)."""
     frames: dict[int, Frame] = {}
     pending: list[float] = []
     for line in lines:

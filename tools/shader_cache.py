@@ -8,27 +8,28 @@ count prints the file's version, key size, record count, distinct key count, a c
 distinct program count (its distinct src_hash values) and the trailing bytes it ignored. diff prints how many distinct keys in NEW are not in OLD, and
 their share of NEW's distinct keys; the two files must have the same format word.
 Little-endian throughout. Both files open with u32 magic and u32 format word, where
-format = kShaderKeyVersion << 16 | sizeof(ShaderKey) (gcn-recomp/runtime/gx/shadergen.h:70).
+format = kShaderKeyVersion << 16 | sizeof(ShaderKey) (gcn-recomp/runtime/gx/shadergen.h:69).
 The key size is the low 16 bits. Any version is read; an unknown magic or a key size of 0
 is refused with what was found.
 
-Shader cache, saves/shaders.bin (magic "WRSC" 0x43535257, render_gl.cpp:424):
+Shader cache, saves/shaders.bin (magic "WRSC" 0x43535257, render_gl_programs.cpp:29):
   header, 16 bytes: magic, format word, u64 driver id        (shader_cache_write_header,
-                                                              render_gl.cpp:473-479)
+                                                              render_gl_programs.cpp:78-84)
   per record: key (key size bytes), u64 src_hash, u32 binary format, u32 length, then
   `length` bytes of binary                                    (shader_cache_write_record,
-                                                              render_gl.cpp:446-471)
-  A record cut off at the end (the game appends, and a kill can cut it) is skipped, as
-  the loader's cache_next (render_gl.cpp:624-636) does; count reports the bytes ignored.
+                                                              render_gl_programs.cpp:51-76)
+  A record cut off at the end (the game appends, and a kill can cut it) is skipped, as the
+  loader's cache_next (render_gl_programs.cpp:229-241) does; count reports the bytes ignored.
 
-Key list (magic "GCSK" 0x4B534347, shadergen.h:72):
+Key list (magic "GCSK" 0x4B534347, shadergen.h:71):
   header, 8 bytes: magic, format word, then the keys back to back, each once. Leftover
   bytes short of a whole key are ignored, as in gcn-recomp/tools/shader_keys.cpp.
 
 Keys are compared as raw bytes, with no canonicalization of the tool's own. A key is made
-canonical when it is built (shadergen.cpp:58), so every file in the current format holds
-canonical keys. The loader canonicalizes again (render_gl.cpp:684) only to fix older caches.
-The engine refuses older caches at load (render_gl.cpp:660); this tool still reads them.
+canonical when it is built (shadergen.cpp:60), so every file in the current format holds
+canonical keys. The loader canonicalizes again (render_gl_programs.cpp:335-338) only to fix
+older caches. The engine replaces older caches at load (render_gl_programs.cpp:265-274); this
+tool still reads them.
 
 Exits 0 once it has read the files, 2 on a bad argument or a file it can't read or doesn't
 understand.

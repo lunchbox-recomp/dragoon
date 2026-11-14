@@ -71,7 +71,7 @@ where it sits, so the warning is harmless. The compiler adds one warning, in gcn
 renderer.
 
 ```
-runtime/gx/render_gl.cpp:3189:13: warning: enumeration value 'Screen' not handled in switch [-Wswitch]
+runtime/gx/render_gl_view.cpp:286:13: warning: enumeration value 'Screen' not handled in switch [-Wswitch]
 ```
 
 ### What the build downloads
@@ -151,11 +151,11 @@ clicked (`imgui.cpp:11408`).
 
 `io.ConfigDebugHighlightIdConflicts` turns that tooltip on by default (`imgui.cpp:1712`), and
 the overlay leaves it on. Since gcn-recomp `d1a60e5` the overlay clears
-`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:425-427`), and
+`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:461-463`), and
 `TextLinkOpenURL` calls nothing when it's null, so a click on the link opens nothing. Since
-`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:406`,
+`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:444`,
 `imgui.cpp:11366`). The overlay also sets `IniFilename` and `LogFilename` to null, so Dear
-ImGui writes no file (`runtime/overlay/overlay.cpp:405-407`).
+ImGui writes no file (`runtime/overlay/overlay.cpp:443-445`).
 
 ## Disc inputs
 
@@ -352,9 +352,9 @@ has been run since `b848158`.
 The runtime keeps the port each gamepad was last on in `saves/ports.txt`. A gamepad the file
 names takes that port again when it's free and the lowest free one when it isn't. Any other
 takes the port of its SDL player number if that's free and otherwise the lowest free one
-(gcn-recomp `runtime/port_memory.h:47-58`).
+(gcn-recomp `runtime/port_memory.h:48-59`).
 
-Once a gamepad has a port, its player number is set to the port (`runtime/gamepads.cpp:136-143`).
+Once a gamepad has a port, its player number is set to the port (`runtime/gamepads.cpp:151-158`).
 A gamepad gets no port when none is free, and one pulled out frees its port. The game then sees
 that port unplugged, though the keyboard keeps port 1 plugged in and so does a port that
 `--pads=N` or a `controls.txt` line covers.

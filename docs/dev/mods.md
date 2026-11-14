@@ -56,7 +56,7 @@ When `apply` prints null for `ram_patches`, empty the line by writing `ram_patch
 
 For one run, `--ram-patches=PATH` beats `GCN_RAM_PATCHES`, which beats the key. An empty value at any of the three means no patches. A relative path in the flag or the variable is relative to the game's working directory.
 
-`gcn-recomp/runtime/main.cpp:451-470` selects the paths, and `gcn-recomp/runtime/settings.cpp:145-148` reads both keys. `gcn-recomp/runtime/ram_patches.cpp:66-86` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:68-74` stops when an overlay manifest can't open.
+`gcn-recomp/runtime/main.cpp:466-485` selects the paths, and `gcn-recomp/runtime/settings.cpp:139-142` reads both keys. `gcn-recomp/runtime/ram_patches.cpp:66-86` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:68-74` stops when an overlay manifest can't open.
 
 The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 for:
 
