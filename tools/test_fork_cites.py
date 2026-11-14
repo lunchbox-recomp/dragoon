@@ -82,7 +82,8 @@ class FindTest(unittest.TestCase):
                          ([Cite(1, "ax.cpp", 1, 1), Cite(1, "ax.cpp", 4, 4)], []))
 
     def test_only_a_path_a_cite_could_hold_names_a_file(self):
-        line = "`ax.cpp:1`, `view.cpp:2:3`, `a.b/c`, `x.cpp-y`, `lib.so.1`, `/usr/x.cpp`, `:4`\n"
+        line = ("`ax.cpp:1`, `view.cpp:2:3`, `a.b/c`, `x.cpp-y`, `lib.so.1`, `/usr/x.cpp`, `~/.cache/x.json`, "
+                "`/opt/-x.cpp`, `:4`\n")
         self.assertEqual(fork_cites.find(line, True),
                          ([Cite(1, "ax.cpp", 1, 1), Cite(1, "ax.cpp", 4, 4)], []))
         self.assertEqual(fork_cites.find("`x.cpp-y:3`, `lib.so.1:3`, `/usr/x.cpp:3`\n", True), ([], []))
