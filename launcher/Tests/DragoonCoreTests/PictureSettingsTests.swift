@@ -38,7 +38,7 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
     private let path = fakeData + "/settings.txt"
 
     @Test func everyFixtureIsListedAndRead() {
-        #expect(SettingsFixture.all.count == 18)
+        #expect(SettingsFixture.all.count == 19)
         #expect(SettingsFixture.all.filter { $0.before == nil }.map(\.name) == ["missing"])
     }
 

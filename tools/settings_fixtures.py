@@ -63,6 +63,8 @@ CASES = [
     Case("bad-values", b"aspect 5\nfullscreen yes\nscale 0\ndisc slow\n", "4:3", 0, 2, "fast"),
     Case("not-utf8", b"# caf\xe9 \xff\xfe settings\naspect 4:3\nname \x80\x81\n", "21:9", 0, 3, "fast"),
     Case("mixed-endings", b"aspect 4:3\nscale 2\r\n# note\r\nfullscreen 0\n", "16:9", 1, 2, "fast"),
+    # The first newline is CR LF and the last LF, so the keys added take CR LF from the first.
+    Case("crlf-then-lf", b"aspect 4:3\r\naspect 16:9\n", "window", 0, 2, "fast"),
     Case("bom-only", b"\xef\xbb\xbf", "16:9", 0, 2, "fast"),
     Case("double-cr", b"aspect 4:3\r\r\nscale 2\r\n", "21:9", 0, 2, "fast"),
     Case("open-after-cr", b"aspect 4:3\nscale 2\r", "16:9", 0, 6, "fast"),

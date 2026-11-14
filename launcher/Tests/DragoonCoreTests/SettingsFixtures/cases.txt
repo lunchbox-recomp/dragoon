@@ -10,6 +10,7 @@ spacing-and-duplicates 16:10 1 8 console
 bad-values 4:3 0 2 fast
 not-utf8 21:9 0 3 fast
 mixed-endings 16:9 1 2 fast
+crlf-then-lf window 0 2 fast
 bom-only 16:9 0 2 fast
 double-cr 21:9 0 2 fast
 open-after-cr 16:9 0 6 fast
