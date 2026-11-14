@@ -62,6 +62,19 @@ struct BuildPageTests {
         #expect(abs(last.start + last.width - 1) < 1e-9)
     }
 
+    /// A window that isn't key but can be seen, as when the player clicks another app, keeps
+    /// its clock and stops its shimmer. One that can't be seen stops both.
+    @Test(arguments: [
+        (true, true, false, false), (false, true, true, false), (false, false, true, true),
+    ])
+    func theClockStopsOnlyWhenTheWindowCantBeSeen(
+        active: Bool, visible: Bool, shimmerPaused: Bool, clockPaused: Bool
+    ) {
+        let paused = Motion.buildPaused(windowIsActive: active, windowIsVisible: visible)
+        #expect(paused.shimmer == shimmerPaused)
+        #expect(paused.clock == clockPaused)
+    }
+
     @Test(arguments: [(0.0, 0.0), (0.25, 0.0), (0.5, 0.5), (0.75, 1.0), (1.0, 1.0)])
     func eachSegmentFillsOnlyItsOwnShare(fraction: Double, fill: Double) {
         #expect(SegmentedBar.fill(fraction, start: 0.25, width: 0.5) == fill)

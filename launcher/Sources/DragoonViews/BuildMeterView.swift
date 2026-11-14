@@ -3,7 +3,7 @@ import SwiftUI
 
 /// A running build's bar, what its step is doing, the time it has taken and the time left,
 /// and, once it's done, the bar become Play. The bar moves only on the recipe's events. The
-/// clock ticks once a second and stops with the shimmer while the window isn't key.
+/// clock ticks once a second, and it and the shimmer stop as `Motion.buildPaused` says.
 struct BuildMeterView: View {
     /// The bar and Play share this height, so the page doesn't move as one becomes the other.
     static let rowHeight: CGFloat = 64
@@ -14,7 +14,12 @@ struct BuildMeterView: View {
     let canPlay: Bool
     let send: Send
     @Environment(\.windowIsActive) private var windowIsActive
+    @Environment(\.windowIsVisible) private var windowIsVisible
     @Namespace private var morph
+
+    private var paused: (shimmer: Bool, clock: Bool) {
+        Motion.buildPaused(windowIsActive: windowIsActive, windowIsVisible: windowIsVisible)
+    }
 
     var body: some View {
         ReduceMotionReader { reduceMotion in
@@ -29,7 +34,7 @@ struct BuildMeterView: View {
                         SegmentedBar(
                             fraction: progress.fraction, colors: colors,
                             shimmering: progress.segment.flatMap { $0.counts ? nil : $0 },
-                            shimmerPaused: !windowIsActive, reduceMotion: reduceMotion
+                            shimmerPaused: paused.shimmer, reduceMotion: reduceMotion
                         )
                         .matchedGeometryEffect(id: morphID(reduceMotion), in: morph)
                         .transition(.opacity)
@@ -95,7 +100,7 @@ struct BuildMeterView: View {
             }
             Spacer(minLength: 0)
             if !finished {
-                ElapsedClock(progress: progress, paused: !windowIsActive)
+                ElapsedClock(progress: progress, paused: paused.clock)
             }
         }
         .font(.body.monospacedDigit())

@@ -66,11 +66,13 @@ struct DragoonApp: App {
 struct ModelView: View {
     let model: LauncherModel
     @State private var windowIsActive = true
+    @State private var windowIsVisible = true
 
     var body: some View {
         LauncherView(state: model.state, send: { model.send($0) })
             .environment(\.windowIsActive, windowIsActive)
-            .background(WindowWatcher(isActive: $windowIsActive))
+            .environment(\.windowIsVisible, windowIsVisible)
+            .background(WindowWatcher(isActive: $windowIsActive, isVisible: $windowIsVisible))
             .onAppear { model.launch() }
     }
 }

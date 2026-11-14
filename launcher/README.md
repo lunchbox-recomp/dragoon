@@ -152,7 +152,7 @@ The time left comes once a step has 3 counts. It's the step's rate across its ne
 
 Make prints quickly, so `ProgressThrottle` lets a progress event through at most every 0.1 s and holds the newest in between, and `ThrottledSend`, beside it in `DragoonCore`, sends the held one once it's due. The banner goes from gray to its own colors with the bar. When the build is done the glow behind it pulses once and the bar becomes Play. The page stays until Play or Back to Library, with Library current in the list. Under Reduce Motion the shimmer fades up and down in place, the glow only fades up and the bar fades into Play.
 
-The clock ticks once a second. It and the shimmer stop while the window isn't key or is covered.
+The clock ticks once a second. It stops only while none of the window can be seen, as when it's covered, minimized or hidden, so a player who clicks another app still sees it go on. The shimmer stops too while the window isn't key. That saves the launcher nothing it can measure, 0.20% against 0.22% with the shimmer moving, but the window server measured 0.27% against 0.57% of a core in the same runs, one run each.
 
 Measured on 2026-11-14 with `idle_cpu.py` over 60 seconds, on a release build of a scratch copy that opens on the build page with the test banner and made-up events, and that counts the window as key unless noted.
 
@@ -160,7 +160,8 @@ Measured on 2026-11-14 with `idle_cpu.py` over 60 seconds, on a release build of
 |---|---|
 | Recompile, shimmer and clock | 0.20% |
 | Warm-up between runs, clock only | 0.20% |
-| Window not key | 0.00% |
+| Recompile, window seen but not key, clock only | 0.20% |
+| Window covered or hidden, nothing moving | 0.00% |
 | Finished, after the pulse | 0.00% |
 | 8 compile events a second | 3.6% |
 
