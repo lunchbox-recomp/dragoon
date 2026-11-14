@@ -16,7 +16,7 @@ frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `1abc
 | Audio | Partial | The mixer runs the commands of the game's ucode (`07F88145`) with its compressor among them, and ten runs' 484,400 command lists held no unknown or skipped one (under Audio). Source type 0 voices, 98.9% of the voice time, resample through a polyphase filter whose coefficients the runtime works out because the console's are in the DSP's ROM, and the low-pass filter isn't applied. Nobody has listened for the sound's quality since the source type 2 fix or compared it with a console, and the click counts are in [`scorecard.md`](scorecard.md), last scored at gcn-recomp `dac449e` (`audio.md`) |
 | Controllers | Four ports, live | Each gamepad takes the port `saves/ports.txt` says it was last on, or else its SDL player number's or the lowest free one. The overlay menu's Controllers page swaps, removes and orders players by who presses A, and a notice says when a controller connects, disconnects or changes player (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with Air Ride's and City Trial's HUD anchored and the menus centered | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD keeps its 4:3 shape at the race, City Trial, 2P and 4P checkpoints, anchored to the edges of the screen or of its player's view, as all four showed on Dragoon `1ff85c8`. The title, the menus, the text boxes and the opening movie keep their 4:3 frame in the middle. On Dragoon `2d68a1e` the 16:9 output dumps of the text box, the movie and the course select went from 3414x1920 at 1.7781 to 2560x1920 at 1.3333 with bars of 427, the title from 2.1815 to 1.6351 (1.6358 at 4:3) and the mode select from 1.9094 to 1.4312 (1.4318). Top Ride's HUD, which it draws outside every render callback, and a menu over play stretch with the picture. On Dragoon `ec0004a` `drawlog.py hud` listed Top Ride's 38 HUD draws at 3600 as stretched, and the race after its finish at 8400, City Trial and 2P gave the same results as on `e79f475`. At an output narrower than 4:3 the menus stretch too (`widescreen.md`). The HUD the table anchors still remaps there, each piece widened from its anchor by 4/3 over the output's aspect (4/3 at 1:1). No run measured it |
-| Speed | Holds 60 fps | 513 frames a second in a race in a hidden window with `--fast`. `dragoon_bench`, which draws nothing, runs the race at 601. Four-player City Trial averages 16.69 ms a frame at the game's own speed, with two intervals over 20 ms, the worst 42 ms. The stadium's scene changes stall the guest for up to 160 ms (under gcn-recomp `95e1c6b`) |
+| Speed | Holds 60 fps | 463 and 498 frames a second in two runs of a race in a hidden window with `--fast`. `dragoon_bench`, which draws nothing, runs the race at 527. Four-player City Trial averages 16.68 ms a frame at the game's own speed, with no interval over 20 ms and the worst 19.23 ms. The stadium's scene changes stall the guest for up to 160 ms (under gcn-recomp `1abcf10`) |
 | Build from the disc | Works | 23 s at gcn-recomp `67a7e30` (3.5 s to configure, 19.5 s for Ninja). That's before the build compiled SDL3 and Dear ImGui and before the default target ran the shader warm-up, which adds about 64 s (`CMakeLists.txt:69-78`, Player targets) |
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
@@ -896,6 +896,26 @@ Built on Dragoon `b567ae0`, `tools/frame_hashes.py check` matched all twenty-fou
 after the build, 7.0 between the checks and 6.5 after the audio check.
 
 None of the 24 bench logs has an `[interp]` line.
+
+The speed runs came after the checks on the same build, one game at a time, at 1-minute loads
+of 4.8 to 7.2 while other jobs built on the machine. The race route ran hidden with `--fast` as
+`tools/probe.sh speed-race 40 tests/routes/air-ride-race.txt 60`, and its dumps of frames 3,600
+and 13,200 were written 20.73 s apart, 463 frames a second, at a load of 6.4 to 6.9. A second
+run at 4.8 wrote them 19.28 s apart, 498 a second. In the audio check's `dragoon_bench` run of
+that route, the one-second samples from 8 s to 20 s averaged 527 frames a second, between 335
+and 702. Both are below the 513 and 601 at `95e1c6b`, and whether the engine or the load made
+the difference wasn't checked.
+
+`tools/probe.sh speed-ct4p 130 tests/routes/city-trial-4p.txt 100000 --pads=4 --real-time GCN_FRAMETIME=1`
+gave 4,311 guest intervals from frame 3,400 (`tools/frametime.py --from 3400`). They averaged
+16.68 ms, with 16.79 ms at the 95th percentile and 16.96 ms at the 99th. None went over 20 ms,
+and the worst was 19.23 ms.
+
+`tools/probe.sh speed-stadium 360 tests/routes/city-trial-stadium.txt 100000 GCN_FRAMETIME=1 --real-time`
+started with an empty shader cache and reached frame 21,551. From frame 4,400 the guest
+averaged 16.71 ms, and 7 intervals went over 20 ms. The four longest were 106 ms at frame
+15,614, 120 ms at 16,203, 155 ms at 16,502 and 160 ms at 20,054, within a frame of the four
+at `95e1c6b`.
 
 ## Disc reads
 
