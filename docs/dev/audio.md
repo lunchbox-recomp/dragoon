@@ -33,15 +33,15 @@ logs the same at boot.
 ## What the runtime does with it
 
 - `dsp_hle.cpp:51-65` takes the first ucode a game boots that isn't JAudio as AX, remembers
-  its IRAM length and passes its hash to `ax_init` (`:65`). The hash is logged (`:47-48`)
-  and checked against JAudio's (`:52`).
+  its IRAM length and passes its hash to `ax_init` (`dsp_hle.cpp:65`). The hash is logged
+  (`dsp_hle.cpp:47-48`) and checked against JAudio's (`dsp_hle.cpp:52`).
 - `ax_init` (`ax.cpp:617-632`) runs when AX starts and gives the 2001 hash the 2001 mixer
   control layout and every other hash the later one. `--log=dsp` logs the choice
   (`AX: later mixer layout, ucode hash=07F88145`). `GCN_AX_LAYOUT=2001` or
   `GCN_AX_LAYOUT=later` overrides the layout but not the compressor, for comparing how the two
   decode the mixer control word.
-- `ax.cpp` mixes with the decoder the layout picks (`:442-443`, `:485-487`). It runs command
-  `12` for any hash but the 2001 one (`:673-679`).
+- `ax.cpp` mixes with the decoder the layout picks (`ax.cpp:442-443`, `ax.cpp:485-487`). It
+  runs command `12` for any hash but the 2001 one (`ax.cpp:673-679`).
 - In a 30-second run at an earlier gcn-recomp (`67a7e30`) the game sent 5,834 command lists,
   about 29 seconds of 5 ms frames. Each command list gets `DCD10002` back
   (`dsp_hle.cpp:98-99`). The ten runs in `status.md` counted 484,400 lists and none had an
@@ -58,13 +58,13 @@ list per 5 ms frame. This is from reading the DOL, not from a trace.
 | Command | Sent when | gcn-recomp |
 |---|---|---|
 | `00` setup | every frame | `ax.cpp:643`, `:552-566` |
-| `07` main L and R from one buffer | stereo mode | `:652` |
-| `11` the same with left inverted | surround mode | `:672` |
-| `02` PB address, `03` process | every frame | `:645-646` |
-| `04` AuxA, `05` AuxB | not DPL2 and that bus has a callback | `:647-650` |
-| `13` send aux and mix, `10` AuxB L and R | DPL2 mode (`13` only with an AuxA callback) | `:680-689`, `:665-671` |
-| `12` compressor | the compressor is on | runs for any hash but the 2001 one (`:673-679`), skipped on that one |
-| `0E` output, `0F` end | every frame | `:663`, `:664` |
+| `07` main L and R from one buffer | stereo mode | `ax.cpp:652` |
+| `11` the same with left inverted | surround mode | `ax.cpp:672` |
+| `02` PB address, `03` process | every frame | `ax.cpp:645-646` |
+| `04` AuxA, `05` AuxB | not DPL2 and that bus has a callback | `ax.cpp:647-650` |
+| `13` send aux and mix, `10` AuxB L and R | DPL2 mode (`13` only with an AuxA callback) | `ax.cpp:680-689`, `ax.cpp:665-671` |
+| `12` compressor | the compressor is on | runs for any hash but the 2001 one (`ax.cpp:673-679`), skipped on that one |
+| `0E` output, `0F` end | every frame | `ax.cpp:663`, `ax.cpp:664` |
 
 Every argument count in `ax.cpp` matches what the game writes, so no list is cut short. The
 builder never writes `01`, `08`, `09` or `0A` to `0D`. In the ten runs in `status.md`, `04`
@@ -86,7 +86,7 @@ else. The runtime handles the mixer control and the compressor, and not the low-
 The PB's mixer control word (word 6) has a different bit layout in the newer build. It gives
 every bus its own enable bit and ramps by group. `ax.cpp:238-286` decodes the word into an
 enable flag and a ramp flag for each of the nine buses, with one decoder for each layout,
-and `:485-487` mixes each bus by its own flags.
+and `ax.cpp:485-487` mixes each bus by its own flags.
 
 | Bit | Later layout (default for `07F88145`, `decode_mixer_later`) | 2001 layout (`4E8A8B21`, or `GCN_AX_LAYOUT=2001`, `decode_mixer_2001`) |
 |---|---|---|
@@ -144,7 +144,7 @@ the release length. Otherwise, while the count is nonzero, it steps down and bot
 scaled by the table's ramp 11 plus the count, one of the release ramps.
 
 Surround is never touched. The count carries from list to list and resets when AX starts
-(`:624`). On the 2001 hash the command's four words are skipped (`:673-679`).
+(`ax.cpp:624`). On the 2001 hash the command's four words are skipped (`ax.cpp:673-679`).
 
 The game sent it in every list of the ten runs in `status.md`, with a threshold and release
 that weren't logged.
