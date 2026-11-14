@@ -29,7 +29,8 @@ SDK = "/Applications/Xcode 26.5.app/Contents/Developer/Platforms/MacOSX.platform
 RUNTIME = "CMakeFiles/runtime_check.dir/gcn-recomp/runtime"
 SRC_OBJECT = "CMakeFiles/runtime_check.dir/src/hooks.cpp.o"
 IMGUI = "CMakeFiles/gcn_imgui.dir/_deps/imgui-src"
-IMGUI_OBJECTS = ("imgui.cpp.o", "backends/imgui_impl_sdl3.cpp.o")
+# A backend first, so the kit has to pick out imgui.cpp to find Dear ImGui's license.
+IMGUI_OBJECTS = ("backends/imgui_impl_sdl3.cpp.o", "imgui.cpp.o")
 ENGINE = "5ca1ab1e" * 5
 # main.cpp's definitions as gcn-recomp's runtime_check compiles it with the overlay on.
 OVERLAY_DEFINES = r'-DGCN_APP_LABEL=\"Dragoon\" -DGCN_GAME_TITLE="\"Kirby Air Ride\"" -DGCN_OVERLAY'
@@ -75,8 +76,8 @@ def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
     compile_c("int engine_b(int x) { return x * 2; }\n", build / RUNTIME / "hw" / "b.cpp.o")
     compile_c("int engine_main(void) { return 0; }\n", build / RUNTIME / "main.cpp.o")
     compile_c("int hook(void) { return 0; }\n", build / SRC_OBJECT)
-    compile_c("int imgui_core(void) { return 4; }\n", build / IMGUI / IMGUI_OBJECTS[0])
-    compile_c("int imgui_backend(void) { return 5; }\n", build / IMGUI / IMGUI_OBJECTS[1])
+    compile_c("int imgui_backend(void) { return 5; }\n", build / IMGUI / IMGUI_OBJECTS[0])
+    compile_c("int imgui_core(void) { return 4; }\n", build / IMGUI / IMGUI_OBJECTS[1])
     archive(sdl_build / "libSDL3.a", compile_c("int SDL_Fake(void) { return 3; }\n", sdl_build / "fake.o"))
     write_file(build, "CMakeCache.txt",
                f"GAME_ISO:FILEPATH={disc}\nCMAKE_OSX_DEPLOYMENT_TARGET:STRING={target}\n"
@@ -183,15 +184,20 @@ class EngineKitTest(unittest.TestCase):
 
     def test_refuses_a_runtime_check_whose_main_has_no_overlay(self) -> None:
         """A gcn-recomp that leaves the menu out of runtime_check, or a build configured with
-        -DGCN_OVERLAY=OFF. A definition that only starts the same is no overlay either."""
+        -DGCN_OVERLAY=OFF, which has no gcn_imgui: the refusal comes before that target's.
+        A definition that only starts the same is no overlay either, and nor is another
+        target's, before main.cpp's block or after it."""
         build = fake_build(self.root)
         ninja = (build / "build.ninja").read_text()
-        for name, defines in (("none", r'-DGCN_APP_LABEL=\"Dragoon\"'), ("test only", "-DGCN_OVERLAY_TEST")):
+        other = ("build CMakeFiles/{0}.dir/gcn-recomp/runtime/a.cpp.o: CXX_COMPILER__{0} a.cpp\n"
+                 "  DEFINES = -DGCN_OVERLAY\n")
+        off = other.format("test_ports") + ninja.replace(imgui_lines(build), "") + other.format("dragoon")
+        for name, defines in (("none", r'  DEFINES = -DGCN_APP_LABEL=\"Dragoon\"' + "\n"),
+                              ("test only", "  DEFINES = -DGCN_OVERLAY_TEST\n"), ("no line", "")):
             with self.subTest(name):
-                write_file(build, "build.ninja", ninja.replace(OVERLAY_DEFINES, defines))
-                self.assert_refused(build, "runtime_check compiles main.cpp without GCN_OVERLAY")
-        write_file(build, "build.ninja", ninja.replace(f"  DEFINES = {OVERLAY_DEFINES}\n", ""))
-        self.assert_refused(build, "runtime_check compiles main.cpp without GCN_OVERLAY")
+                write_file(build, "build.ninja", off.replace(f"  DEFINES = {OVERLAY_DEFINES}\n", defines))
+                self.assert_refused(build, "runtime_check compiles main.cpp without GCN_OVERLAY, so a game"
+                                           " linked from the kit would have no menu")
         write_file(build, "build.ninja", ninja.replace(f"{RUNTIME}/main.cpp.o", f"{RUNTIME}/other.cpp.o"))
         (build / RUNTIME / "main.cpp.o").rename(build / RUNTIME / "other.cpp.o")
         self.assert_refused(build, "runtime_check compiles no main.cpp")
