@@ -51,7 +51,7 @@ final class StreakLayerView: NSView {
             self.still = still
             rebuild()
         }
-        hold(paused)
+        field.hold(paused)
     }
 
     override func layout() {
@@ -100,21 +100,6 @@ final class StreakLayerView: NSView {
                 line.add(run, forKey: "run")
             }
             field.addSublayer(line)
-        }
-    }
-
-    /// Stops the field's clock where it is, or starts it again from there.
-    private func hold(_ paused: Bool) {
-        if paused, field.speed != 0 {
-            let now = field.convertTime(CACurrentMediaTime(), from: nil)
-            field.speed = 0
-            field.timeOffset = now
-        } else if !paused, field.speed == 0 {
-            let stoppedAt = field.timeOffset
-            field.speed = 1
-            field.timeOffset = 0
-            field.beginTime = 0
-            field.beginTime = field.convertTime(CACurrentMediaTime(), from: nil) - stoppedAt
         }
     }
 }
