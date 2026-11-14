@@ -59,9 +59,7 @@ public struct DiscBanner: Equatable, Sendable {
     /// The banner of the disc image at `path`, plain or CISO, or nil when it has none that can
     /// be read. It reads the disc's header, its file system table and the banner, and nothing
     /// else.
-    public static func read(at path: String, fs: any FileSystem = SystemFileSystem())
-        -> DiscBanner?
-    {
+    public static func read(at path: String, fs: any FileSystem) -> DiscBanner? {
         guard let file = try? fs.openReader(at: path) else { return nil }
         return read(from: file)
     }
