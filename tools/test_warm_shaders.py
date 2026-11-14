@@ -357,9 +357,9 @@ class WarmTest(WarmTestCase):
         self.assertEqual(len(self.game_lines()), 4)
 
     def test_the_stamp_a_run_writes_is_the_wanted_one_and_is_current(self):
-        self.assertFalse(warm_shaders.is_current(self.saves, warm_shaders.wanted_stamp()))
+        self.assertFalse(warm_shaders.is_current(self.saves, warm_shaders.wanted_stamp(self.manifest.read_text())))
         self.assertEqual(self.warm()[0], 0)
-        want = warm_shaders.wanted_stamp()
+        want = warm_shaders.wanted_stamp(self.manifest.read_text())
         self.assertEqual((self.saves / warm_shaders.STAMP).read_text(), want + "\n")
         self.assertTrue(warm_shaders.is_current(self.saves, want))
         self.assertFalse(warm_shaders.is_current(self.saves, want + "x"))

@@ -182,7 +182,7 @@ class RecipeTestCase(unittest.TestCase):
         # The stamp the fake warm-up takes as current, so the recipe's plan agrees with it.
         for patch in (mock.patch.object(launcher_build, "CODESIGN", str(codesign)),
                       mock.patch.object(launcher_build.warm_shaders, "wanted_stamp",
-                                        lambda: CURRENT_STAMP)):
+                                        lambda manifest_text: CURRENT_STAMP)):
             patch.start()
             self.addCleanup(patch.stop)
 

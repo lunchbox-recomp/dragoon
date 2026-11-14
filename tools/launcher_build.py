@@ -281,7 +281,8 @@ def warmup_plays(a: argparse.Namespace) -> bool:
     if a.no_warmup:
         return False
     try:
-        return not warm_shaders.is_current(a.data / "saves", warm_shaders.wanted_stamp())
+        want = warm_shaders.wanted_stamp(warm_shaders.MANIFEST.read_text())
+        return not warm_shaders.is_current(a.data / "saves", want)
     except (OSError, ValueError):
         return True
 
