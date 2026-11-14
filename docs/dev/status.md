@@ -1028,7 +1028,7 @@ real game's own time to its window isn't here.
 | The same in a release app, the fake saying 500 and 1,000 ms | none set | 557 to 577 ms, then 1,057 to 1,077 ms | Recorded |
 | An engine that writes no ready file, Play to the hide | 5 s and a log line | 5.0 s, and the line | Pass |
 | The game ending to the window back in, App Nap held off | 0.5 s | 265 and 380 ms | Pass |
-| The same before App Nap was held off | 0.5 s | 270 ms, or 26 s to over 2 minutes | Fail, fixed in `177a791` |
+| The same before App Nap was held off | 0.5 s | 270 ms, or 26 s to over 2 minutes | Fail, fixed in `d34b76d` |
 | Launcher's share of a core while clear, the game running | 0.2% | 0.02% | Pass |
 | Hiding with neither a `window` line nor the 5 s timeout | never | never, in `FlowHandOffTests` | Pass |
 
@@ -1045,7 +1045,7 @@ clicks through, and did the same with `activate` called before Play.
 Once the launcher had called `activate`, its 80 s runs got the game's end late, by 57 s and
 26 s. In a third the game sat as a zombie and the termination handler hadn't run 2 minutes
 after it exited. Runs of 20 s and 80 s that never called `activate` were on time. App Nap fits
-what was seen, so since `177a791` the launcher holds a `ProcessInfo` activity until the game
+what was seen, so since `d34b76d` the launcher holds a `ProcessInfo` activity until the game
 ends. With it, two 80 s runs after `activate` were on time, one of them with a fake that
 writes no ready file. The share is `launcher/tools/idle_cpu.py` over 60 s while the
 window was clear, 0.00% before the activity and 0.02% with it.
