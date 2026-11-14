@@ -82,8 +82,8 @@ class FindTest(unittest.TestCase):
                          ([Cite(1, "ax.cpp", 1, 1), Cite(1, "ax.cpp", 4, 4)], []))
 
     def test_only_a_path_a_cite_could_hold_names_a_file(self):
-        line = ("`ax.cpp:1`, `view.cpp:2:3`, `a.b/c`, `x.cpp-y`, `lib.so.1`, `/usr/x.cpp`, `~/.cache/x.json`, "
-                "`/opt/-x.cpp`, `:4`\n")
+        line = ("`ax.cpp:1`, `view.cpp:2:3`, `a.b/c`, `x.cpp-y`, `lib.so.1`, `/usr/x.cpp`, "
+                "`~/.cache/x.json`, `/opt/-x.cpp`, `:4`\n")
         self.assertEqual(fork_cites.find(line, True),
                          ([Cite(1, "ax.cpp", 1, 1), Cite(1, "ax.cpp", 4, 4)], []))
         self.assertEqual(fork_cites.find("`x.cpp-y:3`, `lib.so.1:3`, `/usr/x.cpp:3`\n", True), ([], []))
@@ -307,6 +307,21 @@ class ForkCitesTest(unittest.TestCase):
                               "gone docs/a.md:1 runtime/hw/ax.cpp:2\n"
                               "gone docs/a.md:1 runtime/hw/ax.cpp:3\n"
                               "total 3, ok 0, moved 0, gone 2, outside 0, unchanged 0, skipped 1, stray 0\n")
+
+    def test_a_fork_relative_cite_whose_text_the_new_path_ends_in_is_skipped(self):
+        code, out, _ = self.bump({"runtime/hw/ax.cpp": text(TEN)}, {"engine/runtime/hw/ax.cpp": text(TEN)},
+                                 removed=("runtime/hw/ax.cpp",),
+                                 docs={"docs/a.md": "`ax.cpp:2` and `gcn-recomp/runtime/hw/ax.cpp:2` "
+                                                    "and `hw/ax.cpp:3` and `runtime/hw/ax.cpp:4`\n"})
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "skipped docs/a.md:1 ax.cpp:2, names 2 fork files "
+                              "(engine/runtime/hw/ax.cpp, runtime/hw/ax.cpp)\n"
+                              "gone docs/a.md:1 runtime/hw/ax.cpp:2\n"
+                              "skipped docs/a.md:1 hw/ax.cpp:3, names 2 fork files "
+                              "(engine/runtime/hw/ax.cpp, runtime/hw/ax.cpp)\n"
+                              "skipped docs/a.md:1 runtime/hw/ax.cpp:4, names 2 fork files "
+                              "(engine/runtime/hw/ax.cpp, runtime/hw/ax.cpp)\n"
+                              "total 4, ok 0, moved 0, gone 1, outside 0, unchanged 0, skipped 3, stray 0\n")
 
     def test_its_own_two_files_are_left_out(self):
         own = {name: (fork_cites.ROOT / name).read_text()
