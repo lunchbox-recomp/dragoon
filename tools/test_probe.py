@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import signal
@@ -441,16 +442,19 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertLess(ended - (self.run_dir() / "exited").stat().st_mtime, 2.5)
 
     def test_seconds_ends_a_run_whose_game_never_exits(self):
-        self.add_game("dragoon", "echo $$ > pid.txt\nexec sleep 600\n")
+        # The game takes a moment to stop, so a probe.sh that didn't wait for it ends first
+        self.add_game("dragoon", 'echo $$ > pid.txt\ntrap "sleep 1; exit 0" TERM\nwhile :; do sleep 1; done\n')
         pid_file = self.run_dir() / "pid.txt"
-        try:
-            r = probe(NAME, "2", script=self.script)
-        except subprocess.TimeoutExpired:  # probe.sh was killed before its trap could end the game
-            os.kill(int(pid_file.read_text()), signal.SIGKILL)
-            raise
+        self.addCleanup(self.kill_if_alive, pid_file)  # if probe.sh timed out or left it running
+        r = probe(NAME, "2", script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         with self.assertRaises(ProcessLookupError):  # killed at SECONDS, and waited for
             os.kill(int(pid_file.read_text()), 0)
+
+    def kill_if_alive(self, pid_file: Path) -> None:
+        if pid_file.exists():
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(int(pid_file.read_text()), signal.SIGKILL)
 
     def test_a_new_run_starts_with_no_settings_ports_or_pads_file(self):
         # A player's own files, where a game run from the repo would read them
