@@ -52,7 +52,9 @@ struct DragoonApp: App {
     var body: some Scene {
         Window(Strings.appName, id: "main") {
             ModelView(model: model)
-                .frame(minWidth: 820, minHeight: 520)
+                .frame(
+                    minWidth: LauncherView.minimumSize.width,
+                    minHeight: LauncherView.minimumSize.height)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(LauncherView.defaultSize)

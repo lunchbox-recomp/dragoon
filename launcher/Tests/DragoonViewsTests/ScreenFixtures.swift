@@ -1,13 +1,15 @@
 import DragoonCore
+import DragoonViews
 import Foundation
 import Testing
 
-/// A state the window can show, named for its snapshot file, drawn as Reduce Motion would when
-/// `reduceMotion` is set.
+/// A state the window can show at `size`, named for its snapshot file, drawn as Reduce Motion
+/// would when `reduceMotion` is set.
 struct ScreenFixture: CustomTestStringConvertible, Sendable {
     let name: String
     let state: Flow.State
     var reduceMotion = false
+    var size = LauncherView.defaultSize
 
     var testDescription: String { name }
 }
@@ -91,10 +93,21 @@ let screenFixtures: [ScreenFixture] = [
             $0.gameProblem = crash
             $0.panicShown = true
         }),
+    // Library's fullest: the rebuild offer and a long panic shown, at the window's opening size
+    // and at the smallest it goes.
+    ScreenFixture(name: "library-fullest", state: fullest),
+    ScreenFixture(name: "library-fullest-smallest", state: fullest, size: LauncherView.minimumSize),
 ]
 
 private let crash = GameProblem.exited(
     .signal(11), panic: GamePanic("Invalid read at 0x00000004\npc 0x80012345\nlr 0x80012300"))
+
+private let fullest = library {
+    $0.installed = InstalledGame(stamp: nil)
+    let frames = (0..<40).map { "frame \($0): 0x8001\(String(format: "%04X", 0x2300 + $0 * 0x24))" }
+    $0.gameProblem = .exited(.signal(11), panic: GamePanic(frames.joined(separator: "\n")))
+    $0.panicShown = true
+}
 
 /// Library with a game built from this source and the test banner.
 private func library(change: (inout Flow.State) -> Void = { _ in }) -> Flow.State {

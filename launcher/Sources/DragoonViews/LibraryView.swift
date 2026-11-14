@@ -30,13 +30,19 @@ struct LibraryView: View {
         }
     }
 
+    /// Play and the boxes above it always fit. The logo comes before them, and the panic's
+    /// scroller shrinks to make room for it, and when it still doesn't fit it's left out.
     private func content(_ colors: HeroColors) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Spacer(minLength: 0)
-            BannerReveal(banner: state.banner, scale: 4) {
-                Wordmark(colors: colors)
+            Spacer(minLength: 0).layoutPriority(-1)
+            ViewThatFits(in: .vertical) {
+                BannerReveal(banner: state.banner, scale: 4) {
+                    Wordmark(colors: colors)
+                }
+                .padding(.bottom, 12)
+                Color.clear.frame(height: 0)
             }
-            .padding(.bottom, 12)
+            .layoutPriority(1)
             if let offer = state.rebuildOffer {
                 RebuildStrip(offer: offer, idle: state.libraryIsIdle, send: send, colors: colors)
             }

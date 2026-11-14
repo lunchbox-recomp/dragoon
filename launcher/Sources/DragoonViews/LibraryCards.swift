@@ -29,6 +29,9 @@ struct RebuildStrip: View {
 /// How the last game ended, with its `panic.txt` behind a button.
 struct ProblemCard: View {
     static let alert = Color(red: 1, green: 0.45, blue: 0.38)
+    /// A long panic's scroller is 150 points tall when the window has room and shrinks to 60
+    /// when it hasn't.
+    static let scrollerHeights: ClosedRange<CGFloat> = 60...150
 
     let problem: GameProblem
     let panicShown: Bool
@@ -60,7 +63,9 @@ struct ProblemCard: View {
                     if Self.fitsWithoutScrolling(panic.text) {
                         panicText(panic)
                     } else {
-                        ScrollView { panicText(panic) }.frame(height: 150)
+                        ScrollView { panicText(panic) }
+                            .frame(minHeight: Self.scrollerHeights.lowerBound,
+                                   maxHeight: Self.scrollerHeights.upperBound)
                     }
                 }
                 .padding(10)
@@ -75,7 +80,7 @@ struct ProblemCard: View {
         .background(LibraryPanel(tint: Self.alert))
     }
 
-    /// At most 8 lines of at most 100 characters fit in the 150 points the scroller gets.
+    /// At most 8 lines of at most 100 characters fit in 150 points, the scroller's tallest.
     static func fitsWithoutScrolling(_ text: String) -> Bool {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         return lines.count <= 8 && lines.allSatisfy { $0.count <= 100 }

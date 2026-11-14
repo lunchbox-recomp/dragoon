@@ -6,6 +6,8 @@ import SwiftUI
 public struct LauncherView: View {
     /// The size the window opens at, in points, which the snapshots render at too.
     nonisolated public static let defaultSize = CGSize(width: 960, height: 600)
+    /// The smallest the window goes, which a snapshot renders Library's fullest state at.
+    nonisolated public static let minimumSize = CGSize(width: 820, height: 520)
 
     let state: Flow.State
     let send: Send

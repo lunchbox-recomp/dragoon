@@ -11,7 +11,8 @@ struct SnapshotTests {
     static func render(_ fixture: ScreenFixture) -> Bitmap? {
         Snapshot.render(
             LauncherView(state: fixture.state, send: { _ in })
-                .environment(\.reducesMotion, fixture.reduceMotion))
+                .environment(\.reducesMotion, fixture.reduceMotion),
+            size: fixture.size)
     }
 
     static func file(_ name: String) -> URL {
