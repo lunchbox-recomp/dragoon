@@ -72,6 +72,14 @@ When that first read brings a banner, its pixels fly in over 900 ms on the Build
 
 `Dragoon --dump-banner DISC OUT.png` writes the banner as a PNG and prints its format and names as JSON, with the time the read and decode took on stderr. It exits 0 when the PNG is written and 2 for a bad argument. It exits 1 when DISC is a folder or isn't a regular file, when the disc can't be opened, when it has no banner and when the PNG can't be written, and says which on stderr. Only a regular file opens, and a FIFO is refused without waiting for a writer. On the supported disc on 2026-11-13 the read and decode took 0.21 ms, and the whole command 0.20 s.
 
+## settings.txt
+
+The game's working directory is `<data>`, so `<data>/settings.txt` is the file it reads its picture and disc speed from as it starts, and the file its Display page saves (gcn-recomp `runtime/settings.h`). `PictureSettings` in `DragoonCore` reads the four keys the engine saves, `aspect`, `fullscreen`, `scale` and `disc`, as `settings_load` does. The last line of a key whose value the engine takes wins, and a missing file gives the engine's defaults, 4:3, a window, scale 2 and fast.
+
+A save sets those four keys as `settings_save` does, through `SettingsText`, which works on the file's bytes. Each line of one of them is rewritten, and one the file lacks goes at the end in the line ending of the file's first newline. Every other line is kept byte for byte, comments, blank lines, unknown keys, bytes that aren't UTF-8 and a byte order mark included. The new file goes to `settings.txt.tmp` and is renamed over the old one, and a save that fails leaves the old file whole. Nothing is written for an aspect or scale the engine's load would skip, or when a file is there that can't be read.
+
+The 18 files in `Tests/DragoonCoreTests/SettingsFixtures/` came from a harness built against gcn-recomp's own `runtime/settings.cpp` and `runtime/platform.cpp` at e9b96fe. Its `settings_save` writes what the pinned 5e54665's does, which read the file with its own `fopen` in place of `plat_read_file`. Each `.in` is the file before a save, and each `.out` what the engine wrote over it with the values `cases.txt` gives. `PictureSettingsTests` saves the same values over each `.in` and checks the launcher writes the `.out` byte for byte.
+
 ## Running the recipe
 
 `BuildRunner.run(_:)` runs the build recipe with the tools the tools check found and gives its JSON lines back as `BuildEvent` values. The command is `<python3> -B -s <bundle>/Contents/Resources/source/tools/launcher_build.py` and then the recipe's options as a list, so a path with spaces stays one argument. `-B` keeps `__pycache__` out of the signed bundle, `-s` keeps the player's user site-packages off the path, and the kit comes from `Contents/Resources/kit`.

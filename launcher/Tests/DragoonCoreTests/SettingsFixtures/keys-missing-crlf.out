@@ -1,0 +1,6 @@
+# just a comment
+ram_patches patches.txt
+aspect 16:9
+fullscreen 1
+scale 2
+disc fast

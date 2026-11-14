@@ -31,6 +31,9 @@ public protocol FileSystem: Sendable {
     /// Moves the file at `path` to `destination`, making the destination's directory first.
     /// Throws `POSIXError(.EEXIST)` and moves nothing when something is at `destination` already.
     func moveItem(at path: String, to destination: String) throws
+    /// Renames the file at `path` to `destination` in one step, replacing a file that's there,
+    /// as rename(2) does. Both are in one directory, which exists.
+    func renameItem(at path: String, over destination: String) throws
 }
 
 /// The real FileSystem, on FileManager.
@@ -106,6 +109,12 @@ public struct SystemFileSystem: FileSystem {
         // RENAME_EXCL checks and moves in one step, so nothing that turns up at the destination
         // meanwhile is replaced.
         if renamex_np(path, destination, UInt32(RENAME_EXCL)) != 0 {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+    }
+
+    public func renameItem(at path: String, over destination: String) throws {
+        if rename(path, destination) != 0 {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
     }

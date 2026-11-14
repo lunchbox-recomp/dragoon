@@ -23,7 +23,14 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
     private var directories: Set<String> = ["/"]
     private var links: [String: String] = [:]
     private var writeError: (any Error)?
+    private var renameError: (any Error)?
     private var written: [Write] = []
+    private var renamed: [Rename] = []
+
+    struct Rename: Equatable {
+        var from: String
+        var to: String
+    }
 
     func addDirectory(_ path: String) {
         lock.withLock { makeDirectories(path) }
@@ -133,6 +140,27 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
             files[target] = data
         }
     }
+
+    func renameItem(at path: String, over destination: String) throws {
+        try lock.withLock {
+            if let renameError { throw renameError }
+            let source = resolve(path)
+            guard let data = files[source] else { throw POSIXError(.ENOENT) }
+            let target = resolve(destination)
+            guard !directories.contains(target) else { throw POSIXError(.EISDIR) }
+            files[source] = nil
+            files[target] = data
+            renamed.append(Rename(from: source, to: target))
+        }
+    }
+
+    /// Makes every later rename throw `error`, while writes still go through.
+    func failRenames(with error: any Error) {
+        lock.withLock { renameError = error }
+    }
+
+    /// Every rename that went through, in order.
+    var renames: [Rename] { lock.withLock { renamed } }
 
     /// Makes every later write throw `error`.
     func failWrites(with error: any Error) {

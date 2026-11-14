@@ -169,6 +169,22 @@ private func cleanUp(_ tree: any Tree) {
     }
 
     @Test(arguments: Kind.allCases)
+    func renameReplacesWhatsThereAndNeedsASource(_ kind: Kind) throws {
+        let tree = try makeTree(kind)
+        defer { cleanUp(tree) }
+        let settings = tree.root + "/settings.txt"
+        try tree.file(settings, "old")
+        try tree.file(settings + ".tmp", "new")
+        try tree.fs.renameItem(at: settings + ".tmp", over: settings)
+        #expect(try tree.fs.readData(at: settings) == Data("new".utf8))
+        #expect(!tree.fs.fileExists(at: settings + ".tmp"))
+
+        try tree.fs.renameItem(at: settings, over: tree.root + "/settings two.txt")
+        #expect(try tree.fs.readData(at: tree.root + "/settings two.txt") == Data("new".utf8))
+        #expect(throws: (any Error).self) { try tree.fs.renameItem(at: settings, over: settings + ".x") }
+    }
+
+    @Test(arguments: Kind.allCases)
     func aReaderGivesTheBytesAtAnOffsetAndFewerOnlyAtTheEnd(_ kind: Kind) throws {
         let tree = try makeTree(kind)
         defer { cleanUp(tree) }

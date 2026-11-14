@@ -1,0 +1,10 @@
+﻿# Picture
+aspect window
+
+# Mods
+disc_overlay mods/manifest.txt
+menu_motion off
+future_key some value
+scale 2
+fullscreen 0
+disc fast

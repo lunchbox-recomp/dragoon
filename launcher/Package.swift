@@ -13,7 +13,8 @@ let package = Package(
         .executableTarget(name: "Dragoon", dependencies: ["DragoonCore", "DragoonViews"]),
         .target(name: "DragoonViews", dependencies: ["DragoonCore"]),
         .target(name: "DragoonCore"),
-        .testTarget(name: "DragoonCoreTests", dependencies: ["DragoonCore"]),
+        .testTarget(
+            name: "DragoonCoreTests", dependencies: ["DragoonCore"], exclude: ["SettingsFixtures"]),
         .testTarget(
             name: "DragoonViewsTests", dependencies: ["DragoonViews", "DragoonCore"],
             exclude: ["Snapshots"]),

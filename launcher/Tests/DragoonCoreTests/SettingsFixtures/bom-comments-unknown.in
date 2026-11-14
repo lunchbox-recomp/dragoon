@@ -1,0 +1,8 @@
+﻿# Picture
+aspect 4:3
+
+# Mods
+disc_overlay mods/manifest.txt
+menu_motion off
+future_key some value
+scale 2
