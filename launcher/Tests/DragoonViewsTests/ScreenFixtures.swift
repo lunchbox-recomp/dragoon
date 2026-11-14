@@ -34,8 +34,9 @@ private func state(
     return state
 }
 
-/// One fixture for each case of `Flow.Screen` and of the screens it carries, and Library with
-/// each of the boxes it can show.
+/// One fixture for each case of `Flow.Screen` and of `ToolsScreen`, `DiscScreen` and
+/// `BuildScreen`, with one move reason and one disc problem, and Library with each of the boxes
+/// it can show.
 let screenFixtures: [ScreenFixture] = [
     ScreenFixture(name: "starting", state: Flow.State()),
     ScreenFixture(name: "must-move", state: state(.mustMove(.refusedCharacter(":")))),
