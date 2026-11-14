@@ -874,6 +874,17 @@ launcher/tools/swift_test.py --filter FileSystemTests
 
 [Why a wrapper runs the tests](../launcher/README.md#why-a-wrapper-runs-the-tests) in the launcher's README gives the flags it adds and when. It adds none when `xcode-select` fails, and it prints the swift command on stderr as a `+` line before it runs. A signal that ends swift exits 128 plus its number, and exit 2 means swift couldn't be started.
 
+## idle_cpu.py
+
+How much of one core does the launcher use while it sits there? idle_cpu.py lives in `launcher/tools/`. It reads a process's CPU time, user and system for every thread, from `/bin/ps -o cputime=`, waits, reads it again and prints the share of one core over the time that passed.
+
+```
+launcher/tools/idle_cpu.py 4242 60
+pid 4242: 0.07% of a core, 0.04 s of CPU in 60.0 s
+```
+
+ps gives CPU time to a hundredth of a second, so a 60 second reading is good to about 0.02%. It never signals the process. It exits 1 when the process isn't there at the start or has gone by the end, and 2 on a bad argument. The tests measure a sleeping and a busy child of their own, as well as one that has exited.
+
 ## fork_cites.py
 
 Which gcn-recomp cites did an engine bump leave pointing at the wrong lines? fork_cites.py finds the cites of fork files by line in every tracked text file. It reads each one's lines at OLD with `git -C gcn-recomp show` and looks for the same text at NEW. Run it after moving the pin and before touching a cite.
