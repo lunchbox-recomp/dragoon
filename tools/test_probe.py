@@ -431,13 +431,14 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertTrue((self.run_dir() / "ran-build-dragoon").exists())
 
     def test_a_game_that_exits_ends_the_run_at_the_next_one_second_tick(self):
-        # The game outlives probe.sh's first look, so the run waits out at least one tick. A tick
-        # of 8 s fails this however fast the machine is, and one of 1 s leaves 6 s for the load.
-        self.add_game("dragoon", "sleep 1\n")
-        began = time.monotonic()
+        # The game outlives probe.sh's first look, so the run waits out at least one tick, and it
+        # marks its exit, so a load that slows the game's start doesn't count. From the mark to
+        # the run's end is what's left of the tick: up to about 1 s here, and 3 s of a 4 s tick.
+        self.add_game("dragoon", "sleep 1\ntouch exited\n")
         r = probe(NAME, SECONDS, script=self.script)  # RUN_LIMIT is well short of SECONDS
+        ended = time.time()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertLess(time.monotonic() - began, 8)
+        self.assertLess(ended - (self.run_dir() / "exited").stat().st_mtime, 2.5)
 
     def test_seconds_ends_a_run_whose_game_never_exits(self):
         self.add_game("dragoon", "echo $$ > pid.txt\nexec sleep 600\n")
