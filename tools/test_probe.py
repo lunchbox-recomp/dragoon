@@ -447,12 +447,15 @@ class ProbeTreeTest(unittest.TestCase):
         self.assertLess(ended - ticks_began - math.ceil(exited - ticks_began), 0.75)
 
     def test_seconds_ends_a_run_whose_game_never_exits(self):
-        # The game takes a moment to stop, so a probe.sh that didn't wait for it ends first
-        self.add_game("dragoon", 'echo $$ > pid.txt\ntrap "sleep 1; exit 0" TERM\nwhile :; do sleep 1; done\n')
+        # The game takes 1 s to stop once it's told, so a probe.sh that didn't wait for it ends
+        # first. Its wait lets the TERM in at once, not after the sleep in hand
+        self.add_game("dragoon", 'echo $$ > pid.txt\ntrap "sleep 1; exit 0" TERM\nwhile :; do sleep 1 & wait $!; done\n')
         pid_file = self.run_dir() / "pid.txt"
         self.addCleanup(self.kill_if_alive, pid_file)  # if probe.sh timed out or left it running
-        r = probe(NAME, "2", script=self.script)
+        began = time.monotonic()
+        r = probe(NAME, "4", script=self.script)  # 4 s gives a loaded machine time to start the game
         self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertGreaterEqual(time.monotonic() - began, 5)  # 4 ticks, then the game's 1 s to stop
         with self.assertRaises(ProcessLookupError):  # killed at SECONDS, and waited for
             os.kill(int(pid_file.read_text()), 0)
 
