@@ -36,7 +36,17 @@ private let discPath = "/Users/Test Player/Games/Kirby Air Ride (USA).gcm"
         let result = runDumpBanner(["--dump-banner", discPath, out], fs: fs)
         #expect(result.status == 1)
         #expect(result.stdout == "")
-        #expect(result.stderr == "\(discPath): no opening.bnr found on the root\n")
+        #expect(result.stderr == "\(discPath): no opening.bnr on the root that can be read\n")
+        #expect(fs.writes.isEmpty)
+    }
+
+    @Test func aDiscThatCantBeOpenedExits1AndSaysSo() {
+        let fs = FakeFileSystem()
+        let result = runDumpBanner(["--dump-banner", discPath, out], fs: fs)
+        #expect(result.status == 1)
+        #expect(result.stdout == "")
+        #expect(result.stderr.hasPrefix("\(discPath): can't be opened ("))
+        #expect(result.stderr.hasSuffix(")\n"))
         #expect(fs.writes.isEmpty)
     }
 

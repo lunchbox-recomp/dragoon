@@ -63,7 +63,12 @@ public struct DiscBanner: Equatable, Sendable {
         -> DiscBanner?
     {
         guard let file = try? fs.openReader(at: path) else { return nil }
-        return try? find(in: file)
+        return read(from: file)
+    }
+
+    /// The banner of the disc image `file` holds, as `read(at:)` gives it.
+    static func read(from file: any FileReader) -> DiscBanner? {
+        try? find(in: file)
     }
 
     /// The pixels as an image with straight alpha, in sRGB.
