@@ -55,4 +55,18 @@ import Testing
         _ = throttle.offer(.step("swap"), at: at(1))
         #expect(throttle.offer(event, at: at(1.01)) == [Self.timed(event, 1.01)])
     }
+
+    @Test(arguments: [
+        BuildEvent.done(game: "/x/game/current/Dragoon.app"),
+        .error(step: "compile", message: "make failed", log: "/x.log"),
+    ])
+    func doneAndErrorGoAfterTheProgressHeldBack(_ event: BuildEvent) {
+        var throttle = ProgressThrottle()
+        _ = throttle.offer(Self.compile(1), at: at(1))
+        _ = throttle.offer(Self.compile(2), at: at(1.01))
+        #expect(throttle.offer(event, at: at(1.02)) == [
+            Self.timed(Self.compile(2), 1.01), Self.timed(event, 1.02),
+        ])
+        #expect(throttle.due == nil)
+    }
 }
