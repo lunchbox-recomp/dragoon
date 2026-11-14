@@ -1022,10 +1022,9 @@ real game's own time to its window isn't here.
 
 | Check | Bar | Measured | Result |
 |---|---|---|---|
-| Play to the game's process starting, in `LaunchTimingTests` | 250 ms | 1.4 to 4.3 ms | Pass |
-| The `window` line going in to the flow hiding on it | 100 ms | 4 to 35 ms | Pass |
-| Play to the game's window, then to its first frame, by the file and the launcher's clock | at least the fake's 300 and 700 ms | 301 to 304 ms, then 701 to 704 ms | Pass |
-| The same in a release app, the fake saying 500 and 1,000 ms | none set | 557 to 577 ms, then 1,057 to 1,077 ms | Recorded |
+| Play to the game's process starting, by the launcher's clock and the kernel's start time, as `LaunchTimingTests` prints it | 250 ms | 0.7 to 2.1 ms | Pass |
+| The `window` line going in, by the file's time, to the flow hiding on it, as `LaunchTimingTests` prints it | 100 ms | 1.9 to 3.9 ms | Pass |
+| Play to the game's process starting in a release app, by its logged times less the fake's 500 ms | none set | 57 to 77 ms | Recorded |
 | An engine that writes no ready file, Play to the hide | 5 s and a log line | 5.0 s, and the line | Pass |
 | The game ending to the window back in, App Nap held off | 0.5 s | 265 and 380 ms | Pass |
 | The same before App Nap was held off | 0.5 s | 270 ms, or 26 s to over 2 minutes | Fail, fixed in `d34b76d` |
@@ -1033,10 +1032,12 @@ real game's own time to its window isn't here.
 | Hiding with neither a `window` line nor the 5 s timeout | never | never, in `FlowHandOffTests` | Pass |
 | The bars above on the real game | an engine that writes `GCN_READY_FILE`, which the gcn-recomp pin bump brings | Not measured | Not measured |
 
-The fake game in `LaunchTimingTests` is a shell script that writes `window 300` and `frame 700`
-as the engine does. Its times count from the process start, as the engine's do, but its
-shell takes 300 to 930 ms more before it runs a line, so its `window` line really went in
-600 to 1,230 ms after the start.
+The first two rows are from 2026-11-14, ten runs of `LaunchTimingTests`, five alone and five in
+the full suite. It prints each run's times and holds none to a bar, as a loaded runner can
+take many times as long. Its fake game is a shell script that writes `window 300` and
+`frame 700` as the engine does, so the times the file gives are the fake's own and aren't
+measured here. By the file's time its `window` line went in 443 to 475 ms after the process
+started alone and 443 to 4,515 ms in the full suite.
 The release app was a scratch build answering the bookmark and the disc check at once, under
 a scratch HOME, with a fake `dragoon` that writes `window 500` and `frame 1000` and then idles.
 So Play to the game's start took 57 to 77 ms in that app. A launcher started from a shell
