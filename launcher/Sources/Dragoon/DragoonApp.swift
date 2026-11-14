@@ -72,7 +72,10 @@ struct ModelView: View {
         LauncherView(state: model.state, send: { model.send($0) })
             .environment(\.windowIsActive, windowIsActive)
             .environment(\.windowIsVisible, windowIsVisible)
-            .background(WindowWatcher(isActive: $windowIsActive, isVisible: $windowIsVisible))
+            .background(
+                WindowWatcher(isActive: $windowIsActive, isVisible: $windowIsVisible) {
+                    model.attach($0)
+                })
             .onAppear { model.launch() }
     }
 }

@@ -3,11 +3,13 @@ import DragoonViews
 import SwiftUI
 
 /// Tells `isActive` whether the window it sits in is key and on screen, so the hero can stop
-/// when it isn't, and `isVisible` whether any of it is on screen, key or not. It also lets the
-/// window be dragged by its background, since its title bar is hidden.
+/// when it isn't, and `isVisible` whether any of it is on screen, key or not, and hands the
+/// window to `found`. It also lets the window be dragged by its background, since its title bar
+/// is hidden.
 struct WindowWatcher: NSViewRepresentable {
     @Binding var isActive: Bool
     @Binding var isVisible: Bool
+    let found: (NSWindow) -> Void
 
     func makeNSView(context: Context) -> WatchingView {
         let view = WatchingView()
@@ -18,6 +20,7 @@ struct WindowWatcher: NSViewRepresentable {
                 isVisible = visible
             }
         }
+        view.found = found
         return view
     }
 
@@ -26,6 +29,7 @@ struct WindowWatcher: NSViewRepresentable {
 
 final class WatchingView: NSView {
     var report: (_ active: Bool, _ visible: Bool) -> Void = { _, _ in }
+    var found: (NSWindow) -> Void = { _ in }
     private var observers: [NSObjectProtocol] = []
 
     override func viewDidMoveToWindow() {
@@ -34,6 +38,7 @@ final class WatchingView: NSView {
         observers = []
         guard let window else { return }
         window.isMovableByWindowBackground = true
+        found(window)
         let names: [Notification.Name] = [
             NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
             NSWindow.didChangeOcclusionStateNotification,

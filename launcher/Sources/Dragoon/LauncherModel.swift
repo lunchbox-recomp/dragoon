@@ -1,3 +1,4 @@
+import AppKit
 import DragoonCore
 import Foundation
 import Observation
@@ -34,8 +35,16 @@ final class LauncherModel {
 
     func send(_ event: Flow.Event) {
         let (next, todo) = Flow.reduce(state, event)
+        if event == .playPressed, next.handOff == .charging, state.handOff != .charging {
+            effects.playPressedAt = Date()
+        }
         state = next
         todo.forEach(effects.perform)
+    }
+
+    /// The window the launcher shows, which fades for the game.
+    func attach(_ window: NSWindow) {
+        effects.window = window
     }
 }
 
