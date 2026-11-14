@@ -13,9 +13,11 @@ the working tree, for cites of gcn-recomp files by line. These forms count:
   , N or , N-M straight after a cite         a list, as in render_gl_batch.cpp:180, 522-523, when
                                              the number ends at ), comma, ; or a backtick
 A bare name Dragoon also has, such as CMakeLists.txt, needs the gcn-recomp/ prefix to count. A
-name two fork files share is skipped with a warning. PATH:N:M is a compiler's diagnostic, not a
-cite, and Markdown's fenced code blocks hold quoted output, so their lines are skipped. Paths
-with spaces aren't recognised.
+name two fork files share is skipped with a warning. So is a Markdown :N with no file:N cite
+before it on its line, even one whose file is named there without a line or on the line before,
+since the tool can't tell which file it means. PATH:N:M is a compiler's diagnostic, not a cite,
+and Markdown's fenced code blocks hold quoted output, so their lines are skipped. Paths with
+spaces aren't recognised.
 
 Each cite's lines are read at OLD with git -C gcn-recomp show. A cite whose file changed between
 OLD and NEW is listed as one of:
@@ -66,10 +68,12 @@ class Cite(NamedTuple):
     last: int
 
 
-def find(text: str, markdown: bool) -> list[Cite]:
+def find(text: str, markdown: bool) -> tuple[list[Cite], list[tuple[int, str]]]:
     """TEXT's cites in order, each continuation and list item carrying its file's path as
-    written. MARKDOWN skips fenced code blocks."""
+    written, and its strays. MARKDOWN skips fenced code blocks and finds strays, each :N with
+    no cite before it on its line, as (line, the :N as written)."""
     cites: list[Cite] = []
+    strays: list[tuple[int, str]] = []
     fenced = False
     for number, line in enumerate(text.splitlines(), 1):
         if markdown and FENCE.match(line):
@@ -81,9 +85,11 @@ def find(text: str, markdown: bool) -> list[Cite]:
         found += [(m.start(), m.end(), None, m.group(1), m.group(2))
                   for m in CONTINUATION.finditer(line)]
         path = None
-        for _, end, written, first, last in sorted(found):
+        for start, end, written, first, last in sorted(found):
             path = written or path
             if path is None:
+                if markdown:
+                    strays.append((number, line[start:end]))
                 continue
             cites.append(Cite(number, path, int(first), int(last or first)))
             while True:
@@ -92,7 +98,7 @@ def find(text: str, markdown: bool) -> list[Cite]:
                     break
                 cites.append(Cite(number, path, int(item.group(1)), int(item.group(2) or item.group(1))))
                 end = item.end()
-    return cites
+    return cites, strays
 
 
 def git(repo: Path, *args: str) -> bytes:
@@ -199,7 +205,11 @@ def run(repo: Path, old: str, new: str, at: Optional[str]) -> int:
     dragoon, texts = dragoon_texts(repo, at)
     counts = dict.fromkeys(("ok", "moved", "gone", "outside", "unchanged"), 0)
     for doc, body in texts.items():
-        for cite in find(body, doc.endswith(".md")):
+        cites, strays = find(body, doc.endswith(".md"))
+        for number, written in strays:
+            print(f"fork_cites.py: {doc}:{number}: {written} has no file:N cite before it on its line, "
+                  "so it isn't checked", file=sys.stderr)
+        for cite in cites:
             path, several = resolve(cite.path, dragoon, fork)
             if several:
                 print(f"fork_cites.py: {doc}:{cite.line}: {cite.path} names {len(several)} fork "

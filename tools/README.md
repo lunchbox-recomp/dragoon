@@ -894,7 +894,7 @@ These count as cites:
 
 No fork file has the `example` names, so the tool doesn't count those cites. The first example is a real cite, and it's checked. The tool skips its own source and tests, which are full of examples.
 
-A name Dragoon also has, such as `CMakeLists.txt`, needs the `gcn-recomp/` prefix. A name two fork files share is skipped with a warning on stderr. A `file:N:M` compiler diagnostic isn't a cite, and nor is anything in a Markdown fenced block, which holds quoted output.
+A name Dragoon also has, such as `CMakeLists.txt`, needs the `gcn-recomp/` prefix. A name two fork files share is skipped with a warning on stderr. So is a `:N` in Markdown with no `file:N` cite before it on its line, even one whose file is named there without a line or on the line before, since the tool can't tell which file it means. Give each such cite its file. A `file:N:M` compiler diagnostic isn't a cite, and nor is anything in a Markdown fenced block, which holds quoted output.
 
 It prints `ok`, `moved ... now A-B` or `gone` for each cite whose file changed, comparing lines with their surrounding whitespace stripped. `outside` marks a cite whose lines aren't in the file at OLD, changed or not, since it was stale before the bump. Then it prints `total T, ok O, moved M, gone G, outside X, unchanged U`. It exits 1 when any cite moved, is gone or is outside.
 
