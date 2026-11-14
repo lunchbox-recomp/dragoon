@@ -7,20 +7,10 @@ private let kirbyID = "GKYE01"
 private let home = "/Users/Test Player"
 private let discPath = home + "/Games/Kirby Air Ride (USA).gcm"
 private let bundledInfo = home + "/Applications/Dragoon.app/Contents/Resources/source/source-info.json"
-/// A CISO block size small enough that a test image spans a few blocks.
-private let testBlockSize = 0x1000
 /// How many blocks a CISO header's map covers, which is 0x8000 less its eight leading bytes.
 private let mapBlocks = 0x8000 - 8
 
 // MARK: Images the tests write
-
-private func be32(_ value: UInt32) -> [UInt8] {
-    [UInt8(value >> 24), UInt8((value >> 16) & 0xFF), UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF)]
-}
-
-private func le32(_ value: UInt32) -> [UInt8] {
-    Array(be32(value).reversed())
-}
 
 private func sha1(_ data: Data) -> String {
     Insecure.SHA1.hash(data: data).map { String(format: "%02x", $0) }.joined()
@@ -70,42 +60,6 @@ private func makeISO(
     image.replaceSubrange(0x420..<0x424, with: be32(UInt32(dolOffset)))
     image.replaceSubrange(dolOffset..<dolOffset + dol.count, with: dol)
     return image
-}
-
-/// The blocks of `image` that hold any nonzero byte, by block number.
-private func storedBlocks(of image: Data, blockSize: Int = testBlockSize) -> [Int: Data] {
-    var blocks: [Int: Data] = [:]
-    for start in stride(from: 0, to: image.count, by: blockSize) {
-        let piece = image.subdata(in: start..<min(start + blockSize, image.count))
-        if piece.contains(where: { $0 != 0 }) { blocks[start / blockSize] = piece }
-    }
-    return blocks
-}
-
-/// A CISO holding `blocks`, each padded to `blockSize` and stored in block order. `mapBytes` sets
-/// map entries after that, for a byte that means "not stored" by some other name than 0.
-private func makeCISO(
-    blocks: [Int: Data], blockSize: Int = testBlockSize, blockSizeField: UInt32? = nil,
-    mapBytes: [Int: UInt8] = [:]
-) -> Data {
-    var header = Data(count: 0x8000)
-    header.replaceSubrange(0..<4, with: Array("CISO".utf8))
-    header.replaceSubrange(4..<8, with: le32(blockSizeField ?? UInt32(blockSize)))
-    var body = Data()
-    for block in blocks.keys.sorted() {
-        header[8 + block] = 1
-        var bytes = blocks[block]!
-        bytes.append(Data(count: blockSize - bytes.count))
-        body.append(bytes)
-    }
-    for (block, byte) in mapBytes { header[8 + block] = byte }
-    return header + body
-}
-
-private func makeCISO(from image: Data, blockSizeField: UInt32? = nil, mapBytes: [Int: UInt8] = [:])
-    -> Data
-{
-    makeCISO(blocks: storedBlocks(of: image), blockSizeField: blockSizeField, mapBytes: mapBytes)
 }
 
 /// The bytes a disc in `format` starts with, as Dolphin reads them, and then junk.

@@ -142,13 +142,10 @@ private func inspect(
 ) throws -> DiscCheck {
     let plain = PlainImage(file: file)
     let image: any DiscBytes
-    switch littleEndianWord(try plain.read(at: 0, count: 4, orFailWith: .cutShort), at: 0) {
-    case Magic.wia: return .needsConversion(format: .wia)
-    case Magic.rvz: return .needsConversion(format: .rvz)
-    case Magic.gcz: return .needsConversion(format: .gcz)
-    case Magic.wbfs: return .needsConversion(format: .wbfs)
-    case Magic.ciso: image = try CISOImage(file: file)
-    default: image = plain
+    switch DiscFormat(magic: try plain.read(at: 0, count: 4, orFailWith: .cutShort)) {
+    case .needsConversion(let format): return .needsConversion(format: format)
+    case .ciso: image = try CISOImage(file: file)
+    case .plain: image = plain
     }
 
     let header = try image.read(at: 0, count: Layout.headerLength, orFailWith: .cutShort)
@@ -193,18 +190,37 @@ private func littleEndianWord(_ data: Data, at offset: Int) -> UInt32 {
     return (0..<4).reduce(0) { $0 | UInt32(data[start + $1]) << (8 * UInt32($1)) }
 }
 
-private func bigEndianWord(_ data: Data, at offset: Int) -> UInt32 {
+func bigEndianWord(_ data: Data, at offset: Int) -> UInt32 {
     let start = data.startIndex + offset
     return (0..<4).reduce(0) { $0 << 8 | UInt32(data[start + $1]) }
 }
 
 // MARK: - The image as a run of bytes
 
+/// How a disc image is stored, by the word at its start.
+enum DiscFormat: Equatable {
+    case plain
+    case ciso
+    case needsConversion(UnsupportedDiscFormat)
+
+    /// `magic` is at least the file's first 4 bytes.
+    init(magic: Data) {
+        switch littleEndianWord(magic, at: 0) {
+        case Magic.wia: self = .needsConversion(.wia)
+        case Magic.rvz: self = .needsConversion(.rvz)
+        case Magic.gcz: self = .needsConversion(.gcz)
+        case Magic.wbfs: self = .needsConversion(.wbfs)
+        case Magic.ciso: self = .ciso
+        default: self = .plain
+        }
+    }
+}
+
 /// A read that asked for bytes the image doesn't hold.
-private struct PastTheEnd: Error {}
+struct PastTheEnd: Error {}
 
 /// A disc image as one run of bytes, whatever it's stored as.
-private protocol DiscBytes {
+protocol DiscBytes {
     /// Exactly `count` bytes at `offset`, or `PastTheEnd` when the image ends first.
     func read(at offset: UInt64, count: Int) throws -> Data
 }
@@ -222,7 +238,7 @@ extension DiscBytes {
     }
 }
 
-private struct PlainImage: DiscBytes {
+struct PlainImage: DiscBytes {
     let file: any FileReader
 
     func read(at offset: UInt64, count: Int) throws -> Data {
@@ -236,7 +252,7 @@ private struct PlainImage: DiscBytes {
 /// a little-endian block size, then a byte per block that says whether it's stored, which only a
 /// 1 does. A block that isn't stored reads as zeros. The map covers 0x8000 - 8 blocks, and the
 /// image ends where it does, as it does in Dolphin's `CISOFileReader::Read`.
-private struct CISOImage: DiscBytes {
+struct CISOImage: DiscBytes {
     static let headerLength = 0x8000
     static let mapStart = 8
 
