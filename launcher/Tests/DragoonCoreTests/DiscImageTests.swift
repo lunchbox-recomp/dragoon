@@ -492,7 +492,7 @@ private let pastTheEndResult = DiscCheck.unreadable(
         return fs
     }
 
-    private func run(_ arguments: [String], _ fs: FakeFileSystem) -> CheckDiscCommandResult {
+    private func run(_ arguments: [String], _ fs: FakeFileSystem) -> CommandResult {
         runCheckDisc(arguments, bundledSourceInfo: bundledInfo, fs: fs)
     }
 
@@ -502,7 +502,7 @@ private let pastTheEndResult = DiscCheck.unreadable(
 
     @Test func aDiscThatMatchesPrintsOKAndExits0() throws {
         let result = run(["--check-disc", discPath], world())
-        #expect(result == CheckDiscCommandResult(stdout: DiscCheck.ok.json() + "\n", stderr: "", status: 0))
+        #expect(result == CommandResult(stdout: DiscCheck.ok.json() + "\n", stderr: "", status: 0))
     }
 
     @Test func aDiscThatDoesntMatchPrintsWhyAndExits1() {

@@ -6,10 +6,10 @@ import Foundation
 /// is 0 when the PNG is written, 1 when the disc can't be opened, has no banner that can be
 /// read or the PNG can't be written, and 2 for any other arguments. Each 1 says which.
 public func runDumpBanner(_ arguments: [String], fs: any FileSystem = SystemFileSystem())
-    -> CheckDiscCommandResult
+    -> CommandResult
 {
     guard arguments.count == 3, arguments[0] == "--dump-banner" else {
-        return CheckDiscCommandResult(
+        return CommandResult(
             stdout: "", stderr: "usage: Dragoon --dump-banner DISC OUT.png\n", status: 2)
     }
     let disc = arguments[1]
@@ -20,25 +20,25 @@ public func runDumpBanner(_ arguments: [String], fs: any FileSystem = SystemFile
     do {
         file = try fs.openReader(at: disc)
     } catch {
-        return CheckDiscCommandResult(
+        return CommandResult(
             stdout: "", stderr: "\(disc): can't be opened (\(error.localizedDescription))\n",
             status: 1)
     }
     let banner = DiscBanner.read(from: file)
     let took = clock.now - start
     guard let banner else {
-        return CheckDiscCommandResult(
+        return CommandResult(
             stdout: "", stderr: "\(disc): no opening.bnr on the root that can be read\n",
             status: 1)
     }
     guard let png = banner.png() else {
-        return CheckDiscCommandResult(
+        return CommandResult(
             stdout: "", stderr: "the banner couldn't be made into a PNG\n", status: 1)
     }
     do {
         try fs.writeData(png, to: out)
     } catch {
-        return CheckDiscCommandResult(
+        return CommandResult(
             stdout: "", stderr: "\(out): can't be written (\(error.localizedDescription))\n",
             status: 1)
     }
@@ -49,7 +49,7 @@ public func runDumpBanner(_ arguments: [String], fs: any FileSystem = SystemFile
     ]
     let milliseconds = Double(took.components.seconds) * 1000
         + Double(took.components.attoseconds) / 1e15
-    return CheckDiscCommandResult(
+    return CommandResult(
         stdout: String(decoding: encodeJSON(fields), as: UTF8.self) + "\n",
         stderr: String(format: "read and decoded in %.3f ms\n", milliseconds), status: 0)
 }

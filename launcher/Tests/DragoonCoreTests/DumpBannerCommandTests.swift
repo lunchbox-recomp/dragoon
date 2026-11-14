@@ -66,7 +66,7 @@ private let discPath = "/Users/Test Player/Games/Kirby Air Ride (USA).gcm"
     func badArgumentsPrintUsageAndExit2(_ arguments: [String]) {
         let fs = world()
         let result = runDumpBanner(arguments, fs: fs)
-        #expect(result == CheckDiscCommandResult(
+        #expect(result == CommandResult(
             stdout: "", stderr: "usage: Dragoon --dump-banner DISC OUT.png\n", status: 2))
         #expect(fs.writes.isEmpty)
     }
