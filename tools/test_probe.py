@@ -8,15 +8,19 @@ import unittest
 from pathlib import Path
 
 import warm_shaders
-from testutil import temp_dir, write_file
+from testutil import RUN_LIMIT, temp_dir, write_file
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "tools" / "probe.sh"
 NAME = "test-probe-never-run"
+# The SECONDS of a run here. Every fake game exits by itself, which ends the run at probe.sh's
+# next one-second tick, so no run waits it out: it's there to be longer than a fake game takes to
+# start on a loaded machine, and than RUN_LIMIT, so a run its game's exit didn't end fails.
+SECONDS = "600"
 
 
 def probe(*args: str, script: Path = PROBE, cwd: Path | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run([str(script), *args], capture_output=True, text=True, timeout=10, cwd=cwd)
+    return subprocess.run([str(script), *args], capture_output=True, text=True, timeout=RUN_LIMIT, cwd=cwd)
 
 
 class ProbeArgumentsTest(unittest.TestCase):
@@ -43,22 +47,22 @@ class ProbeArgumentsTest(unittest.TestCase):
         self.assertIn("SECONDS", r.stderr)
 
     def test_scale_out_of_range_exits_2(self):
-        r = probe(NAME, "1", "", "60", "--scale=10")
+        r = probe(NAME, SECONDS, "", "60", "--scale=10")
         self.assertEqual(r.returncode, 2)
         self.assertIn("--scale=10", r.stderr)
 
     def test_empty_log_list_exits_2(self):
-        r = probe(NAME, "1", "", "60", "--log=")
+        r = probe(NAME, SECONDS, "", "60", "--log=")
         self.assertEqual(r.returncode, 2)
         self.assertIn("--log=", r.stderr)
 
     def test_empty_aspect_exits_2(self):
-        r = probe(NAME, "1", "", "60", "--aspect=")
+        r = probe(NAME, SECONDS, "", "60", "--aspect=")
         self.assertEqual(r.returncode, 2)
         self.assertIn("--aspect=", r.stderr)
 
     def test_empty_bin_exits_2(self):
-        r = probe(NAME, "1", "", "60", "--bin=")
+        r = probe(NAME, SECONDS, "", "60", "--bin=")
         self.assertEqual(r.returncode, 2)
         self.assertIn("--bin=", r.stderr)
 
@@ -78,21 +82,21 @@ class ProbeTreeTest(unittest.TestCase):
         game.chmod(game.stat().st_mode | stat.S_IXUSR)
 
     def test_missing_game_exits_2_before_making_a_run_directory(self):
-        r = probe(NAME, "1", script=self.script)
+        r = probe(NAME, SECONDS, script=self.script)
         self.assertEqual(r.returncode, 2)
         self.assertIn("build/dragoon", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
     def test_missing_bench_exits_2_even_with_the_game_built(self):
         self.add_game("dragoon", "")
-        r = probe(NAME, "1", "", "60", "--bench", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", "--bench", script=self.script)
         self.assertEqual(r.returncode, 2)
         self.assertIn("build/dragoon_bench", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
     def test_log_with_bench_exits_2_before_making_a_run_directory(self):
         self.add_game("dragoon_bench", "echo 'whole run'\n")
-        r = probe(NAME, "1", "", "60", "--log=dsp", "--bench", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", "--log=dsp", "--bench", script=self.script)
         self.assertEqual(r.returncode, 2)
         self.assertIn("--log", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
@@ -100,21 +104,21 @@ class ProbeTreeTest(unittest.TestCase):
     def test_aspect_or_output_with_bench_exits_2_before_making_a_run_directory(self):
         self.add_game("dragoon_bench", "echo 'whole run'\n")
         for setting in ("--aspect=16:9", "--output"):
-            r = probe(NAME, "1", "", "60", setting, "--bench", script=self.script)
+            r = probe(NAME, SECONDS, "", "60", setting, "--bench", script=self.script)
             self.assertEqual(r.returncode, 2, setting)
             self.assertIn(setting, r.stderr)
             self.assertFalse((self.root / "build" / "probe").exists())
 
     def test_crashed_bench_with_no_report_exits_1(self):
         self.add_game("dragoon_bench", "exit 3\n")
-        r = probe(NAME, "1", "", "60", "--bench", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", "--bench", script=self.script)
         self.assertEqual(r.returncode, 1)
 
     def test_route_file_is_flattened_as_warm_shaders_does(self):
         route = write_file(self.root, "route.txt",
                            b"# a comment\r\n120:A:5, 300:A:5,\r\n\r\n# more\r\n  900 : A : 5\r\n\n")
         self.add_game("dragoon", "printf '%s' \"$GCN_INPUT\" > input.txt\n")
-        r = probe(NAME, "1", str(route), script=self.script)
+        r = probe(NAME, SECONDS, str(route), script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         got = (self.root / "build" / "probe" / NAME / "input.txt").read_text()
         self.assertEqual(got, warm_shaders.script_text(route))
@@ -122,7 +126,7 @@ class ProbeTreeTest(unittest.TestCase):
 
     def game_args(self, *settings: str, game: str = "dragoon") -> list[str]:
         self.add_game(game, "printf '%s\\n' \"$@\" > args.txt\necho 'whole run'\n")
-        r = probe(NAME, "1", "", "60", *settings, script=self.script, cwd=self.root)
+        r = probe(NAME, SECONDS, "", "60", *settings, script=self.script, cwd=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         return (self.root / "build" / "probe" / NAME / "args.txt").read_text().splitlines()
 
@@ -146,7 +150,7 @@ class ProbeTreeTest(unittest.TestCase):
 
     def test_a_missing_disc_exits_2_before_making_a_run_directory(self):
         self.add_game("dragoon", "")
-        r = probe(NAME, "1", "", "60", "--disc=no such.iso", script=self.script, cwd=self.root)
+        r = probe(NAME, SECONDS, "", "60", "--disc=no such.iso", script=self.script, cwd=self.root)
         self.assertEqual(r.returncode, 2)
         self.assertIn(f"{self.root}/no such.iso", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
@@ -183,14 +187,14 @@ class ProbeTreeTest(unittest.TestCase):
         self.add_game("dragoon", "")
         for bad in ("--disc=slow", "--disc=Console", "--disc=fast ", "--disc="):
             with self.subTest(bad=bad):
-                r = probe(NAME, "1", "", "60", bad, script=self.script, cwd=self.root)
+                r = probe(NAME, SECONDS, "", "60", bad, script=self.script, cwd=self.root)
                 self.assertEqual(r.returncode, 2)
                 self.assertIn("--disc", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
     def test_a_refused_disc_path_says_the_speeds_too(self):
         self.add_game("dragoon", "")
-        r = probe(NAME, "1", "", "60", "--disc=slow", script=self.script, cwd=self.root)
+        r = probe(NAME, SECONDS, "", "60", "--disc=slow", script=self.script, cwd=self.root)
         self.assertEqual(r.returncode, 2)
         self.assertIn(f"no disc image at {self.root}/slow", r.stderr)
         self.assertIn("fast or console", r.stderr)
@@ -199,7 +203,7 @@ class ProbeTreeTest(unittest.TestCase):
         self.add_game("dragoon_bench", "echo 'whole run'\n")
         for speed in ("--disc=fast", "--disc=console"):
             with self.subTest(speed=speed):
-                r = probe(NAME, "1", "", "60", speed, "--bench", script=self.script)
+                r = probe(NAME, SECONDS, "", "60", speed, "--bench", script=self.script)
                 self.assertEqual(r.returncode, 2)
                 self.assertIn(f"{speed} needs a windowed run", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
@@ -224,13 +228,13 @@ class ProbeTreeTest(unittest.TestCase):
 
     def test_dragoon_setting_reaches_the_game_environment(self):
         self.add_game("dragoon", "printf '%s' \"$DRAGOON_CENSUS\" > census.txt\n")
-        r = probe(NAME, "1", "", "60", "DRAGOON_CENSUS=1", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", "DRAGOON_CENSUS=1", script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual((self.root / "build" / "probe" / NAME / "census.txt").read_text(), "1")
 
     def test_gcn_setting_reaches_the_game_environment(self):
         self.add_game("dragoon", "printf '%s' \"$GCN_FRAMETIME\" > frametime.txt\n")
-        r = probe(NAME, "1", "", "60", "GCN_FRAMETIME=1", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", "GCN_FRAMETIME=1", script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual((self.root / "build" / "probe" / NAME / "frametime.txt").read_text(), "1")
 
@@ -240,8 +244,8 @@ class ProbeTreeTest(unittest.TestCase):
         for name, settings in (("dragoon", ()), ("dragoon_bench", ("--bench",))):
             with self.subTest(name=name):
                 self.add_game(name, "printf '%s' \"$GCN_INTERPRET\" > interpret.txt\necho 'whole run'\n")
-                r = subprocess.run([str(self.script), NAME, "1", "", "60", *settings], capture_output=True,
-                                   text=True, timeout=10, env=env)
+                r = subprocess.run([str(self.script), NAME, SECONDS, "", "60", *settings], capture_output=True,
+                                   text=True, timeout=RUN_LIMIT, env=env)
                 self.assertEqual(r.returncode, 0, r.stderr)
                 self.assertEqual((self.root / "build" / "probe" / NAME / "interpret.txt").read_text(),
                                  "/lists/one.txt")
@@ -249,14 +253,14 @@ class ProbeTreeTest(unittest.TestCase):
 
     def test_setting_of_another_prefix_exits_2_naming_it(self):
         self.add_game("dragoon", "")
-        r = probe(NAME, "1", "", "60", "FOO_BAR=1", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", "FOO_BAR=1", script=self.script)
         self.assertEqual(r.returncode, 2)
         self.assertIn("FOO_BAR=1", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
     def test_frame_count_leaves_out_output_dumps(self):
         self.add_game("dragoon", "touch frame_00060.png output_00060.png\n")
-        r = probe(NAME, "1", "", "60", "--output", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", "--output", script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(r.stdout.rstrip().endswith(": 1 frames"), r.stdout)
 
@@ -292,14 +296,14 @@ class ProbeTreeTest(unittest.TestCase):
         for given, shown in (("nowhere", self.root / "nowhere"), ("empty", self.root / "empty"),
                              (str(self.root / "nowhere"), self.root / "nowhere")):
             with self.subTest(given=given):
-                r = probe(NAME, "1", "", "60", f"--replay={given}", script=self.script, cwd=self.root)
+                r = probe(NAME, SECONDS, "", "60", f"--replay={given}", script=self.script, cwd=self.root)
                 self.assertEqual(r.returncode, 2)
                 self.assertIn(f"no input log at {shown}/inputs.txt", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
 
     def test_a_windowed_run_is_hidden_silent_and_off_the_controllers_whatever_the_callers_audio_driver(self):
         self.add_game("dragoon", "printf '%s\\n' \"$@\" > args.txt\nprintf '%s' \"$SDL_AUDIO_DRIVER\" > driver.txt\n")
-        r = subprocess.run([str(self.script), NAME, "1", "", "60"], capture_output=True, text=True, timeout=10,
+        r = subprocess.run([str(self.script), NAME, SECONDS, "", "60"], capture_output=True, text=True, timeout=RUN_LIMIT,
                            env={**os.environ, "SDL_AUDIO_DRIVER": "coreaudio"})
         self.assertEqual(r.returncode, 0, r.stderr)
         run = self.root / "build" / "probe" / NAME
@@ -312,7 +316,7 @@ class ProbeTreeTest(unittest.TestCase):
         self.add_game("dragoon", "")
         for bad in ("--exit-after=", "--exit-after=0", "--exit-after=9x", "--replay="):
             with self.subTest(bad=bad):
-                r = probe(NAME, "1", "", "60", bad, script=self.script)
+                r = probe(NAME, SECONDS, "", "60", bad, script=self.script)
                 self.assertEqual(r.returncode, 2)
                 self.assertIn(bad, r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
@@ -321,7 +325,7 @@ class ProbeTreeTest(unittest.TestCase):
         self.add_game("dragoon_bench", "echo 'whole run'\n")
         for setting in ("--replay=/somewhere/inputs", "--exit-after=900", "--no-session-audio"):
             with self.subTest(setting=setting):
-                r = probe(NAME, "1", "", "60", setting, "--bench", script=self.script)
+                r = probe(NAME, SECONDS, "", "60", setting, "--bench", script=self.script)
                 self.assertEqual(r.returncode, 2)
                 self.assertIn(setting.split("=")[0] + " needs a windowed run", r.stderr)
         self.assertFalse((self.root / "build" / "probe").exists())
@@ -340,7 +344,7 @@ class ProbeTreeTest(unittest.TestCase):
     def test_bin_runs_that_game_instead_of_build_dragoon(self):
         self.add_game("dragoon", "touch ran-build-dragoon\n")
         game = self.other_game("touch ran-other\n")
-        r = probe(NAME, "1", "", "60", f"--bin={game}", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", f"--bin={game}", script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue((self.run_dir() / "ran-other").exists())
         self.assertFalse((self.run_dir() / "ran-build-dragoon").exists())
@@ -359,13 +363,13 @@ class ProbeTreeTest(unittest.TestCase):
         game = self.other_game("touch ran-other\necho 'whole run'\n")
         for settings in ((), ("--bench",)):
             with self.subTest(settings=settings):
-                r = probe(NAME, "1", "", "60", f"--bin={game}", *settings, script=self.script)
+                r = probe(NAME, SECONDS, "", "60", f"--bin={game}", *settings, script=self.script)
                 self.assertEqual(r.returncode, 0, r.stderr)
                 self.assertTrue((self.run_dir() / "ran-other").exists())
 
     def test_a_relative_bin_is_taken_from_where_probe_was_run(self):
         self.other_game("touch ran-other\n")
-        r = probe(NAME, "1", "", "60", "--bin=other builds/dragoon-b", script=self.script, cwd=self.root)
+        r = probe(NAME, SECONDS, "", "60", "--bin=other builds/dragoon-b", script=self.script, cwd=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue((self.run_dir() / "ran-other").exists())
 
@@ -373,13 +377,13 @@ class ProbeTreeTest(unittest.TestCase):
         game = self.other_game("touch ran-other\n")
         link = self.root / "dragoon-link"
         link.symlink_to(game)
-        r = probe(NAME, "1", "", "60", f"--bin={link}", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", f"--bin={link}", script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue((self.run_dir() / "ran-other").exists())
 
     def test_bin_is_not_passed_on_to_the_game(self):
         game = self.other_game("printf '%s\\n' \"$@\" > args.txt\n")
-        r = probe(NAME, "1", "", "60", f"--bin={game}", script=self.script)
+        r = probe(NAME, SECONDS, "", "60", f"--bin={game}", script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         args = (self.run_dir() / "args.txt").read_text().splitlines()
         self.assertIn("--hidden", args)
@@ -394,7 +398,7 @@ class ProbeTreeTest(unittest.TestCase):
         for bad in (self.root / "nowhere", plain, folder):
             for settings in ((), ("--bench",)):
                 with self.subTest(bad=bad.name, settings=settings):
-                    r = probe(NAME, "1", "", "60", f"--bin={bad}", *settings, script=self.script)
+                    r = probe(NAME, SECONDS, "", "60", f"--bin={bad}", *settings, script=self.script)
                     self.assertEqual(r.returncode, 2)
                     self.assertIn("--bin", r.stderr)
                     self.assertIn(str(bad), r.stderr)
@@ -410,7 +414,7 @@ class ProbeTreeTest(unittest.TestCase):
         for given in (str(folder / "dragoon"), "builds a=b/dragoon", str(self.root / "builds a=b" / "dragoon=2")):
             for settings in ((), ("--bench",)):
                 with self.subTest(given=given, settings=settings):
-                    r = probe(NAME, "1", "", "60", f"--bin={given}", *settings, script=self.script, cwd=self.root)
+                    r = probe(NAME, SECONDS, "", "60", f"--bin={given}", *settings, script=self.script, cwd=self.root)
                     self.assertEqual(r.returncode, 2)
                     self.assertIn("--bin", r.stderr)
                     self.assertIn("builds a=b", r.stderr)
@@ -419,13 +423,13 @@ class ProbeTreeTest(unittest.TestCase):
 
     def test_without_bin_the_builds_still_run(self):
         self.add_game("dragoon", "touch ran-build-dragoon\n")
-        r = probe(NAME, "1", script=self.script)
+        r = probe(NAME, SECONDS, script=self.script)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue((self.run_dir() / "ran-build-dragoon").exists())
 
     def test_a_game_that_exits_ends_the_run_early(self):
         self.add_game("dragoon", "exit 0\n")
-        r = subprocess.run([str(self.script), NAME, "8"], capture_output=True, text=True, timeout=6)
+        r = probe(NAME, SECONDS, script=self.script)  # RUN_LIMIT is well short of SECONDS
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_a_new_run_starts_with_no_settings_ports_or_pads_file(self):
@@ -440,7 +444,7 @@ class ProbeTreeTest(unittest.TestCase):
         for n, settings in enumerate(((), ("--bench",))):
             with self.subTest(settings=settings):
                 name = f"{NAME}-{n}"
-                r = probe(name, "1", "", "60", *settings, script=self.script, cwd=self.root)
+                r = probe(name, SECONDS, "", "60", *settings, script=self.script, cwd=self.root)
                 self.assertEqual(r.returncode, 0, r.stderr)
                 self.assertEqual((self.root / "build" / "probe" / name / "seen.txt").read_text(), "")
 
