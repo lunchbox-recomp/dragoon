@@ -14,12 +14,9 @@ enum Snapshot {
     /// A recorded PNG keeps each channel to the nearest multiple of this, which moves it at
     /// most 4 of the 16 the comparison allows.
     static let recordStep = 8
-    /// How many pixels may differ, as a fraction of the image.
-    static let pixelTolerance = 0.002
-
-    static func allowedPixels(_ image: Bitmap) -> Int {
-        Int(Double(image.width * image.height) * pixelTolerance)
-    }
+    /// How many pixels may differ, of the 960x600. Every screen renders 0 on the Mac that
+    /// recorded them, and one word changed on a button is 211.
+    static let allowedPixels = 100
 
     static let directory = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().appendingPathComponent("Snapshots")

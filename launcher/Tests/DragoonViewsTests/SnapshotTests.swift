@@ -1,5 +1,6 @@
 import DragoonViews
 import Foundation
+import SwiftUI
 import Testing
 
 /// Each screen through `ImageRenderer`, against its PNG in `Snapshots/`. Run with `RECORD=1` to
@@ -34,7 +35,7 @@ struct SnapshotTests {
         let recorded = try #require(
             Bitmap.read(file), "No snapshot at \(file.path). Run with RECORD=1 to write it.")
         let differing = image.differingPixels(from: recorded, tolerance: Snapshot.channelTolerance)
-        let allowed = Snapshot.allowedPixels(image)
+        let allowed = Snapshot.allowedPixels
         guard let differing, differing <= allowed else {
             let actual = FileManager.default.temporaryDirectory
                 .appendingPathComponent("Dragoon snapshot \(name).png")
@@ -53,6 +54,16 @@ struct SnapshotTests {
         let other = try #require(Bitmap.read(Self.file("disc-checking")))
         let differing = try #require(
             image.differingPixels(from: other, tolerance: Snapshot.channelTolerance))
-        #expect(differing > Snapshot.allowedPixels(image))
+        #expect(differing > Snapshot.allowedPixels)
+    }
+
+    /// One word changed on a button, as Quit to Exit on the must-move screen, is past what may
+    /// differ.
+    @Test func oneWordChangedOnAButtonDoesNotPass() throws {
+        let quit = try #require(Snapshot.render(Button("Quit") {}))
+        let exit = try #require(Snapshot.render(Button("Exit") {}))
+        let differing = try #require(
+            quit.differingPixels(from: exit, tolerance: Snapshot.channelTolerance))
+        #expect(differing > Snapshot.allowedPixels)
     }
 }

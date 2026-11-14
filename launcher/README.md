@@ -157,7 +157,7 @@ A `game.pid` that's garbled is removed and ignored, and so is one whose process 
 
 ## Snapshots
 
-`SnapshotTests` renders the window on each screen in `Tests/DragoonViewsTests/ScreenFixtures.swift` with SwiftUI's `ImageRenderer`, at 960x600 points and scale 2 in dark appearance on a fixed dark gray, then averages each 2x2 block of pixels into one. It compares each render with the PNG of the same name in `Tests/DragoonViewsTests/Snapshots/`. A render passes when at most 0.2% of its pixels have a color channel more than 16 of 255 away from the PNG's, so text drawn a little differently on another macOS still passes. A failing render is written to the temporary directory, and the failure names the file.
+`SnapshotTests` renders the window on each screen in `Tests/DragoonViewsTests/ScreenFixtures.swift` with SwiftUI's `ImageRenderer`, at 960x600 points and scale 2 in dark appearance on a fixed dark gray, then averages each 2x2 block of pixels into one. It compares each render with the PNG of the same name in `Tests/DragoonViewsTests/Snapshots/`. A render passes when at most 100 of its 576,000 pixels have a color channel more than 16 of 255 away from the PNG's. On the Mac that recorded them every screen has 0, and one word changed on a button, Quit to Exit, has 211. The 100 leave room for text edges another macOS draws a little differently, which hasn't been measured. A failing render is written to the temporary directory, and the failure names the file.
 
 ```
 RECORD=1 launcher/tools/swift_test.py --filter SnapshotTests
