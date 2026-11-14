@@ -148,7 +148,7 @@ extension DiscBanner {
         let count = Int(word(0, 2))
         let stringTable = count * DiscLayout.entryLength
         // Every name then ends inside the table.
-        guard count >= 1, stringTable < fst.count, fst.last == 0 else { return nil }
+        guard stringTable < fst.count, fst.last == 0 else { return nil }
         var entry = 1
         while entry < count {
             let first = word(entry, 0)
