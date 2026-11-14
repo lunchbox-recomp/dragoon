@@ -41,6 +41,22 @@ struct LiveStreaksTests {
         #expect(Self.running(view) == 56)
     }
 
+    /// Resuming carries on from where the field stopped. It stopped here at 7.25 seconds on its
+    /// own clock, as after a long pause, far behind the window's.
+    @Test func aResumedFieldCarriesOnFromWhereItStopped() {
+        let view = Self.view(paused: true, still: false)
+        let stoppedAt: CFTimeInterval = 7.25
+        view.field.timeOffset = stoppedAt
+        let before = CACurrentMediaTime()
+        view.show(colors: Self.colors, paused: false, still: false)
+        let now = CACurrentMediaTime()
+        let local = view.field.convertTime(now, from: nil)
+        // The field's clock has run only as long as the resume took, microseconds unless the
+        // test was descheduled meanwhile.
+        #expect(local >= stoppedAt - 1e-6)
+        #expect(local <= stoppedAt + (now - before) + 1e-6)
+    }
+
     @Test(arguments: [(true, true, true), (false, true, false), (true, false, false), (false, false, false)])
     func aWindowIsActiveWhenKeyAndOnScreen(isKey: Bool, visible: Bool, active: Bool) {
         #expect(Motion.windowIsActive(isKey: isKey, occlusion: visible ? .visible : []) == active)
