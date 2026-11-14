@@ -888,9 +888,11 @@ These count as cites:
 | Form | Example |
 |---|---|
 | A path under `gcn-recomp/` | `gcn-recomp/runtime/main.cpp:419-422` |
-| A fork-relative path or a bare name that exactly one fork file has and no Dragoon file does | `runtime/hw/drive.h:64`, `ax.cpp:42` |
-| A `:N` continuation, which takes the file of the cite before it on the line | `ax.cpp:42`, `:53-60` |
-| A list straight after a cite | `render_gl_batch.cpp:180, 522-523` |
+| A fork-relative path or a bare name that exactly one fork file has and no Dragoon file does | `runtime/hw/example.h:64`, `example.cpp:42` |
+| A `:N` continuation, which takes the file of the cite before it on the line | `example.cpp:42`, `:53-60` |
+| A list straight after a cite | `example_batch.cpp:180, 522-523` |
+
+No fork file has the `example` names, so the tool doesn't count those cites. The first example is a real cite, and it's checked. The tool skips its own source and tests, which are full of examples.
 
 A name Dragoon also has, such as `CMakeLists.txt`, needs the `gcn-recomp/` prefix. A name two fork files share is skipped with a warning on stderr. A `file:N:M` compiler diagnostic isn't a cite, and nor is anything in a Markdown fenced block, which holds quoted output.
 

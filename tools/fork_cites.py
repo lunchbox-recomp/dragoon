@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Which of Dragoon's gcn-recomp cites did an engine bump leave pointing at the wrong lines?
 
-Reads every tracked text file in the Dragoon checkout, as it sits in the working tree, for cites
-of gcn-recomp files by line. These forms count:
+Reads every tracked text file in the Dragoon checkout but this tool and its tests, as it sits in
+the working tree, for cites of gcn-recomp files by line. These forms count:
   gcn-recomp/PATH:N or gcn-recomp/PATH:N-M   a fork path, always a fork cite
   PATH:N or NAME:N                           a fork-relative path such as runtime/hw/drive.h:64,
                                              or a bare name such as ax.cpp:42, when exactly one
@@ -48,6 +48,8 @@ from typing import NamedTuple, Optional
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE = "gcn-recomp"
 PREFIX = ENGINE + "/"
+# The tool and its tests are full of example cites, so their text isn't read.
+OWN = ("tools/fork_cites.py", "tools/test_fork_cites.py")
 
 # A path is word characters, dots and hyphens split by slashes, ending in a dot and a letter.
 # A cite can't follow a path character, and a digit or ":digit" after it makes it something else.
@@ -167,7 +169,7 @@ def check(cite: Cite, path: str, fork: Fork) -> tuple[str, str]:
 
 def dragoon_texts(repo: Path, at: Optional[str]) -> tuple[list[str], dict[str, str]]:
     """Every path Dragoon tracks but gcn-recomp, and each regular file's text, from commit AT or,
-    with no AT, from REPO's working tree. Links and binary files have no text."""
+    with no AT, from REPO's working tree. Links, binary files and OWN have no text."""
     if at is None:
         tracked = [name for name in names(git(repo, "ls-files", "-z")) if name != ENGINE]
         files = [name for name in tracked if (repo / name).is_file() and not (repo / name).is_symlink()]
@@ -176,7 +178,7 @@ def dragoon_texts(repo: Path, at: Optional[str]) -> tuple[list[str], dict[str, s
         tracked = [path for meta, path in entries if " blob " in meta]
         files = [path for meta, path in entries if meta.startswith("100")]
     texts = {}
-    for name in sorted(files):
+    for name in sorted(set(files) - set(OWN)):
         data = (repo / name).read_bytes() if at is None else git(repo, "show", f"{at}:{name}")
         if b"\0" not in data:
             texts[name] = data.decode(errors="replace")

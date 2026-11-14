@@ -189,6 +189,19 @@ class ForkCitesTest(unittest.TestCase):
         self.assertEqual(err, "fork_cites.py: docs/a.md:2: twin.cpp names 2 fork files "
                               "(runtime/a/twin.cpp, runtime/b/twin.cpp), so it isn't checked\n")
 
+    def test_its_own_two_files_are_left_out(self):
+        own = {name: (fork_cites.ROOT / name).read_text() for name in fork_cites.OWN}
+        paths = {c.path[len(fork_cites.PREFIX):] if c.path.startswith(fork_cites.PREFIX) else c.path
+                 for body in own.values() for c in fork_cites.find(body, False)}
+        fork = {path for path in paths if "/" in path}
+        fork |= {"runtime/" + name for name in paths - fork
+                 if not any(f.endswith("/" + name) for f in fork)}
+        code, out, err = self.bump({path: text(TEN) for path in fork}, {},
+                                   docs={**own, "docs/a.md": "`main.cpp:2`\n"})
+        self.assertGreater(len(fork), 5)
+        self.assertEqual((code, out, err),
+                         (0, "total 1, ok 0, moved 0, gone 0, outside 0, unchanged 1\n", ""))
+
     def test_a_name_the_fork_lacks_is_not_a_fork_cite(self):
         code, out, err = self.bump({"runtime/main.cpp": text(TEN)}, {},
                                    docs={"tools/t.py": "'guest panic: foo.c:12: boom'\n"})
