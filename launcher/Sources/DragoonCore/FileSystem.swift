@@ -115,7 +115,8 @@ public struct SystemFileSystem: FileSystem {
 /// Reads share no position, so two at once can't disturb each other.
 ///
 /// Only a regular file opens. A directory throws `EISDIR` and anything else, such as a FIFO,
-/// `EFTYPE`. The open doesn't wait for a FIFO's writer.
+/// `EFTYPE`. The open doesn't wait for a FIFO's writer. A regular file then has `O_NONBLOCK`
+/// cleared, so its reads block as usual on any file system.
 private final class SystemFileReader: FileReader {
     private let descriptor: Int32
 
@@ -132,6 +133,11 @@ private final class SystemFileReader: FileReader {
         guard type == S_IFREG else {
             close(descriptor)
             throw Self.error(type == S_IFDIR ? EISDIR : EFTYPE)
+        }
+        guard fcntl(descriptor, F_SETFL, 0) == 0 else {
+            let failure = errno
+            close(descriptor)
+            throw Self.error(failure)
         }
     }
 

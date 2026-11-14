@@ -210,6 +210,20 @@ private func cleanUp(_ tree: any Tree) {
         #expect(throws: POSIXError(.EFTYPE)) { try tree.fs.openReader(at: fifo) }
     }
 
+    /// Reads still work once the open has cleared `O_NONBLOCK`: 4 MB in one call, and pieces at
+    /// offsets.
+    @Test func aRealReaderReadsAWholeFileAfterTheOpen() throws {
+        let tree = try DiskTree()
+        defer { cleanUp(tree) }
+        let path = tree.root + "/a dir/disc.gcm"
+        let text = String(repeating: "0123456789abcdef", count: 4 << 16)
+        try tree.file(path, text)
+        let reader = try tree.fs.openReader(at: path)
+        #expect(try reader.read(at: 0, count: 4 << 20) == Data(text.utf8))
+        #expect(try reader.read(at: (4 << 20) - 3, count: 8) == Data("def".utf8))
+        #expect(try reader.read(at: 1_000_001, count: 4) == Data("1234".utf8))
+    }
+
     @Test(arguments: Kind.allCases)
     func whatIsntThereIsReportedSo(_ kind: Kind) throws {
         let tree = try makeTree(kind)
