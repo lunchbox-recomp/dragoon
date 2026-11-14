@@ -145,9 +145,8 @@ struct BuildPageTests {
         #expect(abs(phase - 0.5) < 1e-6)
     }
 
-    /// The whole page's snapshot can't see a shimmer in a segment this small, so the bar is
-    /// drawn on its own: the band, or under Reduce Motion the fade, lights the running step's
-    /// segment and nothing else.
+    /// The page's snapshot sees the shimmer, but only the bar drawn on its own checks that the
+    /// band, or under Reduce Motion the fade, lights the running step's segment and nothing else.
     @MainActor
     @Test(arguments: [false, true])
     func theShimmerLightsOnlyTheRunningStepsSegment(fades: Bool) throws {
