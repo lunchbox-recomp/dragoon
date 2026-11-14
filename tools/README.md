@@ -658,7 +658,7 @@ How does the launcher build the game? launcher_build.py is its recipe, and a dev
 | package | Wraps the game in an app sealed ad hoc, with a `stamp.json` naming both commits and the SDK |
 | swap | Points `game/current` at the new build, then installs the warmed cache in `<data>/saves`, where a failure is only a warning |
 
-Before recompile it prints a `plan` event that says whether the warm-up will play its passes. It won't under `--no-warmup`, or when the player's saves hold a shader cache whose stamp is current by warm_shaders.py's own check, `is_current` with `wanted_stamp`. The launcher leaves the warm-up out of its time left then.
+Before recompile it prints a `plan` event that says whether the warm-up will play its passes. It won't under `--no-warmup`, or when the player's saves hold a shader cache whose stamp is current by warm_shaders.py's own check, `is_current` with `wanted_stamp`. The launcher leaves the warm-up out of its bar and its time left then.
 
 The tools run with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and five other variables, listed in `--help`, so nothing Homebrew or MacPorts installed reaches the build. The snapshot and the kit are only read, and Python runs with `-B`, so a build leaves the launcher's seal as it was.
 

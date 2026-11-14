@@ -24,12 +24,27 @@ public enum BuildSegment: String, CaseIterable, Comparable, Sendable {
     public static let referenceTotal = allCases.reduce(0) { $0 + $1.referenceSeconds }
 
     /// Where the segment starts along the bar, from 0 to 1.
-    public var start: Double {
-        Self.allCases.prefix { $0 != self }.reduce(0) { $0 + $1.referenceSeconds }
-            / Self.referenceTotal
+    public var start: Double { start(skipping: []) }
+
+    public var width: Double { width(skipping: []) }
+
+    /// Where the segment starts along a bar of the steps that will run, every one but the
+    /// `skipped` ones, from 0 to 1.
+    public func start(skipping skipped: Set<BuildSegment>) -> Double {
+        Self.seconds(Self.allCases.prefix { $0 != self }, skipping: skipped)
+            / Self.seconds(Self.allCases, skipping: skipped)
     }
 
-    public var width: Double { referenceSeconds / Self.referenceTotal }
+    /// The segment's width along a bar of the steps that will run, 0 for a skipped one.
+    public func width(skipping skipped: Set<BuildSegment>) -> Double {
+        Self.seconds([self], skipping: skipped) / Self.seconds(Self.allCases, skipping: skipped)
+    }
+
+    private static func seconds(
+        _ segments: some Sequence<BuildSegment>, skipping skipped: Set<BuildSegment>
+    ) -> TimeInterval {
+        segments.filter { !skipped.contains($0) }.reduce(0) { $0 + $1.referenceSeconds }
+    }
 
     private var order: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 
@@ -72,11 +87,14 @@ public enum BuildMeter {
     public static let samplesForEstimate = 3
 
     /// The bar's fill at a step and its count: the segments before it and the share of its own
-    /// that's done. Nil for a step the bar doesn't know.
-    public static func fraction(step: String, done: Int, total: Int) -> Double? {
+    /// that's done, weighed over the steps that will run, every one but the `skipped` ones. Nil
+    /// for a step the bar doesn't know.
+    public static func fraction(
+        step: String, done: Int, total: Int, skipped: Set<BuildSegment> = []
+    ) -> Double? {
         guard let segment = BuildSegment(rawValue: step) else { return nil }
         let share = total > 0 ? Double(min(max(done, 0), total)) / Double(total) : 0
-        return segment.start + segment.width * share
+        return segment.start(skipping: skipped) + segment.width(skipping: skipped) * share
     }
 
     /// Work a second across the samples, from the first to the last, as DuckStation's

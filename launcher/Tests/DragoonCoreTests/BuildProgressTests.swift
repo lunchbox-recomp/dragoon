@@ -192,6 +192,34 @@ import Testing
         #expect(abs(left - (132.0 / 5 + 72.7 + 0.1 + 0.2)) < 1e-9)
     }
 
+    /// The compile at `done` of 135 files, 5 a second, after `plan`.
+    static func compiled(_ done: Int, plan: [(Double, BuildEvent)]) -> BuildProgress {
+        replay(plan + [(0, .step("recompile")), (4.2, .step("compile"))]
+            + (1...done).map { (4.2 + Double($0) * 0.2, .progress(step: "compile", done: $0, total: 135)) })
+    }
+
+    @Test func aPlanWithoutTheWarmUpLeavesItOutOfTheBar() {
+        // A rebuild whose stamp is current: 22.5 s of measured steps run, not 95.2 s.
+        let skipping = Self.compiled(100, plan: [(0, .plan(warmup: false))])
+        #expect(skipping.skipped == [.warmup])
+        #expect(abs(skipping.fraction - (4.2 + 18.0 * 100 / 135) / 22.5) < 1e-9)
+        let compiled = Self.compiled(135, plan: [(0, .plan(warmup: false))])
+        #expect(abs(compiled.fraction - 22.2 / 22.5) < 1e-9)
+        let playing = Self.compiled(100, plan: [(0, .plan(warmup: true))])
+        #expect(playing.skipped == [])
+        #expect(abs(playing.fraction - (4.2 + 18.0 * 100 / 135) / 95.2) < 1e-9)
+    }
+
+    @Test func aLatePlanMovesTheBarOnlyForward() {
+        var progress = Self.compiled(100, plan: [])
+        let before = progress.fraction
+        progress.note(.plan(warmup: false), at: at(30))
+        #expect(abs(progress.fraction - (4.2 + 18.0 * 100 / 135) / 22.5) < 1e-9)
+        progress.note(.plan(warmup: true), at: at(31))
+        #expect(progress.fraction > before)
+        #expect(progress.skipped == [])
+    }
+
     @Test func aPlanMovesNeitherTheBarNorTheClock() {
         let progress = Self.replay([(3, .plan(warmup: false))])
         #expect(progress.step == nil)

@@ -52,9 +52,15 @@ struct BuildPageTests {
         #expect(BuildMeterView.rollsCount(Self.samples(seconds)) == rolls)
     }
 
-    @Test func theDrawnSegmentsCoverTheBarInOrder() {
-        let parts = SegmentedBar.parts
-        #expect(parts.map(\.segments) == [[.recompile], [.compile], [.warmup], [.package, .swap]])
+    /// A warm-up the plan skips isn't drawn, and the other segments cover the bar.
+    @MainActor
+    @Test(arguments: [
+        ([], [[.recompile], [.compile], [.warmup], [.package, .swap]]),
+        ([.warmup], [[.recompile], [.compile], [.package, .swap]]),
+    ] as [(Set<BuildSegment>, [[BuildSegment]])])
+    func theDrawnSegmentsCoverTheBarInOrder(skipped: Set<BuildSegment>, drawn: [[BuildSegment]]) {
+        let parts = SegmentedBar.parts(skipping: skipped)
+        #expect(parts.map(\.segments) == drawn)
         #expect(parts[0].start == 0)
         for (part, next) in zip(parts, parts.dropFirst()) {
             #expect(abs(part.start + part.width - next.start) < 1e-9)

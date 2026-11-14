@@ -41,6 +41,9 @@ public struct BuildProgress: Equatable, Sendable {
 
     public var isDone: Bool { ended != nil }
 
+    /// The segments the plan says won't run, which the bar and the time left leave out.
+    public var skipped: Set<BuildSegment> { warmupPlays ? [] : [.warmup] }
+
     /// Seconds from the first event to `now`, or to `done`.
     public func elapsed(at now: Date) -> TimeInterval {
         guard let started else { return 0 }
@@ -52,14 +55,13 @@ public struct BuildProgress: Equatable, Sendable {
         guard !isDone, let segment else { return nil }
         return BuildMeter.remaining(
             segment: segment, done: done, total: total, samples: samples,
-            finished: finishedSteps, skipped: warmupPlays ? [] : [.warmup])
+            finished: finishedSteps, skipped: skipped)
     }
 
     public mutating func note(_ event: BuildEvent, at time: Date) {
         switch event {
         case .plan(let warmup):
             warmupPlays = warmup
-            return
         case .step(let name):
             begin(name, at: time)
         case .progress(let name, let newDone, let newTotal):
@@ -74,7 +76,9 @@ public struct BuildProgress: Equatable, Sendable {
         case .error:
             return
         }
-        if let step, let fill = BuildMeter.fraction(step: step, done: done, total: total) {
+        if let step,
+            let fill = BuildMeter.fraction(step: step, done: done, total: total, skipped: skipped)
+        {
             fraction = max(fraction, fill)
         }
     }

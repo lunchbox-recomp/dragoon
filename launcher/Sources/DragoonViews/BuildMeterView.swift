@@ -32,7 +32,7 @@ struct BuildMeterView: View {
                             .transition(.opacity)
                     } else {
                         SegmentedBar(
-                            fraction: progress.fraction, colors: colors,
+                            fraction: progress.fraction, colors: colors, skipped: progress.skipped,
                             shimmering: progress.segment.flatMap { $0.counts ? nil : $0 },
                             shimmerPaused: paused.shimmer, reduceMotion: reduceMotion
                         )

@@ -29,6 +29,19 @@ func at(_ seconds: Double) -> Date {
         #expect(abs(BuildSegment.swap.start + BuildSegment.swap.width - 1) < 1e-9)
     }
 
+    @Test func aSkippedSegmentHasNoWidthAndTheOthersFillTheBar() throws {
+        let skipped: Set<BuildSegment> = [.warmup]
+        #expect(BuildSegment.warmup.width(skipping: skipped) == 0)
+        #expect(abs(BuildSegment.compile.start(skipping: skipped) - 4.2 / 22.5) < 1e-9)
+        #expect(abs(BuildSegment.compile.width(skipping: skipped) - 18.0 / 22.5) < 1e-9)
+        #expect(abs(BuildSegment.package.start(skipping: skipped) - 22.2 / 22.5) < 1e-9)
+        let swap = BuildSegment.swap
+        #expect(abs(swap.start(skipping: skipped) + swap.width(skipping: skipped) - 1) < 1e-9)
+        let all = try #require(
+            BuildMeter.fraction(step: "compile", done: 135, total: 135, skipped: skipped))
+        #expect(abs(all - 22.2 / 22.5) < 1e-9)
+    }
+
     @Test func onlyCompileAndWarmupCountTheirWork() {
         #expect(BuildSegment.allCases.filter(\.counts) == [.compile, .warmup])
     }

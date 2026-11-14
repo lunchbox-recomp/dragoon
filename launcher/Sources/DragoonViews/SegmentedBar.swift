@@ -1,24 +1,31 @@
 import DragoonCore
 import SwiftUI
 
-/// The build's bar: one segment a step, each as wide as the step's measured time, filled in the
-/// banner's first hue up to `fraction`. Package and swap share the sliver at the end. Drawn in
-/// shapes, since `ImageRenderer` can't draw a `ProgressView`.
+/// The build's bar: one segment a step that will run, each as wide as the step's measured time,
+/// filled in the banner's first hue up to `fraction`. Package and swap share the sliver at the
+/// end. Drawn in shapes, since `ImageRenderer` can't draw a `ProgressView`.
 struct SegmentedBar: View {
     static let height: CGFloat = 12
     static let gap: CGFloat = 3
 
-    /// Where each drawn segment starts along the bar and how wide it is, from 0 to 1.
-    static let parts: [(segments: [BuildSegment], start: Double, width: Double)] = [
-        ([.recompile], BuildSegment.recompile.start, BuildSegment.recompile.width),
-        ([.compile], BuildSegment.compile.start, BuildSegment.compile.width),
-        ([.warmup], BuildSegment.warmup.start, BuildSegment.warmup.width),
-        ([.package, .swap], BuildSegment.package.start,
-         BuildSegment.package.width + BuildSegment.swap.width),
-    ]
+    /// The steps each drawn segment holds.
+    static let groups: [[BuildSegment]] = [[.recompile], [.compile], [.warmup], [.package, .swap]]
+
+    /// Where each drawn segment starts along the bar and how wide it is, from 0 to 1, over the
+    /// steps that will run. A segment whose steps are all `skipped` isn't drawn.
+    static func parts(skipping skipped: Set<BuildSegment>)
+        -> [(segments: [BuildSegment], start: Double, width: Double)]
+    {
+        groups.filter { !$0.allSatisfy(skipped.contains) }.map { segments in
+            (segments, segments[0].start(skipping: skipped),
+             segments.reduce(0) { $0 + $1.width(skipping: skipped) })
+        }
+    }
 
     let fraction: Double
     let colors: HeroColors
+    /// The steps the plan says won't run, as `BuildProgress.skipped` has them.
+    var skipped: Set<BuildSegment> = []
     /// The step whose segment shimmers, as one that prints no progress does while it runs.
     var shimmering: BuildSegment?
     var shimmerPaused = false
@@ -27,11 +34,12 @@ struct SegmentedBar: View {
     var stopped: BuildSegment?
 
     var body: some View {
+        let parts = Self.parts(skipping: skipped)
         GeometryReader { geometry in
-            let usable = geometry.size.width - Self.gap * CGFloat(Self.parts.count - 1)
+            let usable = geometry.size.width - Self.gap * CGFloat(parts.count - 1)
             HStack(spacing: Self.gap) {
-                ForEach(Self.parts.indices, id: \.self) { index in
-                    let part = Self.parts[index]
+                ForEach(parts.indices, id: \.self) { index in
+                    let part = parts[index]
                     segment(part.segments, fill: Self.fill(fraction, start: part.start, width: part.width))
                         .frame(width: max(usable * part.width, 2))
                 }
