@@ -318,8 +318,10 @@ public enum Strings {
     // MARK: - Picture card
 
     static let pictureCardTitle = "Picture: 4:3 or 16:9"
-    // The first sentence is the sheet's 4:3 note, and the second its 16:9 note's first part.
-    static let pictureCardNote = "4:3 is the console's own shape. At 16:9 the world widens and the race HUD keeps its 4:3 size. Settings in Library's … menu has 16:10, 21:9 and Fill window."
+    // The first sentence is the sheet's 4:3 note. The next two are its 16:9 note without where
+    // the HUD's boxes sit and the menus' 4:3 middle, which the previews draw, and with what
+    // stretches as the sheet says it.
+    static let pictureCardNote = "4:3 is the console's own shape. At 16:9 the world widens and the race HUD keeps its 4:3 size. The pause menu and Top Ride's HUD stretch. Settings in Library's … menu has 16:10, 21:9 and Fill window."
     static let pictureCardKeep = "Keep 4:3"
     /// A preview's button for VoiceOver.
     static func pictureCardUse(_ aspect: String) -> String { "Use \(aspect)" }

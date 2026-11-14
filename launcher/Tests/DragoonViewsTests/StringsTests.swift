@@ -46,4 +46,12 @@ struct StringsTests {
             #expect(Strings.aspectNote(aspect) == "settings.txt sets \(aspect), which isn't one of these.")
         }
     }
+
+    /// The Picture card's 16:9 note leaves out where the HUD sits, but not what stretches,
+    /// which it says as the sheet's 16:9 note does.
+    @Test func thePictureCardSaysWhatStretchesAsTheSheetDoes() {
+        let stretches = "pause menu and Top Ride's HUD stretch."
+        #expect(Strings.aspectNote("16:9").hasSuffix(", and the \(stretches)"))
+        #expect(Strings.pictureCardNote.contains(" The \(stretches) "))
+    }
 }
