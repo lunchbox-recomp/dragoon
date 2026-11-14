@@ -124,7 +124,8 @@ final class EffectRunner {
     /// Starts the game and hides the window while it runs. The window comes back once the
     /// launch's one result has been sent.
     private func play(disc: String, launch: Int) {
-        let session = games.play(game: places.game, disc: disc, data: places.data)
+        let session = games.play(
+            game: places.game, disc: disc, data: places.data, readyFile: places.readyFile)
         NSApplication.shared.hide(nil)
         Task {
             for await result in session {

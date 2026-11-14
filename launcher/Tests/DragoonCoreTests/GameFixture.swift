@@ -18,6 +18,7 @@ final class GameFixture: @unchecked Sendable {
     var disc: String { root + "/Kirby Air Ride (USA).gcm" }
     var panic: String { data + "/panic.txt" }
     var record: String { data + "/game.pid" }
+    var readyFile: String { data + "/" + ReadyFile.name }
     /// Where the fake game writes its arguments, one per line, its working directory and a note.
     var argumentsFile: String { root + "/game arguments.txt" }
     var directoryFile: String { root + "/game directory.txt" }
@@ -70,12 +71,17 @@ final class GameFixture: @unchecked Sendable {
         try FileManager.default.createSymbolicLink(atPath: executable, withDestinationPath: "/bin/sleep")
     }
 
-    /// Starts the game with `disc` as its one argument, or the fixture's disc when it's nil.
+    /// Starts the game with `disc` as its one argument, or the fixture's disc when it's nil, and
+    /// `readyFile` as its ready file. `started` gets its pid too.
     func play(
-        disc: String? = nil, environment: [String: String] = ProcessInfo.processInfo.environment
+        disc: String? = nil, environment: [String: String] = ProcessInfo.processInfo.environment,
+        started: (pid_t) -> Void = { _ in }
     ) -> GameSession {
         GameLauncher(logFolder: logs, environment: environment, now: { GameFixture.clock })
-            .play(game: game, disc: disc ?? self.disc, data: data) { started.append($0) }
+            .play(game: game, disc: disc ?? self.disc, data: data, readyFile: readyFile) {
+                self.started.append($0)
+                started($0)
+            }
     }
 
     /// What `GameRecord.runningGame` finds for this fixture's game.

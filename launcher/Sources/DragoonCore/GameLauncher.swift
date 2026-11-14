@@ -78,17 +78,18 @@ public final class GameLauncher: Sendable {
     ///
     /// While the game runs, `<data>/game.pid` records it for `GameRecord.runningGame`, and the
     /// record goes as the result is sent.
-    public func play(game: String, disc: String, data: String) -> GameSession {
-        play(game: game, disc: disc, data: data, started: { _ in })
-    }
-
-    /// `play`, which also gives `started` the game's pid once it's running, so a test can stop
-    /// a game it started.
-    func play(
-        game: String, disc: String, data: String, started: (pid_t) -> Void
+    ///
+    /// The game gets `readyFile` as `GCN_READY_FILE`, for `ReadyWatcher`. The engine adds to what
+    /// that file holds, so it and its `.tmp` are removed before the game starts, and again as the
+    /// result is sent. `started` gets the game's pid once it's running.
+    public func play(
+        game: String, disc: String, data: String, readyFile: String,
+        started: (pid_t) -> Void = { _ in }
     ) -> GameSession {
         let (session, results) = GameSession.makeStream()
-        let end = { @Sendable (result: GameResult) in
+        ReadyFile.remove(readyFile, fs: fs)
+        let end = { @Sendable [fs] (result: GameResult) in
+            ReadyFile.remove(readyFile, fs: fs)
             results.yield(result)
             results.finish()
         }
@@ -113,6 +114,7 @@ public final class GameLauncher: Sendable {
         process.currentDirectoryURL = URL(fileURLWithPath: data, isDirectory: true)
         var environment = environment
         environment["__CFBundleIdentifier"] = nil
+        environment[ReadyFile.variable] = readyFile
         process.environment = environment
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = log ?? FileHandle.nullDevice

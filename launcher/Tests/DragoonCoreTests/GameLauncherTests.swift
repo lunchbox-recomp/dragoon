@@ -33,6 +33,56 @@ import Testing
         #expect(fixture.lines(fixture.noteFile) == ["passed on", "unset"])
     }
 
+    @Test func theGameGetsTheReadyFilesPathInGCN_READY_FILE() async throws {
+        let fixture = try GameFixture()
+        try fixture.install(
+            #"printf '%s\n' "${GCN_READY_FILE-unset}" > \#(shellWord(fixture.noteFile))"#)
+        _ = await results(of: fixture.play())
+        #expect(fixture.lines(fixture.noteFile) == [fixture.readyFile])
+    }
+
+    /// The launcher's own GCN_READY_FILE, from a shell that set one, never reaches the game.
+    @Test func theReadyFileReplacesOneInTheLaunchersEnvironment() async throws {
+        let fixture = try GameFixture()
+        try fixture.install(
+            #"printf '%s\n' "${GCN_READY_FILE-unset}" > \#(shellWord(fixture.noteFile))"#)
+        var environment = ProcessInfo.processInfo.environment
+        environment["GCN_READY_FILE"] = fixture.root + "/somewhere else.txt"
+        _ = await results(of: fixture.play(environment: environment))
+        #expect(fixture.lines(fixture.noteFile) == [fixture.readyFile])
+    }
+
+    /// The engine keeps what the file holds and adds to it, so an earlier run's lines would read
+    /// as this run's.
+    @Test func anEarlierRunsReadyFileIsGoneBeforeTheGameStarts() async throws {
+        let fixture = try GameFixture()
+        try fixture.write(fixture.readyFile, "window 1\nframe 2\n")
+        try fixture.write(fixture.readyFile + ".tmp", "window 1\n")
+        try fixture.install(
+            """
+            for name in ready.txt ready.txt.tmp; do
+              if [ -e "$name" ]; then echo "$name" >> \(shellWord(fixture.noteFile)); fi
+            done
+            """)
+        _ = await results(of: fixture.play())
+        #expect(fixture.text(fixture.noteFile) == nil)
+    }
+
+    @Test(arguments: ["exit 0", "exit 3", "kill -KILL $$"])
+    func theReadyFileIsGoneOnceTheGameHasEnded(_ ending: String) async throws {
+        let fixture = try GameFixture()
+        try fixture.install(
+            """
+            printf 'window 5\\n' > "$GCN_READY_FILE.tmp"
+            mv "$GCN_READY_FILE.tmp" "$GCN_READY_FILE"
+            printf 'window 5\\nframe 9\\n' > "$GCN_READY_FILE.tmp"
+            \(ending)
+            """)
+        #expect(await results(of: fixture.play()).count == 1)
+        #expect(!FileManager.default.fileExists(atPath: fixture.readyFile))
+        #expect(!FileManager.default.fileExists(atPath: fixture.readyFile + ".tmp"))
+    }
+
     @Test func whatTheGamePrintsGoesToItsLogInTheLogsFolder() async throws {
         let fixture = try GameFixture()
         try fixture.install(
