@@ -73,6 +73,17 @@ final class EffectRunner {
             NSWorkspace.shared.open(URL(fileURLWithPath: log))
         case .play(let disc, let launch):
             play(disc: disc, launch: launch)
+        case .scheduleHandOffTimeout(let launch, let seconds):
+            background {
+                try? await Task.sleep(for: .seconds(seconds))
+                return .handOffTimedOut(launch: launch)
+            }
+        case .hideWindow:
+            NSApplication.shared.hide(nil)
+        case .showWindow:
+            NSApplication.shared.unhide(nil)
+            NSApplication.shared.activate()
+            send(.windowShown)
         case .watchEarlierGame(let pid):
             background {
                 await LiveProcess.waitForEnd(of: pid)
@@ -121,12 +132,11 @@ final class EffectRunner {
         }
     }
 
-    /// Starts the game and hides the window while it runs. The window comes back once the
-    /// launch's one result has been sent.
+    /// Starts the game, whose one result comes back as an event. The flow hides the window and
+    /// brings it back.
     private func play(disc: String, launch: Int) {
         let session = games.play(
             game: places.game, disc: disc, data: places.data, readyFile: places.readyFile)
-        NSApplication.shared.hide(nil)
         Task {
             for await result in session {
                 switch result {
@@ -136,8 +146,6 @@ final class EffectRunner {
                     send(.gameCouldNotStart(launch: launch, reason: Strings.gameStart(failure)))
                 }
             }
-            NSApplication.shared.unhide(nil)
-            NSApplication.shared.activate()
         }
     }
 

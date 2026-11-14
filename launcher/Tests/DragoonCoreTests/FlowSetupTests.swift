@@ -112,7 +112,7 @@ import Testing
         #expect(run.state.playStatus == .checkingDisc)
         #expect(!run.state.canPlay)
         run.send(.bookmarkResolved(.found(flowDisc)))
-        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc, launch: 1)])
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == starting(1))
         #expect(run.screen == .library)
         #expect(run.state.gameRunning)
     }

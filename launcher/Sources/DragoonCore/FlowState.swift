@@ -47,6 +47,18 @@ extension Flow {
         case build
     }
 
+    /// Where Play's launch card is, from Play until the window is back after the game.
+    public enum HandOff: Equatable, Sendable {
+        /// Play was pressed, and the bookmark is resolved and the disc checked behind the card.
+        case charging
+        /// The game has started, and the launcher waits for its window line or the timeout.
+        case launched
+        /// The launcher's window is hidden while the game runs.
+        case hidden
+        /// The game has ended and the window is fading back in with the card up.
+        case returning
+    }
+
     public struct State: Equatable, Sendable {
         public var screen: Screen = .starting
         public var settings = LauncherSettings()
@@ -69,6 +81,8 @@ extension Flow {
         public var rebuildDeclined = false
         /// The player opened the game problem's `panic.txt`. Each new problem starts closed.
         public var panicShown = false
+        /// Play's launch card, or nil when Library shows none.
+        public var handOff: HandOff?
 
         public init() {}
 

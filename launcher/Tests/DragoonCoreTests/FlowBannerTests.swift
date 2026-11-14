@@ -24,7 +24,7 @@ import Testing
     @Test func playWithNoBannerStartsTheGameAndReadsIt() {
         var run = launched(banner: nil)
         let effects = run.send(playToStarting)
-        #expect(effects.last == [.play(disc: flowDisc, launch: 1), .readBanner(flowDisc)])
+        #expect(effects.last == starting(1) + [.readBanner(flowDisc)])
     }
 
     @Test func aRebuildWithNoBannerReadsItBeforeTheTools() {
@@ -36,7 +36,7 @@ import Testing
 
     @Test func withABannerCachedNothingIsRead() {
         var run = launched()
-        #expect(run.send(playToStarting).last == [.play(disc: flowDisc, launch: 1)])
+        #expect(run.send(playToStarting).last == starting(1))
     }
 
     @Test(arguments: [
@@ -60,7 +60,7 @@ import Testing
         #expect(run.state == expected)
 
         run.send(.gameExited(launch: 1, exit: .status(0), panic: nil))
-        #expect(run.send(playToStarting).last == [.play(disc: flowDisc, launch: 2)])
+        #expect(run.send(playToStarting).last == starting(2))
     }
 
     @Test func aBannerThatCouldntBeReadLeavesItToTheNextCheck() {
@@ -72,7 +72,7 @@ import Testing
 
         run.send(.gameExited(launch: 1, exit: .status(0), panic: nil))
         #expect(run.send(playToStarting).last
-            == [.play(disc: flowDisc, launch: 2), .readBanner(flowDisc)])
+            == starting(2) + [.readBanner(flowDisc)])
     }
 
     @Test func noBannerReadReplacesTheCachedOneWithNothing() {

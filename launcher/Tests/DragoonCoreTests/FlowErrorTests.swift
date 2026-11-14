@@ -84,7 +84,7 @@ import Testing
         #expect(run.send(.lookAgainPressed) == [.resolveBookmark(flowBookmark)])
         #expect(run.send(.bookmarkResolved(.found(flowDisc)))
             == [.checkDisc(path: flowDisc, expected: flowSource.disc)])
-        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc, launch: 1)])
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == starting(1))
         #expect(run.screen == .library)
     }
 
@@ -99,6 +99,7 @@ import Testing
         #expect(run.send(.discChecked(path: moved, check: .ok)) == [
             .saveSettings(LauncherSettings(welcomeSeen: true, disc: bookmark)),
             .play(disc: moved, launch: 1),
+            .scheduleHandOffTimeout(launch: 1, after: Flow.handOffTimeout),
         ])
     }
 
@@ -193,7 +194,8 @@ import Testing
         var run = launched()
         _ = run.send(playToStarting)
         let panic = GamePanic("unmapped read at 0x80001234")
-        #expect(run.send(.gameExited(launch: 1, exit: .status(134), panic: panic)) == [.deleteOldBuilds])
+        #expect(run.send(.gameExited(launch: 1, exit: .status(134), panic: panic))
+            == [.showWindow, .deleteOldBuilds])
         #expect(!run.state.gameRunning)
         #expect(run.state.gameProblem == .exited(.status(134), panic: panic))
         // Playing again clears it, and so does a clean exit.
@@ -212,7 +214,7 @@ import Testing
         var run = launched()
         _ = run.send(playToStarting)
         #expect(run.send(.gameExited(launch: 1, exit: .signal(SIGSEGV), panic: GamePanic("bad read")))
-            == [.deleteOldBuilds])
+            == [.showWindow, .deleteOldBuilds])
         #expect(!run.state.gameRunning)
         #expect(run.state.gameProblem == .exited(.signal(SIGSEGV), panic: GamePanic("bad read")))
     }
@@ -223,14 +225,15 @@ import Testing
         var run = launched()
         #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
         run.send(.bookmarkResolved(.found(flowDisc)))
-        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc, launch: 1)])
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == starting(1))
         #expect(run.screen == .library)
         #expect(run.state.gameRunning)
         #expect(!run.state.libraryIsIdle)
         #expect(run.send(.playPressed) == [])
         #expect(run.send(.rebuildPressed) == [])
         #expect(run.send(.changeDiscPressed) == [])
-        #expect(run.send(.gameExited(launch: 1, exit: .status(0), panic: nil)) == [.deleteOldBuilds])
+        #expect(run.send(.gameExited(launch: 1, exit: .status(0), panic: nil))
+            == [.showWindow, .deleteOldBuilds])
         #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
     }
 
@@ -239,7 +242,7 @@ import Testing
         var run = launched()
         _ = run.send(playToStarting)
         #expect(run.send(.gameCouldNotStart(launch: 1, reason: "Dragoon.app is damaged"))
-            == [.deleteOldBuilds])
+            == [.showWindow, .deleteOldBuilds])
         #expect(run.screen == .library)
         #expect(!run.state.gameRunning)
         #expect(run.state.gameProblem == .couldNotStart(reason: "Dragoon.app is damaged"))
@@ -275,7 +278,7 @@ import Testing
         #expect(run.state.rebuildOffer == .otherVersion)
         #expect(run.send(.playPressed) == [.resolveBookmark(flowBookmark)])
         run.send(.bookmarkResolved(.found(flowDisc)))
-        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc, launch: 1)])
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == starting(1))
         #expect(run.state.installed == old)
         run.send(.gameExited(launch: 1, exit: .status(0), panic: nil))
         #expect(run.send(.rebuildLaterPressed) == [])

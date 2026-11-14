@@ -82,6 +82,13 @@ extension Flow {
         case gameCouldNotStart(launch: Int, reason: String)
         /// The game an earlier launcher started, which `watchEarlierGame` waits on, has ended.
         case earlierGameEnded
+        /// The ready file of the game that the `play` with this launch number started says
+        /// `marks`.
+        case gameReady(launch: Int, marks: ReadyMarks)
+        /// `scheduleHandOffTimeout`'s time is up for this launch.
+        case handOffTimedOut(launch: Int)
+        /// `showWindow` has faded the window back in.
+        case windowShown
     }
 
     /// What the app does for the flow. Each result comes back as an event.
@@ -117,6 +124,13 @@ extension Flow {
         /// Starts the current game with the disc at `disc`. Its one result is `gameExited` once
         /// the game ends, or `gameCouldNotStart`, and either echoes `launch`.
         case play(disc: String, launch: Int)
+        /// Gives `handOffTimedOut` for `launch` after `after` seconds.
+        case scheduleHandOffTimeout(launch: Int, after: TimeInterval)
+        /// Fades the window out, then hides the app while the game runs. `timedOut` is set when
+        /// the game's ready file had no window line in time, which is logged.
+        case hideWindow(timedOut: Bool)
+        /// Shows the app and fades the window back in, which gives `windowShown`.
+        case showWindow
         /// Waits for the game an earlier launcher started, running as `pid`, to end, which gives
         /// `earlierGameEnded`.
         case watchEarlierGame(pid: Int32)

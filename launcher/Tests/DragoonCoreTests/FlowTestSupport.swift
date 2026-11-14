@@ -87,6 +87,15 @@ let playToStarting: [Flow.Event] = [
     .playPressed, .bookmarkResolved(.found(flowDisc)), .discChecked(path: flowDisc, check: .ok),
 ]
 
+/// What a disc that passes gives once Play has checked it: the game's start and its hand-off
+/// timer, for the launch with this number.
+func starting(_ launch: Int) -> [Flow.Effect] {
+    [
+        .play(disc: flowDisc, launch: launch),
+        .scheduleHandOffTimeout(launch: launch, after: Flow.handOffTimeout),
+    ]
+}
+
 /// The events that take a rebuild from Library to a running build, each with the effects it
 /// gives, for a disc that's where the bookmark says.
 let rebuildToRunning: [(Flow.Event, [Flow.Effect])] = [

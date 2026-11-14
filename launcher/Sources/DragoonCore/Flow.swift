@@ -12,6 +12,9 @@ public enum Flow {
     public static let neededSpace: Int64 = 2_000_000_000
     /// Seconds between tools checks while the tools are missing.
     public static let toolsCheckInterval: TimeInterval = 5
+    /// Seconds after the game starts that the launcher hides with no window line, as it does for
+    /// an engine from before the ready file.
+    public static let handOffTimeout: TimeInterval = 5
 
     public static func reduce(_ state: State, _ event: Event) -> (State, [Effect]) {
         var next = state
@@ -94,12 +97,14 @@ extension Flow.State {
             case .missing:
                 screen = .disc(.problem(.missing))
             }
+            handOff = nil
             return []
         case .discChecked(let path, let check):
             guard case .disc(path, let bookmark) = waiting, let source else { return [] }
             waiting = nil
             if let problem = DiscProblem(check, expected: source.disc) {
                 screen = .disc(.problem(problem))
+                handOff = nil
                 return []
             }
             var effects: [Effect] = []
@@ -166,6 +171,7 @@ extension Flow.State {
             guard canPlay else { return [] }
             gameProblem = nil
             panicShown = false
+            handOff = .charging
             return begin(.play)
         case .rebuildLaterPressed:
             if screen == .library { rebuildDeclined = true }
@@ -189,6 +195,19 @@ extension Flow.State {
             // ends.
             guard gameRunning, launchNumber == 0 else { return [] }
             return gameStopped(nil)
+        case .gameReady(let launch, let marks):
+            guard launch == launchNumber, handOff == .launched, marks.window != nil else {
+                return []
+            }
+            handOff = .hidden
+            return [.hideWindow(timedOut: false)]
+        case .handOffTimedOut(let launch):
+            guard launch == launchNumber, handOff == .launched else { return [] }
+            handOff = .hidden
+            return [.hideWindow(timedOut: true)]
+        case .windowShown:
+            if handOff == .returning { handOff = nil }
+            return []
         }
     }
 
@@ -239,7 +258,13 @@ extension Flow.State {
         gameRunning = false
         gameProblem = problem
         panicShown = false
-        return deleteOldBuildsIfIdle()
+        // The window comes back with the card up, and the card goes once it's in.
+        var effects: [Effect] = []
+        if handOff == .launched || handOff == .hidden {
+            handOff = .returning
+            effects.append(.showWindow)
+        }
+        return effects + deleteOldBuildsIfIdle()
     }
 
     // MARK: - Tools
@@ -284,6 +309,7 @@ extension Flow.State {
     private mutating func resolveDisc() -> [Effect] {
         guard let bookmark = settings.disc else {
             screen = .disc(.choose)
+            handOff = nil
             return []
         }
         waiting = .bookmark
@@ -298,7 +324,11 @@ extension Flow.State {
             screen = .library
             gameRunning = true
             launchNumber += 1
-            return [.play(disc: path, launch: launchNumber)]
+            handOff = .launched
+            return [
+                .play(disc: path, launch: launchNumber),
+                .scheduleHandOffTimeout(launch: launchNumber, after: Flow.handOffTimeout),
+            ]
         case .build:
             screen = .build(.preparing)
             waiting = .tools(disc: path)

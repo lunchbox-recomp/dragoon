@@ -239,16 +239,16 @@ private let oldCommits = Commits(
         run.send(.playPressed)
         run.send(.bookmarkResolved(.found(flowDisc)))
         #expect(run.send(.discChecked(path: "/elsewhere.iso", check: .ok)) == [])
-        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == [.play(disc: flowDisc, launch: 1)])
+        #expect(run.send(.discChecked(path: flowDisc, check: .ok)) == starting(1))
     }
 
     /// Each `play` carries the next launch number, and its result echoes it. A result for any
     /// other launch, such as a late one from the launch before, changes nothing.
     @Test func aLateResultFromAnEarlierLaunchChangesNothing() {
         var run = launched()
-        #expect(run.send(playToStarting).last == [.play(disc: flowDisc, launch: 1)])
+        #expect(run.send(playToStarting).last == starting(1))
         run.send(.gameCouldNotStart(launch: 1, reason: "no game"))
-        #expect(run.send(playToStarting).last == [.play(disc: flowDisc, launch: 2)])
+        #expect(run.send(playToStarting).last == starting(2))
         let running = run.state
         let others: [Flow.Event] = [
             .gameExited(launch: 1, exit: .status(3), panic: GamePanic("late")),
@@ -260,7 +260,8 @@ private let oldCommits = Commits(
         }
         #expect(run.state == running)
         #expect(run.state.gameRunning)
-        #expect(run.send(.gameExited(launch: 2, exit: .status(0), panic: nil)) == [.deleteOldBuilds])
+        #expect(run.send(.gameExited(launch: 2, exit: .status(0), panic: nil))
+            == [.showWindow, .deleteOldBuilds])
         #expect(!run.state.gameRunning)
     }
 
@@ -299,7 +300,8 @@ private let oldCommits = Commits(
     @Test func oldBuildsWaitUntilTheGameHasExited() {
         var run = launched()
         #expect(!run.send(playToStarting).joined().contains(.deleteOldBuilds))
-        #expect(run.send(.gameExited(launch: 1, exit: .status(0), panic: nil)) == [.deleteOldBuilds])
+        #expect(run.send(.gameExited(launch: 1, exit: .status(0), panic: nil))
+            == [.showWindow, .deleteOldBuilds])
     }
 
     /// Nothing the player can press leaves Library while the game runs, so the state is set by
