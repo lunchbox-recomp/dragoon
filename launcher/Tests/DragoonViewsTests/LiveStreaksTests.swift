@@ -57,6 +57,22 @@ struct LiveStreaksTests {
         #expect(local <= stoppedAt + (now - before) + 1e-6)
     }
 
+    /// A new rate runs the field faster from where it is, with no jump, and pausing still stops
+    /// it.
+    @Test func aFieldRunsAtItsRateFromWhereItIs() {
+        let view = Self.view(paused: false, still: false)
+        let before = CACurrentMediaTime()
+        let at = view.field.convertTime(before, from: nil)
+        view.show(colors: Self.colors, paused: false, still: false, rate: 3)
+        let now = CACurrentMediaTime()
+        let local = view.field.convertTime(now, from: nil)
+        #expect(view.field.speed == 3)
+        #expect(local >= at - 1e-6)
+        #expect(local <= at + 3 * (now - before) + 1e-6)
+        view.show(colors: Self.colors, paused: true, still: false, rate: 3)
+        #expect(view.field.speed == 0)
+    }
+
     @Test(arguments: [(true, true, true), (false, true, false), (true, false, false), (false, false, false)])
     func aWindowIsActiveWhenKeyAndOnScreen(isKey: Bool, visible: Bool, active: Bool) {
         #expect(Motion.windowIsActive(isKey: isKey, occlusion: visible ? .visible : []) == active)

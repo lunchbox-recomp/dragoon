@@ -17,7 +17,7 @@ struct HeroBackdrop: View {
 
 /// Speed streaks drifting up and to the right. Nearer streaks are thicker, brighter and
 /// faster. `paused` holds them where they are and `still` draws them at rest, as Reduce Motion
-/// wants.
+/// wants. `rate` runs them at that many times their speed, as Play's launch card does.
 ///
 /// The window moves them with Core Animation, which runs in the window server. Redrawing a
 /// SwiftUI `Canvas` at 30 frames a second cost the launcher 4 to 7% of a core on Library,
@@ -27,6 +27,7 @@ struct HeroStreaks: View {
     let colors: HeroColors
     let paused: Bool
     let still: Bool
+    var rate: Double = 1
     @Environment(\.animationClock) private var clock
 
     var body: some View {
@@ -35,12 +36,12 @@ struct HeroStreaks: View {
             case .live:
                 LiveStreaks(
                     colors: [colors.streakPrimary, colors.streakSecondary, .white],
-                    paused: paused, still: still)
+                    paused: paused, still: still, rate: rate)
             case .fixed(let date):
                 Canvas { context, size in
                     StreakField(size: size).draw(
                         in: &context, colors: colors,
-                        time: still ? 0 : date.timeIntervalSinceReferenceDate)
+                        time: still ? 0 : date.timeIntervalSinceReferenceDate * rate)
                 }
             }
         }

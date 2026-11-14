@@ -8,18 +8,21 @@ struct LiveStreaks: NSViewRepresentable {
     let colors: [Color]
     let paused: Bool
     let still: Bool
+    /// How many times their own speed the streaks run.
+    var rate: Double = 1
 
     func makeNSView(context: Context) -> StreakLayerView {
         StreakLayerView()
     }
 
     func updateNSView(_ view: StreakLayerView, context: Context) {
-        view.show(colors: colors.map { NSColor($0).cgColor }, paused: paused, still: still)
+        view.show(
+            colors: colors.map { NSColor($0).cgColor }, paused: paused, still: still, rate: rate)
     }
 }
 
 final class StreakLayerView: NSView {
-    /// The layer the streaks hang from, whose clock `show` stops and starts.
+    /// The layer the streaks hang from, whose clock `show` stops, starts and runs at a rate.
     let field = CALayer()
     private var colors: [CGColor] = []
     private var still = false
@@ -45,13 +48,13 @@ final class StreakLayerView: NSView {
         nil
     }
 
-    func show(colors: [CGColor], paused: Bool, still: Bool) {
+    func show(colors: [CGColor], paused: Bool, still: Bool, rate: Double = 1) {
         if colors != self.colors || still != self.still {
             self.colors = colors
             self.still = still
             rebuild()
         }
-        field.hold(paused)
+        field.run(at: paused ? 0 : Float(rate))
     }
 
     override func layout() {
