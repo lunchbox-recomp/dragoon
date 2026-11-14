@@ -15,7 +15,7 @@ enum Snapshot {
     /// most 4 of the 16 the comparison allows.
     static let recordStep = 8
     /// How many pixels may differ, of the 960x600. Every screen renders 0 on the Mac that
-    /// recorded them, and one word changed on a button is 211.
+    /// recorded them, and Quit changed to Exit on the must-move screen is 223.
     static let allowedPixels = 100
 
     static let directory = URL(fileURLWithPath: #filePath)
