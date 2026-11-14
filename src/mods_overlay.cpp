@@ -1,10 +1,10 @@
-// The overlay's Mods page (docs/dev/mods.md), in the desktop game, which defines GCN_OVERLAY.
-// It lists each package's options with their choices and Off, and a failed package shows off
-// with its error. Apply and restart empties settings.txt's disc_overlay and ram_patches lines,
-// then runs tools/mod_choices.py `set` for each change and then `apply`, on a thread of its own
-// so the menu keeps drawing. Then it names apply's paths in those lines and restarts the game as
-// the overlay's Restart game does (frontend.h). src/mods_page.h has the pure part, which decides
-// what follows a run; this file has the ImGui and the threads.
+// The overlay's Mods page (docs/dev/mods.md), in the desktop game and in runtime_check, which
+// makes the kit's engine.o; both define GCN_OVERLAY. It lists each package's options with their
+// choices and Off, and a failed package shows off with its error. Apply and restart empties
+// settings.txt's disc_overlay and ram_patches lines, then runs tools/mod_choices.py `set` for
+// each change and then `apply`, on a thread of its own so the menu keeps drawing. Then it names
+// apply's paths in those lines and restarts the game as Restart game does (frontend.h). The pure
+// part, which decides what follows a run, is src/mods_page.h; this has the ImGui and the threads.
 //
 // The page runs nothing until it's first shown. A result that comes in while the menu is
 // closed is taken the next time the page draws, and then the game waits for Restart game.

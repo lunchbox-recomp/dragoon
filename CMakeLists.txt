@@ -10,8 +10,8 @@ endif()
 add_subdirectory(gcn-recomp)
 
 # src/, the C++ the tables' hooks call and the overlay's Mods page. SOURCES compiles it into the
-# game targets, and the page draws only where GCN_OVERLAY is defined, which is the desktop
-# game's. The unit tests link DRAGOON_UNIT_SOURCES too.
+# game targets, and the page draws only where GCN_OVERLAY is defined: the desktop game and
+# runtime_check, which makes the kit's engine.o. The unit tests link DRAGOON_UNIT_SOURCES too.
 set(DRAGOON_UNIT_SOURCES ${CMAKE_SOURCE_DIR}/src/json_read.cpp ${CMAKE_SOURCE_DIR}/src/child_run.cpp
                          ${CMAKE_SOURCE_DIR}/src/mods_page.cpp)
 set(DRAGOON_SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp ${CMAKE_SOURCE_DIR}/src/cameras.cpp
