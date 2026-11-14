@@ -428,6 +428,22 @@ class ProbeTreeTest(unittest.TestCase):
         r = subprocess.run([str(self.script), NAME, "8"], capture_output=True, text=True, timeout=6)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_a_new_run_starts_with_no_settings_ports_or_pads_file(self):
+        # A player's own files, where a game run from the repo would read them
+        (self.root / "saves").mkdir()
+        files = ("settings.txt", "ports.txt", "pads.txt", "saves/settings.txt", "saves/ports.txt", "saves/pads.txt")
+        for name in files:
+            write_file(self.root, name, "1\n")
+        look = "for f in " + " ".join(files) + "; do [ -e \"$f\" ] && echo \"$f\"; done > seen.txt\necho 'whole run'\n"
+        self.add_game("dragoon", look)
+        self.add_game("dragoon_bench", look)
+        for n, settings in enumerate(((), ("--bench",))):
+            with self.subTest(settings=settings):
+                name = f"{NAME}-{n}"
+                r = probe(name, "1", "", "60", *settings, script=self.script, cwd=self.root)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual((self.root / "build" / "probe" / name / "seen.txt").read_text(), "")
+
 
 if __name__ == "__main__":
     unittest.main()
