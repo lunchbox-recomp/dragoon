@@ -41,6 +41,31 @@ class PictureBoxTest(unittest.TestCase):
         _, out, _ = run_main(picture_box.main, path, "--dark", "15")
         self.assertIn("box 0..6 by 0..4", out)
 
+    def test_an_rgba_dump_reads_four_bytes_a_pixel(self):
+        # The window's dumps are RGBA. The alpha isn't opaque and decides nothing: the bars are
+        # black at full alpha and the picture is cream at a quarter.
+        w, h = 8, 3
+        data = bytes(c for y in range(h) for x in range(w)
+                     for c in ((*CREAM, 64) if 2 <= x < 5 else (*BLACK, 255)))
+        path = self.dir / "rgba.png"
+        write_png(path, w, h, 4, data, [0, 1, 4])
+        code, out, _ = run_main(picture_box.main, str(path))
+        self.assertEqual(code, 0)
+        self.assertEqual(out, f"{path}: 8x3, box 2..5 by 0..3, 3x3, ratio 1.0000, bars 2 and 3\n")
+
+    def test_the_box_takes_every_rows_extent(self):
+        # 15 wide, the rows lit over different spans with the widest in the middle, so the box
+        # reaches past the first and last lit rows' ends, with bars of 2 and 1.
+        spans = {1: (4, 10), 2: (2, 14), 3: (5, 8)}
+
+        def paint(x, y):
+            lo, hi = spans.get(y, (0, 0))
+            return CREAM if lo <= x < hi else BLACK
+
+        path = self.png("rows.png", 15, 6, paint)
+        _, out, _ = run_main(picture_box.main, path)
+        self.assertEqual(out, f"{path}: 15x6, box 2..14 by 1..4, 12x3, ratio 4.0000, bars 2 and 1\n")
+
     def test_color_boxes_one_element(self):
         def paint(x, y):
             return ORANGE if 3 <= x < 7 and 1 <= y < 4 else CREAM
@@ -51,6 +76,17 @@ class PictureBoxTest(unittest.TestCase):
         _, out, _ = run_main(picture_box.main, path, "--color", "F07808")
         self.assertIn("no pixel matched", out)
         _, out, _ = run_main(picture_box.main, path, "--color", "F07808", "--within", "15")
+        self.assertIn("box 3..7 by 1..4", out)
+
+    def test_color_checks_each_channel_to_within(self):
+        # ORANGE is FF8000. Off by 9 in G alone or in B alone is past the default --within of 8,
+        # and off by 8 in each is within it.
+        path = self.png("button.png", 10, 6, lambda x, y: ORANGE if 3 <= x < 7 and 1 <= y < 4 else BLACK)
+        for color in ("FF8900", "FF8009"):
+            with self.subTest(color=color):
+                _, out, _ = run_main(picture_box.main, path, "--color", color)
+                self.assertEqual(out, f"{path}: 10x6, no pixel matched\n")
+        _, out, _ = run_main(picture_box.main, path, "--color", "F78808")
         self.assertIn("box 3..7 by 1..4", out)
 
     def test_a_dark_image_matches_nothing(self):
@@ -70,6 +106,13 @@ class PictureBoxTest(unittest.TestCase):
         code, _, err = run_main(picture_box.main, str(bad))
         self.assertEqual(code, 2)
         self.assertIn("bad.png", err)
+
+    def test_a_missing_file_or_a_directory_exits_2_naming_it(self):
+        for path in (self.dir / "missing.png", self.dir):
+            with self.subTest(path=path):
+                code, out, err = run_main(picture_box.main, str(path))
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn(str(path), err)
 
     def test_bad_arguments_exit_2(self):
         path = self.png("a.png", 2, 2, lambda x, y: CREAM)
