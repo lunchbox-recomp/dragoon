@@ -58,7 +58,7 @@ When `apply` prints null for `ram_patches`, empty the line by writing `ram_patch
 
 For one run, `--ram-patches=PATH` beats `GCN_RAM_PATCHES`, which beats the key. An empty value at any of the three means no patches. A relative path in the flag or the variable is relative to the game's working directory.
 
-`gcn-recomp/runtime/main.cpp:482-504` selects the paths, and `gcn-recomp/runtime/settings.cpp:143-144`, `:148-149` reads both keys. `gcn-recomp/runtime/settings.cpp:82-89` skips a key whose file is missing when no flag or variable is set. `gcn-recomp/runtime/ram_patches.cpp:66-92` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:70-76` stops when any other overlay manifest can't open.
+`gcn-recomp/runtime/main.cpp:506-528` selects the paths, and `gcn-recomp/runtime/settings.cpp:143-144`, `:151-152` reads both keys. `gcn-recomp/runtime/settings.cpp:82-89` skips a key whose file is missing when no flag or variable is set. `gcn-recomp/runtime/ram_patches.cpp:66-92` opens the RAM patch list, and `gcn-recomp/runtime/hw/di.cpp:70-76` stops when any other overlay manifest can't open.
 
 The tool exits 0 when the command succeeds, including an apply that leaves a failed package off. It exits 1 for:
 
@@ -101,4 +101,4 @@ A `set` that ran before the failure has saved its choice in `mods.txt`, and the 
 
 A replay has no Apply and restart, since a restart ends a replay. A result that comes in while the menu is closed is taken the next time the page is shown.
 
-`src/mods_overlay.cpp:129-137` starts an apply, `src/mods_overlay.cpp:145-177` takes each result and `src/mods_overlay.cpp:224-275` draws the page. `src/mods_page.cpp:28-56` turns a run into JSON or a message, `src/mods_page.cpp:163-169` decides whether an apply is due at the start and whether the page says so, `src/mods_page.cpp:210-238` rewrites the two lines and `src/mods_page.cpp:272-294` decides what follows a run. `src/child_run.cpp:78-153` runs the script, and `gcn-recomp/runtime/main.cpp:434-437` is the restart.
+`src/mods_overlay.cpp:129-137` starts an apply, `src/mods_overlay.cpp:145-177` takes each result and `src/mods_overlay.cpp:224-275` draws the page. `src/mods_page.cpp:28-56` turns a run into JSON or a message, `src/mods_page.cpp:163-169` decides whether an apply is due at the start and whether the page says so, `src/mods_page.cpp:210-238` rewrites the two lines and `src/mods_page.cpp:272-294` decides what follows a run. `src/child_run.cpp:78-153` runs the script, and `gcn-recomp/runtime/main.cpp:437-440` is the restart.
