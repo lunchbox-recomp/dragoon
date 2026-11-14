@@ -150,7 +150,7 @@ A build shows one bar in segments, each as wide as its step took on the Mac it w
 
 The time left comes once a step has 3 counts. It's the step's rate across its newest 30 counts, as DuckStation's loading screen takes it (`fullscreenui_widgets.cpp:7144-7181`), plus each later step's measured time scaled by this Mac's ratio on the steps it has finished. A step that didn't count all its work, as a warm-up whose cache was current, stays out of the ratio. The estimate changes only on an event.
 
-Make prints quickly, so `ProgressThrottle` lets a progress event through at most every 0.1 s and holds the newest in between. The banner goes from gray to its own colors with the bar. When the build is done the glow behind it pulses once and the bar becomes Play. The page stays until Play or Back to Library, with Library current in the list. Under Reduce Motion the shimmer fades up and down in place, the glow only fades up and the bar fades into Play.
+Make prints quickly, so `ProgressThrottle` lets a progress event through at most every 0.1 s and holds the newest in between, and `ThrottledSend`, beside it in `DragoonCore`, sends the held one once it's due. The banner goes from gray to its own colors with the bar. When the build is done the glow behind it pulses once and the bar becomes Play. The page stays until Play or Back to Library, with Library current in the list. Under Reduce Motion the shimmer fades up and down in place, the glow only fades up and the bar fades into Play.
 
 The clock ticks once a second. It and the shimmer stop while the window isn't key or is covered.
 

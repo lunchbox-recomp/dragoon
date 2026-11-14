@@ -54,3 +54,44 @@ public struct ProgressThrottle: Sendable {
         return held
     }
 }
+
+/// A `ProgressThrottle` that sends each event it lets through, and sends a held one once it's
+/// due. `now` and `sleep` are the clock it reads and how it waits, which a test replaces.
+@MainActor
+public final class ThrottledSend {
+    public typealias Sleep = @MainActor (TimeInterval) async -> Void
+
+    private var throttle = ProgressThrottle()
+    private var flushing = false
+    private let now: () -> Date
+    private let sleep: Sleep
+    private let send: (ProgressThrottle.Timed) -> Void
+
+    public init(
+        now: @escaping () -> Date = { Date() },
+        sleep: @escaping Sleep = { try? await Task.sleep(for: .seconds($0)) },
+        send: @escaping (ProgressThrottle.Timed) -> Void
+    ) {
+        self.now = now
+        self.sleep = sleep
+        self.send = send
+    }
+
+    public func offer(_ event: BuildEvent, at time: Date) {
+        throttle.offer(event, at: time).forEach(send)
+        flushWhenDue()
+    }
+
+    private func flushWhenDue() {
+        guard !flushing, let due = throttle.due else { return }
+        flushing = true
+        let wait = max(due.timeIntervalSince(now()), 0)
+        Task { [weak self, sleep] in
+            await sleep(wait)
+            guard let self else { return }
+            self.flushing = false
+            if let held = self.throttle.flush(at: self.now()) { self.send(held) }
+            self.flushWhenDue()
+        }
+    }
+}

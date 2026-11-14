@@ -70,3 +70,75 @@ import Testing
         #expect(throttle.due == nil)
     }
 }
+
+/// `ThrottledSend` on a clock the test sets and a sleep that moves it on at once.
+@MainActor
+final class ThrottleRig {
+    var now = at(0)
+    private(set) var waits: [TimeInterval] = []
+    private(set) var sent: [ProgressThrottle.Timed] = []
+    private lazy var throttled = ThrottledSend(
+        now: { [unowned self] in now },
+        sleep: { [unowned self] seconds in
+            waits.append(seconds)
+            now = now.addingTimeInterval(seconds)
+        },
+        send: { [unowned self] in sent.append($0) })
+
+    func offer(_ event: BuildEvent, at seconds: Double) {
+        now = at(seconds)
+        throttled.offer(event, at: now)
+    }
+
+    /// Lets the main actor run what the throttle queued on it, until `done` or 100 turns.
+    func settle(until done: () -> Bool = { false }) async {
+        for _ in 0..<100 where !done() { await Task.yield() }
+    }
+}
+
+@MainActor
+@Suite struct ThrottledSendTests {
+    static let compile = ProgressThrottleTests.compile
+    static let timed = ProgressThrottleTests.timed
+
+    @Test func aHeldProgressGoesOnceItIsDueWithTheMomentItCame() async {
+        let rig = ThrottleRig()
+        rig.offer(Self.compile(1), at: 1)
+        rig.offer(Self.compile(2), at: 1.02)
+        rig.offer(Self.compile(3), at: 1.05)
+        #expect(rig.sent == [Self.timed(Self.compile(1), 1)])
+        await rig.settle { rig.sent.count == 2 }
+        #expect(rig.sent == [Self.timed(Self.compile(1), 1), Self.timed(Self.compile(3), 1.05)])
+        // It slept from the second event to a tenth of a second after the first, once.
+        #expect(rig.waits.count == 1)
+        #expect(abs((rig.waits.first ?? 0) - 0.08) < 1e-9)
+    }
+
+    @Test func aProgressHeldAfterAFlushGetsAFlushOfItsOwn() async {
+        let rig = ThrottleRig()
+        rig.offer(Self.compile(1), at: 1)
+        rig.offer(Self.compile(2), at: 1.02)
+        await rig.settle { rig.sent.count == 2 }
+        // The flush went at 1.1, so 1.15 is held until 1.2.
+        rig.offer(Self.compile(3), at: 1.15)
+        await rig.settle { rig.sent.count == 3 }
+        #expect(rig.sent.map(\.event) == [Self.compile(1), Self.compile(2), Self.compile(3)])
+        #expect(rig.waits.count == 2)
+        #expect(abs((rig.waits.last ?? 0) - 0.05) < 1e-9)
+    }
+
+    @Test func doneSendsTheHeldProgressAndTheFlushThenSendsNothing() async {
+        let rig = ThrottleRig()
+        let done = BuildEvent.done(game: "/x/game/current/Dragoon.app")
+        rig.offer(Self.compile(1), at: 1)
+        rig.offer(Self.compile(2), at: 1.02)
+        rig.offer(done, at: 1.03)
+        let expected = [
+            Self.timed(Self.compile(1), 1), Self.timed(Self.compile(2), 1.02), Self.timed(done, 1.03),
+        ]
+        #expect(rig.sent == expected)
+        await rig.settle()
+        #expect(rig.waits.count == 1)
+        #expect(rig.sent == expected)
+    }
+}
