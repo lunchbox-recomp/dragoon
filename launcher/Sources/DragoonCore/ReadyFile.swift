@@ -58,7 +58,8 @@ public enum ReadyFile {
     }
 
     /// Removes the file at `path` and the `.tmp` the engine writes it through, so the next run
-    /// starts with neither. The engine keeps what the file held and adds to it.
+    /// starts with neither. An earlier run's file stays until the next run's first line replaces
+    /// it, so the launcher removes it first.
     static func remove(_ path: String, fs: any FileSystem) {
         try? fs.removeItem(at: path)
         try? fs.removeItem(at: path + ".tmp")

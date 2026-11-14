@@ -79,8 +79,9 @@ public final class GameLauncher: Sendable {
     /// While the game runs, `<data>/game.pid` records it for `GameRecord.runningGame`, and the
     /// record goes as the result is sent.
     ///
-    /// The game gets `readyFile` as `GCN_READY_FILE`, for `ReadyWatcher`. The engine adds to what
-    /// that file holds, so it and its `.tmp` are removed before the game starts, and again as the
+    /// The game gets `readyFile` as `GCN_READY_FILE`, for `ReadyWatcher`. An earlier run's file
+    /// stays until this run's first line replaces it, and the watch would read its `window` line
+    /// as this run's, so it and its `.tmp` are removed before the game starts, and again as the
     /// result is sent. `started` gets the game's pid once it's running.
     public func play(
         game: String, disc: String, data: String, readyFile: String,

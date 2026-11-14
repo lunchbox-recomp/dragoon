@@ -52,8 +52,8 @@ import Testing
         #expect(fixture.lines(fixture.noteFile) == [fixture.readyFile])
     }
 
-    /// The engine keeps what the file holds and adds to it, so an earlier run's lines would read
-    /// as this run's.
+    /// An earlier run's file stays until this run's first line replaces it, so its lines would
+    /// read as this run's.
     @Test func anEarlierRunsReadyFileIsGoneBeforeTheGameStarts() async throws {
         let fixture = try GameFixture()
         try fixture.write(fixture.readyFile, "window 1\nframe 2\n")
