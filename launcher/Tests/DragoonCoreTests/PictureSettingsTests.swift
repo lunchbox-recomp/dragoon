@@ -55,6 +55,15 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
     }
 
     @Test(arguments: SettingsFixture.all)
+    func aSaveOnTheFakeFileSystemWritesTheSameBytes(_ fixture: SettingsFixture) throws {
+        let fs = FakeFileSystem()
+        if let before = fixture.before { fs.addFile(path, before) }
+        try fixture.picture.save(to: fakeData, fs: fs)
+        #expect(try fs.readData(at: path) == fixture.after)
+        #expect(!fs.fileExists(at: path + ".tmp"))
+    }
+
+    @Test(arguments: SettingsFixture.all)
     func whatASaveWroteLoadsBackAsWhatWasSet(_ fixture: SettingsFixture) {
         #expect(PictureSettings(parsing: fixture.after) == fixture.picture)
     }
