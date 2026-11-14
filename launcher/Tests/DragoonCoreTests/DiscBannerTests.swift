@@ -281,6 +281,16 @@ private let tileCases: [(Int, Int, Int)] = [
         #expect(total <= 0x440 + disc.fstSize + 0x1FA0)
     }
 
+    /// An `opening.bnr` whose size is neither banner's is never read, however big it says it is.
+    @Test(arguments: [UInt32(0x1961), 0x1_0000, 0x4000_0000, 0xFFFF_FFFF])
+    func anOpeningBNROfAnotherSizeIsntRead(_ size: UInt32) {
+        var disc = standardDisc()
+        disc.poke(disc.entries["opening.bnr"]! + 8, size)
+        let fs = FakeFileSystem()
+        #expect(read(disc.image, fs: fs) == nil)
+        #expect(fs.reads.allSatisfy { $0.count <= 0x1FA0 })
+    }
+
     @Test func aCISOReadsItsHeaderToo() {
         let disc = standardDisc()
         let fs = FakeFileSystem()
