@@ -1031,6 +1031,7 @@ real game's own time to its window isn't here.
 | The same before App Nap was held off | 0.5 s | 270 ms, or 26 s to over 2 minutes | Fail, fixed in `d34b76d` |
 | Launcher's share of a core while clear, the game running | 0.2% | 0.02% | Pass |
 | Hiding with neither a `window` line nor the 5 s timeout | never | never, in `FlowHandOffTests` | Pass |
+| The bars above on the real game | an engine that writes `GCN_READY_FILE`, which the gcn-recomp pin bump brings | Not measured | Not measured |
 
 The fake game in `LaunchTimingTests` is a shell script that writes `window 300` and `frame 700`
 as the engine does. Its times count from the process start, as the engine's do, but its
