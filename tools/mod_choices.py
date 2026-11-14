@@ -143,6 +143,9 @@ def sweep_temps(data):
     """
     stale = time.time() - 60
     for path in data.glob('.mods-*'):
+        # NamedTemporaryFile's names: the prefix, then eight of its lowercase letters, digits and _.
+        if not re.fullmatch(r'\.mods-[a-z0-9_]{8}', path.name):
+            continue
         # Another run's write can replace or remove its temp file after the glob.
         try:
             info = path.lstat()

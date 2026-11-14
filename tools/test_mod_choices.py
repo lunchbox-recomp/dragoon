@@ -552,12 +552,12 @@ class FakeEngineTest(unittest.TestCase):
     def test_apply_removes_temp_files_a_killed_write_left(self):
         # A kill at the time limit or the game's quit skips write_choices' own cleanup.
         old = time.time() - 120
-        stale = self.data / '.mods-stale'
+        stale = self.data / '.mods-stale_12'
         stale.write_text('a.xml:opt=0\n')
         os.utime(stale, (old, old))
-        young = self.data / '.mods-young'
+        young = self.data / '.mods-young_12'
         young.write_text('a.xml:opt=0\n')
-        folder = self.data / '.mods-folder'
+        folder = self.data / '.mods-folder12'
         folder.mkdir()
         os.utime(folder, (old, old))
         other = self.data / 'other'
@@ -573,12 +573,37 @@ class FakeEngineTest(unittest.TestCase):
         self.assertTrue(folder.is_dir())
         self.assertTrue(other.exists())
 
-    def stale_temp(self, name):
+    def stale_temp(self, name, age=120):
         path = self.data / name
         path.write_text('a.xml:opt=0\n')
-        old = time.time() - 120
+        old = time.time() - age
         os.utime(path, (old, old))
         return path
+
+    def test_sweep_keeps_a_name_unlike_a_temp_file(self):
+        # Only NamedTemporaryFile's shape: .mods- and eight of its letters, digits and _.
+        backup = self.stale_temp('.mods-backup.txt', age=3600)
+        short = self.stale_temp('.mods-abc1234')
+        upper = self.stale_temp('.mods-ABCD1234')
+        temp = self.stale_temp('.mods-abcd_123')
+        mod_choices.sweep_temps(self.data)
+        self.assertTrue(backup.exists())
+        self.assertTrue(short.exists())
+        self.assertTrue(upper.exists())
+        self.assertFalse(temp.exists())
+
+    def test_sweep_matches_the_names_write_choices_makes(self):
+        # A kill between NamedTemporaryFile and os.replace leaves its file, which the sweep takes.
+        with mock.patch.object(mod_choices.os, 'replace', side_effect=KeyboardInterrupt), \
+                mock.patch.object(mod_choices.os, 'unlink'):
+            with self.assertRaises(KeyboardInterrupt):
+                mod_choices.write_choices(self.data, [('a.xml', 'opt', 1)])
+        left = list(self.data.glob('.mods-*'))
+        self.assertEqual(len(left), 1)
+        old = time.time() - 120
+        os.utime(left[0], (old, old))
+        mod_choices.sweep_temps(self.data)
+        self.assertFalse(left[0].exists())
 
     def test_sweep_skips_a_temp_file_gone_before_its_lstat(self):
         # Another run's write replaced it between the glob and the lstat.
