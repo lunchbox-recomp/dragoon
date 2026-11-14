@@ -257,6 +257,15 @@ private let tileCases: [(Int, Int, Int)] = [
         #expect(read(disc.image) == nil)
     }
 
+    /// An entry count past the table and a directory that ends past it would walk off the
+    /// table's end, but the count alone refuses it first.
+    @Test func anEntryCountPastTheTableWithADirectoryPastItHasNoBanner() {
+        var disc = makeDisc(root: [.directory("sub", []), .file("opening.bnr", makeBNR())])
+        disc.poke(disc.fstOffset + 8, 0xFFFF_FFFF)
+        disc.poke(disc.entries["sub"]! + 8, UInt32(disc.fstSize / 12 + 1))
+        #expect(read(disc.image) == nil)
+    }
+
     // MARK: How much is read
 
     @Test(arguments: [("BNR1", [BannerText()]), ("BNR2", sixTexts)])
