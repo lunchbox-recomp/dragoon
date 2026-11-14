@@ -19,7 +19,8 @@ struct LiveStreaks: NSViewRepresentable {
 }
 
 final class StreakLayerView: NSView {
-    private let field = CALayer()
+    /// The layer the streaks hang from, whose clock `show` stops and starts.
+    let field = CALayer()
     private var colors: [CGColor] = []
     private var still = false
     private var builtSize = CGSize.zero

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 private struct WindowIsActiveKey: EnvironmentKey {
@@ -24,11 +25,16 @@ extension EnvironmentValues {
     }
 }
 
-enum Motion {
+public enum Motion {
     /// The hero's streaks stop when nobody can see them, while the game has the screen and under
     /// Reduce Motion, so Library costs nothing then.
     static func heroPaused(windowIsActive: Bool, gameRunning: Bool, reduceMotion: Bool) -> Bool {
         !windowIsActive || gameRunning || reduceMotion
+    }
+
+    /// Whether a window counts as active for `windowIsActive`: it's key and on screen.
+    public static func windowIsActive(isKey: Bool, occlusion: NSWindow.OcclusionState) -> Bool {
+        isKey && occlusion.contains(.visible)
     }
 }
 

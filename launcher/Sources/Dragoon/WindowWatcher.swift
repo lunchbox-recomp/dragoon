@@ -1,4 +1,5 @@
 import AppKit
+import DragoonViews
 import SwiftUI
 
 /// Tells `isActive` whether the window it sits in is key and on screen, so the hero can stop
@@ -44,6 +45,6 @@ final class WatchingView: NSView {
 
     private func update() {
         guard let window else { return }
-        report(window.isKeyWindow && window.occlusionState.contains(.visible))
+        report(Motion.windowIsActive(isKey: window.isKeyWindow, occlusion: window.occlusionState))
     }
 }
