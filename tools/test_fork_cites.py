@@ -19,8 +19,8 @@ def text(lines: list[str]) -> str:
 
 class FindTest(unittest.TestCase):
     """find() gives (cites, strays), a stray being a Markdown :N with no cite before it on its
-    line or with a name of a file without a line between it and that cite, as (line, the :N as
-    written, the name or None)."""
+    line or with a name of another file without a line between it and that cite, as (line, the
+    :N as written, the name or None)."""
 
     def test_a_path_under_gcn_recomp_with_a_range(self):
         self.assertEqual(fork_cites.find("see `gcn-recomp/runtime/main.cpp:404-407` here\n", True),
@@ -56,6 +56,21 @@ class FindTest(unittest.TestCase):
                                                       (1, ":5", "runtime/hw/dsp.cpp")]))
         self.assertEqual(fork_cites.find("`ax.cpp:617` (`dsp_hle.cpp` `:65`)\n", False),
                          ([Cite(1, "ax.cpp", 617, 617), Cite(1, "ax.cpp", 65, 65)], []))
+
+    def test_the_cites_own_file_named_again_leaves_a_continuation_be(self):
+        self.assertEqual(fork_cites.find("`ax.cpp:617`, in ax.cpp's mixer, `:620`\n", True),
+                         ([Cite(1, "ax.cpp", 617, 617), Cite(1, "ax.cpp", 620, 620)], []))
+        self.assertEqual(fork_cites.find("`runtime/hw/ax.cpp:1` (ax.cpp) `:2`, `ax.cpp:3` in hw/ax.cpp `:4`\n", True),
+                         ([Cite(1, "runtime/hw/ax.cpp", 1, 1), Cite(1, "runtime/hw/ax.cpp", 2, 2),
+                           Cite(1, "ax.cpp", 3, 3), Cite(1, "ax.cpp", 4, 4)], []))
+        self.assertEqual(fork_cites.find("`ax.cpp:1`, `dsp.cpp`, ax.cpp, `:2`\n", True),
+                         ([Cite(1, "ax.cpp", 1, 1)], [(1, ":2", "dsp.cpp")]))
+
+    def test_another_file_of_the_same_name_or_ending_is_still_another_file(self):
+        self.assertEqual(fork_cites.find("`hw/ax.cpp:1`, `audio/ax.cpp`, `:2`\n", True),
+                         ([Cite(1, "hw/ax.cpp", 1, 1)], [(1, ":2", "audio/ax.cpp")]))
+        self.assertEqual(fork_cites.find("`ax.cpp:1`, `max.cpp`, `:2`\n", True),
+                         ([Cite(1, "ax.cpp", 1, 1)], [(1, ":2", "max.cpp")]))
 
     def test_a_cite_after_a_file_named_without_a_line_starts_afresh(self):
         self.assertEqual(fork_cites.find("`ax.cpp:1`, `dsp.cpp`, `dsp.cpp:3`, `:4`, so ax.cpp:5-6\n", True),

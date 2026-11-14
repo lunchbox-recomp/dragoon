@@ -17,7 +17,9 @@ name two fork files share is listed as skipped, below. A Markdown :N with no fil
 it on its line is a stray, skipped with a warning on stderr, even one whose file is named there
 without a line or on the line before, since the tool can't tell which file it means. So is a
 Markdown :N with a file named without a line between it and the cite before it, as :65 in
-ax.cpp:617 (dsp_hle.cpp, :65), which may mean either file. PATH:N:M is a
+ax.cpp:617 (dsp_hle.cpp, :65), which may mean either file. A name of the cite's own file, as
+ax.cpp in ax.cpp:617, in ax.cpp's mixer, :620, or one ending in /ax.cpp, isn't another
+file and leaves the :N be. PATH:N:M is a
 compiler's diagnostic, not a cite, and Markdown's fenced code blocks hold quoted output, so their
 lines are skipped. Paths with spaces aren't recognised. A file named without a line is only a
 path a cite could hold, so x.cpp-y, lib.so.1 and /usr/x.cpp name no file, just as x.cpp-y:3,
@@ -80,11 +82,16 @@ class Cite(NamedTuple):
     last: int
 
 
+def same(a: str, b: str) -> bool:
+    """Whether paths A and B can name one file, one being the other or its end after a slash."""
+    return a == b or a.endswith("/" + b) or b.endswith("/" + a)
+
+
 def find(text: str, markdown: bool) -> tuple[list[Cite], list[tuple[int, str, Optional[str]]]]:
     """TEXT's cites in order, each continuation and list item carrying its file's path as
     written, and its strays. MARKDOWN skips fenced code blocks and finds strays, each :N with
-    no cite before it on its line or with a file named without a line between it and that cite,
-    as (line, the :N as written, that file's name or None)."""
+    no cite before it on its line or with a file other than the cite's named without a line
+    between it and that cite, as (line, the :N as written, that file's name or None)."""
     cites: list[Cite] = []
     strays: list[tuple[int, str, Optional[str]]] = []
     fenced = False
@@ -102,7 +109,8 @@ def find(text: str, markdown: bool) -> tuple[list[Cite], list[tuple[int, str, Op
         path = named = None
         for start, end, written, first, last in sorted(found):
             if first is None:
-                named = written if path else None
+                if path and not same(written, path):
+                    named = written
                 continue
             if written:
                 path, named = written, None
