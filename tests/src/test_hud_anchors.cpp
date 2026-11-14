@@ -664,6 +664,15 @@ TEST(CameraMark, NoneAtFourByThree) {
     EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 21.0f / 9.0f), dragoon::kMenuFrame);
 }
 
+TEST(CameraMark, NoneAtANarrowerOutput) {
+    // Centered at 1:1 the frame would widen by 4/3 and lose about 107 of its 640 at each side.
+    // Stretched, it all shows, squeezed.
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 1.0f), Mark{});
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 3.0f / 4.0f), Mark{});
+    EXPECT_EQ(dragoon::camera_mark(lens(dragoon::kOrtho, 0, -480, 0, 640), {}, 1.0f), Mark{});
+    EXPECT_EQ(dragoon::camera_mark(narrow(25), {}, 1.34f), dragoon::kMenuFrame);
+}
+
 // After the race's finish the world camera that's drawn gets its aspect once, at frame 8,092.
 // The camera module still sets eight others over the screen each frame to 13,061, so each frame
 // has the screen as a view and the narrow HUD 3D camera marks nothing, as at 8,400.
