@@ -269,10 +269,13 @@ public enum Strings {
         switch aspect {
         case "4:3": return "4:3 is the console's own shape."
         case "window": return "The picture takes the window's shape as it's resized. The window opens at 4:3."
-        default:
+        case _ where PictureSettings.aspects.contains(aspect):
             // The HUD at 16:9 is measured (docs/dev/status.md's HUD row), and 16:10 and 21:9 are
             // checked by tests/src/test_hud_anchors.cpp's offered aspects.
             return "The world widens to \(aspect). The race HUD keeps its 4:3 size at the picture's edges, the menus stay 4:3 in the middle, and Top Ride's HUD stretches."
+        default:
+            // A hand-edited aspect the sheet has no button for, such as 5:4.
+            return "settings.txt sets \(aspect), which isn't one of these."
         }
     }
     /// Where the game's picture goes: its window, or the screen.

@@ -82,7 +82,7 @@ The 19 cases in `Tests/DragoonCoreTests/SettingsFixtures/` come from `tools/sett
 
 ## The Settings sheet
 
-Settings in Library's "..." menu reads `settings.txt` and opens a sheet on it with the game's aspect, fullscreen and scale. The aspects are the game's Display page's, in its order and with its labels: 4:3, 16:9, 16:10, 21:9 and Fill window. Scale offers 1x to 8x, as the page does, since the renderer draws at 8x at most. A file's scale over 8 marks 8x, and an aspect the sheet doesn't offer marks none, until the player picks one.
+Settings in Library's "..." menu reads `settings.txt` and opens a sheet on it with the game's aspect, fullscreen and scale. The aspects are the game's Display page's, in its order and with its labels: 4:3, 16:9, 16:10, 21:9 and Fill window. Scale offers 1x to 8x, as the page does, since the renderer draws at 8x at most. A file's scale over 8 marks 8x, and an aspect the sheet doesn't offer marks none, with a note that settings.txt sets it, until the player picks one.
 
 Each pick is saved at once. The flow saves only while Library is idle, so never while the game runs, which reads the file as it starts and saves it from its Display page. Settings is off while any game runs, an earlier launcher's included, and Play waits while the sheet is open. A save that fails says why in the sheet, the file is as it was, and the sheet goes back to what the file holds, so picking the same again tries again.
 

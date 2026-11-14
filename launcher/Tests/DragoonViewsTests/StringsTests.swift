@@ -20,7 +20,7 @@ struct StringsTests {
 
     /// The Settings sheet's sentences, which follow Library's rule.
     static let settingsSentences: [String] =
-        PictureSettings.aspects.map(Strings.aspectNote) + [
+        (PictureSettings.aspects + ["5:4"]).map(Strings.aspectNote) + [
             Strings.windowNote(PictureSettings(aspect: "16:9"), display: nil),
             Strings.windowNote(PictureSettings(aspect: "16:9", fullscreen: true), display: nil),
             Strings.windowNote(PictureSettings(aspect: "4:3", fullscreen: true), display: testDisplay),
@@ -34,5 +34,16 @@ struct StringsTests {
     func aLibrarySentenceEndsInAFullStop(_ sentence: String) {
         #expect(sentence.hasSuffix(".") || sentence.hasSuffix("…"))
         #expect(!sentence.contains("!"))
+    }
+
+    /// The HUD note holds for the wide aspects the sheet offers. One it doesn't, set by hand in
+    /// settings.txt, is named as such and nothing more.
+    @Test func anAspectTheSheetDoesntOfferHasASentenceOfItsOwn() {
+        for aspect in ["16:9", "16:10", "21:9"] {
+            #expect(Strings.aspectNote(aspect).hasPrefix("The world widens to \(aspect). The race HUD"))
+        }
+        for aspect in ["5:4", "32:9", "0016:0009"] {
+            #expect(Strings.aspectNote(aspect) == "settings.txt sets \(aspect), which isn't one of these.")
+        }
     }
 }
