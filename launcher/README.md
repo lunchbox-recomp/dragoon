@@ -124,6 +124,7 @@ Library fills the window, in the disc banner's colors.
 | Play bar | A 64 point Play button, a line saying what Play is doing and a "..." menu with Rebuild, Change Disc and Show Saves |
 | Rebuild offer | A strip above the bar |
 | Game problem | A card above the bar, whose Show panic.txt opens the file's text |
+| Launch card | What Play grows into, over everything else, from Play until the game's window is up and again as the window comes back after the game |
 
 `BannerPalette` in `DragoonCore` picks the two hues. Each opaque pixel whose channels are at least 48 of 255 apart goes into one of 12 buckets 30° wide, by its hue. The fullest bucket gives the first hue and the next fullest the second, each the mean hue of its pixels. The two buckets beside the first never give the second. With no banner, or no pixel with a hue, they're teal and magenta. Play's text is white or a near-black gray of 0.08, whichever has more contrast with the button. The button runs from brightness 0.86 at its top to 0.70 at its bottom, and the label covers rows 21 to 45 of its 64 points, from the top of the "l" to the bottom of the "y". Each ink counts its contrast where it's worst behind the label: white at row 21, brightness 0.81, and near-black at row 45, brightness 0.75. Over every whole degree of hue the ink chosen has at least 4.0:1, and the worst, at 21.6°, is 4.01:1. Play's label is 24 point bold, which WCAG counts as large text, so it passes WCAG's 3:1 for large text. It doesn't pass 4.5:1, the bar for body text.
 
@@ -177,9 +178,27 @@ Only a regular file at `panic.txt` is read. A link isn't followed and a FIFO isn
 
 That `panic.txt` then moves into the logs folder as `panic-<time>.txt`, under a name no other file has, so it never replaces one. A `panic.txt` that's there before the game starts is from an earlier run, so it moves there first and is never shown. One that can't be moved stays in `<data>` and still isn't shown, since only a `panic.txt` written after the launch began is shown.
 
-The window hides while the game runs and comes back when it exits or can't start. Each `play` effect carries a launch number that its result echoes, and `Flow` ignores a result for any other launch. A late result can't end a game that's running.
+Each `play` effect carries a launch number that its result echoes, and `Flow` ignores a result for any other launch. A late result can't end a game that's running.
 
-The launcher hides its window as it starts the game (`Sources/Dragoon/EffectRunner.swift:123-125`), not at the game's first frame. Since gcn-recomp `1abcf10` the game's own window opens on a boot splash, the disc's banner over a dark grey with a bar for the shader cache's load, which stays up until the game's first frame (gcn-recomp `docs/graphics.md`, "The boot splash"). The engine can also tell a launcher when that first frame is up through `GCN_READY_FILE` (gcn-recomp `docs/diagnostics.md`, "Starting a run"), which this launcher doesn't set.
+## The hand-off to the game
+
+Play grows into the launch card, which fills the window, by `matchedGeometryEffect` from the Play button. The bookmark is resolved and the disc checked behind it, while a `phaseAnimator` takes the card from idle to charge and back. At charge the glow behind the logo builds, the logo grows to 1.03 times its size and the streaks run at 2.5 times their speed. Once the game has started the logo springs to 1.08 and the streaks run at 6 times. A phase animator ends each run on its first phase, so the launch step is a spring on the flow's state instead. A disc that isn't there or fails its check takes the card down. Under Reduce Motion the card only fades, the logo keeps its size and the streaks stay at rest.
+
+The game gets `GCN_READY_FILE=<data>/ready.txt`. The engine appends `window <ms>` at the first frame its window shows and `frame <ms>` at the game's first frame, each once, in milliseconds since its process started (gcn-recomp `runtime/ready_file.h`). It adds to what the file holds, so the file and its `.tmp` are removed before the game starts, and again once it ends. Only whole lines count, and a line that isn't `window` or `frame`, one space and a whole number is skipped.
+
+The engine replaces the file through its `.tmp` at each line, so `ReadyWatcher` watches the data folder with a `DispatchSource` and reads the file at each change. It reads once as it begins, so a line written before then isn't missed. It stops once both lines are in or the game ends, and nothing runs between changes.
+
+| Event | The launcher |
+|---|---|
+| The `window` line | Fades its window out over 0.25 s, then hides the app |
+| 5 s after the game started with no `window` line | The same, and logs that it timed out. An engine from before the ready file writes nothing |
+| The game ends or can't start | Fades its window back in with the card up, then the card shrinks back into Play |
+
+The launcher hides on nothing else. With an engine that writes the file, its window goes only once the game's window has shown a frame.
+
+Once the game's window is up the launcher may not be the active app. On macOS 26.6 an inactive app's fade doesn't move, nor does its completion handler run, so a timer of the fade's length ends it. `NSApplication.hide` does nothing for an inactive app, and then the window stays clear and lets clicks through until the game ends. Ordering the window out would quit the launcher, since SwiftUI ends an app whose one `Window` goes. While the game runs the launcher holds a `ProcessInfo` activity against App Nap, which once held the game's exit for over 2 minutes before its termination handler ran.
+
+The times from Play to the game's window and to its first frame go in the system log, under the subsystem `io.github.lunchbox-recomp.dragoon` and the category `launch`, as `Play to the game's window 572 ms, to its first frame 1072 ms`. Play's time comes from the launcher's clock and the game's start from the kernel. The lines count from that start. `LaunchTimingTests` measures the same on a fake game.
 
 While the game runs, `<data>/game.pid` holds its pid and the time its process started, and the file goes as the result is sent. A launcher that opens in the meantime takes the game as running when that pid's process started at that time and runs the installed game. Library counts it as running until a kqueue process source sees it exit, and then shows nothing, since how it ended can't be known.
 
@@ -195,11 +214,11 @@ RECORD=1 launcher/tools/swift_test.py --filter SnapshotTests
 
 That writes every PNG again. Look at each one before committing it.
 
-Library's streaks, the build bar's shimmer and the build page's clock read `animationClock` from the environment. The tests fix the clock at 2027-01-15 08:00 UTC, so a render draws the same frame every time. The streaks and the shimmer move with Core Animation in the window, which `ImageRenderer` can't draw, so under a fixed clock the streaks are drawn in a `Canvas` at that moment and the shimmer's band where it is then. `library-reduce-motion` draws the streaks at rest. The build page's fixtures draw 0.8 s later, half a shimmer on, where the band sits in the middle of its segment and the Reduce Motion fade is at its brightest. The page's snapshot sees the shimmer, but only `BuildPageTests`, which draws the bar on its own, checks that the shimmer lights the running step's segment and nothing else.
+Library's streaks, the launch card, the build bar's shimmer and the build page's clock read `animationClock` from the environment. The tests fix the clock at 2027-01-15 08:00 UTC, so a render draws the same frame every time. The streaks and the shimmer move with Core Animation in the window, which `ImageRenderer` can't draw, so under a fixed clock the streaks are drawn in a `Canvas` at that moment, at the card's rate, and the shimmer's band where it is then. Under a fixed clock the card draws its step's phase with no phase animator, in `launch-card-idle`, `-charge` and `-launch`. `library-reduce-motion` and `launch-card-reduce-motion` draw the streaks at rest. The build page's fixtures draw 0.8 s later, half a shimmer on, where the band sits in the middle of its segment and the Reduce Motion fade is at its brightest. The page's snapshot sees the shimmer, but only `BuildPageTests`, which draws the bar on its own, checks that the shimmer lights the running step's segment and nothing else.
 
 The PNGs hold only the launcher's own UI. Library and Build show the disc's banner, and their fixtures use `TestBanner`, a made-up pattern the tests build, never a real banner.
 
-The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 35 PNGs come to 1,136 KB, from 3 to 112 KB each.
+The PNGs are RGB with every row Paeth-filtered and deflated at zlib's level 9 by `PNGEncoder`. ImageIO's own encoder deflates at its fastest level, and with all its row filters on its PNGs came to 1.3 MB for 19 screens at scale 2. SwiftUI dithers its gradients, which left each new Library PNG at about 700 KB, so a recorded PNG is the render averaged down to one pixel a point with each channel rounded to a multiple of 8. The 39 PNGs come to 1,421 KB, from 3 to 112 KB each.
 
 Measured on 2026-11-13 on macOS 26.6.2 with the Command Line Tools 26.6 and Swift 6.3.3, `ImageRenderer` can't draw three of the views the window uses. The results are the same with `NSApplication.shared` made first.
 
