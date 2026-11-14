@@ -212,7 +212,7 @@ import Testing
 
     /// The recipe prints one plan, before any step (`launcher_build.py`'s `build_game`), so a
     /// plan after a step is only an event out of order, and one is all this tests.
-    @Test func aLatePlanMovesTheBarOnlyForward() {
+    @Test func aLatePlanWithoutTheWarmUpMovesTheBarForward() {
         var progress = Self.compiled(100, plan: [])
         let before = progress.fraction
         progress.note(.plan(warmup: false), at: at(30))
