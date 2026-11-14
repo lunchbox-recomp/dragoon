@@ -44,6 +44,7 @@ struct BuildPageTests {
     }
 
     /// The warm-up's runs roll their count, and the compile's files, several a second, don't.
+    @MainActor
     @Test(arguments: [
         ([], true), ([4.0], true), ([1.0, 2.0], true), ([1.0, 1.5], true), ([1.0, 1.4], false),
         ([1.0, 1.1, 5.0], true), ([1.0, 1.125, 1.25], false),
@@ -163,6 +164,7 @@ struct BuildPageTests {
         #expect(counts.right == 0)
     }
 
+    @MainActor
     @Test(arguments: [(0.0, 0.0), (0.25, 0.0), (0.5, 0.5), (0.75, 1.0), (1.0, 1.0)])
     func eachSegmentFillsOnlyItsOwnShare(fraction: Double, fill: Double) {
         #expect(SegmentedBar.fill(fraction, start: 0.25, width: 0.5) == fill)
