@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import stat
 import subprocess
 import time
@@ -14,9 +15,10 @@ from testutil import RUN_LIMIT, temp_dir, write_file
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "tools" / "probe.sh"
 NAME = "test-probe-never-run"
-# The SECONDS of a run here. Every fake game exits by itself, which ends the run at probe.sh's
-# next one-second tick, so no run waits it out: it's there to be longer than a fake game takes to
-# start on a loaded machine, and than RUN_LIMIT, so a run its game's exit didn't end fails.
+# The SECONDS of a run here. Every fake game but one exits by itself, which ends the run at
+# probe.sh's next one-second tick, so no run waits it out: it's there to be longer than a fake
+# game takes to start on a loaded machine, and than RUN_LIMIT, so a run its game's exit didn't
+# end fails. The one that doesn't exit has a SECONDS of its own.
 SECONDS = "600"
 
 
@@ -436,6 +438,18 @@ class ProbeTreeTest(unittest.TestCase):
         r = probe(NAME, SECONDS, script=self.script)  # RUN_LIMIT is well short of SECONDS
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertLess(time.monotonic() - began, 8)
+
+    def test_seconds_ends_a_run_whose_game_never_exits(self):
+        self.add_game("dragoon", "echo $$ > pid.txt\nexec sleep 600\n")
+        pid_file = self.run_dir() / "pid.txt"
+        try:
+            r = probe(NAME, "2", script=self.script)
+        except subprocess.TimeoutExpired:  # probe.sh was killed before its trap could end the game
+            os.kill(int(pid_file.read_text()), signal.SIGKILL)
+            raise
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with self.assertRaises(ProcessLookupError):  # killed at SECONDS, and waited for
+            os.kill(int(pid_file.read_text()), 0)
 
     def test_a_new_run_starts_with_no_settings_ports_or_pads_file(self):
         # A player's own files, where a game run from the repo would read them
