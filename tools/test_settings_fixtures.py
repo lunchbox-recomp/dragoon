@@ -95,7 +95,8 @@ class CopiedLinesTest(unittest.TestCase):
             (runtime / each).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(settings_fixtures.RUNTIME / each, runtime / each)
         text = (runtime / name).read_text(encoding="utf-8")
-        self.assertEqual(text.count(old), 1)
+        # Every copy, since render_gl_present.cpp fits both the frame and the menu's blur.
+        self.assertIn(old, text)
         (runtime / name).write_text(text.replace(old, new), encoding="utf-8")
         with mock.patch.object(settings_fixtures, "ROOT", root), \
                 mock.patch.object(settings_fixtures, "RUNTIME", runtime):
