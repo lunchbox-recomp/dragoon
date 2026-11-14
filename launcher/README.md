@@ -165,7 +165,7 @@ RECORD=1 launcher/tools/swift_test.py --filter SnapshotTests
 
 That writes every PNG again. Look at each one before committing it.
 
-A view that animates reads `animationClock` from the environment, as `ClockedTimeline` does. The window runs on the display's frames, and the tests fix the clock at 2027-01-15 08:00 UTC, so a render draws the same frame every time. Library's streaks move with Core Animation in the window, which `ImageRenderer` can't draw, so under a fixed clock they're drawn in a `Canvas` at that moment. `library-reduce-motion` draws them at rest.
+Library's streaks are the one view that reads `animationClock` from the environment. The tests fix the clock at 2027-01-15 08:00 UTC, so a render draws the same frame every time. The streaks move with Core Animation in the window, which `ImageRenderer` can't draw, so under a fixed clock they're drawn in a `Canvas` at that moment. `library-reduce-motion` draws them at rest.
 
 The PNGs hold only the launcher's own UI. Library and Build show the disc's banner, and their fixtures use `TestBanner`, a made-up pattern the tests build, never a real banner.
 
