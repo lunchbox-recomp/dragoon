@@ -6,7 +6,7 @@ so every other hash, this one included, gets the later layout and the compressor
 newer build's low-pass filter isn't applied.
 
 Files cited by name alone, such as `ax.cpp`, are gcn-recomp's, under `runtime/`. Their line
-numbers are at the pin `95e1c6b`.
+numbers are at the pin `5e54665`.
 
 ## The ucode
 

@@ -1,8 +1,8 @@
 # Status
 
 What's true of Dragoon, measured on one Mac. Most sections name the Dragoon or gcn-recomp
-commits they were measured at. The pin is gcn-recomp `95e1c6b`, where all twenty-four routes'
-frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `95e1c6b`).
+commits they were measured at. The pin is gcn-recomp `5e54665`, where all twenty-four routes'
+frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `5e54665`).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -14,7 +14,7 @@ frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `95e1
 | City Trial | Runs | One player (`tests/routes/city-trial.txt`) or four in split screen (`city-trial-4p.txt`), the five-minute clock running. With the clock cut to three minutes and the stadium set to Drag Race in Game Settings, one player (`city-trial-stadium.txt`) or four (`city-trial-stadium-4p.txt`) play out the clock and reach Drag Race 3 and its results. A fresh save offers only Drag Race, Target Flight and Destruction Derby besides Shuffle, and no route plays the last two, though a bot soak reached Destruction Derby's results (under Bot soak) |
 | Top Ride | Runs | All seven courses a fresh save offers (Grass, Sand, Sky, Fire, Light, Water and Metal) race past the countdown with one player and three CPUs (`top-ride-<course>.txt`) |
 | Audio | Partial | The mixer runs the commands of the game's ucode (`07F88145`) with its compressor among them, and ten runs' 484,400 command lists held no unknown or skipped one (under Audio). Source type 0 voices, 98.9% of the voice time, resample through a polyphase filter whose coefficients the runtime works out because the console's are in the DSP's ROM, and the low-pass filter isn't applied. Nobody has listened for the sound's quality since the source type 2 fix or compared it with a console, and the click counts are in [`scorecard.md`](scorecard.md), last scored at gcn-recomp `dac449e` (`audio.md`) |
-| Controllers | Four ports, live | Each gamepad takes the port `saves/ports.txt` says it was last on, or else its SDL player number's or the lowest free one (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
+| Controllers | Four ports, live | Each gamepad takes the port `saves/ports.txt` says it was last on, or else its SDL player number's or the lowest free one. The overlay menu's Controllers page swaps, removes and orders players by who presses A, and a notice says when a controller connects, disconnects or changes player (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with Air Ride's and City Trial's HUD anchored | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD keeps its 4:3 shape at the race, City Trial, 2P and 4P checkpoints, anchored to the edges of the screen or of its player's view, as all four showed on Dragoon `1ff85c8`. Top Ride's HUD and the menus stretch with the picture (`widescreen.md`) |
 | Speed | Holds 60 fps | 513 frames a second in a race in a hidden window with `--fast`. `dragoon_bench`, which draws nothing, runs the race at 601. Four-player City Trial averages 16.69 ms a frame at the game's own speed, with two intervals over 20 ms, the worst 42 ms. The stadium's scene changes stall the guest for up to 160 ms (under gcn-recomp `95e1c6b`) |
 | Build from the disc | Works | 23 s at gcn-recomp `67a7e30` (3.5 s to configure, 19.5 s for Ninja). That's before the build compiled SDL3 and Dear ImGui and before the default target ran the shader warm-up, which adds about 64 s (`CMakeLists.txt:69-78`, Player targets) |
@@ -356,8 +356,19 @@ takes the port of its SDL player number if that's free and otherwise the lowest 
 
 Once a gamepad has a port, its player number is set to the port (`runtime/gamepads.cpp:151-158`).
 A gamepad gets no port when none is free, and one pulled out frees its port. The game then sees
-that port unplugged, though the keyboard keeps port 1 plugged in and so does a port that
+that port unplugged, though the keyboard keeps its port plugged in and so does a port that
 `--pads=N` or a `controls.txt` line covers.
+
+Since gcn-recomp `5e54665` the overlay menu has a Controllers page. It lists each player's
+controllers, with Swap with the next player and Remove, and Set player order gives player 1,
+then 2 and on, the next controller whose A goes down. Each change applies at once and is saved
+to `saves/ports.txt`, except the keyboard's player, which is player 1 again at the next launch.
+A player a `controls.txt` `port <n>` line sets can't be changed there. A notice at the bottom of
+the window says for 2 seconds that a controller connected, disconnected or changed player, and
+the game keeps running under it. Frame dumps leave out the menu and the notices.
+
+`tools/test_ports.sh` passed all 284 of its checks on Dragoon `92405f1`, among them Swap,
+Remove, Set player order and the notices.
 
 A device's `port <n>` line in `controls.txt` keeps that port from gamepads, and a
 `gamecontrollerdb.txt` beside the executable adds mappings. `--pads=N` plugs in ports 1 to N
@@ -648,7 +659,7 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, under Chained course passes) | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`) | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `95e1c6b` on Dragoon `60dd08d` (under gcn-recomp `95e1c6b`) | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `5e54665` on Dragoon `92405f1` (under gcn-recomp `5e54665`) | Pass |
 | World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `45c52c5` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
 | Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `45c52c5` at loads of 2.7 to 6.3) | Pass |
 | Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1) | Pass |
@@ -850,6 +861,23 @@ scene change under Top Ride and the stadium at the game's speed.
 In the audio check the four-player bench fell from about 360 to between 92 and 138 frames a
 second for its last 7 s, with the same work per frame. A rerun of that route's check matched its
 2 rows and held 256 to 380 from 8 s to the end, so the drop didn't repeat on the same build.
+
+## gcn-recomp `5e54665`
+
+The pin moved from `95e1c6b` to `5e54665`, 16 commits. The overlay menu has a Controllers page,
+and a notice over the game says when a controller connects, disconnects or changes player
+(under Controllers). `render_gl.cpp` is split into a file per job, which cut the
+`GCN_ONLY_COMP`, `GCN_COMPLOG` and `GCN_NOCULL` switches and renderer state nothing read, and
+`test_ports.cpp` into a file per area. The other commits merge repeated code into shared helpers,
+drop code nothing called or rework comments. A probe run passes `--no-gamepads` and no route
+opens the menu.
+
+Built on Dragoon `92405f1`, `tools/frame_hashes.py check` matched all twenty-four routes and
+1,906 frames in 14 min 38 s. `tools/audio_hashes.py check` then matched all 48 rows in 14 min
+27 s, so no golden was recorded. The 1-minute load was 31.5 as the frame check began, just
+after the build, 7.4 between the checks and 10.6 after the audio check.
+
+None of the 24 bench logs has an `[interp]` line.
 
 ## Disc reads
 
