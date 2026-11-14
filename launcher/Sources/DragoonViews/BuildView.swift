@@ -94,10 +94,21 @@ struct BuildView: View {
 /// whole log is.
 struct FailedBuild: View {
     let failure: BuildFailure
-    /// The steps the running build's plan left out of its bar.
-    let skipped: Set<BuildSegment>
+    /// The bar, worked out once from the running build's plan. The plan isn't kept, so the page
+    /// can draw no other. Nil when the build stopped at no step.
+    let bar: (stopped: BuildSegment, skipped: Set<BuildSegment>, fraction: Double)?
     let lastLines: [String]
     let colors: HeroColors
+
+    /// `skipped` is the steps the running build's plan left out of its bar.
+    init(
+        failure: BuildFailure, skipped: Set<BuildSegment>, lastLines: [String], colors: HeroColors
+    ) {
+        self.failure = failure
+        self.bar = Self.bar(failure, skipped: skipped)
+        self.lastLines = lastLines
+        self.colors = colors
+    }
 
     /// The bar the build stopped with: the step it stopped at, the steps the plan left out but
     /// that one, which is drawn even when the plan skipped it, and the fill up to its segment.
@@ -112,7 +123,7 @@ struct FailedBuild: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let bar = Self.bar(failure, skipped: skipped) {
+            if let bar {
                 SegmentedBar(
                     fraction: bar.fraction, colors: colors, skipped: bar.skipped,
                     stopped: bar.stopped

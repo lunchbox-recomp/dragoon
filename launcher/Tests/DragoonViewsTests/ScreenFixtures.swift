@@ -107,6 +107,17 @@ let screenFixtures: [ScreenFixture] = [
             lastLines: ["gen/func_80012345.c:41:3: error: use of undeclared identifier 'r3'", "make: *** [gen/func_80012345.o] Error 1"]))) {
             $0.banner = TestBanner.banner
         }),
+    // The warm-up failed after a plan that left it out, as when the disc's drive goes away: the
+    // failed step is drawn, so four segments with the warm-up's outlined, and the fill stops
+    // where it starts.
+    ScreenFixture(
+        name: "build-failed-warmup-skip-plan",
+        state: state(.build(.failed(
+            .failed(step: "warmup", message: "warm_shaders.py exited 2", log: log),
+            skipped: [.warmup],
+            lastLines: ["/Volumes/Games/Disc.gcm: no such disc image"]))) {
+            $0.banner = TestBanner.banner
+        }),
     ScreenFixture(name: "library", state: library()),
     ScreenFixture(name: "library-reduce-motion", state: library(), reduceMotion: true),
     ScreenFixture(name: "library-no-banner", state: library { $0.banner = nil }),
