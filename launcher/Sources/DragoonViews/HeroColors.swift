@@ -7,8 +7,12 @@ struct HeroColors {
     static let buttonSaturation = 0.85
     static let buttonLight = 0.86
     static let buttonDark = 0.70
-    /// WCAG's floor for body text.
-    static let minimumContrast = 4.5
+    /// The near-black ink's gray, sRGB, for the light buttons.
+    static let darkInk = 0.08
+    /// The bar Play's text meets on every hue: 3:1, WCAG's floor for large text, which Play's
+    /// 24 pt bold label is. 4.5:1, the floor for body text, can't be met on every hue: on the
+    /// worst, both inks come to 3.9:1.
+    static let minimumContrast = 3.0
 
     let palette: BannerPalette
 
@@ -26,23 +30,43 @@ struct HeroColors {
     var buttonBottom: Color {
         Color(hue: palette.primary, saturation: Self.buttonSaturation, brightness: Self.buttonDark)
     }
-    /// White on the button when it reads against the lighter end, and near-black otherwise.
+    /// White or near-black, whichever has more contrast with the button.
     var buttonInk: Color {
-        Self.whiteReads(onHue: palette.primary) ? .white : Color(white: 0.08)
+        Self.whiteReads(onHue: palette.primary) ? .white : Color(white: Self.darkInk)
     }
 
     static func whiteReads(onHue hue: Double) -> Bool {
-        let fill = luminance(hue: hue, saturation: buttonSaturation, brightness: buttonLight)
-        return 1.05 / (fill + 0.05) >= minimumContrast
+        let ink = inkContrasts(onHue: hue)
+        return ink.white >= ink.dark
+    }
+
+    /// Each ink's contrast with the button, the lower of the two at the gradient's middle,
+    /// where the text sits, and at its darker end.
+    static func inkContrasts(onHue hue: Double) -> (white: Double, dark: Double) {
+        let middle = luminance(
+            hue: hue, saturation: buttonSaturation, brightness: (buttonLight + buttonDark) / 2)
+        let darker = luminance(hue: hue, saturation: buttonSaturation, brightness: buttonDark)
+        let ink = linear(darkInk)
+        return (
+            min(contrast(1, middle), contrast(1, darker)),
+            min(contrast(ink, middle), contrast(ink, darker))
+        )
+    }
+
+    /// WCAG's contrast ratio of two relative luminances.
+    static func contrast(_ one: Double, _ other: Double) -> Double {
+        (max(one, other) + 0.05) / (min(one, other) + 0.05)
     }
 
     /// WCAG relative luminance of an sRGB color given as hue, saturation and brightness.
     static func luminance(hue: Double, saturation: Double, brightness: Double) -> Double {
         let (red, green, blue) = rgb(hue: hue, saturation: saturation, brightness: brightness)
-        func linear(_ channel: Double) -> Double {
-            channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
-        }
         return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    }
+
+    /// An sRGB channel's linear light.
+    static func linear(_ channel: Double) -> Double {
+        channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
     }
 
     static func rgb(hue: Double, saturation: Double, brightness: Double)

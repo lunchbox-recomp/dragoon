@@ -37,13 +37,36 @@ struct LibraryLookTests {
     @Test(arguments: [(0.92, true), (0.61, true), (1.0 / 6, false), (0.53, false), (1.0 / 3, false)])
     func playsInkReadsOnItsHue(hue: Double, white: Bool) {
         #expect(HeroColors.whiteReads(onHue: hue) == white)
-        let fill = HeroColors.luminance(
-            hue: hue, saturation: HeroColors.buttonSaturation, brightness: HeroColors.buttonLight)
-        let dark = HeroColors.luminance(
-            hue: hue, saturation: HeroColors.buttonSaturation, brightness: HeroColors.buttonDark)
-        // The other ink reads too: black against the darker end of a light button.
-        if !white { #expect((dark + 0.05) / (0.0 + 0.05) >= HeroColors.minimumContrast) }
-        #expect(fill > dark)
+    }
+
+    /// The near-black ink is a gray of 0.08, whose luminance is 0.0072.
+    @Test func theDarkInksLuminanceIsItsRealOne() {
+        #expect(abs(HeroColors.linear(HeroColors.darkInk) - 0.0072) < 0.00005)
+        #expect(abs(HeroColors.contrast(1, 0) - 21) < 1e-9)
+    }
+
+    /// On every whole degree of hue, Play's ink is the one with more contrast at the button's
+    /// middle and darker end, worked out here from the button's two brightnesses, and it meets
+    /// the bar.
+    @Test func playsInkMeetsItsBarOnEveryHue() {
+        let ink = HeroColors.linear(0.08)
+        var worst = Double.infinity
+        for degree in 0..<360 {
+            let hue = Double(degree) / 360
+            func luminance(_ brightness: Double) -> Double {
+                HeroColors.luminance(
+                    hue: hue, saturation: HeroColors.buttonSaturation, brightness: brightness)
+            }
+            let middle = luminance((0.86 + 0.70) / 2), darker = luminance(0.70)
+            let white = min(1.05 / (middle + 0.05), 1.05 / (darker + 0.05))
+            let dark = min((middle + 0.05) / (ink + 0.05), (darker + 0.05) / (ink + 0.05))
+            #expect(HeroColors.whiteReads(onHue: hue) == (white >= dark), "at \(degree)°")
+            worst = min(worst, max(white, dark))
+        }
+        #expect(worst >= HeroColors.minimumContrast)
+        #expect(HeroColors.minimumContrast == 3)
+        // Under 4.5:1 somewhere, so the bar is large text's.
+        #expect(worst < 4.5)
     }
 
     @Test func aStreakIsTheSameEveryLaunch() {
