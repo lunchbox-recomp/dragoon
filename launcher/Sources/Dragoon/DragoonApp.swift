@@ -54,7 +54,7 @@ struct DragoonApp: App {
                 .frame(minWidth: 820, minHeight: 520)
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 960, height: 600)
+        .defaultSize(LauncherView.defaultSize)
         .windowResizability(.contentMinSize)
     }
 }

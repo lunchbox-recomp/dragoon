@@ -4,6 +4,9 @@ import SwiftUI
 /// The window: during setup the steps on the left and the current one on the right, and Library
 /// on its own. A launcher that has to move, or can't read its source, shows only that.
 public struct LauncherView: View {
+    /// The size the window opens at, in points, which the snapshots render at too.
+    nonisolated public static let defaultSize = CGSize(width: 960, height: 600)
+
     let state: Flow.State
     let send: Send
 

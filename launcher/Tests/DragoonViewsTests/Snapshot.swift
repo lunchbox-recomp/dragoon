@@ -5,8 +5,8 @@ import SwiftUI
 /// Renders a view with `ImageRenderer` for comparison with a committed PNG in `Snapshots/`.
 /// `RECORD=1` in the environment writes the PNG instead.
 enum Snapshot {
-    /// The window's default size, in points.
-    static let size = CGSize(width: 960, height: 600)
+    /// The size the window opens at, in points.
+    static let size = LauncherView.defaultSize
     static let scale: CGFloat = 2
     /// How far a color channel may be off, out of 255, before the pixel counts as different.
     /// Text drawn by another macOS can shift its edges a little.
