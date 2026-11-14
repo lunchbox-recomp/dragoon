@@ -147,7 +147,7 @@ private func descriptors(on path: String) -> Int {
         }
         reading.cancel()
         await reading.value
-        #expect(await Processes.eventually(timeout: 2) { descriptors(on: scratch.path) == 0 })
+        #expect(await Processes.eventually { descriptors(on: scratch.path) == 0 })
     }
 
     @Test func aFolderThatIsNotThereEndsTheWatchAtOnce() async throws {
