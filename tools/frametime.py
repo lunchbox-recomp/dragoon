@@ -19,7 +19,7 @@ pairing doesn't follow.
 --menu reads the overlay menu's lines instead, "[overlay] frame f<n> held <0|1> interval
 <ms>ms  cpu <ms>ms  late <ms>ms  present <ms>ms  blur <ms>ms" (gcn-recomp docs/diagnostics.md),
 from each LOG, one run each, pooled. An engine before gcn-recomp 236e1f4 prints no late, present
-or blur, and a line may end after any of them. A log's first line and each line with interval 0
+or blur, and a line may end after any of them, but not skip one. A log's first line and each line with interval 0
 start an open. It prints the opens, the paused redraw interval from the held 1 lines that have
 one, and the late, present and blur of those same lines that have each, then the menu's CPU time
 over every frame it drew, each with n, p50, p99 and max, then the CPU time of each log's f0
@@ -47,9 +47,10 @@ RT = re.compile(r"^\[rt\] f(\d+) render\s+([\d.]+)ms")
 SHADER = re.compile(r"^\[shaders\] compiled program \d+ in ([\d.]+) ms")
 # The last ms stops a line cut off mid-number, and the $ one with more text after it. A line
 # with no held field, from an engine before gcn-recomp 9776d98, doesn't parse. late, present and
-# blur came in 236e1f4, in that order, and each one there is read.
+# blur came in 236e1f4, in that order. A line that ends after one of them is read, so each group
+# holds the next, and one with a field missing in the middle doesn't parse.
 MENU = re.compile(r"^\[overlay\] frame f(\d+) held ([01]) interval\s+([\d.]+)ms\s+cpu\s+([\d.]+)ms"
-                  r"(?:\s+late\s+([\d.]+)ms)?(?:\s+present\s+([\d.]+)ms)?(?:\s+blur\s+([\d.]+)ms)?$")
+                  r"(?:\s+late\s+([\d.]+)ms(?:\s+present\s+([\d.]+)ms(?:\s+blur\s+([\d.]+)ms)?)?)?$")
 # The fields of a held redraw's line that split its interval, as --menu prints them.
 PRE_FIELDS = (("late", "held wait's lateness (late)"), ("present", "draw before the menu (present)"),
               ("blur", "blurred backdrop (blur)"))

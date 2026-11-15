@@ -130,7 +130,15 @@ class MenuTest(unittest.TestCase):
         lines = [base + "  late  0.3", base + "  late  0.300ms  present  1.2", base + "  late ms",
                  base + "  present  1.000ms  late  0.300ms", base + "  blur  0.100ms  blur  0.100ms",
                  base + "  late  0.300ms  present  1.000ms  blur  0.100ms  and more", base + "  lat  0.300ms",
-                 base + "late  0.300ms"]
+                 base + "late  0.300ms", base + "  late  0.300mspresent  1.000ms",
+                 base + "  late  0.300ms  present  1.000msblur  0.100ms"]
+        self.assertEqual(frametime.parse_menu(lines), [])
+
+    def test_a_line_missing_a_middle_field_is_skipped(self):
+        # The engine prints all three or none; a line that skips one isn't its line
+        base = menu_line(1, 1, 16.0, 0.1)
+        lines = [base + "  blur  0.100ms", base + "  present  1.000ms", base + "  late  0.300ms  blur  0.100ms",
+                 base + "  present  1.000ms  blur  0.100ms"]
         self.assertEqual(frametime.parse_menu(lines), [])
 
     def test_a_bad_number_in_a_new_field_exits_2_naming_the_log(self):
@@ -140,7 +148,9 @@ class MenuTest(unittest.TestCase):
         self.assertIn(f"{a}: an [overlay] frame line has a bad number", err)
 
     def test_late_present_and_blur_take_the_held_redraws_that_have_each(self):
-        extra = [menu_line(5, 0, 0, 1.0), menu_line(6, 1, 18.0, 0.1, 2.0), menu_line(7, 1, 16.0, 0.1)]
+        # f8 opens held with interval 0, so it's no redraw and its fields stay out
+        extra = [menu_line(5, 0, 0, 1.0), menu_line(6, 1, 18.0, 0.1, 2.0), menu_line(7, 1, 16.0, 0.1),
+                 menu_line(8, 1, 0, 1.0, 9.0, 9.0, 9.0)]
         s = frametime.menu_summary({"a": frametime.parse_menu(NEW_OPEN), "b": frametime.parse_menu(extra)})
         self.assertEqual(s["interval"], {"n": 5, "p50": 17.05, "p99": 20.0, "max": 20.0})
         self.assertEqual(s["late"], {"n": 4, "p50": 0.01, "p99": 2.0, "max": 2.0})
