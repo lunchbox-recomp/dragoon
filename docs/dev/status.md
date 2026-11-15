@@ -677,7 +677,8 @@ against the pinned gcn-recomp's `runtime/settings.cpp`, `runtime/platform.cpp` a
 `runtime/gx/aspect.h`, and its test checks it writes every committed file. They were last
 written at gcn-recomp `864d9d4`, whose `settings_save` also writes `menu_sounds`. The sheet's time runs from the press through
 reading a real `settings.txt` to an `NSHostingView` laid out and drawn, and leaves out AppKit's
-slide in. Alone it's the first SwiftUI view the process draws.
+slide in. Alone it's the first SwiftUI view the process draws. `SettingsSheetTests` fails over
+100 ms on a Mac and only prints its time where `CI` is set, since a loaded runner took 126 ms.
 
 These runs set `DUMP_EVERY` to 100,000, since a dumped frame goes over 33 ms by itself. The
 stall, compile and boot rows ran at Dragoon `2fc9285` and gcn-recomp `dac449e` on an M4 Max,
