@@ -87,17 +87,17 @@ class CommandLineTest(unittest.TestCase):
 class CopiedLinesTest(unittest.TestCase):
     """main.cpp's window choices and the renderer's 640, which the harness copies by hand."""
 
-    def check_with(self, name: str, old: str, new: str) -> tuple[int, str, str]:
-        """--check against a copy of the engine's files the harness reads, with OLD in NAME made NEW."""
+    def check_with(self, name: str, old: str, new: str, copies: int = -1) -> tuple[int, str, str]:
+        """--check against a copy of the engine's files the harness reads, with OLD in NAME made NEW,
+        in the first COPIES places it's found, or in every one."""
         root = temp_dir(self, prefix="engine copy ")
         runtime = root / "gcn-recomp" / "runtime"
         for each in {"settings.cpp", "platform.cpp", "gx/aspect.h", *(n for n, _ in settings_fixtures.COPIED)}:
             (runtime / each).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(settings_fixtures.RUNTIME / each, runtime / each)
         text = (runtime / name).read_text(encoding="utf-8")
-        # Every copy, since render_gl_present.cpp fits both the frame and the menu's blur.
         self.assertIn(old, text)
-        (runtime / name).write_text(text.replace(old, new), encoding="utf-8")
+        (runtime / name).write_text(text.replace(old, new, copies), encoding="utf-8")
         with mock.patch.object(settings_fixtures, "ROOT", root), \
                 mock.patch.object(settings_fixtures, "RUNTIME", runtime):
             return run_main(settings_fixtures.main, "--check")
@@ -116,6 +116,24 @@ class CopiedLinesTest(unittest.TestCase):
                 self.assertEqual(self.check_with(name, line, "// " + line),
                                  (2, "", f"gcn-recomp/runtime/{name}: no line \"{line}\", "
                                          "which settings_fixtures.cpp copies\n"))
+
+    # render_gl_present.cpp fits the frame in blit_rect_to and the menu's held frame in
+    # blur_fit_frame with the same line, and the first is the frame's.
+    FIT = "const OutputRect fit = fit_aspect(w, h, output_aspect());"
+    ONE_LEFT = (2, "", f"gcn-recomp/runtime/gx/render_gl_present.cpp: \"{FIT}\" is on 1 of its lines, "
+                       "and settings_fixtures.cpp copies 2\n")
+
+    def test_the_fit_line_holds_both_copies_at_the_pin(self) -> None:
+        text = (settings_fixtures.RUNTIME / "gx/render_gl_present.cpp").read_text(encoding="utf-8")
+        self.assertEqual([line.strip() for line in text.splitlines()].count(self.FIT), 2)
+
+    def test_one_copy_of_the_fit_commented_out_exits_2(self) -> None:
+        self.assertEqual(self.check_with("gx/render_gl_present.cpp", self.FIT, "// " + self.FIT, 1),
+                         self.ONE_LEFT)
+
+    def test_the_frames_fit_at_4_3_exits_2(self) -> None:
+        changed = "const OutputRect fit = fit_aspect(w, h, 4.0f / 3.0f);"
+        self.assertEqual(self.check_with("gx/render_gl_present.cpp", self.FIT, changed, 1), self.ONE_LEFT)
 
 
 class NoEngineTest(unittest.TestCase):
