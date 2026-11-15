@@ -17,12 +17,14 @@ copies a frame to the display in strips prints more than one [ft] line a batch, 
 pairing doesn't follow.
 
 --menu reads the overlay menu's lines instead, "[overlay] frame f<n> held <0|1> interval
-<ms>ms  cpu <ms>ms" (gcn-recomp docs/diagnostics.md), from each LOG, one run each, pooled. A
-log's first line and each line with interval 0 start an open. It prints the opens, the paused
-redraw interval from the held 1 lines that have one, the menu's CPU time over every frame it
-drew, each with n, p50, p99 and max, then the CPU time of each log's f0 line, the first frame
-of the process's first open. A log whose lines don't start at f0 says it has none. --from,
---slow and --late don't apply to it.
+<ms>ms  cpu <ms>ms  late <ms>ms  present <ms>ms  blur <ms>ms" (gcn-recomp docs/diagnostics.md),
+from each LOG, one run each, pooled. An engine before gcn-recomp 236e1f4 prints no late, present
+or blur, and a line may end after any of them. A log's first line and each line with interval 0
+start an open. It prints the opens, the paused redraw interval from the held 1 lines that have
+one, and the late, present and blur of those same lines that have each, then the menu's CPU time
+over every frame it drew, each with n, p50, p99 and max, then the CPU time of each log's f0
+line, the first frame of the process's first open. A log whose lines don't start at f0 says it
+has none. --from, --slow and --late don't apply to it.
 
 Exits 0 once it has read the logs, 2 on a bad argument, a log it can't read, a log with no
 frame from N on, or under --menu one with no [overlay] frame line.
@@ -44,8 +46,13 @@ FT = re.compile(r"^\[ft\] f(\d+) guest\s+([\d.]+)ms.*?"
 RT = re.compile(r"^\[rt\] f(\d+) render\s+([\d.]+)ms")
 SHADER = re.compile(r"^\[shaders\] compiled program \d+ in ([\d.]+) ms")
 # The last ms stops a line cut off mid-number, and the $ one with more text after it. A line
-# with no held field, from an engine before gcn-recomp 9776d98, doesn't parse.
-MENU = re.compile(r"^\[overlay\] frame f(\d+) held ([01]) interval\s+([\d.]+)ms\s+cpu\s+([\d.]+)ms$")
+# with no held field, from an engine before gcn-recomp 9776d98, doesn't parse. late, present and
+# blur came in 236e1f4, in that order, and each one there is read.
+MENU = re.compile(r"^\[overlay\] frame f(\d+) held ([01]) interval\s+([\d.]+)ms\s+cpu\s+([\d.]+)ms"
+                  r"(?:\s+late\s+([\d.]+)ms)?(?:\s+present\s+([\d.]+)ms)?(?:\s+blur\s+([\d.]+)ms)?$")
+# The fields of a held redraw's line that split its interval, as --menu prints them.
+PRE_FIELDS = (("late", "held wait's lateness (late)"), ("present", "draw before the menu (present)"),
+              ("blur", "blurred backdrop (blur)"))
 
 
 @dataclass
@@ -112,6 +119,9 @@ class MenuFrame:
     held: bool
     interval_ms: float
     cpu_ms: float
+    late_ms: float | None = None  # None where the line has no such field
+    present_ms: float | None = None
+    blur_ms: float | None = None
 
 
 def parse_menu(lines) -> list[MenuFrame]:
@@ -119,7 +129,8 @@ def parse_menu(lines) -> list[MenuFrame]:
     frames = []
     for line in lines:
         if m := MENU.match(line.rstrip("\r\n")):
-            frames.append(MenuFrame(int(m[1]), m[2] == "1", float(m[3]), float(m[4])))
+            late, present, blur = (None if v is None else float(v) for v in m.group(5, 6, 7))
+            frames.append(MenuFrame(int(m[1]), m[2] == "1", float(m[3]), float(m[4]), late, present, blur))
     return frames
 
 
@@ -135,10 +146,15 @@ def menu_opens(frames: list[MenuFrame]) -> list[list[MenuFrame]]:
     return opens
 
 
+def held_redraws(frames: list[MenuFrame]) -> list[MenuFrame]:
+    """The paused redraws: the held 1 lines, less an open's first frame, which has an interval
+    of 0. A fade out and the frames before the hold lands are paced by the guest."""
+    return [f for f in frames if f.held and f.interval_ms > 0]
+
+
 def redraws(frames: list[MenuFrame]) -> list[float]:
-    """The paused redraw intervals: the held 1 lines' intervals, less the 0 of an open's first
-    frame. A fade out and the frames before the hold lands are paced by the guest."""
-    return [f.interval_ms for f in frames if f.held and f.interval_ms > 0]
+    """The paused redraw intervals."""
+    return [f.interval_ms for f in held_redraws(frames)]
 
 
 def _spread(values: list[float]) -> dict:
@@ -153,8 +169,11 @@ def menu_summary(logs: dict[str, list[MenuFrame]]) -> dict:
     isn't f0."""
     frames = [f for fs in logs.values() for f in fs]
     first = {name: fs[0].cpu_ms if fs[0].n == 0 else None for name, fs in logs.items()}
+    held = held_redraws(frames)
+    pre = {key: _spread([ms for f in held if (ms := getattr(f, f"{key}_ms")) is not None])
+           for key, _ in PRE_FIELDS}
     return {"logs": len(logs), "opens": sum(len(menu_opens(fs)) for fs in logs.values()),
-            "frames": len(frames), "interval": _spread(redraws(frames)),
+            "frames": len(frames), "interval": _spread(redraws(frames)), **pre,
             "cpu": _spread([f.cpu_ms for f in frames]),
             "first_cpu": _spread([ms for ms in first.values() if ms is not None]), "first": first}
 
@@ -174,6 +193,7 @@ def read_menu(log: Path) -> list[MenuFrame]:
 def print_menu(s: dict) -> None:
     print(f"menu: {s['logs']} logs, {s['opens']} opens, {s['frames']} frames")
     for key, label, places in (("interval", "paused redraw interval (held 1)", 2),
+                               *((key, f"  {label}", 3) for key, label in PRE_FIELDS),
                                ("cpu", "menu cpu a frame", 3),
                                ("first_cpu", "first menu frame of each process (f0) cpu", 3)):
         v = s[key]

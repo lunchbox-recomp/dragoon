@@ -93,8 +93,11 @@ class StatsTest(unittest.TestCase):
         self.assertEqual(frametime.late(frames, 3, 25.0), [(3, 30.0), (6, 25.01), (9, 30.0)])
 
 
-def menu_line(n: int, held: int, interval: float, cpu: float) -> str:
-    return f"[overlay] frame f{n} held {held} interval {interval:6.2f}ms  cpu {cpu:6.3f}ms"
+def menu_line(n: int, held: int, interval: float, cpu: float, *pre: float) -> str:
+    """The engine's line, with as many of late, present and blur as `pre` gives, as gcn-recomp
+    236e1f4 prints them. With none it's the line from before 236e1f4."""
+    tail = "".join(f"  {key} {ms:6.3f}ms" for key, ms in zip(("late", "present", "blur"), pre))
+    return f"[overlay] frame f{n} held {held} interval {interval:6.2f}ms  cpu {cpu:6.3f}ms" + tail
 
 
 # Two opens as the engine prints them: each starts with no interval and the guest not yet
@@ -102,12 +105,64 @@ def menu_line(n: int, held: int, interval: float, cpu: float) -> str:
 FIRST_OPEN = [menu_line(0, 0, 0, 13.0), menu_line(1, 1, 16.0, 0.4), menu_line(2, 1, 17.0, 0.3),
               menu_line(3, 0, 40.0, 0.2)]
 SECOND_OPEN = [menu_line(4, 0, 0, 0.5), menu_line(5, 1, 8.0, 0.6), menu_line(6, 0, 33.0, 0.1)]
+# An open from 236e1f4 on. Its open frame and fade out carry the fields too, which the held
+# redraws' spreads leave out.
+NEW_OPEN = [menu_line(0, 0, 0, 2.0, 0.0, 9.0, 0.0), menu_line(1, 1, 20.0, 0.3, 0.0, 4.0, 0.5),
+            menu_line(2, 1, 17.05, 0.2, 0.35, 0.2, 0.06), menu_line(3, 1, 16.0, 0.2, 0.01, 0.3, 0.05),
+            menu_line(4, 0, 30.0, 0.1, 0.0, 7.0, 0.0)]
 
 
 class MenuTest(unittest.TestCase):
     def test_parses_each_field_of_the_engines_line(self):
         self.assertEqual(frametime.parse_menu(["[overlay] frame f12 held 1 interval  16.67ms  cpu  0.245ms\n"]),
-                         [frametime.MenuFrame(12, True, 16.67, 0.245)])
+                         [frametime.MenuFrame(12, True, 16.67, 0.245, None, None, None)])
+
+    def test_parses_late_present_and_blur_from_236e1f4(self):
+        line = "[overlay] frame f12 held 1 interval  17.05ms  cpu  0.245ms  late  0.351ms  present  0.212ms  blur  0.064ms\n"
+        self.assertEqual(frametime.parse_menu([line]), [frametime.MenuFrame(12, True, 17.05, 0.245, 0.351, 0.212, 0.064)])
+
+    def test_a_line_with_only_some_of_the_new_fields_reads_those(self):
+        frames = frametime.parse_menu([menu_line(1, 1, 16.0, 0.1, 0.3), menu_line(2, 1, 16.0, 0.1, 0.3, 1.5)])
+        self.assertEqual([(f.late_ms, f.present_ms, f.blur_ms) for f in frames], [(0.3, None, None), (0.3, 1.5, None)])
+
+    def test_garbled_new_fields_are_skipped(self):
+        base = menu_line(1, 1, 16.0, 0.1)
+        lines = [base + "  late  0.3", base + "  late  0.300ms  present  1.2", base + "  late ms",
+                 base + "  present  1.000ms  late  0.300ms", base + "  blur  0.100ms  blur  0.100ms",
+                 base + "  late  0.300ms  present  1.000ms  blur  0.100ms  and more", base + "  lat  0.300ms",
+                 base + "late  0.300ms"]
+        self.assertEqual(frametime.parse_menu(lines), [])
+
+    def test_a_bad_number_in_a_new_field_exits_2_naming_the_log(self):
+        a = write_file(temp_dir(self), "a.txt", menu_line(0, 0, 0, 1.0) + "  late  1.2.3ms\n")
+        code, _, err = run_main(frametime.main, "--menu", str(a))
+        self.assertEqual(code, 2)
+        self.assertIn(f"{a}: an [overlay] frame line has a bad number", err)
+
+    def test_late_present_and_blur_take_the_held_redraws_that_have_each(self):
+        extra = [menu_line(5, 0, 0, 1.0), menu_line(6, 1, 18.0, 0.1, 2.0), menu_line(7, 1, 16.0, 0.1)]
+        s = frametime.menu_summary({"a": frametime.parse_menu(NEW_OPEN), "b": frametime.parse_menu(extra)})
+        self.assertEqual(s["interval"], {"n": 5, "p50": 17.05, "p99": 20.0, "max": 20.0})
+        self.assertEqual(s["late"], {"n": 4, "p50": 0.01, "p99": 2.0, "max": 2.0})
+        self.assertEqual(s["present"], {"n": 3, "p50": 0.3, "p99": 4.0, "max": 4.0})
+        self.assertEqual(s["blur"], {"n": 3, "p50": 0.06, "p99": 0.5, "max": 0.5})
+
+    def test_a_log_from_before_236e1f4_has_none_of_the_new_spreads(self):
+        s = frametime.menu_summary({"a": frametime.parse_menu(FIRST_OPEN)})
+        self.assertEqual((s["late"], s["present"], s["blur"]), ({"n": 0}, {"n": 0}, {"n": 0}))
+        self.assertEqual(s["interval"]["n"], 2)
+
+    def test_main_prints_late_present_and_blur_beside_the_interval(self):
+        a = write_file(temp_dir(self), "a.txt", "\n".join(NEW_OPEN) + "\n")
+        b = write_file(temp_dir(self), "b.txt", "\n".join(FIRST_OPEN) + "\n")
+        code, out, _ = run_main(frametime.main, "--menu", str(a), str(b))
+        self.assertEqual(code, 0)
+        self.assertIn("paused redraw interval (held 1): n 5  p50 17.00  p99 20.00  max 20.00 ms", out)
+        self.assertIn("  held wait's lateness (late): n 3  p50 0.010  p99 0.350  max 0.350 ms", out)
+        self.assertIn("  draw before the menu (present): n 3  p50 0.300  p99 4.000  max 4.000 ms", out)
+        self.assertIn("  blurred backdrop (blur): n 3  p50 0.060  p99 0.500  max 0.500 ms", out)
+        code, out, _ = run_main(frametime.main, "--menu", str(b), "--json")
+        self.assertEqual(json.loads(out)["late"], {"n": 0})
 
     def test_other_lines_and_cut_off_lines_are_skipped(self):
         lines = ["[overlay] shown after 180 ms", "[rt] f5 render  2.00ms", "x " + menu_line(0, 1, 1, 1),
