@@ -32,9 +32,15 @@ Prints one JSON object per line on stdout:
   {"event": "plan", "warmup": false}
   {"event": "step", "step": "recompile"}
   {"event": "progress", "step": "compile", "done": 12, "total": 135}
+  {"event": "progress", "step": "warmup", "done": 3, "total": 8, "frames": 41230,
+   "frames_total": 139760}
   {"event": "done", "game": "<data>/game/current/Dragoon.app"}
   {"event": "error", "step": "compile", "message": "...", "log": "<file>"}
   {"event": "warning", "step": "swap", "message": "...", "log": "<file>"}
+A compile's done is the files make has started. A warm-up's done is the passes that have ended,
+and frames and frames_total, once warm_shaders.py prints its first frames line, are the frames
+its passes have played and the frames of them all. A game without GCN_PROGRESS prints none, and
+its warm-up's events carry only the passes.
 The plan comes first and says whether the warm-up will play its passes. It won't under
 --no-warmup, or when the player's saves hold a shader cache whose stamp warm_shaders.py finds
 current, by the check warm_shaders.py makes. A stamp that can't be worked out counts as playing.
@@ -105,7 +111,7 @@ INFO_PLIST = {
     "GCSupportsGameMode": True,
 }
 
-Progress = Callable[[str], Optional[tuple]]
+Progress = Callable[[str], Optional[dict]]  # a line to the counts its progress event carries
 
 
 class StepFailed(Exception):
@@ -218,7 +224,7 @@ class Build:
                 self.note(line)
                 counts = progress(line)
                 if counts:
-                    emit(event="progress", step=self.step, done=counts[0], total=counts[1])
+                    emit(event="progress", step=self.step, **counts)
         if p.returncode != 0:
             raise StepFailed(f"{name or Path(cmd[0]).name} exited {p.returncode}")
 
@@ -249,24 +255,33 @@ def compile_game(b: Build, a: argparse.Namespace, build: Path) -> None:
     total = len(list((build / "gen").glob("*.c")))
     done = itertools.count(1)
 
-    def progress(line: str) -> Optional[tuple]:
-        return (next(done), total) if COMPILE_LINE.fullmatch(line) else None
+    def progress(line: str) -> Optional[dict]:
+        return {"done": next(done), "total": total} if COMPILE_LINE.fullmatch(line) else None
 
     b.run(make_command(a), cwd=build, progress=progress)
 
 
 def warm_up(b: Build, a: argparse.Namespace, game: Path, warm: Path) -> None:
-    """Run the snapshot's warm_shaders.py on copies of the player's cache and stamp in WARM."""
+    """Run the snapshot's warm_shaders.py on copies of the player's cache and stamp in WARM.
+
+    Each pass line and each frames line it prints is a progress event with the passes done
+    and, from the first frames line on, the frames played and the frames of all the passes."""
     warm.mkdir(parents=True)
     for name in WARMED:
         if (a.data / "saves" / name).is_file():
             shutil.copy2(a.data / "saves" / name, warm / name)
     manifest = a.source / routes.MANIFEST.relative_to(routes.ROOT)
-    total = len(warm_shaders.passes(routes.parse_manifest(manifest.read_text())))
-    done = itertools.count(1)
+    counts = {"done": 0,
+              "total": len(warm_shaders.passes(routes.parse_manifest(manifest.read_text())))}
 
-    def progress(line: str) -> Optional[tuple]:
-        return (next(done), total) if warm_shaders.PASS_LINE.fullmatch(line) else None
+    def progress(line: str) -> Optional[dict]:
+        if warm_shaders.PASS_LINE.fullmatch(line):
+            counts["done"] += 1
+        elif m := warm_shaders.FRAMES_LINE.fullmatch(line):
+            counts.update(frames=int(m[1]), frames_total=int(m[2]))
+        else:
+            return None
+        return dict(counts)
 
     b.run([str(a.python), "-B", str(a.source / "tools" / "warm_shaders.py"), "--game", str(game),
            "--saves", str(warm), "--disc", str(a.disc)], cwd=a.cache, name="warm_shaders.py",

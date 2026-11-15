@@ -1,9 +1,12 @@
+import contextlib
+import io
 import json
 import os
 import stat
 import struct
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -26,7 +29,10 @@ FOUR_EXIT = f"--exit-after={FOUR_FRAMES}"
 # frames to key numbers) go in unless the cache holds them, each an 8-byte key, an 8-byte source
 # hash that is the same number and no binary, as on macOS. It prints the lines the real game
 # prints once it has built what the cache held and under GCN_FRAMETIME=1 for each program built
-# in play. FAKE_SLEEP_ON and FAKE_FAIL_ON name the runs (by a part of the line logged) that hang
+# in play. Under GCN_PROGRESS=N it prints "[progress] frame" every N frames to stderr up to its
+# --exit-after, as gcn-recomp does, but for the frames FAKE_PROGRESS_SKIPS lists, and then the
+# line FAKE_PROGRESS_GARBAGE holds. FAKE_OLD_ENGINE makes it an engine from before
+# GCN_PROGRESS, which prints none. FAKE_SLEEP_ON and FAKE_FAIL_ON name the runs (by a part of the line logged) that hang
 # or exit 1, and FAKE_MEET makes each wait until another run has started too. FAKE_HOLD_ON
 # names a run that waits until every other run is done (FAKE_RELEASE is the file they make)
 # and then half a second more, so it ends last.
@@ -39,6 +45,13 @@ line += " GCN=" + ",".join(sorted(k for k in os.environ if k.startswith("GCN_"))
 line += " CARD=" + str(os.path.exists("saves/memcard_a.raw"))
 with open(os.environ["FAKE_LOG"], "a") as f:
     f.write(line + "\\n")
+every = os.environ.get("GCN_PROGRESS")
+if every and not os.environ.get("FAKE_OLD_ENGINE"):
+    for n in range(int(every), int(frames) + 1, int(every)):
+        if str(n) not in os.environ.get("FAKE_PROGRESS_SKIPS", "").split(","):
+            print(f"[progress] frame {{n}}", file=sys.stderr)
+    if os.environ.get("FAKE_PROGRESS_GARBAGE"):
+        print(os.environ["FAKE_PROGRESS_GARBAGE"], file=sys.stderr)
 path = "saves/shaders.bin"
 if not os.path.exists(path):
     with open(path, "wb") as f:
@@ -160,6 +173,105 @@ class PassesTest(unittest.TestCase):
             "valley 25 60 4200 warm-from=tour\ntour 90 60 4200,9000 warm=12000\nmeadows 30 60 6000\n"))
         self.assertEqual([(p.name, p.exit_after) for p in ps],
                          [("tour", 12000), ("meadows", 6000 + warm_shaders.ROUTE_TAIL_FRAMES)])
+
+
+TOTAL_FRAMES = TITLE_FRAMES + FOUR_FRAMES
+
+
+def frames_lines(out: str) -> list[tuple[int, int]]:
+    """The frames played and the frames of every pass, from each frames line in OUT."""
+    return [(int(m[1]), int(m[2])) for m in map(warm_shaders.FRAMES_LINE.fullmatch, out.splitlines())
+            if m]
+
+
+class FramesPlayedTest(unittest.TestCase):
+    """FramesPlayed on MANIFEST's two passes, with a clock the test sets."""
+
+    def setUp(self):
+        self.now = 0.0
+        plan = warm_shaders.passes(routes.parse_manifest(MANIFEST))
+        self.played = warm_shaders.FramesPlayed(plan, clock=lambda: self.now)
+
+    def counts(self, *steps: tuple) -> list[int]:
+        """The frames each line STEPS print says were played. A step is (seconds, "saw", pass,
+        frame) or (seconds, "ended", pass)."""
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            for seconds, call, i, *frame in steps:
+                self.now = seconds
+                getattr(self.played, call)(i, *frame)
+        lines = frames_lines(out.getvalue())
+        self.assertEqual({total for _, total in lines} - {TOTAL_FRAMES}, set())
+        return [played for played, _ in lines]
+
+    def test_passes_playing_at_once_add_up(self):
+        self.assertEqual(self.counts((0, "saw", 1, 600), (1, "saw", 0, 120), (2, "saw", 1, 1200)),
+                         [600, 720, 1320])
+
+    def test_an_ended_pass_counts_its_frames_once(self):
+        self.assertEqual(self.counts((0, "saw", 0, 1800), (1, "ended", 0), (2, "saw", 1, 60)),
+                         [1800, TITLE_FRAMES, TITLE_FRAMES + 60])
+
+    def test_a_count_that_falls_or_runs_past_the_pass_holds_at_most_its_frames(self):
+        # A reset starts the game's count again at 1.
+        self.assertEqual(self.counts((0, "saw", 0, 1200), (1, "saw", 0, 60), (2, "saw", 0, 99999)),
+                         [1200, 1200, TITLE_FRAMES])
+
+    def test_a_line_at_most_every_quarter_second_but_each_end_prints(self):
+        self.assertEqual(self.counts((0, "saw", 0, 60), (0.1, "saw", 0, 120), (0.2, "ended", 1),
+                                     (0.3, "saw", 0, 180), (0.5, "saw", 0, 240), (0.6, "saw", 0, 300)),
+                         [60, 120 + FOUR_FRAMES, 240 + FOUR_FRAMES])
+
+    def test_without_a_progress_line_nothing_prints(self):
+        self.assertEqual(self.counts((0, "ended", 0), (1, "ended", 1)), [])
+
+
+class ProgressFrameTest(unittest.TestCase):
+    def test_the_highest_frame_the_progress_lines_name(self):
+        lines = [b"[progress] frame 60", b"[shaders] compiled program 3 in 1.0 ms",
+                 b"[progress] frame 180", b"[progress] frame 120"]
+        self.assertEqual(warm_shaders.progress_frame(lines), 180)
+
+    def test_a_stdout_line_the_game_had_half_written_before_it_still_counts(self):
+        self.assertEqual(warm_shaders.progress_frame([b"[shaders] 3 progr[progress] frame 240"]), 240)
+
+    def test_garbage_and_no_lines_are_no_frame(self):
+        for line in (b"[progress] frame", b"[progress] frame 0", b"[progress] frame 060",
+                     b"[progress] frame 12x", b"[progress] frame -5", b"frame 60",
+                     b"[progress] frame 60 more", b"\xff\xfe[progress] frame",
+                     b"[progress] GCN_PROGRESS=x isn't a positive frame interval, so it prints nothing"):
+            self.assertIsNone(warm_shaders.progress_frame([line]), line)
+        self.assertIsNone(warm_shaders.progress_frame([]))
+
+
+class LogTailTest(unittest.TestCase):
+    def test_a_line_counts_once_its_newline_is_in(self):
+        path = temp_dir(self) / "stdout.txt"
+        with path.open("wb", buffering=0) as w, path.open("rb") as r:
+            tail = warm_shaders.LogTail(r)
+            self.assertEqual(tail.lines(), [])
+            w.write(b"[progress] frame 60\n[progress] fr")
+            self.assertEqual(tail.lines(), [b"[progress] frame 60"])
+            self.assertEqual(tail.lines(), [])
+            w.write(b"ame 120\n")
+            self.assertEqual(tail.lines(), [b"[progress] frame 120"])
+
+
+class RunPassTest(unittest.TestCase):
+    def test_frames_reach_the_caller_while_the_game_plays(self):
+        d = temp_dir(self)
+        game = write_file(d, "game", f"#!{sys.executable}\nimport sys, time\n"
+                          "print('[progress] frame 60', file=sys.stderr)\ntime.sleep(1)\n"
+                          "print('[progress] frame 120', file=sys.stderr)\n")
+        game.chmod(0o755)
+        (d / "scratch").mkdir()
+        p = warm_shaders.Pass("route", 120, 1, write_file(d, "route.txt", "1:A:1\n"))
+        seen: list[tuple[int, float]] = []
+        warm_shaders.run_pass(game, p, d / "scratch", threading.Event(),
+                              shown=lambda frame: seen.append((frame, time.monotonic())))
+        returned = time.monotonic()
+        self.assertEqual([frame for frame, _ in seen], [60, 120])
+        self.assertGreater(returned - seen[0][1], 0.5)
 
 
 class LastCompileFrameTest(unittest.TestCase):
@@ -323,7 +435,7 @@ class WarmTest(WarmTestCase):
         with mock.patch.dict(os.environ, env):
             self.assertEqual(self.warm()[0], 0)
         for line in self.game_lines():
-            self.assertIn("GCN=GCN_FRAMETIME,GCN_INPUT", line.split())
+            self.assertIn("GCN=GCN_FRAMETIME,GCN_INPUT,GCN_PROGRESS", line.split())
 
     def test_failing_pass_leaves_saves_identical_and_exits_non_zero(self):
         self.saves.mkdir()
@@ -568,6 +680,56 @@ class ParallelTest(WarmTestCase):
         self.assertEqual(code, 2)
         self.assertIn("--jobs", err)
         self.assertFalse(self.saves.exists())
+
+
+class FramesTest(WarmTestCase):
+    """The frames lines a warm-up prints from its games' [progress] lines."""
+
+    def assert_climbs_to_every_frame(self, out: str) -> None:
+        counts = frames_lines(out)
+        self.assertEqual(counts[-1], (TOTAL_FRAMES, TOTAL_FRAMES))
+        self.assertEqual(sorted(counts), counts)
+
+    def test_frames_climb_to_every_pass_s_and_each_pass_line_stays(self):
+        code, out, err = self.warm()
+        self.assertEqual(code, 0, err)
+        self.assert_climbs_to_every_frame(out)
+        lines = out.splitlines()
+        ends = [i for i, l in enumerate(lines) if warm_shaders.PASS_LINE.fullmatch(l)]
+        self.assertEqual([lines[i].split(":")[0] for i in ends], ["title", "city-trial-4p"])
+        # Each end prints the count with the pass that ended whole.
+        self.assertEqual([frames_lines(lines[i + 1])[0][0] for i in ends], [TITLE_FRAMES, TOTAL_FRAMES])
+
+    def test_passes_playing_at_once_add_up_to_every_pass_s_frames(self):
+        meet = self.dir / "meet"
+        meet.mkdir()
+        with mock.patch.dict(os.environ, {"FAKE_MEET": str(meet)}):
+            code, out, err = self.warm("--jobs", "2")
+        self.assertEqual(code, 0, err)
+        self.assert_climbs_to_every_frame(out)
+
+    def test_an_engine_without_gcn_progress_warms_with_only_the_pass_lines(self):
+        with mock.patch.dict(os.environ, {"FAKE_OLD_ENGINE": "1"}):
+            code, out, err = self.warm()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(frames_lines(out), [])
+        self.assertEqual(len([l for l in out.splitlines() if warm_shaders.PASS_LINE.fullmatch(l)]), 2)
+        self.assertEqual(self.cache_keys(), [fake_key(1), fake_key(2)])
+
+    def test_missing_and_garbage_progress_lines_still_end_at_every_pass_s_frames(self):
+        env = {"FAKE_PROGRESS_SKIPS": f"{TITLE_FRAMES},{FOUR_FRAMES},120",
+               "FAKE_PROGRESS_GARBAGE": "[progress] frame 99999"}
+        with mock.patch.dict(os.environ, env):
+            code, out, err = self.warm()
+        self.assertEqual(code, 0, err)
+        self.assert_climbs_to_every_frame(out)
+
+    def test_a_failed_pass_s_last_output_leaves_out_its_progress_lines(self):
+        with mock.patch.dict(os.environ, {"FAKE_FAIL_ON": FOUR_EXIT}):
+            code, _, err = self.warm()
+        self.assertEqual(code, 1)
+        self.assertIn("city-trial-4p: the game exited 1", err)
+        self.assertNotIn("[progress]", err)
 
 
 class ReportTest(WarmTestCase):

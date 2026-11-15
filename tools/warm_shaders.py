@@ -30,7 +30,11 @@ frames past the route's last required frame. A route with a warm-from=ROUTE sett
 pass, since ROUTE's pass plays what it does.
 
 Prints one line per pass and a closing line with the cache's size. A failed pass prints
-the game's last output to stderr.
+the game's last output to stderr. Each pass runs with GCN_PROGRESS=60, so a game that knows it
+prints "[progress] frame N" every 60 frames, and then a line "frames: D of T" says how many
+of the plan's T frames the passes have played between them, at most every 0.25 s and once
+more as each pass ends (see FramesPlayed). A game from before GCN_PROGRESS prints none, and
+then there are only the pass lines.
 
 Exits 0 when the cache is warm, whether the passes ran or the stamp was current, 1 when a
 pass failed or the game left no shaders.bin (the player's saves are untouched), 2 when it
@@ -54,7 +58,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import frametime
 import shader_cache
@@ -85,6 +89,14 @@ ROUTE_TAIL_FRAMES = 900  # past the last frame a route must reach, to build what
 STRETCH_ENDS = (2000, 3400)
 # The line each finished pass prints, which the launcher's build counts as progress.
 PASS_LINE = re.compile(r"\S+: \d+ frames, \d+\.\d s")
+# Each pass's GCN_PROGRESS, a second of the game's frames. The game prints GAME_PROGRESS to
+# stderr every that many frames. The pass's stdout shares its file, so a stdout line the game
+# hadn't finished writing can come before it on the same line.
+PROGRESS_EVERY = 60
+GAME_PROGRESS = re.compile(rb"\[progress\] frame ([1-9]\d*)$")
+# The line the frames the passes have played print as, which the launcher's build also counts.
+FRAMES_LINE = re.compile(r"frames: (\d+) of (\d+)")
+FRAMES_EVERY_S = 0.25  # the least time between two FRAMES_LINEs, but for a pass ending
 # Ends the message of a warm-up that can't run, for whichever build ran it.
 SKIP_HINT = ("(-DDRAGOON_WARMUP=OFF skips the warm-up in a CMake build, and --no-warmup in "
              "launcher_build.py)")
@@ -210,40 +222,105 @@ class PassStopped(Exception):
     """A pass cut short because another one failed."""
 
 
+class FramesPlayed:
+    """The frames the plan's passes have played between them, printed as FRAMES_LINE.
+
+    A pass has played the highest frame its game's GAME_PROGRESS lines name, at most its
+    length, since a reset starts the count again at 1, and all of its length once it ends.
+    Nothing prints until a game prints a GAME_PROGRESS line, so a game without GCN_PROGRESS
+    leaves only the pass lines. The caller holds PRINT_LOCK for both calls.
+    """
+
+    def __init__(self, plan: list[Pass], clock=time.monotonic):
+        self.lengths = [p.exit_after for p in plan]
+        self.played = [0] * len(plan)
+        self.reported = False
+        self.printed: Optional[float] = None
+        self.clock = clock
+
+    def line(self) -> str:
+        return f"frames: {sum(self.played)} of {sum(self.lengths)}"
+
+    def saw(self, i: int, frame: int) -> None:
+        """Pass I's game printed that it has shown FRAME. Prints unless the last line went
+        out under FRAMES_EVERY_S ago."""
+        self.reported = True
+        self.played[i] = max(self.played[i], min(frame, self.lengths[i]))
+        now = self.clock()
+        if self.printed is None or now - self.printed >= FRAMES_EVERY_S:
+            self.printed = now
+            print(self.line(), flush=True)
+
+    def ended(self, i: int) -> None:
+        """Pass I played to its end. Prints once a game has printed a GAME_PROGRESS line."""
+        self.played[i] = self.lengths[i]
+        if self.reported:
+            self.printed = self.clock()
+            print(self.line(), flush=True)
+
+
+class LogTail:
+    """The whole lines a growing file gains, read from where the last call stopped."""
+
+    def __init__(self, f):
+        self.f = f
+        self.rest = b""
+
+    def lines(self) -> list[bytes]:
+        *whole, self.rest = (self.rest + self.f.read()).split(b"\n")
+        return whole
+
+
+def progress_frame(lines: list[bytes]) -> Optional[int]:
+    """The highest frame the GAME_PROGRESS lines among LINES name, None for none."""
+    frames = [int(m[1]) for m in map(GAME_PROGRESS.search, lines) if m]
+    return max(frames, default=None)
+
+
 def last_compile_frame(log: str) -> int:
     """The frame the game built its last program in, 0 for none or without GCN_FRAMETIME=1."""
     return max((n for n, f in frametime.parse(log.splitlines()).items() if f.compiles), default=0)
 
 
 def run_pass(game: Path, p: Pass, scratch: Path, stop: threading.Event,
-             disc: Optional[Path] = None) -> None:
-    """Play P in SCRATCH, killing the game if STOP is set or it outlasts its time limit."""
+             disc: Optional[Path] = None, shown: Callable[[int], None] = lambda frame: None) -> None:
+    """Play P in SCRATCH, killing the game if STOP is set or it outlasts its time limit.
+
+    Every STOP_POLL_S, and once the game exits, it reads the whole lines the game has printed
+    since and calls SHOWN with the highest frame a GAME_PROGRESS line among them names.
+    """
     env = {k: v for k, v in os.environ.items() if k not in OWN_ENV}
     env["SDL_AUDIO_DRIVER"] = "dummy"
     env["GCN_INPUT"] = script_text(p.route_file)
+    env["GCN_PROGRESS"] = str(PROGRESS_EVERY)
     cmd = [str(game), "--hidden", "--fast", "--no-input-log", "--no-gamepads", f"--pads={p.pads}",
            f"--exit-after={p.exit_after}"] + ([str(disc)] if disc else [])
     log = scratch / "stdout.txt"
     limit = pass_timeout(p.exit_after)
-    with log.open("wb") as f:
+    with log.open("wb") as f, log.open("rb") as printed:
+        reader = LogTail(printed)
         proc = subprocess.Popen(cmd, cwd=scratch, env=env, stdout=f, stderr=subprocess.STDOUT)
         deadline = time.monotonic() + limit
         try:
-            while True:
+            code = None
+            while code is None:
                 try:
                     code = proc.wait(timeout=STOP_POLL_S)
-                    break
                 except subprocess.TimeoutExpired:
                     if stop.is_set():
                         raise PassStopped from None
                     if time.monotonic() > deadline:
                         raise PassFailed(f"{p.name}: the game didn't exit within {limit:.0f} s") from None
+                frame = progress_frame(reader.lines())
+                if frame is not None:
+                    shown(frame)
         finally:
             if proc.poll() is None:
                 proc.kill()
                 proc.wait()
     if code != 0:
-        tail = "\n".join(log.read_text(errors="replace").splitlines()[-TAIL_LINES:])
+        lines = [l for l in log.read_bytes().splitlines() if not GAME_PROGRESS.search(l)]
+        tail = "\n".join(l.decode(errors="replace") for l in lines[-TAIL_LINES:])
         raise PassFailed(f"{p.name}: the game exited {code}\n{tail}")
 
 
@@ -356,19 +433,25 @@ def warm(game: Path, saves: Path, plan: list[Pass], jobs: int = 1,
                 shutil.copyfile(start, d / "saves" / CACHE)
         seconds = [0.0] * len(plan)
         stop = threading.Event()
+        played = FramesPlayed(plan)
+
+        def shown(i: int, frame: int) -> None:
+            with PRINT_LOCK:
+                played.saw(i, frame)
 
         def play(i: int) -> None:
             if stop.is_set():
                 raise PassStopped
             began = time.monotonic()
             try:
-                run_pass(game, plan[i], scratch[i], stop, disc)
+                run_pass(game, plan[i], scratch[i], stop, disc, lambda frame: shown(i, frame))
             except PassFailed:
                 stop.set()  # here, so that no queued pass starts before the caller hears of it
                 raise
             seconds[i] = time.monotonic() - began
             with PRINT_LOCK:
                 print(f"{plan[i].name}: {plan[i].exit_after} frames, {seconds[i]:.1f} s", flush=True)
+                played.ended(i)
 
         failed: dict[int, PassFailed] = {}
         with ThreadPoolExecutor(max_workers=jobs) as pool:

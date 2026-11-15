@@ -503,6 +503,8 @@ A route with a `warm-from=ROUTE` setting gets no pass, because ROUTE's pass play
 
 `air-ride-race`, `air-ride-celestial-valley` and `air-ride-beanstalk-park` get the programs they first draw past their own stretches, at frames 5,649 to 12,068 of their own routes, from Sky Sands, which draws them by frame 14,186.
 
+It prints `NAME: FRAMES frames, SECONDS s` as each pass ends. Each pass runs with `GCN_PROGRESS=60`, so its game prints `[progress] frame N` every 60 frames. The tool reads those from each pass's output every 0.25 s. From the first one on it prints `frames: PLAYED of TOTAL` up to every 0.25 s, and once more as each pass ends. PLAYED is the frames the passes have played between them and TOTAL is all of theirs. A pass counts the highest frame its game has printed, up to its own length. Once it ends it counts all of its length. A game from before `GCN_PROGRESS` prints none, and then only the pass lines come. A failed pass's last output leaves out the `[progress]` lines.
+
 The merged cache replaces `saves/shaders.bin` only once every pass has succeeded, and nothing else in `saves/` is touched, so the memory card stays as it is. `saves/.shader-warmup` stamps what the warm-up played, and a run with a current stamp does nothing unless `--force` is given. `--help` gives what the stamp holds and the pass timeout.
 
 `--report DIR` keeps each pass's output as `NAME.log` and the cache it left as `NAME.bin` in DIR, and prints `report.txt`. A row says how many programs the game built from the starting cache before its first frame and how long that took, how many keys the pass built itself and how many of those no other pass built. It also gives the keys and programs the pass added that the starting cache and the passes before it in the manifest lacked, and the merged cache's size so far. With `GCN_FRAMETIME=1` in the environment it gives the frame the pass built its last program in.
@@ -654,7 +656,7 @@ How does the launcher build the game? launcher_build.py is its recipe, and a dev
 |---|---|
 | recompile | Empties `<cache>/build`. There the snapshot's `extract_dol.py` takes `main.dol` from the disc, checked against the disc ID and SHA-1 in `source-info.json`, and its `recomp.py` writes the game's C to `gen/` |
 | compile | Runs make on the kit's Makefile with a job per core, which compiles `gen/*.c` and links `dragoon` with the kit. Each compile line make prints becomes a progress event |
-| warmup | Runs the snapshot's warm_shaders.py on the disc and a copy of the player's shader cache, one progress event per pass |
+| warmup | Runs the snapshot's warm_shaders.py on the disc and a copy of the player's shader cache, one progress event per pass and per frames line, each with the passes done and, from the first frames line, `frames` and `frames_total` |
 | package | Wraps the game in an app sealed ad hoc, with a `stamp.json` naming both commits and the SDK |
 | swap | Points `game/current` at the new build, then installs the warmed cache in `<data>/saves`, where a failure is only a warning |
 

@@ -102,6 +102,16 @@ with open(os.path.join(saves, ".shader-warmup"), "w") as f:
     f.write("new stamp\\n")
 print("warm: 2 passes")
 """
+# The warm-up of a game that prints GCN_PROGRESS, with a line that only looks like a count.
+WARM_FRAMES = WARM.replace('print("title: 1860 frames, 0.1 s", flush=True)', """
+print("frames: 600 of 6240")
+print("frames: lots of 6240")
+print("title: 1860 frames, 0.1 s", flush=True)
+print("frames: 1860 of 6240")
+""").replace('print("city-trial-4p: 4380 frames, 0.2 s")', """
+print("city-trial-4p: 4380 frames, 0.2 s")
+print("frames: 6240 of 6240")
+""")
 
 
 class FullLog:
@@ -488,9 +498,20 @@ class GoodRunTest(RecipeTestCase):
         self.assertEqual(warm["argv"], ["--game", str(self.cache / "build" / "dragoon"),
                                         "--saves", str(self.cache / "warm" / "saves"),
                                         "--disc", str(self.disc)])
+        # This fake prints no frames lines, as with a game from before GCN_PROGRESS.
         self.assertEqual(self.of(events, "progress", "warmup"), [
             {"event": "progress", "step": "warmup", "done": 1, "total": 2},
             {"event": "progress", "step": "warmup", "done": 2, "total": 2}])
+
+    def test_the_warmup_s_frames_lines_ride_on_its_progress_events(self):
+        self.fake("warm_shaders", WARM_FRAMES, self.source / "tools", "warm_shaders.py")
+        code, events, _ = self.build()
+        self.assertEqual(code, 0)
+        warmup = {"event": "progress", "step": "warmup", "total": 2, "frames_total": 6240}
+        self.assertEqual(self.of(events, "progress", "warmup"), [
+            {**warmup, "done": 0, "frames": 600}, {**warmup, "done": 1, "frames": 600},
+            {**warmup, "done": 1, "frames": 1860}, {**warmup, "done": 2, "frames": 1860},
+            {**warmup, "done": 2, "frames": 6240}])
 
     def test_the_players_stamp_reaches_the_warmup_so_a_current_cache_is_skipped(self):
         self.old_game()
