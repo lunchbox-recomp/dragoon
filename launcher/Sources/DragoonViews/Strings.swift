@@ -121,12 +121,18 @@ public enum Strings {
         }
     }
 
-    /// A step's count with its unit. Compile counts each file as make starts it, and the
-    /// warm-up each run as it ends.
-    static func count(step: String, done: Int, total: Int) -> String {
+    /// A step's count with its unit. Compile counts each file as make starts it. The warm-up
+    /// gives the share of its frames played once it has `frames`, and each run as it ends
+    /// from a game that prints none.
+    static func count(step: String, done: Int, total: Int, frames: FrameCount? = nil) -> String {
         switch step {
         case "compile": return "\(done) of \(total) files"
-        case BuildProgress.warmupStep: return "\(done) of \(total) runs done"
+        case BuildProgress.warmupStep:
+            if let frames, frames.total > 0 {
+                return percent(Double(min(frames.done, frames.total)) / Double(frames.total))
+                    + " warmed up"
+            }
+            return "\(done) of \(total) runs done"
         default: return "\(done) of \(total)"
         }
     }

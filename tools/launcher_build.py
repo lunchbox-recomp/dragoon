@@ -33,7 +33,7 @@ Prints one JSON object per line on stdout:
   {"event": "step", "step": "recompile"}
   {"event": "progress", "step": "compile", "done": 12, "total": 135}
   {"event": "progress", "step": "warmup", "done": 3, "total": 8, "frames": 41230,
-   "frames_total": 139760}
+   "frames_total": 119760}
   {"event": "done", "game": "<data>/game/current/Dragoon.app"}
   {"event": "error", "step": "compile", "message": "...", "log": "<file>"}
   {"event": "warning", "step": "swap", "message": "...", "log": "<file>"}

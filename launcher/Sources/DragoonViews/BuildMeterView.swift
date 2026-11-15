@@ -54,18 +54,12 @@ struct BuildMeterView: View {
 
     /// Whether the count's last change came at least `rollGap` after the one before, so it
     /// rolls. Rolling make's files, several a second, kept SwiftUI drawing all through the
-    /// compile, at 7% of a core, so a fast count just changes.
+    /// compile, at 7% of a core, so a fast count just changes. The warm-up's frames come about
+    /// every 0.25 s, so its share just changes too.
     static func rollsCount(_ samples: [BuildSample]) -> Bool {
         guard samples.count >= 2 else { return true }
         let last = samples[samples.count - 1], before = samples[samples.count - 2]
         return last.time.timeIntervalSince(before.time) >= rollGap
-    }
-
-    /// Whether the count rolls: always while the samples are the warm-up's frames, since then
-    /// the count is its runs, which end a few times a build, and otherwise as `rollsCount` of
-    /// the samples says.
-    static func rollsCount(_ progress: BuildProgress) -> Bool {
-        progress.frames != nil || rollsCount(progress.samples)
     }
 
     /// One id for the bar and Play, so the bar morphs into Play, and another for each under
@@ -98,12 +92,15 @@ struct BuildMeterView: View {
             if finished {
                 Text(Strings.buildTook(progress.elapsed(at: Date())))
             } else if let step = progress.step, progress.total > 0 {
-                Text(Strings.count(step: step, done: progress.done, total: progress.total))
+                let count = Strings.count(
+                    step: step, done: progress.done, total: progress.total,
+                    frames: progress.frames)
+                Text(count)
                     .contentTransition(
-                        reduceMotion ? .opacity : .numericText(value: Double(progress.done)))
+                        reduceMotion ? .opacity : .numericText(value: Double(progress.work.done)))
                     .animation(
-                        Self.rollsCount(progress) ? .snappy(duration: 0.25) : nil,
-                        value: progress.done)
+                        Self.rollsCount(progress.samples) ? .snappy(duration: 0.25) : nil,
+                        value: count)
             }
             Spacer(minLength: 0)
             if !finished {

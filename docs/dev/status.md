@@ -1032,17 +1032,18 @@ time is what `--dump-banner`, added in `29cc77b`, prints for the supported disc.
 ### Build progress
 
 The build page's warm-up segment fills by the frames the warm-up's runs have played, of the
-139,760 the manifest gives its eight runs, from gcn-recomp's `GCN_PROGRESS` (in the pin since
-`864d9d4`). The count under the bar stays the runs ended, "3 of 8 runs done". A game from
-before `GCN_PROGRESS` prints no frames, and then the runs fill it as before. The launcher
-README's build page section has the event format.
+119,760 the manifest gives its eight runs, from gcn-recomp's `GCN_PROGRESS` (in the pin since
+`864d9d4`). The line under the bar gives the share of them played, "51% warmed up". A game
+from before `GCN_PROGRESS` prints no frames, and then the runs fill the segment and the line
+says "3 of 8 runs done" as before. The launcher README's build page section has the event
+format.
 
 | Check | Bar | Measured | Result |
 |---|---|---|---|
 | Frames add up across runs playing at once and never fall | Each end counts its run's frames once | `test_warm_shaders.py` on fake games, two at once, with lines missing, garbled or past the run's end | Pass |
 | An engine without `GCN_PROGRESS` | Warms and shows the runs as before | A fake game that prints no `[progress]` line warms with only the pass lines, and the recipe's events carry no frames (`test_warm_shaders.py`, `test_launcher_build.py`) | Pass |
 | The segment and the time left from frame events, and from runs alone | Never falls, full only on `done` | `BuildProgressTests` on a whole build of each | Pass |
-| Launcher's share of a core through the warm-up's frame events | 5% | Not measured, since it needs the page on screen. They come at most 4 a second, against the 8 compile events a second that measured 2.8 to 3.4% | Not measured |
+| Launcher's share of a core through the warm-up's frame events | 5% | Not measured, since it needs the page on screen. `warm_shaders.py` prints a frames line at most every 0.25 s, plus one as each run ends. `ProgressThrottle` passes at most 10 events a second. The compile's 8 events a second measured 2.8 to 3.4% | Not measured |
 | The time left on a real warm-up at 25, 50 and 75% | Within 20% of the real time left | Not measured. No real warm-up ran with the frame events, so neither the fill's pace nor how often the game's lines come was seen | Not measured |
 
 ### The hand-off to the game

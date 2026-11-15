@@ -16,6 +16,21 @@ struct BuildPageTests {
         #expect(Strings.count(step: step, done: done, total: total) == text)
     }
 
+    /// With frames the warm-up shows the share of them played, rounded down, and never past
+    /// 100%. Without them, or with a total of none, it shows its runs.
+    @Test(arguments: [
+        (FrameCount(done: 61_078, total: 119_760), "51% warmed up"),
+        (FrameCount(done: 0, total: 119_760), "0% warmed up"),
+        (FrameCount(done: 119_759, total: 119_760), "99% warmed up"),
+        (FrameCount(done: 119_760, total: 119_760), "100% warmed up"),
+        (FrameCount(done: 130_000, total: 119_760), "100% warmed up"),
+        (FrameCount(done: 5, total: 0), "3 of 8 runs done"),
+    ])
+    func theWarmUpShowsItsShareOfFramesOnceItHasThem(frames: FrameCount, text: String) {
+        #expect(Strings.count(step: "warmup", done: 3, total: 8, frames: frames) == text)
+        #expect(Strings.count(step: "warmup", done: 3, total: 8) == "3 of 8 runs done")
+    }
+
     @Test(arguments: [
         (0.0, "0:00"), (5.9, "0:05"), (72, "1:12"), (600, "10:00"), (3725, "1:02:05"),
         (-3, "0:00"),
@@ -53,20 +68,19 @@ struct BuildPageTests {
         #expect(BuildMeterView.rollsCount(Self.samples(seconds)) == rolls)
     }
 
-    /// The warm-up's frames come every 0.25 s, but its count is still its runs, so it rolls.
+    /// The warm-up's frames, every 0.25 s, are its samples, so its share just changes.
     @MainActor
-    @Test func theRunsRollWhileFramesComeFourTimesASecond() {
+    @Test func theWarmUpsShareDoesNotRollAsItsFramesCome() {
         var progress = BuildProgress()
         progress.note(.step("warmup"), at: Date(timeIntervalSinceReferenceDate: 0))
         for tick in 1...4 {
             progress.note(
                 .progress(
                     step: "warmup", done: 1, total: 8,
-                    frames: FrameCount(done: tick * 475, total: 139_760)),
+                    frames: FrameCount(done: tick * 475, total: 119_760)),
                 at: Date(timeIntervalSinceReferenceDate: Double(tick) * 0.25))
         }
         #expect(!BuildMeterView.rollsCount(progress.samples))
-        #expect(BuildMeterView.rollsCount(progress))
     }
 
     /// A warm-up the plan skips isn't drawn, and the other segments cover the bar.
