@@ -271,6 +271,18 @@ class LogTail:
         return whole
 
 
+def without_progress(lines: list[bytes]) -> list[bytes]:
+    """LINES with each GAME_PROGRESS line taken out. A stdout line it was printed into keeps
+    the text before it."""
+    kept = []
+    for line in lines:
+        m = GAME_PROGRESS.search(line)
+        if m and not m.start():
+            continue
+        kept.append(line[:m.start()] if m else line)
+    return kept
+
+
 def progress_frame(lines: list[bytes]) -> Optional[int]:
     """The highest frame the GAME_PROGRESS lines among LINES name, None for none."""
     frames = [int(m[1]) for m in map(GAME_PROGRESS.search, lines) if m]
@@ -319,7 +331,7 @@ def run_pass(game: Path, p: Pass, scratch: Path, stop: threading.Event,
                 proc.kill()
                 proc.wait()
     if code != 0:
-        lines = [l for l in log.read_bytes().splitlines() if not GAME_PROGRESS.search(l)]
+        lines = without_progress(log.read_bytes().splitlines())
         tail = "\n".join(l.decode(errors="replace") for l in lines[-TAIL_LINES:])
         raise PassFailed(f"{p.name}: the game exited {code}\n{tail}")
 

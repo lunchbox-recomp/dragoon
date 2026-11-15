@@ -273,6 +273,32 @@ class RunPassTest(unittest.TestCase):
         self.assertEqual([frame for frame, _ in seen], [60, 120])
         self.assertGreater(returned - seen[0][1], 0.5)
 
+    def test_a_read_takes_the_highest_frame_of_every_line_since_the_last(self):
+        d = temp_dir(self)
+        # The two progress lines go in one write, so no read can fall between them.
+        game = write_file(d, "game", f"#!{sys.executable}\nimport os, time\n"
+                          "print('[shaders] 0 programs from cache', flush=True)\n"
+                          "os.write(2, b'[progress] frame 60\\n[progress] frame 120\\n')\n"
+                          "time.sleep(1)\n")
+        game.chmod(0o755)
+        (d / "scratch").mkdir()
+        p = warm_shaders.Pass("route", 120, 1, write_file(d, "route.txt", "1:A:1\n"))
+        seen: list[tuple[int, float]] = []
+        warm_shaders.run_pass(game, p, d / "scratch", threading.Event(),
+                              shown=lambda frame: seen.append((frame, time.monotonic())))
+        returned = time.monotonic()
+        self.assertEqual(seen[0][0], 120)
+        self.assertGreater(returned - seen[0][1], 0.5)
+
+
+class WithoutProgressTest(unittest.TestCase):
+    def test_progress_lines_go_and_stdout_text_before_one_stays(self):
+        lines = [b"[shaders] 3 programs", b"[progress] frame 60", b"[shaders] compi[progress] frame 120",
+                 b"led program 4", b"", b"[progress] frame 12x"]
+        self.assertEqual(warm_shaders.without_progress(lines),
+                         [b"[shaders] 3 programs", b"[shaders] compi", b"led program 4", b"",
+                          b"[progress] frame 12x"])
+
 
 class LastCompileFrameTest(unittest.TestCase):
     def test_a_program_belongs_to_the_next_render_line(self):
