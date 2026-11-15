@@ -195,6 +195,67 @@ class HashRouteTest(unittest.TestCase):
             self.hash_route(run, allow_crash=True)
 
 
+MENU_OUT = f"""[ax] hash list=400 fnv={A}
+[overlay] open
+[pause] held at frame 600, output frame 0
+[overlay] shown after 182 ms
+[overlay] closed
+[pause] resumed at frame 600 after 912.4 ms, output frame 0
+[ax] hash list=800 fnv={B}
+"""
+
+
+class MenuRouteTest(unittest.TestCase):
+    route = audio_hashes.Route("title", 20, 60, [120], ["--pads=4"])
+
+    def setUp(self):
+        self.root = temp_dir(self)
+        self.out = self.root / "build" / "probe" / "audio-menu-title"
+        patch = mock.patch.object(audio_hashes, "ROOT", self.root)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def play(self, *args, **kwargs):
+        self.settings = (self.out / "settings.txt").read_text()
+        write_file(self.out, "stdout.txt", MENU_OUT)
+
+    def test_runs_windowed_for_twice_the_seconds_with_the_menu_opened_and_no_dumps(self):
+        run = mock.Mock(side_effect=self.play)
+        with mock.patch.object(subprocess, "run", run):
+            log = audio_hashes.menu_route(self.route)
+        self.assertEqual(run.call_args.args[0],
+                         [str(audio_hashes.PROBE), "audio-menu-title", "40", str(routes.route_file("title")),
+                          "100000", "GCN_AXSTATS=1", "GCN_OVERLAY_AT=600:60", "--pads=4"])
+        self.assertEqual(log, MENU_OUT)
+
+    def test_slow_multiplies_the_doubled_seconds(self):
+        run = mock.Mock(side_effect=self.play)
+        with mock.patch.object(subprocess, "run", run):
+            audio_hashes.menu_route(self.route, 3)
+        self.assertEqual(run.call_args.args[0][2], "120")
+
+    def test_the_run_starts_from_a_blank_card_with_the_menus_sounds_on(self):
+        self.out.mkdir(parents=True)
+        write_file(self.out, "saves.txt", "an earlier run's card")
+        with mock.patch.object(subprocess, "run", mock.Mock(side_effect=self.play)):
+            audio_hashes.menu_route(self.route)
+        self.assertEqual(self.settings, "menu_sounds on\n")
+        self.assertFalse((self.out / "saves.txt").exists())
+
+    def test_a_log_with_both_lines_lacks_nothing(self):
+        self.assertEqual(audio_hashes.menu_missing(MENU_OUT), ())
+
+    def test_a_log_without_the_open_or_the_resume_says_which(self):
+        no_resume = MENU_OUT.replace("[pause] resumed", "[pause] still")
+        no_open = MENU_OUT.replace("[overlay] open", "[overlay] opening")
+        self.assertEqual(audio_hashes.menu_missing(no_resume), ("no [pause] resumed line",))
+        self.assertEqual(audio_hashes.menu_missing(no_open), ("no [overlay] open line",))
+        self.assertEqual(len(audio_hashes.menu_missing("")), 2)
+
+    def test_a_line_must_start_with_its_tag(self):
+        self.assertEqual(len(audio_hashes.menu_missing("x [overlay] open\nx [pause] resumed at frame 2 \n")), 2)
+
+
 class CrashedBenchTest(unittest.TestCase):
     """main on a bench whose probe.sh exits with a status, after the hashes it printed first."""
 
@@ -342,6 +403,49 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(out, "")
         self.assertIn(str(self.path), err)
+
+    def menu(self, log: str, *argv: str):
+        with mock.patch.object(audio_hashes, "menu_route", return_value=log) as menu_route:
+            result = run_main(audio_hashes.main, "menu", *argv)
+        return (*result, menu_route)
+
+    def test_menu_with_matching_rows_and_both_lines_exits_0(self):
+        self.golden(f"400 {A}\n800 {B}\n")
+        code, out, _, menu_route = self.menu(MENU_OUT)
+        self.assertEqual(code, 0)
+        self.assertIn("title: OK, 2 rows match, reached list 800 (needs 800)", out)
+        self.assertEqual(menu_route.call_args.args[1], 1)
+
+    def test_menu_without_the_resume_exits_1_and_says_so(self):
+        self.golden(f"400 {A}\n800 {B}\n")
+        code, out, _, _ = self.menu(MENU_OUT.replace("[pause] resumed", "[pause] still"))
+        self.assertEqual(code, 1)
+        self.assertIn("title: 1 problem(s)", out)
+        self.assertIn("no [pause] resumed line", out)
+
+    def test_menu_without_the_open_exits_1_and_says_so(self):
+        self.golden(f"400 {A}\n800 {B}\n")
+        code, out, _, _ = self.menu(MENU_OUT.replace("[overlay] open", "[overlay] gone"))
+        self.assertEqual(code, 1)
+        self.assertIn("no [overlay] open line", out)
+
+    def test_menu_with_a_changed_row_exits_1(self):
+        self.golden(f"400 {A}\n800 {C}\n")
+        code, out, _, _ = self.menu(MENU_OUT)
+        self.assertEqual(code, 1)
+        self.assertIn(f"list 800: {B} != golden {C}", out)
+
+    def test_menu_reads_the_goldens_before_any_run_and_takes_slow_but_not_lists(self):
+        code, _, err, menu_route = self.menu(MENU_OUT)
+        self.assertEqual(code, 2)
+        self.assertIn(str(self.path), err)
+        menu_route.assert_not_called()
+        self.golden(f"400 {A}\n")
+        self.assertEqual(self.menu(MENU_OUT, "--slow=2")[3].call_args.args[1], 2)
+        code, _, err, menu_route = self.menu(MENU_OUT, "--lists", "400")
+        self.assertEqual(code, 2)
+        self.assertIn("--lists is for record", err)
+        menu_route.assert_not_called()
 
     def test_unknown_route_exits_2(self):
         code, _, err, hash_route = self.main({}, "check", "nope")

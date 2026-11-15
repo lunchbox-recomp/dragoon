@@ -377,6 +377,12 @@ As in frame_hashes.py, `check --slow=N` gives each route N times its seconds, an
 
 A bench that crashes prints no report, and probe.sh exits 1. That counts as a route that doesn't match, so `check` says the bench printed no report and fails the lists it didn't reach. `record` exits 2 on it without writing a golden, as it does on any other probe.sh failure.
 
+`menu` checks the same goldens with the overlay menu's sounds on and the menu opened over the game. `dragoon_bench` has no menu, so each route runs windowed and unpaced under the NAME `audio-menu-ROUTE`, for twice its seconds and with `--slow=N` N times that, with `GCN_AXSTATS=1`, `GCN_OVERLAY_AT=600:60` and no frame dumps. The run's directory starts with a `settings.txt` that holds `menu_sounds on`. A run also fails without an `[overlay] open` line, the menu opened, or a `[pause] resumed` line, the guest let go after the close. The sounds join after the mixer's blocks, so matching rows show the menu left the game's own mix alone, not that a sound played.
+
+```
+tools/audio_hashes.py menu title
+```
+
 ## interp_bisect.py
 
 Which functions change a route when the interpreter runs them? It reads every function start from `analysis/symbols.txt` and checks ROUTE with frame_hashes.py, or with audio_hashes.py under `--audio`. Each check sets `GCN_INTERPRET` to a list of starts, a file in `build/bisect/` with one hex address a line, named by absolute path.

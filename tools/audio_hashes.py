@@ -2,6 +2,7 @@
 """Did a change alter what the AX mixer outputs? Run routes and compare their audio hashes.
 
 Usage: audio_hashes.py check  [ROUTE ...] [--slow=N]
+       audio_hashes.py menu   [ROUTE ...] [--slow=N]
        audio_hashes.py record [ROUTE ...] [--lists N,N,...]
 
 Routes and their probe settings are in tests/hashes/manifest.txt; with no ROUTE every route
@@ -16,6 +17,14 @@ run that stops short of a golden's last list count fails. record rewrites the go
 that didn't reach one. A check reads every golden before it runs the game. No audio is
 captured or kept, only the hashes.
 
+menu checks the same goldens with the overlay menu's sounds on and the menu opened over the
+game. Each route runs as a windowed probe.sh run, unpaced as the bench is, under the NAME
+audio-menu-ROUTE, for twice its seconds, with GCN_AXSTATS=1, GCN_OVERLAY_AT=600:60 and no frame
+dumps. Its directory starts with a settings.txt of "menu_sounds on" and nothing else. Besides
+the rows, a run fails without an "[overlay] open" line, the menu opened, and a "[pause]
+resumed" line, the guest let go after the close. The sounds join after the mixer's
+blocks, so the rows show that the menu and its sounds left the game's own mix alone.
+
 --slow=N gives each route N times its seconds, for a build that runs slower than the one the
 goldens came from. N is a whole number from 1 and defaults to 1. record refuses it, since
 goldens come from a build at full speed.
@@ -28,7 +37,7 @@ match, so check says the bench printed no report and fails the lists it didn't r
 and any other probe.sh failure are an error, and record writes no golden.
 
 Exits 0 when every route matches (or is recorded), 1 when a hash changed, a list count wasn't
-reached or a checked bench printed no report, 2 on a bad argument, a missing or malformed
+reached, a checked bench printed no report or a menu run lacks either line, 2 on a bad argument, a missing or malformed
 golden, or a probe.sh run that failed any other way.
 """
 from __future__ import annotations
@@ -48,6 +57,11 @@ HASHES = ROOT / "tests" / "hashes"
 AX_HASH = re.compile(r"^\[ax\] hash list=(\d+) fnv=([0-9A-F]{16})$", re.MULTILINE)
 GOLDEN_LINE = re.compile(r"(\d+) ([0-9A-F]{16})")
 LIST_STEP = 400  # the game prints a hash line every 400 command lists
+MENU_AT = "600:60"  # GCN_OVERLAY_AT: open over frame 600, close after 60 redraws of the held frame
+MENU_SECONDS = 2  # a windowed run gets twice a route's seconds
+MENU_SETTINGS = "menu_sounds on\n"
+MENU_LINES = ((re.compile(r"^\[overlay\] open$", re.MULTILINE), "[overlay] open"),
+              (re.compile(r"^\[pause\] resumed at frame \d+ ", re.MULTILINE), "[pause] resumed"))
 HEADER = """\
 # AX output hashes for the {route} route: list count, then the running FNV-1a over every output block
 # the mixer has written since boot, as GCN_AXSTATS=1 prints it. They hold for unpaced runs only:
@@ -120,6 +134,28 @@ def hash_route(route: Route, slow: int = 1, allow_crash: bool = False) -> dict[i
     return parse_hashes((out / "stdout.txt").read_text())
 
 
+def menu_probe_args(route: Route, name: str, slow: int) -> list[str]:
+    return [str(PROBE), name, str(route.seconds * MENU_SECONDS * slow), str(route_file(route.name)),
+            "100000", "GCN_AXSTATS=1", f"GCN_OVERLAY_AT={MENU_AT}", *route.extra]
+
+
+def menu_route(route: Route, slow: int = 1) -> str:
+    """The log of ROUTE's windowed run with the menu's sounds on and the menu opened at MENU_AT,
+    from a blank memory card. The directory stays after it, as hash_route's does."""
+    out = ROOT / "build" / "probe" / f"audio-menu-{route.name}"
+    if out.exists():
+        remove_run(out)
+    out.mkdir(parents=True)
+    (out / "settings.txt").write_text(MENU_SETTINGS)
+    run_probe(menu_probe_args(route, out.name, slow), ROOT, route.name)
+    return (out / "stdout.txt").read_text(errors="replace")
+
+
+def menu_missing(log: str) -> tuple[str, ...]:
+    """What a menu run's LOG lacks of the open and the resume."""
+    return tuple(f"no {label} line" for line, label in MENU_LINES if not line.search(log))
+
+
 def record_route(route: Route, got: dict[int, str], lists: list[int], path: Path) -> bool:
     missing = [n for n in lists if n not in got]
     if missing:
@@ -131,8 +167,9 @@ def record_route(route: Route, got: dict[int, str], lists: list[int], path: Path
     return True
 
 
-def check_route(route: Route, got: dict[int, str], golden: dict[int, str]) -> bool:
-    problems = compare(golden, got)
+def check_route(route: Route, got: dict[int, str], golden: dict[int, str],
+                missing: tuple[str, ...] = ()) -> bool:
+    problems = compare(golden, got) + list(missing)
     where = reached(got, max(golden))
     if problems:
         print(f"{route.name}: {len(problems)} problem(s), {where}")
@@ -166,16 +203,16 @@ def lists_to_record(path: Path, chosen: list[int]) -> list[int]:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["check", "record"])
+    ap.add_argument("mode", choices=["check", "menu", "record"])
     ap.add_argument("routes", nargs="*")
     ap.add_argument("--lists", default=None, help="record: comma-separated list counts")
     ap.add_argument("--slow", default=None, metavar="N",
-                    help="check: give each route N times its seconds (default 1)")
+                    help="check and menu: give each route N times its seconds (default 1)")
     args = ap.parse_args(argv)
-    if args.mode == "check" and args.lists is not None:
+    if args.mode != "record" and args.lists is not None:
         ap.error("--lists is for record")
     if args.mode == "record" and args.slow is not None:
-        ap.error("--slow is for check")
+        ap.error("--slow is for check and menu")
     try:
         slow = 1 if args.slow is None else slow_factor(args.slow)
         chosen = parse_lists(args.lists) if args.lists is not None else []
@@ -183,11 +220,15 @@ def main(argv: list[str]) -> int:
             raise ValueError("--lists names no list counts")
         routes = select_routes(args.routes, MANIFEST)
         paths = {r.name: HASHES / "audio" / f"{r.name}.txt" for r in routes}
-        goldens = {r.name: read_golden(paths[r.name]) for r in routes} if args.mode == "check" else {}
+        goldens = {r.name: read_golden(paths[r.name]) for r in routes} if args.mode != "record" else {}
         wanted = ({r.name: lists_to_record(paths[r.name], chosen) for r in routes}
                   if args.mode == "record" else {})
         failed = 0
         for route in routes:
+            if args.mode == "menu":
+                log = menu_route(route, slow)
+                failed += not check_route(route, parse_hashes(log), goldens[route.name], menu_missing(log))
+                continue
             got = hash_route(route, slow, allow_crash=args.mode == "check")
             if args.mode == "record":
                 ok = record_route(route, got, wanted[route.name], paths[route.name])
