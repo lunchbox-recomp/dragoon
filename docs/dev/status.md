@@ -151,11 +151,11 @@ clicked (`imgui.cpp:11408`).
 
 `io.ConfigDebugHighlightIdConflicts` turns that tooltip on by default (`imgui.cpp:1712`), and
 the overlay leaves it on. Since gcn-recomp `d1a60e5` the overlay clears
-`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:222-224`), and
+`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:287-289`), and
 `TextLinkOpenURL` calls nothing when it's null, so a click on the link opens nothing. Since
-`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:208`,
+`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:272`,
 `imgui.cpp:11366`). The overlay also sets `IniFilename` and `LogFilename` to null, so Dear
-ImGui writes no file (`runtime/overlay/overlay.cpp:207-209`).
+ImGui writes no file (`runtime/overlay/overlay.cpp:271-273`).
 
 ## Disc inputs
 
