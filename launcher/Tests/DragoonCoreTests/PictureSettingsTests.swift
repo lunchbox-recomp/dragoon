@@ -39,7 +39,7 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
     private let path = fakeData + "/settings.txt"
 
     @Test func everyFixtureIsListedAndRead() {
-        #expect(SettingsFixture.all.count == 20)
+        #expect(SettingsFixture.all.count == 22)
         #expect(SettingsFixture.all.filter { $0.before == nil }.map(\.name) == ["missing"])
     }
 
@@ -67,6 +67,13 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
     @Test(arguments: SettingsFixture.all)
     func whatASaveWroteLoadsBackAsWhatWasSet(_ fixture: SettingsFixture) {
         #expect(PictureSettings(parsing: fixture.after) == fixture.picture)
+    }
+
+    /// A save writes `menu_sounds` back as the launcher read it, and each case's is what the
+    /// engine's `settings_load` read from its `.in`, which `settings_fixtures.py` checks.
+    @Test(arguments: SettingsFixture.all)
+    func theMenuSoundsReadAreTheEngines(_ fixture: SettingsFixture) {
+        #expect(PictureSettings(parsing: fixture.before ?? Data()).menuSounds == fixture.picture.menuSounds)
     }
 
     @Test func aSaveWritesTheTemporaryFileThenRenamesItOverSettings() throws {
@@ -147,12 +154,13 @@ struct SettingsFixture: CustomTestStringConvertible, Sendable {
             disc console
             disc slow
             menu_sounds on
+            menu_sounds off
             menu_sounds loud
             # aspect 16:10
             aspectx 4:3
             """
         #expect(PictureSettings(parsing: Data(text.utf8))
-            == PictureSettings(aspect: "21:9", fullscreen: true, scale: 3, fastDisc: false, menuSounds: true))
+            == PictureSettings(aspect: "21:9", fullscreen: true, scale: 3, fastDisc: false, menuSounds: false))
     }
 
     @Test(arguments: [

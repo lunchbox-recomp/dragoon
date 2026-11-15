@@ -57,6 +57,8 @@ class HarnessTest(unittest.TestCase):
                          b"aspect 16:9\nfullscreen 1\nscale 3\ndisc fast\nmenu_sounds off\n")
         self.assertEqual((made / "menu-sounds-on.out").read_bytes(),
                          b"menu_sounds on\naspect 16:9\nfullscreen 0\nscale 2\ndisc fast\n")
+        self.assertEqual((made / "menu-sounds-on-then-off.out").read_bytes(),
+                         b"menu_sounds off\nmenu_sounds off\naspect 16:9\nfullscreen 0\nscale 2\ndisc fast\n")
         self.assertEqual((made / "scales.txt").read_text().splitlines()[-1], "10 5120 3840")
 
 
@@ -76,6 +78,12 @@ class CommandLineTest(unittest.TestCase):
         out = temp_dir(self, prefix="out ") / "fixtures"
         self.assertEqual(run_main(settings_fixtures.main, "--out", str(out)), (0, "", ""))
         self.assertEqual(run_main(settings_fixtures.main, "--check", "--out", str(out)), (0, "", ""))
+
+    def test_a_case_whose_menu_sounds_isnt_the_engines_exits_2(self) -> None:
+        wrong = settings_fixtures.Case("on-then-off", b"menu_sounds on\nmenu_sounds off\n", "4:3", 0, 2, "fast", "on")
+        with mock.patch.object(settings_fixtures, "CASES", [wrong]):
+            self.assertEqual(run_main(settings_fixtures.main, "--check"),
+                             (2, "", "on-then-off: the engine loads menu_sounds off, not the case's on\n"))
 
     def test_a_compiler_that_fails_exits_2(self) -> None:
         code, out, err = run_main(settings_fixtures.main, "--check", "--cxx", "/usr/bin/false")

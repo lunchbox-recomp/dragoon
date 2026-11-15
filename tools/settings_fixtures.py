@@ -8,7 +8,8 @@ runtime/platform.cpp and runtime/gx/aspect.h, from the submodule, then writes th
 fixtures to DIR (launcher/Tests/DragoonCoreTests/SettingsFixtures by default):
   NAME.in, NAME.out  settings.txt before a save and what settings_save wrote over it with the
                      values cases.txt gives NAME. The missing case has no .in
-  cases.txt          NAME ASPECT FULLSCREEN SCALE DISC SOUNDS for each case
+  cases.txt          NAME ASPECT FULLSCREEN SCALE DISC SOUNDS for each case. SOUNDS has to be the
+                     menu_sounds settings_load reads from NAME.in
   window-sizes.txt   ASPECT USABLE_W USABLE_H W H, the window main.cpp opens in a usable area,
                      0 by 0 for none, with its 40 point title bar
   fits.txt           ASPECT DISPLAY_W DISPLAY_H X Y W H, the fullscreen picture
@@ -26,8 +27,8 @@ render_gl_present.cpp or render_gl.cpp as it is there, as many times as at the p
 the first that isn't is named.
 
 Exits 0 when it wrote them or they all match, 1 when --check found a difference, and 2 when
-gcn-recomp isn't checked out, a copied line isn't in the engine, the harness doesn't compile or
-a save failed.
+gcn-recomp isn't checked out, a copied line isn't in the engine, the harness doesn't compile, a
+case's SOUNDS isn't what the engine loads or a save failed.
 """
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ class Case(NamedTuple):
     fullscreen: int
     scale: int
     disc: str
-    sounds: str = "off"  # menu_sounds
+    sounds: str = "off"  # menu_sounds, which has to be what the engine loads from before
 
 
 CASES = [
@@ -80,6 +81,8 @@ CASES = [
     Case("unchanged", b"aspect 16:9\nfullscreen 1\nscale 3\ndisc fast\n", "16:9", 1, 3, "fast"),
     Case("big-scale", b"scale 2\n", "4:3", 0, 999999999, "fast"),
     Case("menu-sounds-on", b"menu_sounds on\naspect 4:3\n", "16:9", 0, 2, "fast", "on"),
+    Case("menu-sounds-bad", b"menu_sounds yes\n", "4:3", 0, 2, "fast", "off"),
+    Case("menu-sounds-on-then-off", b"menu_sounds on\nmenu_sounds off\n", "16:9", 0, 2, "fast", "off"),
 ]
 
 ASPECTS = ["4:3", "16:9", "16:10", "21:9", "window"]
@@ -182,6 +185,10 @@ def write(out: Path, exe: Path, work: Path) -> None:
             (out / f"{case.name}.in").write_bytes(case.before)
         commands.append(f"save {case.aspect} {case.fullscreen} {case.scale} {case.disc} {case.sounds} "
                         f"{folder / 'settings.txt'}")
+    # The launcher writes menu_sounds back as it read it, so each case's is what the engine reads.
+    for case, loaded in zip(CASES, ask(exe, [f"sounds {saves / c.name / 'settings.txt'}" for c in CASES])):
+        if loaded != case.sounds:
+            raise Failure(f"{case.name}: the engine loads menu_sounds {loaded}, not the case's {case.sounds}")
     for case, answer in zip(CASES, ask(exe, commands)):
         if answer != "saved":
             raise Failure(f"{case.name}: settings_save failed")

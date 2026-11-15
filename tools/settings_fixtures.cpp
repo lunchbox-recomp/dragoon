@@ -3,6 +3,7 @@
 // runtime/gx/aspect.h. It reads one command a line from stdin and prints one line for each:
 //
 //   save ASPECT FULLSCREEN SCALE DISC SOUNDS PATH   settings_save over PATH: "saved" or "failed"
+//   sounds PATH                                     settings_load's menu_sounds: "on" or "off"
 //   window ASPECT USABLE_W USABLE_H                 the window main.cpp opens: "W H"
 //   fit ASPECT DISPLAY_W DISPLAY_H                  the fullscreen picture: "X Y W H"
 //   scale N                                         the picture the renderer draws at N: "W H"
@@ -66,6 +67,10 @@ int main() {
             s.fast_disc = disc == "fast";
             s.menu_sounds = sounds == "on";
             printf("%s\n", settings_save(path, s) ? "saved" : "failed");
+        } else if (command == "sounds") {
+            std::string path;
+            std::getline(in >> std::ws, path);
+            printf("%s\n", settings_load(path).menu_sounds ? "on" : "off");
         } else if (command == "window") {
             int w, h;
             in >> aspect >> w >> h;
