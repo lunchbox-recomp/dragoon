@@ -170,10 +170,12 @@ A build shows one bar in segments, each as wide as its step took on the Mac it w
 |---|---|---|
 | Recompile | Its start | A shimmer in its segment, since it prints no progress |
 | Compile | A progress event as make starts each file | "41 of 135 files" |
-| Warm-up | A progress event as each run ends | "3 of 8 runs done" |
+| Warm-up | A progress event as each run ends, and one at most every 0.25 s with the frames its runs have played of all theirs | "3 of 8 runs done", with the segment filled by the frames |
 | Package, swap | Their start | A shimmer across the sliver they share, since they print no progress |
 
-The time left comes once a step has 3 counts. It's the step's rate across its newest 30 counts, as DuckStation's loading screen takes it (`fullscreenui_widgets.cpp:7144-7181`), plus each later step's measured time scaled by this Mac's ratio on the steps it has finished. A step that didn't count all its work, as a warm-up whose cache was current, stays out of the ratio. Before recompile the recipe prints a `plan` event that says whether the warm-up will play. It won't under `--no-warmup` or when the player's shader cache is current by `warm_shaders.py`'s own stamp check, and then the warm-up's 72.7 s stays out of the time left and its segment out of the bar, whose other segments share its width by their measured times. The estimate changes only on an event.
+The warm-up's runs play five or six at once and end in clumps near its end, so counting them left the bar still for most of a minute. Each run's game prints `[progress] frame N` every 60 frames under `GCN_PROGRESS=60`, and `warm_shaders.py` adds up what its runs have played against the frames the route manifest gives them all, 139,760 for its eight runs, and prints `frames: 70300 of 139760`. The recipe puts the newest of those on the warm-up's progress events as `frames` and `frames_total`, beside the runs in `done` and `total`. From the first one the frames fill the segment and set its time left, and the count under the bar stays the runs. A game from before `GCN_PROGRESS` prints no frames, and then the runs fill the segment as before.
+
+The time left comes once a step has 3 counts, the warm-up's frames once it has them. It's the step's rate across its newest 30 counts, as DuckStation's loading screen takes it (`fullscreenui_widgets.cpp:7144-7181`), plus each later step's measured time scaled by this Mac's ratio on the steps it has finished. A step that didn't count all its work, as a warm-up whose cache was current, stays out of the ratio. Before recompile the recipe prints a `plan` event that says whether the warm-up will play. It won't under `--no-warmup` or when the player's shader cache is current by `warm_shaders.py`'s own stamp check, and then the warm-up's 72.7 s stays out of the time left and its segment out of the bar, whose other segments share its width by their measured times. The estimate changes only on an event.
 
 Make prints quickly, so `ProgressThrottle` lets a progress event through at most every 0.1 s and holds the newest in between, and `ThrottledSend`, beside it in `DragoonCore`, sends the held one once it's due. The banner goes from gray to its own colors with the bar. When the build is done the glow behind it pulses once and the bar becomes Play. The page stays until Play or Back to Library, with Library current in the list. Under Reduce Motion the shimmer fades up and down in place, the glow only fades up and the bar fades into Play.
 
@@ -189,6 +191,9 @@ Measured on 2026-11-14 with `idle_cpu.py` over 60 seconds, on a release build of
 | Window covered or hidden, nothing moving | 0.00% |
 | Finished, after the pulse | 0.00% |
 | 8 compile events a second | 2.8-3.4% |
+| Warm-up frame events, up to 4 a second | Not measured |
+
+The warm-up between runs was measured before its frame events. They come at most half as often as the compile's and change the fill and the time left, not the count. Measuring them needs the page on screen, so they haven't been.
 
 The page first used 11.2% of a core through the compile. Rolling make's count with `.numericText()` on each file kept SwiftUI drawing, and so did easing the banner's color on each step. A count now rolls only when it changes at most twice a second, as the warm-up's do. The banner eases only into and out of gray.
 

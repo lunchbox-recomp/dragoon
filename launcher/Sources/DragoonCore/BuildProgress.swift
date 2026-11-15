@@ -13,6 +13,9 @@ public struct BuildProgress: Equatable, Sendable {
     /// The step's count, 0 of 0 until its first progress event.
     public private(set) var done = 0
     public private(set) var total = 0
+    /// The warm-up's frames played, from its first event that carries them, and nil before
+    /// and in any other step. Once there, they fill the segment and time the step, not `done`.
+    public private(set) var frames: FrameCount?
     /// Cancel was pressed and the build hasn't stopped yet.
     public var canceling = false
     /// When the first event came.
@@ -21,8 +24,8 @@ public struct BuildProgress: Equatable, Sendable {
     public private(set) var ended: Date?
     /// When the step's first event came.
     public private(set) var stepStarted: Date?
-    /// The step's counts as they came, the newest `BuildMeter.sampleLimit` of them since its
-    /// total last changed or its count last fell.
+    /// The step's counts as they came, the warm-up's frames once it has them, the newest
+    /// `BuildMeter.sampleLimit` of them since its total last changed or its count last fell.
     public private(set) var samples: [BuildSample] = []
     /// The steps passed, in order.
     public private(set) var finishedSteps: [FinishedStep] = []
@@ -50,11 +53,15 @@ public struct BuildProgress: Equatable, Sendable {
         return max((ended ?? now).timeIntervalSince(started), 0)
     }
 
+    /// What fills the step's segment and times it: the frames once the step has them, otherwise
+    /// its count.
+    public var work: (done: Int, total: Int) { frames.map { ($0.done, $0.total) } ?? (done, total) }
+
     /// Seconds left as of the last event, or nil while `BuildMeter.remaining` has none.
     public var remaining: TimeInterval? {
         guard !isDone, let segment else { return nil }
         return BuildMeter.remaining(
-            segment: segment, done: done, total: total, samples: samples,
+            segment: segment, done: work.done, total: work.total, samples: samples,
             finished: finishedSteps, skipped: skipped)
     }
 
@@ -64,9 +71,9 @@ public struct BuildProgress: Equatable, Sendable {
             warmupPlays = warmup
         case .step(let name):
             begin(name, at: time)
-        case .progress(let name, let newDone, let newTotal):
+        case .progress(let name, let newDone, let newTotal, let newFrames):
             if name != step { begin(name, at: time) }
-            count(newDone, of: newTotal, at: time)
+            count(newDone, of: newTotal, frames: newFrames, at: time)
         case .done:
             if started == nil { started = time }
             finishStep(at: time)
@@ -77,7 +84,8 @@ public struct BuildProgress: Equatable, Sendable {
             return
         }
         if let step,
-            let fill = BuildMeter.fraction(step: step, done: done, total: total, skipped: skipped)
+            let fill = BuildMeter.fraction(
+                step: step, done: work.done, total: work.total, skipped: skipped)
         {
             fraction = max(fraction, fill)
         }
@@ -90,21 +98,29 @@ public struct BuildProgress: Equatable, Sendable {
         stepStarted = time
         done = 0
         total = 0
+        frames = nil
         samples = []
     }
 
     /// A new total or a count that fell starts the samples again, as DuckStation's
-    /// `UpdateLoadingScreenProgress` does, and a count that didn't change adds none.
-    private mutating func count(_ count: Int, of newTotal: Int, at time: Date) {
-        let sample = BuildSample(time: time, done: count)
-        if newTotal != total || count < done {
+    /// `UpdateLoadingScreenProgress` does, and a count that didn't change adds none. The
+    /// samples count `work`, so the warm-up's first frames start them again. An event without
+    /// frames after one with them keeps the frames it had.
+    private mutating func count(
+        _ count: Int, of newTotal: Int, frames newFrames: FrameCount?, at time: Date
+    ) {
+        let before = work
+        done = count
+        total = newTotal
+        if let newFrames { frames = newFrames }
+        let now = work
+        let sample = BuildSample(time: time, done: now.done)
+        if now.total != before.total || now.done < before.done {
             samples = [sample]
-        } else if count != done {
+        } else if now.done != before.done {
             samples.append(sample)
             if samples.count > BuildMeter.sampleLimit { samples.removeFirst() }
         }
-        done = count
-        total = newTotal
     }
 
     private mutating func finishStep(at time: Date) {

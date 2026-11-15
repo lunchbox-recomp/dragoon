@@ -17,8 +17,9 @@ public enum BuildSegment: String, CaseIterable, Comparable, Sendable {
         }
     }
 
-    /// Whether the recipe prints progress events for the step: one per file compile starts
-    /// and one per warm-up run done.
+    /// Whether the recipe prints progress events for the step: one per file compile starts,
+    /// and for the warm-up one per run done and, from a game that prints `GCN_PROGRESS`, one
+    /// up to every 0.25 s with the frames its runs have played.
     public var counts: Bool { self == .compile || self == .warmup }
 
     public static let referenceTotal = allCases.reduce(0) { $0 + $1.referenceSeconds }

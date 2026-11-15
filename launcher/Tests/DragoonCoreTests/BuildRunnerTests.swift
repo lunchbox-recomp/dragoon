@@ -28,6 +28,28 @@ import Testing
         #expect(finished.failure == nil)
     }
 
+    @Test func aWarmUpsProgressCarriesItsFramesWhenTheRecipeGivesThem() async throws {
+        let fixture = try RecipeFixture()
+        try fixture.install(
+            #"""
+            echo '{"event": "progress", "step": "warmup", "done": 3, "total": 8, "frames": 41230, "frames_total": 139760}'
+            echo '{"event": "progress", "step": "warmup", "done": 3, "total": 8}'
+            echo '{"event": "progress", "step": "warmup", "done": 3, "total": 8, "frames": "many", "frames_total": 139760}'
+            echo '{"event": "progress", "step": "warmup", "done": 3, "total": 8, "frames": 41230}'
+            echo '{"event": "done", "game": "/g"}'
+            """#)
+        let finished = await collect(fixture.runner().run(fixture.request()))
+        #expect(
+            finished.events == [
+                .progress(
+                    step: "warmup", done: 3, total: 8,
+                    frames: FrameCount(done: 41230, total: 139760)),
+                .progress(step: "warmup", done: 3, total: 8),
+                .progress(step: "warmup", done: 3, total: 8),
+                .progress(step: "warmup", done: 3, total: 8), .done(game: "/g"),
+            ])
+    }
+
     @Test func thePlanSaysWhetherTheWarmUpPlays() async throws {
         let fixture = try RecipeFixture()
         try fixture.install(

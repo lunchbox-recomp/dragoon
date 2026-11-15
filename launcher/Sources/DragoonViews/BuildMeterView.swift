@@ -61,6 +61,13 @@ struct BuildMeterView: View {
         return last.time.timeIntervalSince(before.time) >= rollGap
     }
 
+    /// Whether the count rolls: always while the samples are the warm-up's frames, since then
+    /// the count is its runs, which end a few times a build, and otherwise as `rollsCount` of
+    /// the samples says.
+    static func rollsCount(_ progress: BuildProgress) -> Bool {
+        progress.frames != nil || rollsCount(progress.samples)
+    }
+
     /// One id for the bar and Play, so the bar morphs into Play, and another for each under
     /// Reduce Motion, so one fades into the other.
     private func morphID(_ reduceMotion: Bool) -> String {
@@ -95,7 +102,7 @@ struct BuildMeterView: View {
                     .contentTransition(
                         reduceMotion ? .opacity : .numericText(value: Double(progress.done)))
                     .animation(
-                        Self.rollsCount(progress.samples) ? .snappy(duration: 0.25) : nil,
+                        Self.rollsCount(progress) ? .snappy(duration: 0.25) : nil,
                         value: progress.done)
             }
             Spacer(minLength: 0)

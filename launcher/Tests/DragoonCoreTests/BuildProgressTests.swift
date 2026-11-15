@@ -239,10 +239,96 @@ import Testing
         return events
     }()
 
-    @Test func overAWholeBuildTheBarNeverFallsAndFillsOnlyOnDone() {
+    /// A warm-up event with `runs` of 8 ended and `frames` of 139,760 played.
+    static func warming(_ runs: Int, frames: Int) -> BuildEvent {
+        .progress(
+            step: "warmup", done: runs, total: 8, frames: FrameCount(done: frames, total: 139_760))
+    }
+
+    @Test func framesFillTheWarmUpsSegmentAndTheCountStaysItsRuns() {
+        let progress = Self.replay([(0, .step("warmup")), (30, Self.warming(0, frames: 69_880))])
+        #expect(progress.done == 0)
+        #expect(progress.total == 8)
+        #expect(progress.frames == FrameCount(done: 69_880, total: 139_760))
+        #expect(progress.fraction
+            == BuildMeter.fraction(step: "warmup", done: 69_880, total: 139_760))
+        #expect(progress.fraction > BuildSegment.warmup.start)
+    }
+
+    @Test func withoutFramesTheRunsFillIt() {
+        let progress = Self.replay([
+            (0, .step("warmup")), (30, .progress(step: "warmup", done: 2, total: 8)),
+        ])
+        #expect(progress.frames == nil)
+        #expect(progress.fraction == BuildMeter.fraction(step: "warmup", done: 2, total: 8))
+        #expect(progress.samples == [BuildSample(time: at(30), done: 2)])
+    }
+
+    @Test func eachFrameCountIsASampleAndTheFirstStartsThemAgain() {
+        let progress = Self.replay([
+            (0, .step("warmup")), (1, .progress(step: "warmup", done: 1, total: 8)),
+            (2, Self.warming(1, frames: 1_900)), (3, Self.warming(1, frames: 1_900)),
+            (4, Self.warming(2, frames: 3_800)),
+        ])
+        #expect(progress.samples
+            == [BuildSample(time: at(2), done: 1_900), BuildSample(time: at(4), done: 3_800)])
+    }
+
+    @Test func aRunWithoutFramesAfterThemKeepsTheFramesAndTheFill() {
+        let before = Self.replay([(0, .step("warmup")), (2, Self.warming(0, frames: 50_000))])
+        var after = before
+        after.note(.progress(step: "warmup", done: 1, total: 8), at: at(3))
+        #expect(after.frames == before.frames)
+        #expect(after.fraction == before.fraction)
+        #expect(after.samples == before.samples)
+        #expect(after.done == 1)
+    }
+
+    @Test func aNewStepDropsTheFrames() {
+        let progress = Self.replay([
+            (0, .step("warmup")), (2, Self.warming(8, frames: 139_760)), (3, .step("package")),
+        ])
+        #expect(progress.frames == nil)
+        #expect(progress.finishedSteps.last
+            == FinishedStep(segment: .warmup, seconds: 3, complete: true))
+    }
+
+    @Test func theTimeLeftComesFromTheFramesRate() throws {
+        var events: [(Double, BuildEvent)] = [
+            (0, .step("recompile")), (4.2, .step("compile")),
+            (4.3, .progress(step: "compile", done: 135, total: 135)), (22.2, .step("warmup")),
+            (30, Self.warming(0, frames: 15_200)), (31, Self.warming(0, frames: 17_100)),
+        ]
+        #expect(Self.replay(events).remaining == nil)
+        events.append((32, Self.warming(0, frames: 19_000)))
+        let left = try #require(Self.replay(events).remaining)
+        // 1,900 frames a second leave 120,760, and package and swap take their 0.3 s, since
+        // this Mac matched the measured one's 22.2 s.
+        #expect(abs(left - (120_760.0 / 1_900 + 0.3)) < 1e-9)
+    }
+
+    /// The whole build with the warm-up's frames every 0.25 s, 1,900 a second until the runs
+    /// end in clumps from 61 s.
+    static let wholeBuildWithFrames: [(Double, BuildEvent)] = {
+        var events = Array(Self.wholeBuild.prefix { $0.0 < 23 })
+        events.append((23, .step("warmup")))
+        let runs: [Double] = [61, 61.2, 61.3, 62, 62.4, 80, 83, 95]
+        for tick in 1...288 {
+            let seconds = 23 + Double(tick) * 0.25
+            let played = min(Int(Double(tick) * 0.25 * 1_900), 139_760)
+            events.append((seconds, Self.warming(runs.filter { $0 <= seconds }.count, frames: played)))
+        }
+        events.append((95, Self.warming(8, frames: 139_760)))
+        events += [(95.6, .step("package")), (96.2, .step("swap")),
+                   (96.5, .done(game: "/x/game/current/Dragoon.app"))]
+        return events
+    }()
+
+    @Test(arguments: [BuildProgressTests.wholeBuild, BuildProgressTests.wholeBuildWithFrames])
+    func overAWholeBuildTheBarNeverFallsAndFillsOnlyOnDone(build: [(Double, BuildEvent)]) {
         var progress = BuildProgress()
         var last = 0.0
-        for (seconds, event) in Self.wholeBuild {
+        for (seconds, event) in build {
             progress.note(event, at: at(seconds))
             #expect(progress.fraction >= last)
             if case .done = event {

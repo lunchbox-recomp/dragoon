@@ -53,6 +53,22 @@ struct BuildPageTests {
         #expect(BuildMeterView.rollsCount(Self.samples(seconds)) == rolls)
     }
 
+    /// The warm-up's frames come every 0.25 s, but its count is still its runs, so it rolls.
+    @MainActor
+    @Test func theRunsRollWhileFramesComeFourTimesASecond() {
+        var progress = BuildProgress()
+        progress.note(.step("warmup"), at: Date(timeIntervalSinceReferenceDate: 0))
+        for tick in 1...4 {
+            progress.note(
+                .progress(
+                    step: "warmup", done: 1, total: 8,
+                    frames: FrameCount(done: tick * 475, total: 139_760)),
+                at: Date(timeIntervalSinceReferenceDate: Double(tick) * 0.25))
+        }
+        #expect(!BuildMeterView.rollsCount(progress.samples))
+        #expect(BuildMeterView.rollsCount(progress))
+    }
+
     /// A warm-up the plan skips isn't drawn, and the other segments cover the bar.
     @MainActor
     @Test(arguments: [

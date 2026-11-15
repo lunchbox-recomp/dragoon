@@ -188,12 +188,16 @@ private let compilingWithoutWarmup = progress(
     [(25.6, .plan(warmup: false)), (25.6, .step("recompile")), (21.4, .step("compile"))]
         + compileFiles(100, from: 21.3, every: 0.2))
 
-/// 3 of 8 warm-up runs done a minute in.
+/// The warm-up 37 s in, half its 139,760 frames played at 1,900 a second as the recipe gives them
+/// every 0.25 s, and no run ended yet, as the runs end in clumps near the end.
 private let warmingUp = progress(
     [(60, .step("recompile")), (55.6, .step("compile"))] + compileFiles(135, from: 55.5, every: 0.1)
-        + [(37, .step("warmup")), (10, .progress(step: "warmup", done: 1, total: 8)),
-           (6, .progress(step: "warmup", done: 2, total: 8)),
-           (2, .progress(step: "warmup", done: 3, total: 8))])
+        + [(37, .step("warmup"))]
+        + (1...148).map { tick in
+            (37 - Double(tick) * 0.25, BuildEvent.progress(
+                step: "warmup", done: 0, total: 8,
+                frames: FrameCount(done: tick * 475, total: 139_760)))
+        })
 
 /// A whole build that took 1:36.
 private let builtGame = progress([

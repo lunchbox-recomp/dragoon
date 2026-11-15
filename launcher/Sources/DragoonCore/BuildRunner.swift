@@ -57,7 +57,10 @@ public enum BuildEvent: Equatable, Sendable {
     case plan(warmup: Bool)
     /// A step began. The steps are recompile, compile, warmup, package and swap.
     case step(String)
-    case progress(step: String, done: Int, total: Int)
+    /// The step's count: the files make has started, or the warm-up's runs that have ended. The
+    /// warm-up's carries `frames` too once its game prints `GCN_PROGRESS`, which a game from
+    /// before it doesn't.
+    case progress(step: String, done: Int, total: Int, frames: FrameCount? = nil)
     /// The new game is current, at `game`. A cancel that lands after the swap has made the new
     /// game current ends the stream with this too, and the warmed shader cache may then not
     /// have been installed.
@@ -66,6 +69,17 @@ public enum BuildEvent: Equatable, Sendable {
     /// yields this: an error the recipe reports as it refuses its arguments or finds another build
     /// running is left to `BuildFailure.refused` or `alreadyRunning`.
     case error(step: String, message: String, log: String)
+}
+
+/// The frames a warm-up's runs have played between them, of all the frames they play.
+public struct FrameCount: Equatable, Sendable {
+    public var done: Int
+    public var total: Int
+
+    public init(done: Int, total: Int) {
+        self.done = done
+        self.total = total
+    }
 }
 
 extension BuildEvent {
@@ -88,7 +102,11 @@ extension BuildEvent {
             guard let step = object["step"] as? String, let done = object["done"] as? Int,
                 let total = object["total"] as? Int
             else { return nil }
-            self = .progress(step: step, done: done, total: total)
+            var frames: FrameCount?
+            if let played = object["frames"] as? Int, let all = object["frames_total"] as? Int {
+                frames = FrameCount(done: played, total: all)
+            }
+            self = .progress(step: step, done: done, total: total, frames: frames)
         case "done":
             guard let game = object["game"] as? String else { return nil }
             self = .done(game: game)
