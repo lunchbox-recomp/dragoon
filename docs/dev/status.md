@@ -134,7 +134,7 @@ and the discovery and CTest steps were read from CMake's files, not run.
 
 CI's macOS job runs `ninja unit` (`tools/ci.py:82`), which builds the engine's own unit tests
 and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
-(`gcn-recomp/CMakeLists.txt:1434-1437`). It builds `dragoon_tests` too and runs it once to list
+(`gcn-recomp/CMakeLists.txt:1442-1445`). It builds `dragoon_tests` too and runs it once to list
 its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's
 `Modules/GoogleTestAddTests.cmake:63-67`). So CI runs code compiled from this archive.
 
@@ -1074,7 +1074,7 @@ stadium weren't run again, so the Speed row's numbers for them are from `14712b8
 keys, as at `14712b8`.
 
 `overlay_init` runs on the main thread after `render_init` loads the shader cache and before
-`boot_load` and the guest start (`gcn-recomp/runtime/main.cpp:873`, `:892-899`). Ten hidden boots
+`boot_load` and the guest start (`gcn-recomp/runtime/main.cpp:909`, `:928-935`). Ten hidden boots
 from a copy of the warm-up's cache, a build at `14712b8` and one at `80ef3a7` in turn, each
 `tools/probe.sh NAME 20 "" 100000 GCN_READY_FILE=ready.txt --exit-after=120`, plus `--bin=` for
 the older build, not niced at loads of 9.8 to 8.8, gave these.
