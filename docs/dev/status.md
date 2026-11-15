@@ -1,8 +1,8 @@
 # Status
 
 What's true of Dragoon, measured on one Mac. Most sections name the Dragoon or gcn-recomp
-commits they were measured at. The pin is gcn-recomp `864d9d4`, where all twenty-four routes'
-frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `864d9d4`).
+commits they were measured at. The pin is gcn-recomp `14712b8`, where all twenty-four routes'
+frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `14712b8`).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -16,7 +16,7 @@ frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `864d
 | Audio | Partial | The mixer runs the commands of the game's ucode (`07F88145`) with its compressor among them, and ten runs' 484,400 command lists held no unknown or skipped one (under Audio). Source type 0 voices, 98.9% of the voice time, resample through a polyphase filter whose coefficients the runtime works out because the console's are in the DSP's ROM, and the low-pass filter isn't applied. Nobody has listened for the sound's quality since the source type 2 fix or compared it with a console, and the click counts are in [`scorecard.md`](scorecard.md), last scored at gcn-recomp `dac449e` (`audio.md`) |
 | Controllers | Four ports, live | Each gamepad takes the port `saves/ports.txt` says it was last on, or else its SDL player number's or the lowest free one. The overlay menu's Controllers page swaps, removes and orders players by who presses A, and a notice says when a controller connects, disconnects or changes player (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with Air Ride's and City Trial's HUD anchored and the menus centered | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD keeps its 4:3 shape at the race, City Trial, 2P and 4P checkpoints, anchored to the edges of the screen or of its player's view, as all four showed on Dragoon `1ff85c8`. The title, the menus, the text boxes and the opening movie keep their 4:3 frame in the middle. On Dragoon `2d68a1e` the 16:9 output dumps of the text box, the movie and the course select went from 3414x1920 at 1.7781 to 2560x1920 at 1.3333 with bars of 427, the title from 2.1815 to 1.6351 (1.6358 at 4:3) and the mode select from 1.9094 to 1.4312 (1.4318). Top Ride's HUD, which it draws outside every render callback, and a menu over play stretch with the picture. On Dragoon `ec0004a` `drawlog.py hud` listed Top Ride's 38 HUD draws at 3600 as stretched, and the race after its finish at 8400, City Trial and 2P gave the same results as on `e79f475`. At an output narrower than 4:3 the menus stretch too (`widescreen.md`). The HUD the table anchors still remaps there, each piece widened from its anchor by 4/3 over the output's aspect (4/3 at 1:1). No run measured it |
-| Speed | Holds 60 fps | 525 and 524 frames a second in two runs of a race in a hidden window with `--fast`. `dragoon_bench`, which draws nothing, runs the race at 600. Four-player City Trial averages 16.69 and 16.68 ms a frame in two runs at the game's own speed, with one interval over 20 ms in each, the worst 48.61 ms, neither traced. The stadium's scene changes stall the guest for up to 160 ms (under gcn-recomp `864d9d4`) |
+| Speed | Holds 60 fps | 529 and 523 frames a second in two runs of a race in a hidden window with `--fast`. `dragoon_bench`, which draws nothing, runs the race at 590. Four-player City Trial averages 16.68 ms a frame in each of two runs at the game's own speed, with no interval over 20 ms in one and two in the other, the worst 21.94 ms, not traced. The stadium's scene changes stall the guest for up to 161 ms (under gcn-recomp `14712b8`) |
 | Build from the disc | Works | 23 s at gcn-recomp `67a7e30` (3.5 s to configure, 19.5 s for Ninja). That's before the build compiled SDL3 and Dear ImGui and before the default target ran the shader warm-up, which adds about 64 s (`CMakeLists.txt:69-78`, Player targets) |
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
@@ -659,7 +659,7 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, under Chained course passes) | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`) | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `864d9d4` on Dragoon `2525ea1` (under gcn-recomp `864d9d4`) | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `14712b8` on Dragoon `05d18f1` (under gcn-recomp `14712b8`) | Pass |
 | World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `45c52c5` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
 | Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `45c52c5` at loads of 2.7 to 6.3) | Pass |
 | Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1) | Pass |
@@ -670,6 +670,19 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | Launcher's Settings sheet opening | 100 ms from Settings to the sheet drawn | 55 to 71 ms in a test process of its own and 17 to 19 ms in the full suite (`SettingsSheetTests`) | Pass |
 | Launcher writing settings.txt while the game runs | Never | Never, in `FlowSettingsTests`: Settings does nothing and a pick saves nothing while the launcher's or an earlier launcher's game runs, and Play waits while the sheet is open. Never in `FlowPictureCardTests` either: the Picture card doesn't show while a game runs, a pick saves nothing once one does, and Play and Back to Library wait while the card's read or save is on its way, so Library's Play can't start the game before the card's save is done | Pass |
 | Launcher's Picture card | Shown once, after the first build, only when settings.txt has no `aspect` line; a pick writes what the Settings sheet's does; Keep 4:3 writes nothing | Shown after the build that made the first game and remembered in `launcher.json`, not after a rebuild, not by a launcher that showed it, not over any `aspect` line or a file that can't be read (`FlowPictureCardTests`). Each pick, 4:3 and 16:9, over four files without an aspect line writes the sheet's bytes, and over `bom-only` and `empty` the engine's own `settings_save` bytes (`PictureCardWriteTests`) | Pass |
+| Opening the menu pauses | The guest is held within 2 host frames, as before | `test_ports` passes "a gamepad's Back opens the overlay, and the guest is held within 2 host frames" (`tools/test_ports_menu_no_window.cpp:66`), one of the 499 port checks `gcn-recomp/tools/test_ports.sh build/test_ports DIR` passed at a load of 7.2 | Pass |
+| Menu open to fully shown | 200 ms or less, and its first frame with `menu_motion off` | 20 opens over the title at frame 600 said `[overlay] shown after` 180 to 190 ms: 180 ms six times, 181 twice, 182 three times, 188 four times, 189 three times and 190 twice, at loads of 3.0 to 3.3. With `menu_motion off` in the run's `settings.txt` it said 3 ms at 2.7, and `test_ports` passes "with menu_motion off it opens whole and closes at once". Each run was `tools/probe.sh NAME 40 "" 100000 GCN_OVERLAY_AT=600:60 --exit-after=900`, not niced | Pass |
+| Menu smooth while it moves | The held frame redrawn every 17 ms or less at the 99th percentile, and the menu's CPU time a frame 1.5 ms or less at the 99th, at 1920x1080 | Not measured as written. The pin has no `[overlay] frame` line under `GCN_FRAMETIME=1`, and no line times each redraw of a held frame. The 20 opens above held the game for 60 redraws in 884 to 984 ms, 14.7 to 16.4 ms a redraw on average, with no percentile. `test_ports --pages` timed the menu's CPU frame in a 1920x1080 window at 0.267, 0.188 and 0.144 ms at the 99th percentile over 39 frames on each of its three pages, after a first frame of 13.08 ms on the first page and under 1 ms on the others, not niced at a load of 5.8. Those frames are under `--dump-output`, so the menu is still in them, not moving | Not measured |
+| Menu closed costs nothing | Four players at `--real-time --scale=2`, `[rt]` at the 99th percentile within the two-run spread; no Dear ImGui menu frame over 600 closed frames | `[rt]` at the 99th percentile from frame 3,400 was 2.08 and 2.09 ms with the menu built in and closed, and 2.11 and 2.12 ms in a build with `-DGCN_OVERLAY=OFF`, over 4,230 to 4,283 frames. Each build's two runs are 0.01 ms apart, and the menu's build is 0.02 to 0.04 ms under the other, not over it. The runs took turns, on, off, on, off, from a copy of the warm-up's 333-key cache, not niced, at loads from 17.2 just after the build down to 3.9, each `tools/probe.sh NAME 130 tests/routes/city-trial-4p.txt 100000 --pads=4 --real-time --scale=2 GCN_FRAMETIME=1`, plus `--bin=build-nooverlay/dragoon` for the second build. `test_ports --pages` counted 0 menu frames over 300 closed host frames at 1920x1080 and 300 at 1440x1080, and `test_ports` passes "a closed menu with no notice costs zero Dear ImGui menu frames" | Pass |
+| Menu leaves 4:3 unchanged | `tools/frame_hashes.py check` passes | The Frames row, at the same pin and build | Pass |
+| Audio unchanged with the menu's sounds on | The route audio hashes match with sounds on | All 48 rows of the twenty-four routes match in windowed runs with `menu_sounds on` in each run's `settings.txt` and the menu opened over frame 600 and closed after 60 redraws, at `nice -n 19` and loads of 4.0 to 9.9. Each run was `tools/probe.sh NAME SECONDS tests/routes/ROUTE.txt 100000 GCN_AXSTATS=1 GCN_OVERLAY_AT=600:60` plus the route's manifest settings, at twice its manifest seconds. `dragoon_bench` has no menu, so `tools/audio_hashes.py check` can't open it. No line says whether a sound played under SDL's dummy audio driver, and the hashes are of the mixer's blocks, which the sounds join later (`test_ui_sound` checks a `GCN_WAV` capture never holds them) | Pass |
+| Menu sounds clean | Peak -12 dBFS or lower, first and last sample 0, 2 ms attack and release, no click from `tools/audio_clicks.py`, heard within one callback | `test_ui_sound` passed 366 of 366 checks. Each of the eight voices peaks at -14 dBFS, starts and ends on a zero sample in both channels, rises over its first 2 ms and falls no faster than a 2 ms raised cosine, and "the next pull takes it and it's audible in that pull, over -60 dBFS". `tools/audio_clicks.py` on each voice, as `test_ui_sound DIR WAVDIR` wrote it, found 0 clicks, 0 gaps and 0 clipped runs. At a load of 5.5 | Pass |
+| Menu contrast | Text 4.5:1 and the focus ring 3:1, in both themes | `test_overlay_theme` passed all 147 checks on the engine's default theme, the one Dragoon draws: text at 4.52:1 at least (Text on the selected tab) and the ring at 6.00:1 at least (beside a pressed item). Dragoon has no theme of its own, so there's no second theme to measure | Pass for the default theme |
+| Menu at couch size | Body text 22 px and targets 48 px at 1080 lines | `test_overlay_theme` passes "body text is at least 22 px at 1080 lines" and "nothing to press is under 48 px at 1080 lines, items included" | Pass |
+| Menu fonts | A theme with no font uses Dear ImGui's embedded font and says so once; the atlas 8 MB or less | `test_overlay_fonts` passed 32 checks. A theme that lists no font takes the embedded font and says so in one `[overlay] font` line, and with no font file there it says so once for each of the ten faces. The atlas texture was 8.00 MB at most with the Mac's Avenir Next faces up to 2,160 lines and with the embedded font up to 1,440, both at twice the density, no glyph falling back | Pass |
+| Notices | Gone at exactly 2 s | `test_ports` passes "it's there a nanosecond before 2 s and gone at exactly 2 s, with no frame after" with `menu_motion` on, off and under `--dump-output` | Pass |
+| Menu pages switch | A shoulder or trigger moves one page. One held as the menu opens moves nothing, and none moves a page while an item is active | `test_ports` passes "R1, L1, the right and left triggers, E and Q each move exactly one page, on and back", "L1 held as the menu opens moves nothing, nor does letting it go" and the same for the left trigger and Q, "while a slider is active no shoulder, trigger or key moves a page". On a GameCube pad it passes "Z and each click turn a page as they're let go" and "Z held while a slider is active steps it faster and turns no page" | Pass |
+| Menu review dumps | Each page dumped once settled at 16:9 and at 4:3 over a plain background. No golden holds them | `test_ports --pages` dumped its three pages in 1920x1080 and 1440x1080 windows over plain grey once each had settled, 37 of 37 checks. In the game, `GCN_OVERLAY_PAGE` 0, 1 and 2 with `GCN_OVERLAY_PLAIN=1` dumped Display, Controllers and Mods at 2560x1920 and, with `--aspect=16:9`, at 3414x1920, each run `tools/probe.sh NAME 40 "" 100000 GCN_OVERLAY_AT=600:60 GCN_OVERLAY_PAGE=N GCN_OVERLAY_PLAIN=1 --output --exit-after=900` (plus `--aspect=16:9`) at loads of 3.4 to 4.0. No golden holds them, and the dumps were deleted | Pass |
 
 The five launcher rows were measured on 2026-11-14 on macOS 26.6.2 with Swift 6.3.3. The
 fixtures and the geometry tables come from `tools/settings_fixtures.py`, which builds a harness
@@ -679,6 +692,13 @@ written at gcn-recomp `864d9d4`, whose `settings_save` also writes `menu_sounds`
 reading a real `settings.txt` to an `NSHostingView` laid out and drawn, and leaves out AppKit's
 slide in. Alone it's the first SwiftUI view the process draws. `SettingsSheetTests` fails over
 100 ms on a Mac and only prints its time where `CI` is set, since a loaded runner took 126 ms.
+
+The menu rows were measured on 2026-11-14 at Dragoon `05d18f1` and gcn-recomp `14712b8` on an
+M4 Max, one game at a time. The engine's checks were built in the game's build directory with
+`ninja test_ports test_overlay_theme test_overlay_motion test_overlay_fonts test_ui_sound` and
+run at `nice -n 19`, except `test_ports --pages`, which times frames. The game runs that time
+something weren't niced. A probe run starts the game in `build/probe/NAME/`, so its Mods page
+says `tools/mod_choices.py` isn't there and offers Read again.
 
 These runs set `DUMP_EVERY` to 100,000, since a dumped frame goes over 33 ms by itself. The
 stall, compile and boot rows ran at Dragoon `2fc9285` and gcn-recomp `dac449e` on an M4 Max,
@@ -974,6 +994,51 @@ started with an empty shader cache and reached frame 21,588. From frame 4,400 th
 averaged 16.71 ms, and 6 intervals went over 20 ms. The four longest were 106 ms at frame
 15,614, 120 ms at 16,202, 159 ms at 16,503 and 160 ms at 20,056, within two frames of the four
 at `1abcf10`.
+
+## gcn-recomp `14712b8`
+
+The pin moved from `864d9d4` to `14712b8`, 6 commits (gcn-recomp #105). What a game gives the
+overlay, the menu's sounds, telemetry and the renderer's hooks from a static initializer is kept
+through the engine's own, since their storage is now `constinit` or a function-local static. `test_ports`
+links `telemetry.cpp` and checks at `--init-order` that a telemetry default and a menu sound theme
+set before main are there at main, beside the theme and the page. Dragoon's build needed no
+change for it, since `test_ports` comes from the engine's `gcn_add_game`. The bump moved seven
+cites by two or three lines, which `tools/fork_cites.py 864d9d4 14712b8` found.
+
+Built on Dragoon `05d18f1`, `tools/frame_hashes.py check` matched all twenty-four routes and
+1,906 frames in 14 min 40 s. `tools/audio_hashes.py check` then matched all 48 rows in 14 min
+27 s, so no golden was recorded. The 1-minute load was 32.5 as the frame check began, just after
+the build, 6.1 between the checks and 3.6 after the audio check.
+
+None of the 24 bench logs has an `[interp]` line.
+
+The speed runs came after the checks on the same build, one game at a time, at 1-minute loads
+of 2.4 to 6.0. The race route ran hidden with `--fast` as
+`tools/probe.sh speed-race 40 tests/routes/air-ride-race.txt 60`, and its dumps of frames 3,600
+and 13,200 were written 18.15 s apart, 529 frames a second, at a load of 2.7 to 3.6. A second
+run wrote them 18.35 s apart, 523 a second, at 3.4 to 3.8. In the audio check's
+`dragoon_bench` run of that route, at `nice -n 19`, the one-second samples from 8 s to 20 s
+averaged 591 frames a second, between 505 and 728. A run of the same bench on its own and not
+niced, at a load of 3.5, averaged 590, between 535 and 719. Both are under the 600 at
+`864d9d4`, and whether the engine or the load made the difference wasn't checked.
+
+`tools/probe.sh speed-ct4p 130 tests/routes/city-trial-4p.txt 100000 --pads=4 --real-time GCN_FRAMETIME=1`
+gave 4,307 guest intervals from frame 3,400 (`tools/frametime.py --from 3400`). They averaged
+16.68 ms, with 16.79 ms at the 95th percentile and 16.96 ms at the 99th. None went over 20 ms,
+and the worst was 17.16 ms. A second run gave 4,313 intervals averaging 16.68 ms, 16.79 ms at
+the 95th percentile and 16.96 ms at the 99th, and two over 20 ms, 20.31 ms at frame 5,722 and
+21.94 ms at 5,727. What held those two frames wasn't traced.
+
+`tools/probe.sh speed-stadium 360 tests/routes/city-trial-stadium.txt 100000 GCN_FRAMETIME=1 --real-time`
+started with an empty shader cache and reached frame 21,595. From frame 4,400 the guest
+averaged 16.71 ms, and 10 intervals went over 20 ms. The four longest were 106 ms at frame
+15,614, 126 ms at 16,202, 161 ms at 16,502 and 160 ms at 20,054, within two frames of the four
+at `864d9d4`.
+
+`tools/warm_shaders.py --force`, five passes at once from an empty cache and not niced, took
+65.7 s at a load of 2.5, under the Player targets bar of 90 s. Its cache holds 333 keys, one
+fewer than the 334 at Dragoon `2fc9285` and gcn-recomp `dac449e`. Which key it lacks wasn't
+checked.
 
 ## Disc reads
 
