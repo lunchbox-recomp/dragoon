@@ -111,8 +111,13 @@ class MenuTest(unittest.TestCase):
 
     def test_other_lines_and_cut_off_lines_are_skipped(self):
         lines = ["[overlay] shown after 180 ms", "[rt] f5 render  2.00ms", "x " + menu_line(0, 1, 1, 1),
-                 "[overlay] frame f3 held 1 interval  16.67ms  cpu  0.2", "[overlay] frame f3 held 2 interval 1.00ms  cpu 1.000ms"]
+                 "[overlay] frame f3 held 1 interval  16.67ms  cpu  0.2", "[overlay] frame f3 held 2 interval 1.00ms  cpu 1.000ms",
+                 menu_line(4, 1, 16.0, 0.1) + " and more"]
         self.assertEqual(frametime.parse_menu(lines), [])
+
+    def test_a_line_from_before_the_held_field_is_skipped(self):
+        # gcn-recomp 47ad859 printed the line with no held field; 9776d98 added it
+        self.assertEqual(frametime.parse_menu(["[overlay] frame f3 interval  16.00ms  cpu  0.100ms"]), [])
 
     def test_a_line_with_no_interval_and_the_first_line_start_an_open(self):
         opens = frametime.menu_opens(frametime.parse_menu([menu_line(7, 1, 16.0, 0.1)] + SECOND_OPEN))
@@ -161,6 +166,14 @@ class MenuTest(unittest.TestCase):
         code, _, err = run_main(frametime.main, "--menu", str(a))
         self.assertEqual(code, 2)
         self.assertIn(f"{a}: no [overlay] frame lines", err)
+        self.assertIn("before gcn-recomp 9776d98", err)
+
+    def test_a_log_with_a_bad_number_exits_2_naming_it(self):
+        a = write_file(temp_dir(self), "a.txt", "[overlay] frame f0 held 0 interval 1.2.3ms  cpu  0.100ms\n")
+        code, _, err = run_main(frametime.main, "--menu", str(a))
+        self.assertEqual(code, 2)
+        self.assertIn(f"{a}: an [overlay] frame line has a bad number", err)
+        self.assertEqual(len(err.splitlines()), 1)
 
     def test_the_frame_options_and_a_second_log_without_menu_exit_2(self):
         a = write_file(temp_dir(self), "a.txt", "\n".join(FIRST_OPEN) + "\n")

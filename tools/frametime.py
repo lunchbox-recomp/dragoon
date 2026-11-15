@@ -43,7 +43,8 @@ FT = re.compile(r"^\[ft\] f(\d+) guest\s+([\d.]+)ms.*?"
                 r"(draws\s+\d+/\s*\d+\s+verts\s+\d+\s+idx\s+\d+)\s")
 RT = re.compile(r"^\[rt\] f(\d+) render\s+([\d.]+)ms")
 SHADER = re.compile(r"^\[shaders\] compiled program \d+ in ([\d.]+) ms")
-# The ms$: a line cut off mid-number must not parse.
+# The last ms stops a line cut off mid-number, and the $ one with more text after it. A line
+# with no held field, from an engine before gcn-recomp 9776d98, doesn't parse.
 MENU = re.compile(r"^\[overlay\] frame f(\d+) held ([01]) interval\s+([\d.]+)ms\s+cpu\s+([\d.]+)ms$")
 
 
@@ -124,7 +125,8 @@ def parse_menu(lines) -> list[MenuFrame]:
 
 def menu_opens(frames: list[MenuFrame]) -> list[list[MenuFrame]]:
     """One log's frames by open. An open's first frame has no interval, which the line gives
-    as 0, and so does the log's first frame."""
+    as 0, and so does the log's first frame. A reopen during a fade out keeps its interval,
+    so it counts with the open before it."""
     opens: list[list[MenuFrame]] = []
     for f in frames:
         if not opens or f.interval_ms == 0:
@@ -159,9 +161,13 @@ def menu_summary(logs: dict[str, list[MenuFrame]]) -> dict:
 
 def read_menu(log: Path) -> list[MenuFrame]:
     with log.open(errors="replace") as lines:
-        frames = parse_menu(lines)
+        try:
+            frames = parse_menu(lines)
+        except ValueError as e:  # a time such as 1.2.3, which the pattern lets through
+            raise ValueError(f"{log}: an [overlay] frame line has a bad number: {e}") from None
     if not frames:
-        raise ValueError(f"{log}: no [overlay] frame lines; was GCN_FRAMETIME=1 set and the menu open?")
+        raise ValueError(f"{log}: no [overlay] frame lines; was GCN_FRAMETIME=1 set and the menu "
+                         f"open? An engine before gcn-recomp 9776d98 prints them with no held field")
     return frames
 
 
