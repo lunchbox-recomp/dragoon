@@ -2,6 +2,7 @@
 """Summarize a GCN_FRAMETIME=1 log: frame pacing, render cost and shader stalls.
 
 Usage: frametime.py LOG [--from N] [--slow MS] [--late MS] [--json]
+       frametime.py --menu LOG [LOG ...] [--json]
 
 LOG is a run's stdout.txt from tools/probe.sh, or any log with [ft], [rt] and [shaders]
 lines. Prints the guest's interval between presents and the renderer's issue time from
@@ -15,8 +16,16 @@ Frame numbers are the [rt] lines'; a frame's batch is the [ft] line one lower. A
 copies a frame to the display in strips prints more than one [ft] line a batch, which this
 pairing doesn't follow.
 
-Exits 0 once it has read the log, 2 on a bad argument or a log it can't read or that has no
-frame from N on.
+--menu reads the overlay menu's lines instead, "[overlay] frame f<n> held <0|1> interval
+<ms>ms  cpu <ms>ms" (gcn-recomp docs/diagnostics.md), from each LOG, one run each, pooled. A
+log's first line and each line with interval 0 start an open. It prints the opens, the paused
+redraw interval from the held 1 lines that have one, the menu's CPU time over every frame it
+drew, each with n, p50, p99 and max, then the CPU time of each log's f0 line, the first frame
+of the process's first open. A log whose lines don't start at f0 says it has none. --from,
+--slow and --late don't apply to it.
+
+Exits 0 once it has read the logs, 2 on a bad argument, a log it can't read, a log with no
+frame from N on, or under --menu one with no [overlay] frame line.
 """
 from __future__ import annotations
 
@@ -34,6 +43,8 @@ FT = re.compile(r"^\[ft\] f(\d+) guest\s+([\d.]+)ms.*?"
                 r"(draws\s+\d+/\s*\d+\s+verts\s+\d+\s+idx\s+\d+)\s")
 RT = re.compile(r"^\[rt\] f(\d+) render\s+([\d.]+)ms")
 SHADER = re.compile(r"^\[shaders\] compiled program \d+ in ([\d.]+) ms")
+# The ms$: a line cut off mid-number must not parse.
+MENU = re.compile(r"^\[overlay\] frame f(\d+) held ([01]) interval\s+([\d.]+)ms\s+cpu\s+([\d.]+)ms$")
 
 
 @dataclass
@@ -94,6 +105,95 @@ def late(frames: dict[int, Frame], start: int, ms: float) -> list[tuple[int, flo
             if n >= start and f.guest_ms is not None and f.guest_ms > ms]
 
 
+@dataclass
+class MenuFrame:
+    n: int
+    held: bool
+    interval_ms: float
+    cpu_ms: float
+
+
+def parse_menu(lines) -> list[MenuFrame]:
+    """The [overlay] frame lines, in the order the log has them."""
+    frames = []
+    for line in lines:
+        if m := MENU.match(line.rstrip("\r\n")):
+            frames.append(MenuFrame(int(m[1]), m[2] == "1", float(m[3]), float(m[4])))
+    return frames
+
+
+def menu_opens(frames: list[MenuFrame]) -> list[list[MenuFrame]]:
+    """One log's frames by open. An open's first frame has no interval, which the line gives
+    as 0, and so does the log's first frame."""
+    opens: list[list[MenuFrame]] = []
+    for f in frames:
+        if not opens or f.interval_ms == 0:
+            opens.append([])
+        opens[-1].append(f)
+    return opens
+
+
+def redraws(frames: list[MenuFrame]) -> list[float]:
+    """The paused redraw intervals: the held 1 lines' intervals, less the 0 of an open's first
+    frame. A fade out and the frames before the hold lands are paced by the guest."""
+    return [f.interval_ms for f in frames if f.held and f.interval_ms > 0]
+
+
+def _spread(values: list[float]) -> dict:
+    if not values:
+        return {"n": 0}
+    return {"n": len(values), "p50": percentile(values, 50), "p99": percentile(values, 99),
+            "max": max(values)}
+
+
+def menu_summary(logs: dict[str, list[MenuFrame]]) -> dict:
+    """Every log's frames pooled, and the CPU time of each log's f0, None where its first line
+    isn't f0."""
+    frames = [f for fs in logs.values() for f in fs]
+    first = {name: fs[0].cpu_ms if fs[0].n == 0 else None for name, fs in logs.items()}
+    return {"logs": len(logs), "opens": sum(len(menu_opens(fs)) for fs in logs.values()),
+            "frames": len(frames), "interval": _spread(redraws(frames)),
+            "cpu": _spread([f.cpu_ms for f in frames]),
+            "first_cpu": _spread([ms for ms in first.values() if ms is not None]), "first": first}
+
+
+def read_menu(log: Path) -> list[MenuFrame]:
+    with log.open(errors="replace") as lines:
+        frames = parse_menu(lines)
+    if not frames:
+        raise ValueError(f"{log}: no [overlay] frame lines; was GCN_FRAMETIME=1 set and the menu open?")
+    return frames
+
+
+def print_menu(s: dict) -> None:
+    print(f"menu: {s['logs']} logs, {s['opens']} opens, {s['frames']} frames")
+    for key, label, places in (("interval", "paused redraw interval (held 1)", 2),
+                               ("cpu", "menu cpu a frame", 3),
+                               ("first_cpu", "first menu frame of each process (f0) cpu", 3)):
+        v = s[key]
+        if v["n"]:
+            print(f"{label}: n {v['n']}  p50 {v['p50']:.{places}f}  p99 {v['p99']:.{places}f}"
+                  f"  max {v['max']:.{places}f} ms")
+        else:
+            print(f"{label}: n 0")
+    for name, ms in s["first"].items():
+        print(f"  {name}  " + (f"f0 cpu {ms:.3f} ms" if ms is not None else "no f0 line"))
+
+
+def menu_main(logs: list[Path], as_json: bool) -> int:
+    try:
+        frames = {str(log): read_menu(log) for log in logs}
+    except (OSError, ValueError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    s = menu_summary(frames)
+    if as_json:
+        print(json.dumps(s, indent=1))
+    else:
+        print_menu(s)
+    return 0
+
+
 def read_frames(log: Path, start: int) -> dict[int, Frame]:
     with log.open(errors="replace") as lines:
         frames = parse(lines)
@@ -107,12 +207,23 @@ def read_frames(log: Path, start: int) -> dict[int, Frame]:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("log", type=Path)
-    ap.add_argument("--from", dest="start", type=int, default=300)
-    ap.add_argument("--slow", type=float, default=16.7)
-    ap.add_argument("--late", type=float, default=25.0)
+    ap.add_argument("logs", type=Path, nargs="+", metavar="LOG")
+    ap.add_argument("--from", dest="start", type=int, default=None)
+    ap.add_argument("--slow", type=float, default=None)
+    ap.add_argument("--late", type=float, default=None)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--menu", action="store_true")
     args = ap.parse_args(argv)
+    if args.menu:
+        if (args.start, args.slow, args.late) != (None, None, None):
+            ap.error("--from, --slow and --late don't apply to --menu")
+        return menu_main(args.logs, args.json)
+    if len(args.logs) > 1:
+        ap.error("one LOG, unless --menu")
+    args.log = args.logs[0]
+    args.start = 300 if args.start is None else args.start
+    args.slow = 16.7 if args.slow is None else args.slow
+    args.late = 25.0 if args.late is None else args.late
     try:
         frames = read_frames(args.log, args.start)
     except (OSError, ValueError) as e:

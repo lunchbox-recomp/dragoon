@@ -278,6 +278,13 @@ Add `--json` for machine output. Frame numbers are the `[rt]` lines'. A frame's 
 
 A dumped frame is read back, which adds to its `[rt]` time, so time a run with a dump interval past its end (the 100000 above). Under `--fast` the guest interval is how fast the game goes, not its pacing. Use `--real-time` for pacing. Shader compiles show either way.
 
+`--menu` reads the overlay menu's `[overlay] frame` lines instead, from one or more logs pooled, a run each. It counts the opens and gives n, p50, p99 and max for the paused redraw interval and for the menu's CPU time over every frame it drew. The interval comes from the `held 1` lines alone, as gcn-recomp's `docs/diagnostics.md` says. Last comes the CPU time of each log's `f0` line, the first frame of the process's first open. A log's first line and each line with interval 0 start an open. `GCN_OVERLAY_AT` opens the menu once a process, so 20 opens take 20 runs.
+
+```
+tools/probe.sh menu-1 30 "" 100000 --real-time --aspect=16:9 GCN_FRAMETIME=1 GCN_OVERLAY_AT=600:60 --exit-after=900
+tools/frametime.py --menu build/probe/menu-1/stdout.txt build/probe/menu-2/stdout.txt
+```
+
 ## framediff.py
 
 Do two runs draw the same pixels? It compares every `frame_NNNNN.png` that two directories of frame dumps have in common, prints the share of pixels whose largest RGB difference is over a tolerance and the worst difference seen, and ends with a line counting the frames compared and the ones over budget. It exits 1 if any frame is over the budget. Alpha isn't compared.
