@@ -13,6 +13,12 @@ python3 tools/frame_hashes.py record
 
 Both take an optional list of route names. `check` runs each route through `tools/probe.sh` and reports every frame that changed or wasn't reached. `record` rewrites the goldens, so only use it when a change to the output is on purpose.
 
+`--aspect=16:9` runs each route with `tools/probe.sh --aspect=16:9` and checks or records the goldens in `gl-16x9/` instead of `gl/`. The frames hashed are still the game's own 640x480 dumps, not the window's picture. At 16:9 a dump holds the picture before the window stretches it, so the widened world is squeezed into 640 pixels, the anchored HUD keeps its 4:3 shape once stretched, and a menu or the memory card prompt fills the middle 480 pixels between bars of 80. So no 16:9 frame hashes as its 4:3 one does. With no `--aspect`, or `--aspect=4:3`, probe.sh gets no `--aspect`, as the 4:3 goldens were recorded.
+
+```sh
+python3 tools/frame_hashes.py check --aspect=16:9
+```
+
 The hashes depend on the renderer, the scale (always 1), the macOS version and the GPU, so goldens are per machine. The committed ones were recorded on an M4 Max under macOS 26, so a mismatch on another Mac is expected. After a macOS or GPU change, look at a route's frames from `tools/probe.sh` before running `record`.
 
 Frames come from the player's own disc, so they're never committed. The tool deletes them once they're hashed, and only the hashes stay.
