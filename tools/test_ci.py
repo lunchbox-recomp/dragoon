@@ -84,7 +84,7 @@ class Jobs(unittest.TestCase):
             ["python3", "launcher/tools/make_app.py", "--out", built, "--version", "0.0.0",
              "--launcher", "launcher/.build/release/Dragoon", "--kit", os.path.abspath("engine kit"),
              "--source", snapshot],
-            ["ditto", "-c", "-k", "--keepParent", "app job/build/Dragoon.app", "app job/Dragoon.zip"],
+            ["ditto", "-c", "-k", "--norsrc", "--keepParent", "app job/build/Dragoon.app", "app job/Dragoon.zip"],
             ["ditto", "-x", "-k", "app job/Dragoon.zip", "app job/unzipped"],
             ["python3", "tools/check_bundle.py", "app job/unzipped/Dragoon.app", "--commit", "HEAD"],
             "link_app_stub"])
@@ -98,22 +98,55 @@ class Jobs(unittest.TestCase):
         self.assertEqual(self.commands("launcher")[2], ["python3", "launcher/tools/swift_test.py"])
 
     def test_each_workflow_job_runs_only_its_own_ci_job(self):
-        runs: dict[str, list[str]] = {}
-        job = None
-        in_jobs = False
-        for line in WORKFLOW.read_text().splitlines():
-            if line == "jobs:":
-                in_jobs = True
-            elif in_jobs and re.fullmatch(r"  [\w-]+:", line):
-                job = line.strip()[:-1]
-                runs[job] = []
-            elif job and re.match(r"\s+run:", line):
-                runs[job].append(line.split("run:", 1)[1].strip())
-        self.assertEqual(sorted(runs), sorted(ci.JOBS))
-        for job, lines in runs.items():
+        jobs = workflow_jobs()
+        self.assertEqual(sorted(jobs), sorted(ci.JOBS))
+        for job, keys in jobs.items():
+            lines = [value for _, key, value in keys if key == "run"]
             with self.subTest(job=job):
                 self.assertIn(f"python3 tools/ci.py {job}", lines)
                 self.assertLessEqual(set(lines), {"brew install ninja", f"python3 tools/ci.py {job}"})
+
+    def test_the_app_job_follows_the_kit_job_and_takes_its_artifact(self):
+        jobs = workflow_jobs()
+        needs = {job: value for job, keys in jobs.items() for _, key, value in keys if key == "needs"}
+        self.assertEqual(needs, {"app": "kit"})
+        workspace = "${{ github.workspace }}"
+
+        def artifacts(job: str) -> list[tuple[str, str, str]]:
+            return [k for k in jobs[job] if k[0] in ("actions/upload-artifact", "actions/download-artifact")]
+
+        self.assertEqual(artifacts("kit"), [
+            ("actions/upload-artifact", "name", "engine-kit"),
+            ("actions/upload-artifact", "path", f"{workspace}/{ci.KIT}"),
+            ("actions/upload-artifact", "if-no-files-found", "error")])
+        self.assertEqual(artifacts("app"), [
+            ("actions/download-artifact", "name", "engine-kit"),
+            ("actions/download-artifact", "path", f"{workspace}/{ci.KIT}"),
+            ("actions/upload-artifact", "path", f"{workspace}/{ci.ZIP}"),
+            ("actions/upload-artifact", "archive", "false"),
+            ("actions/upload-artifact", "if-no-files-found", "error")])
+
+
+def workflow_jobs() -> dict[str, list[tuple[str, str, str]]]:
+    """Each workflow job's `key: value` lines in order, each as (action, key, value). The action
+    is the step's `uses:` without its pin, for the keys under its `with:`, and "" elsewhere."""
+    jobs: dict[str, list[tuple[str, str, str]]] = {}
+    job = None
+    action = ""
+    in_jobs = False
+    for line in WORKFLOW.read_text().splitlines():
+        if line == "jobs:":
+            in_jobs = True
+        elif in_jobs and re.fullmatch(r"  [\w-]+:", line):
+            job, action = line.strip()[:-1], ""
+            jobs[job] = []
+        elif job and (m := re.fullmatch(r"\s+(- )?([\w-]+):\s*(.*?)", line.split(" #", 1)[0])):
+            step, key, value = m.groups()
+            if step:
+                action = value.split("@", 1)[0] if key == "uses" else ""
+            if key not in ("uses", "with"):
+                jobs[job].append((action, key, value))
+    return jobs
 
 
 class KitSteps(unittest.TestCase):
@@ -191,6 +224,15 @@ class KitSteps(unittest.TestCase):
             "CC=clang", "CXX=clang++"])
         self.assertEqual(Path("app job/stub game/gen/stub_tables.c").read_text(), "// stub tables\n")
         self.assertFalse(Path("stub game").exists())
+
+    def test_the_app_jobs_failures_name_its_own_stub_game(self):
+        code, out, err = run_main(lambda argv: ci.link_app_stub())
+        self.assertEqual(code, 1)
+        self.assertIn("app job/stub game/dragoon wasn't linked", out)
+        with mock.patch.dict(os.environ, {"XCRUN_FAILS": "1"}):
+            code, out, err = run_main(lambda argv: ci.link_app_stub())
+        self.assertEqual(code, 1)
+        self.assertIn("couldn't set up app job/stub game", out)
 
     def test_clear_app_deletes_the_last_app_job_and_leaves_the_kit(self):
         for path in ("app job/unzipped/Dragoon.app", "engine kit/lib"):

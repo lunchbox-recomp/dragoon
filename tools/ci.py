@@ -15,9 +15,11 @@ before it starts.
 The app job takes the kit from `engine kit/`, where the kit job or the workflow's download
 of its artifact left it, and works in `app job/`, which it deletes before it starts. It builds
 the launcher with `swift build -c release`, exports a source snapshot and builds the unsigned
-app with make_app.py. It zips the app with `ditto -c -k --keepParent` into
+app with make_app.py. It zips the app with `ditto -c -k --norsrc --keepParent` into
 `app job/Dragoon.zip`, unzips that into a fresh directory, runs check_bundle.py on the copy and
 links the copy's own kit against the stub tables, as a release's zip would be checked.
+--norsrc leaves out the `._` member ditto would add for each file with extended attributes,
+such as a Mac's com.apple.provenance, which a plain unzip turns into files that break the seal.
 
 Exits 0 when every step passed, 1 when a step failed and 2 on an unknown job.
 """
@@ -127,7 +129,7 @@ JOBS: dict[str, Callable[[], list[Step]]] = {
         ("Build the app", ["python3", "launcher/tools/make_app.py", "--out", os.path.abspath(BUILT),
                            "--version", APP_VERSION, "--launcher", LAUNCHER, "--kit", os.path.abspath(KIT),
                            "--source", os.path.abspath(SNAPSHOT)]),
-        ("Zip the app", ["ditto", "-c", "-k", "--keepParent", f"{BUILT}/Dragoon.app", ZIP]),
+        ("Zip the app", ["ditto", "-c", "-k", "--norsrc", "--keepParent", f"{BUILT}/Dragoon.app", ZIP]),
         ("Unzip it into a fresh directory", ["ditto", "-x", "-k", ZIP, UNZIPPED]),
         ("Check the unzipped app", ["python3", "tools/check_bundle.py", f"{UNZIPPED}/Dragoon.app",
                                     "--commit", "HEAD"]),
