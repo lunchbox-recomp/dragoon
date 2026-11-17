@@ -23,8 +23,8 @@ missing or isn't one it writes. --cxx names the C++ compiler, c++ from PATH by d
 The harness copies main.cpp's window and output aspect choices and the renderer's 640 wide
 frame, fit and scale cap, which it can't include. Before it builds, each line it copies, this
 file's COPIED, has to be in runtime/main.cpp, runtime/gx/render_gl_internal.h,
-render_gl_present.cpp or render_gl.cpp as it is there, as many times as at the pin (COPIES), and
-the first that isn't is named.
+render_gl_present.cpp, render_gl_blur.cpp or render_gl.cpp as it is there, and the first that
+isn't is named.
 
 Exits 0 when it wrote them or they all match, 1 when --check found a difference, and 2 when
 gcn-recomp isn't checked out, a copied line isn't in the engine, the harness doesn't compile, a
@@ -98,7 +98,8 @@ SCALES = range(1, 11)
 # fit to the output aspect and its cap on the scale. Each must still be a line of its file,
 # spaces at its ends aside, or the harness no longer matches the engine. A whole line, not the
 # part the harness uses, so one commented out or put under a condition fails too: EFB_W's line
-# carries EFB_H = 528, which the harness doesn't use, for that.
+# carries EFB_H = 528, which the harness doesn't use, for that. The fit fits the frame in
+# blit_rect_to and the menu's held frame in blur_fit_frame, so both are named.
 COPIED = [
     ("main.cpp", "constexpr int kTitleBar = 40;"),
     ("main.cpp", "const int shape_w = aspect_window ? 4 : aspect_w, shape_h = aspect_window ? 3 : aspect_h;"),
@@ -116,12 +117,9 @@ COPIED = [
     ("main.cpp", "if (g_aspect_window && dh > 0) gx::render_set_output_aspect((float)dw / (float)dh);"),
     ("gx/render_gl_internal.h", "static const int EFB_W = 640, EFB_H = 528;"),
     ("gx/render_gl_present.cpp", "const OutputRect fit = fit_aspect(w, h, output_aspect());"),
+    ("gx/render_gl_blur.cpp", "const OutputRect fit = fit_aspect(w, h, output_aspect());"),
     ("gx/render_gl.cpp", "if (scale > kMaxInternalScale) scale = kMaxInternalScale;"),
 ]
-# How many times a copied line is in its file at the pin, where that's more than once. The fit
-# fits the frame in blit_rect_to and the menu's held frame in blur_fit_frame, so a change to
-# either copy leaves one and has to fail too.
-COPIES = {("gx/render_gl_present.cpp", "const OutputRect fit = fit_aspect(w, h, output_aspect());"): 2}
 
 
 class Failure(Exception):
@@ -129,16 +127,11 @@ class Failure(Exception):
 
 
 def check_copied() -> None:
-    """Fails naming the first of COPIED its file no longer holds as many times as COPIES says."""
+    """Fails naming the first of COPIED its file no longer holds."""
     for name, line in COPIED:
         path = RUNTIME / name
-        found = [text.strip() for text in path.read_text(encoding="utf-8").splitlines()].count(line)
-        wanted = COPIES.get((name, line), 1)
-        if found == 0:
+        if line not in [text.strip() for text in path.read_text(encoding="utf-8").splitlines()]:
             raise Failure(f"{path.relative_to(ROOT)}: no line \"{line}\", which settings_fixtures.cpp copies")
-        if found != wanted:
-            raise Failure(f"{path.relative_to(ROOT)}: \"{line}\" is on {found} of its lines, and "
-                          f"settings_fixtures.cpp copies {wanted}")
 
 
 def build(work: Path, cxx: str) -> Path:

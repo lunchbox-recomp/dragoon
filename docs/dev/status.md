@@ -134,7 +134,7 @@ and the discovery and CTest steps were read from CMake's files, not run.
 
 CI's macOS job runs `ninja unit` (`tools/ci.py:82`), which builds the engine's own unit tests
 and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
-(`gcn-recomp/CMakeLists.txt:1460-1463`). It builds `dragoon_tests` too and runs it once to list
+(`gcn-recomp/CMakeLists.txt:1444-1447`). It builds `dragoon_tests` too and runs it once to list
 its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's
 `Modules/GoogleTestAddTests.cmake:63-67`). So CI runs code compiled from this archive.
 
@@ -151,11 +151,11 @@ clicked (`imgui.cpp:11408`).
 
 `io.ConfigDebugHighlightIdConflicts` turns that tooltip on by default (`imgui.cpp:1712`), and
 the overlay leaves it on. Since gcn-recomp `d1a60e5` the overlay clears
-`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:294-296`), and
+`Platform_OpenInShellFn` after both backends start (`runtime/overlay/overlay.cpp:255-257`), and
 `TextLinkOpenURL` calls nothing when it's null, so a click on the link opens nothing. Since
-`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:279`,
+`2246986` the tooltip has no Item Picker button (`runtime/overlay/overlay.cpp:240`,
 `imgui.cpp:11366`). The overlay also sets `IniFilename` and `LogFilename` to null, so Dear
-ImGui writes no file (`runtime/overlay/overlay.cpp:278-280`).
+ImGui writes no file (`runtime/overlay/overlay.cpp:239-241`).
 
 ## Disc inputs
 
@@ -1075,7 +1075,7 @@ stadium weren't run again, so the Speed row's numbers for them are from `14712b8
 keys, as at `14712b8`.
 
 `overlay_init` runs on the main thread after `render_init` loads the shader cache and before
-`boot_load` and the guest start (`gcn-recomp/runtime/main.cpp:923`, `:942-949`). Ten hidden boots
+`boot_load` and the guest start (`gcn-recomp/runtime/main.cpp:934`, `:953-960`). Ten hidden boots
 from a copy of the warm-up's cache, a build at `14712b8` and one at `80ef3a7` in turn, each
 `tools/probe.sh NAME 20 "" 100000 GCN_READY_FILE=ready.txt --exit-after=120`, plus `--bin=` for
 the older build, not niced at loads of 9.8 to 8.8, gave these.
