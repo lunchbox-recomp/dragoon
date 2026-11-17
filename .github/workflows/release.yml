@@ -1,0 +1,40 @@
+name: Release
+# A pushed v* tag builds the unsigned app, writes install.sh for it, attests both and drafts a
+# release holding them. A dispatch run does the same, for the tag v0.0.0, and drafts nothing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+jobs:
+  # tools/ci.py holds the steps, as it does for ci.yml, so a Mac runs the same ones.
+  release:
+    runs-on: macos-26
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || 'v0.0.0' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Dependencies
+        run: brew install ninja
+      - name: Tools job
+        run: python3 tools/ci.py tools
+      - name: Launcher job
+        run: python3 tools/ci.py launcher
+      - name: Kit job
+        run: python3 tools/ci.py kit
+      - name: Release job
+        run: python3 tools/ci.py release --tag "$RELEASE_TAG"
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ github.workspace }}/app job/Dragoon.zip, ${{ github.workspace }}/app job/install.sh
+      - name: Draft the release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$RELEASE_TAG" "app job/Dragoon.zip" "app job/install.sh" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$RELEASE_TAG" --notes ""

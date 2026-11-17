@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the steps CI runs, on a runner or on your own Mac.
 
-Usage: tools/ci.py [JOB ...]
+Usage: tools/ci.py [JOB ...] [--tag TAG]
 
 Run it from the repository's root, with the gcn-recomp submodule checked out. With no JOB it
 runs every job: tools, macos, kit, launcher and app. A job's steps run in order, and the first
@@ -21,12 +21,19 @@ links the copy's own kit against the stub tables, as a release's zip would be ch
 --norsrc leaves out the `._` member ditto would add for each file with extended attributes,
 such as a Mac's com.apple.provenance, which a plain unzip turns into files that break the seal.
 
-Exits 0 when every step passed, 1 when a step failed and 2 on an unknown job.
+The release job runs only when named, with `--tag TAG`, as .github/workflows/release.yml runs
+it: `tools/ci.py release --tag v1.2.3`. It takes the app job's steps with the tag's version, 1.2.3
+for v1.2.3 or v1.2.3-rc1, and then writes `app job/install.sh` with make_install_script.py for
+the zip at the tag's download URL. The workflow attests both files and drafts the release.
+
+Exits 0 when every step passed, 1 when a step failed and 2 on an unknown job, a --tag without
+the release job or the release job without one, or a tag that isn't v and a version.
 """
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -44,6 +51,10 @@ UNZIPPED = f"{APP_JOB}/unzipped"
 APP_STUB = f"{APP_JOB}/stub game"
 LAUNCHER = "launcher/.build/release/Dragoon"  # what `swift build -c release` makes
 APP_VERSION = "0.0.0"  # CI's app is never released, so it has no version of its own
+RELEASE = "release"  # a job only release.yml runs, by name and with --tag
+INSTALL_SCRIPT = f"{APP_JOB}/install.sh"
+DOWNLOADS = "https://github.com/lunchbox-recomp/dragoon/releases/download"
+RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+){0,2})(?:-[0-9A-Za-z.]+)?")
 
 Step = tuple[str, "list[str] | Callable[[], int]"]
 
@@ -122,20 +133,41 @@ JOBS: dict[str, Callable[[], list[Step]]] = {
         ("Link the kit against stub tables", link_stub),
     ],
     "launcher": launcher_steps,
-    "app": lambda: [
+    "app": lambda: app_steps(APP_VERSION),
+}
+
+
+def app_steps(version: str) -> list[Step]:
+    return [
         ("Delete the last app", clear_app),
         ("Build the launcher", ["swift", "build", "-c", "release", "--package-path", "launcher"]),
         ("Export the source snapshot", ["python3", "tools/export_source.py", os.path.abspath(SNAPSHOT)]),
         ("Build the app", ["python3", "launcher/tools/make_app.py", "--out", os.path.abspath(BUILT),
-                           "--version", APP_VERSION, "--launcher", LAUNCHER, "--kit", os.path.abspath(KIT),
+                           "--version", version, "--launcher", LAUNCHER, "--kit", os.path.abspath(KIT),
                            "--source", os.path.abspath(SNAPSHOT)]),
         ("Zip the app", ["ditto", "-c", "-k", "--norsrc", "--keepParent", f"{BUILT}/Dragoon.app", ZIP]),
         ("Unzip it into a fresh directory", ["ditto", "-x", "-k", ZIP, UNZIPPED]),
         ("Check the unzipped app", ["python3", "tools/check_bundle.py", f"{UNZIPPED}/Dragoon.app",
                                     "--commit", "HEAD"]),
         ("Link the unzipped app's kit against stub tables", link_app_stub),
-    ],
-}
+    ]
+
+
+def release_version(tag: str) -> str | None:
+    """The app's version for the tag TAG, such as 1.2.3 for v1.2.3 or v1.2.3-rc1, or None for a
+    tag that isn't v, one to three numbers joined by dots and an optional - suffix."""
+    m = RELEASE_TAG.fullmatch(tag)
+    return m.group(1) if m else None
+
+
+def release_steps(tag: str) -> list[Step]:
+    """The app job's steps with the tag's version, then install.sh for the tag's download URL."""
+    version = release_version(tag)
+    assert version, tag
+    return app_steps(version) + [
+        ("Write install.sh", ["python3", "launcher/tools/make_install_script.py", "--zip", ZIP,
+                              "--url", f"{DOWNLOADS}/{tag}/Dragoon.zip", "--out", INSTALL_SCRIPT]),
+    ]
 
 
 def run(steps: list[Step], job: str) -> bool:
@@ -151,13 +183,22 @@ def run(steps: list[Step], job: str) -> bool:
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("jobs", nargs="*", metavar="JOB")
-    jobs = p.parse_args(argv).jobs
-    unknown = [j for j in jobs if j not in JOBS]
+    p.add_argument("--tag", help="the release job's tag, such as v1.2.3")
+    a = p.parse_args(argv)
+    unknown = [j for j in a.jobs if j not in JOBS and j != RELEASE]
     if unknown:
-        print(f"ci.py: no job {', '.join(unknown)}; the jobs are {', '.join(JOBS)}", file=sys.stderr)
+        print(f"ci.py: no job {', '.join(unknown)}; the jobs are {', '.join([*JOBS, RELEASE])}",
+              file=sys.stderr)
         return 2
-    for job in jobs or list(JOBS):
-        if not run(JOBS[job](), job):
+    if (RELEASE in a.jobs) != (a.tag is not None):
+        print(f"ci.py: --tag goes with the {RELEASE} job, and only with it", file=sys.stderr)
+        return 2
+    if a.tag is not None and not release_version(a.tag):
+        print(f"ci.py: --tag {a.tag!r} isn't v and one to three numbers joined by dots, with an"
+              " optional - suffix, such as v1.2.3 or v1.2.3-rc1", file=sys.stderr)
+        return 2
+    for job in a.jobs or list(JOBS):
+        if not run(release_steps(a.tag) if job == RELEASE else JOBS[job](), job):
             return 1
     return 0
 

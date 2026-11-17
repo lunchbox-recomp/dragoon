@@ -13,7 +13,9 @@ from unittest import mock
 import ci
 from testutil import run_main, temp_dir
 
-WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+WORKFLOW = WORKFLOWS / "ci.yml"
+RELEASE_WORKFLOW = WORKFLOWS / "release.yml"
 
 
 def py(code: str) -> list[str]:
@@ -126,15 +128,132 @@ class Jobs(unittest.TestCase):
             ("actions/upload-artifact", "archive", "false"),
             ("actions/upload-artifact", "if-no-files-found", "error")])
 
+    def test_every_action_is_pinned_by_sha_and_both_workflows_share_each_pin(self):
+        pins: dict[str, set[tuple[str, str]]] = {}
+        for workflow in (WORKFLOW, RELEASE_WORKFLOW):
+            for line in workflow.read_text().splitlines():
+                if "uses:" not in line:
+                    continue
+                m = re.fullmatch(r"      - uses: ([\w./-]+)@([0-9a-f]{40}) # (v[0-9.]+)", line)
+                self.assertTrue(m, line)
+                pins.setdefault(m.group(1), set()).add(m.groups()[1:])
+        self.assertEqual({action: len(pin) for action, pin in pins.items()},
+                         {action: 1 for action in pins})
+        self.assertEqual(pins["actions/attest"], {("1e69f48acb82d1966a394da916b4c1698aa569d6", "v4.2.2")})
 
-def workflow_jobs() -> dict[str, list[tuple[str, str, str]]]:
+
+def steps(job: list[ci.Step]) -> list:
+    """Each step's command, or a Python step's function name."""
+    return [step if isinstance(step, list) else step.__name__ for _, step in job]
+
+
+class Release(unittest.TestCase):
+    def test_the_tag_gives_the_apps_version(self):
+        for tag, version in (("v1", "1"), ("v1.2.3", "1.2.3"), ("v0.0.1-rc1", "0.0.1"), ("v10.20", "10.20"),
+                             ("v1.2.3-beta.2", "1.2.3"), ("v0.0.0", "0.0.0")):
+            self.assertEqual(ci.release_version(tag), version, tag)
+        for tag in ("1.2.3", "v", "v1.2.3.4", "v1.2.3-", "v1.2.3-rc 1", "v1.2.3-rc/1", "vx", "main", "v1..2",
+                    "V1.2.3", "v1.2.3'"):
+            self.assertIsNone(ci.release_version(tag), tag)
+
+    def test_the_release_job_is_the_app_job_with_the_tags_version_then_install_sh(self):
+        release = steps(ci.release_steps("v0.0.1-rc1"))
+        self.assertEqual(release[:-1], steps(ci.app_steps("0.0.1")))
+        self.assertEqual(release[3][release[3].index("--version") + 1], "0.0.1")
+        self.assertEqual(release[-1], [
+            "python3", "launcher/tools/make_install_script.py", "--zip", "app job/Dragoon.zip", "--url",
+            "https://github.com/lunchbox-recomp/dragoon/releases/download/v0.0.1-rc1/Dragoon.zip",
+            "--out", "app job/install.sh"])
+
+    def test_the_release_job_takes_a_good_tag_and_a_tag_takes_the_release_job(self):
+        for argv, why in ((["release"], "--tag goes with the release job"),
+                          (["app", "--tag", "v1.2.3"], "--tag goes with the release job"),
+                          (["--tag", "v1.2.3"], "--tag goes with the release job"),
+                          (["release", "--tag", "1.2.3"], "isn't v and one to three numbers"),
+                          (["release", "--tag", ""], "isn't v and one to three numbers")):
+            with self.subTest(argv=argv), mock.patch.object(ci, "run") as run:
+                code, out, err = run_main(ci.main, *argv)
+                self.assertEqual(code, 2)
+                self.assertIn(why, err)
+                run.assert_not_called()
+
+    def test_the_release_job_runs_for_its_tag_and_no_job_leaves_it_out(self):
+        with mock.patch.object(ci, "run", return_value=True) as run:
+            self.assertEqual(run_main(ci.main, "release", "--tag", "v1.2.3")[0], 0)
+            self.assertEqual([(steps(c.args[0]), c.args[1]) for c in run.call_args_list],
+                             [(steps(ci.release_steps("v1.2.3")), "release")])
+            run.reset_mock()
+            self.assertEqual(run_main(ci.main)[0], 0)
+            self.assertEqual([c.args[1] for c in run.call_args_list], list(ci.JOBS))
+        self.assertNotIn("release", ci.JOBS)
+
+
+class ReleaseWorkflow(unittest.TestCase):
+    """release.yml against the release job and the rules for a release."""
+
+    def setUp(self) -> None:
+        self.text = RELEASE_WORKFLOW.read_text()
+        self.keys = workflow_jobs(RELEASE_WORKFLOW)["release"]
+
+    def test_a_pushed_v_tag_or_a_dispatch_runs_it_with_three_permissions_and_no_secret(self):
+        self.assertEqual(top_level(self.text, "on"), ["  push:", '    tags: ["v*"]', "  workflow_dispatch:"])
+        self.assertEqual(top_level(self.text, "permissions"),
+                         ["  contents: write", "  id-token: write", "  attestations: write"])
+        self.assertEqual(list(workflow_jobs(RELEASE_WORKFLOW)), ["release"])
+        self.assertNotIn("permissions", [key for _, key, _ in self.keys])
+        self.assertNotIn("secrets.", self.text)
+        self.assertIn(("", "runs-on", "macos-26"), self.keys)
+
+    def test_it_runs_the_ci_jobs_then_the_release_job_for_the_tag_or_v0_0_0(self):
+        runs = [value for _, key, value in self.keys if key == "run"]
+        self.assertEqual(runs[:-1], ["brew install ninja", "python3 tools/ci.py tools", "python3 tools/ci.py launcher",
+                                     "python3 tools/ci.py kit", 'python3 tools/ci.py release --tag "$RELEASE_TAG"'])
+        self.assertEqual([value for _, key, value in self.keys if key == "RELEASE_TAG"],
+                         ["${{ github.event_name == 'push' && github.ref_name || 'v0.0.0' }}"])
+        self.assertEqual(self.keys[:3], [("", "runs-on", "macos-26"), ("", "env", ""), ("", "RELEASE_TAG",
+                         "${{ github.event_name == 'push' && github.ref_name || 'v0.0.0' }}")])
+        self.assertEqual([(action, key, value) for action, key, value in self.keys if action == "actions/checkout"],
+                         [("actions/checkout", "submodules", "true"),
+                          ("actions/checkout", "persist-credentials", "false")])
+
+    def test_it_attests_the_zip_and_install_sh_then_drafts_a_release_of_both_only_on_a_push(self):
+        workspace = "${{ github.workspace }}"
+        release = self.keys.index(("", "run", 'python3 tools/ci.py release --tag "$RELEASE_TAG"'))
+        attest = self.keys.index(("actions/attest", "subject-path",
+                                  f"{workspace}/{ci.ZIP}, {workspace}/{ci.INSTALL_SCRIPT}"))
+        draft = self.keys.index(("", "name", "Draft the release"))
+        self.assertLess(release, attest)
+        self.assertLess(attest, draft)
+        self.assertEqual([k for k in self.keys if k[0] == "actions/attest"], [self.keys[attest]])
+        self.assertEqual(self.keys[draft:], [
+            ("", "name", "Draft the release"),
+            ("", "if", "github.event_name == 'push'"),
+            ("", "env", ""),
+            ("", "GH_TOKEN", "${{ github.token }}"),
+            ("", "run", f'gh release create "$RELEASE_TAG" "{ci.ZIP}" "{ci.INSTALL_SCRIPT}" --repo "$GITHUB_REPOSITORY"'
+                        ' --draft --verify-tag --title "$RELEASE_TAG" --notes ""')])
+        self.assertEqual([value for _, key, value in self.keys if key == "if"], ["github.event_name == 'push'"])
+
+
+def top_level(text: str, key: str) -> list[str]:
+    """The lines under a workflow's top-level KEY, up to its next top-level line."""
+    lines = text.splitlines()
+    block = []
+    for line in lines[lines.index(f"{key}:") + 1:]:
+        if line and not line.startswith(" "):
+            break
+        block.append(line)
+    return block
+
+
+def workflow_jobs(workflow: Path = WORKFLOW) -> dict[str, list[tuple[str, str, str]]]:
     """Each workflow job's `key: value` lines in order, each as (action, key, value). The action
     is the step's `uses:` without its pin, for the keys under its `with:`, and "" elsewhere."""
     jobs: dict[str, list[tuple[str, str, str]]] = {}
     job = None
     action = ""
     in_jobs = False
-    for line in WORKFLOW.read_text().splitlines():
+    for line in workflow.read_text().splitlines():
         if line == "jobs:":
             in_jobs = True
         elif in_jobs and re.fullmatch(r"  [\w-]+:", line):

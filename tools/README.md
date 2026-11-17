@@ -608,9 +608,12 @@ The `kit` job leaves the kit in `engine kit/` and links it against stub tables i
 
 The `app` job builds the unsigned app from the kit in `engine kit/`. On a Mac it runs after the `kit` job. In CI it runs once the workflow has downloaded the `engine-kit` artifact. It works in `app job/`, which it deletes first. It runs `swift build -c release` for the launcher, exports a snapshot with `export_source.py` and builds the app with `make_app.py`. Then it zips the app with `ditto -c -k --norsrc --keepParent` into `app job/Dragoon.zip`, unzips that into a fresh directory, runs `check_bundle.py` on the copy and links the copy's own `Contents/Resources/kit` against the stub tables. The workflow uploads the zip as it is, unarchived. `--norsrc` keeps ditto from adding a `._` member for each file with extended attributes. A Mac's files have them and a runner's don't. Without the flag a plain `unzip` turns those members into files that break the seal.
 
+The `release` job runs only by name, with `--tag`. `.github/workflows/release.yml` runs it once its `kit` job has made the kit. It runs the `app` job's steps with the tag's version, so `v1.2.3` and `v1.2.3-rc1` both build version 1.2.3. Then `make_install_script.py` writes `app job/install.sh` for the zip at `https://github.com/lunchbox-recomp/dragoon/releases/download/TAG/Dragoon.zip`. The workflow attests the zip and `install.sh` and drafts a release holding both. A dispatch run builds for `v0.0.0` and drafts nothing. The tag has to be `v` and one to three numbers, with an optional `-` suffix. A bad tag exits 2, and so does `--tag` given without the job or the job without it. Running ci.py with no job leaves `release` out.
+
 ```
 tools/ci.py
 tools/ci.py tools launcher
+tools/ci.py kit release --tag v0.0.1-rc1
 ```
 
 ## mutant.py
@@ -867,6 +870,21 @@ It exits 0 when the app is there and prints its path. A step that failed, such a
 - the kit is from another gcn-recomp commit or another `src/` than the snapshot's, which `kit_problem` in `launcher_build.py` decides for both tools
 
 The tests fake codesign with a script that records its call, so they sign nothing. Every path in them has a space.
+
+## make_install_script.py
+
+What does a player's `curl ... | sh` run? make_install_script.py lives in `launcher/tools/`. It fills `launcher/install.sh.in` with the zip's URL and SHA-256 and writes the release's `install.sh`, mode 0755.
+
+```
+launcher/tools/make_install_script.py --zip "app job/Dragoon.zip" \
+  --url https://github.com/lunchbox-recomp/dragoon/releases/download/v0.0.1-rc1/Dragoon.zip --out "app job/install.sh"
+```
+
+The script is POSIX `sh` with `set -eu`. It quotes every path, since a home folder can have a space. Before it downloads anything it checks for arm64 with `uname -m` and for macOS 14 or later with `sw_vers -productVersion`. It also refuses while `Dragoon` or `dragoon` runs (`pgrep -x`). It downloads with `curl` into a `mktemp -d` folder that a `trap` removes on every exit, and checks the zip with `shasum -a 256`. A mismatch prints both hashes and exits 1 with nothing installed. It unzips with `ditto -x -k` into a second temporary folder in `~/Applications`, so the swap is a rename. The earlier app moves aside and goes with that folder once the new one is in place. Then it runs `open` on the app. Builds and saves in `~/Library/Application Support/Dragoon` stay as they were. It never runs `sudo` or `xattr` and never installs the Command Line Tools. It's one function called on its last line, so a download cut short runs nothing.
+
+The URL goes between single quotes, so it has to start with `https://` or `file://` and hold no quote, backslash, whitespace or control character. The tool exits 2, writing nothing, on that, on a missing zip or bad argument and on a template without each placeholder once.
+
+The tests run the script under `/bin/sh` on fixture zips that ditto makes as the release does, with a `HOME` that has a space and fakes of `uname`, `sw_vers`, `pgrep` and `open` leading `PATH`, beside a `curl` that logs and runs the real one on a `file://` URL. They check each run leaves no temporary folder.
 
 ## sign_and_package.py
 
