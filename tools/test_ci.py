@@ -153,17 +153,20 @@ class Release(unittest.TestCase):
                              ("v1.2.3-beta.2", "1.2.3"), ("v0.0.0", "0.0.0")):
             self.assertEqual(ci.release_version(tag), version, tag)
         for tag in ("1.2.3", "v", "v1.2.3.4", "v1.2.3-", "v1.2.3-rc 1", "v1.2.3-rc/1", "vx", "main", "v1..2",
-                    "V1.2.3", "v1.2.3'"):
+                    "V1.2.3", "v1.2.3'", "v1.2.3-..", "v1.2.3-rc..1", "v1.2.3-.rc", "v1.2.3-rc."):
             self.assertIsNone(ci.release_version(tag), tag)
 
-    def test_the_release_job_is_the_app_job_with_the_tags_version_then_install_sh(self):
+    def test_the_release_job_is_the_app_job_with_the_tags_version_then_the_release_files(self):
         release = steps(ci.release_steps("v0.0.1-rc1"))
-        self.assertEqual(release[:-1], steps(ci.app_steps("0.0.1")))
+        self.assertEqual(release[:-2], steps(ci.app_steps("0.0.1")))
         self.assertEqual(release[3][release[3].index("--version") + 1], "0.0.1")
-        self.assertEqual(release[-1], [
-            "python3", "launcher/tools/make_install_script.py", "--zip", "app job/Dragoon.zip", "--url",
-            "https://github.com/lunchbox-recomp/dragoon/releases/download/v0.0.1-rc1/Dragoon.zip",
-            "--out", "app job/install.sh"])
+        self.assertEqual(release[-2:], [
+            ["ditto", "app job/Dragoon.zip", "app job/release/Dragoon.zip"],
+            ["python3", "launcher/tools/make_install_script.py", "--zip", "app job/release/Dragoon.zip", "--url",
+             "https://github.com/lunchbox-recomp/dragoon/releases/download/v0.0.1-rc1/Dragoon.zip",
+             "--out", "app job/release/install.sh"]])
+        self.assertEqual((ci.RELEASE_ZIP, ci.INSTALL_SCRIPT),
+                         (f"{ci.RELEASE_FILES}/Dragoon.zip", f"{ci.RELEASE_FILES}/install.sh"))
 
     def test_the_release_job_takes_a_good_tag_and_a_tag_takes_the_release_job(self):
         for argv, why in ((["release"], "--tag goes with the release job"),
@@ -191,48 +194,67 @@ class Release(unittest.TestCase):
 class ReleaseWorkflow(unittest.TestCase):
     """release.yml against the release job and the rules for a release."""
 
+    WORKSPACE = "${{ github.workspace }}"
+
     def setUp(self) -> None:
         self.text = RELEASE_WORKFLOW.read_text()
-        self.keys = workflow_jobs(RELEASE_WORKFLOW)["release"]
+        self.jobs = workflow_jobs(RELEASE_WORKFLOW)
+        self.build, self.release = self.jobs["build"], self.jobs["release"]
 
-    def test_a_pushed_v_tag_or_a_dispatch_runs_it_with_three_permissions_and_no_secret(self):
+    def permissions(self, keys: list[tuple[str, str, str]]) -> list[tuple[str, str]]:
+        """The KEY: VALUE lines under a job's permissions:, which come before its steps:."""
+        names = [key for _, key, _ in keys]
+        start, end = names.index("permissions") + 1, names.index("steps")
+        return [(key, value) for _, key, value in keys[start:end] if key not in ("env", "RELEASE_TAG")]
+
+    def test_a_pushed_v_tag_or_a_dispatch_runs_it_with_no_secret(self):
         self.assertEqual(top_level(self.text, "on"), ["  push:", '    tags: ["v*"]', "  workflow_dispatch:"])
-        self.assertEqual(top_level(self.text, "permissions"),
-                         ["  contents: write", "  id-token: write", "  attestations: write"])
-        self.assertEqual(list(workflow_jobs(RELEASE_WORKFLOW)), ["release"])
-        self.assertNotIn("permissions", [key for _, key, _ in self.keys])
+        self.assertEqual(list(self.jobs), ["build", "release"])
         self.assertNotIn("secrets.", self.text)
-        self.assertIn(("", "runs-on", "macos-26"), self.keys)
+        for keys in (self.build, self.release):
+            self.assertIn(("", "runs-on", "macos-26"), keys)
 
-    def test_it_runs_the_ci_jobs_then_the_release_job_for_the_tag_or_v0_0_0(self):
-        runs = [value for _, key, value in self.keys if key == "run"]
-        self.assertEqual(runs[:-1], ["brew install ninja", "python3 tools/ci.py tools", "python3 tools/ci.py launcher",
-                                     "python3 tools/ci.py kit", 'python3 tools/ci.py release --tag "$RELEASE_TAG"'])
-        self.assertEqual([value for _, key, value in self.keys if key == "RELEASE_TAG"],
+    def test_only_the_release_job_can_write_and_it_runs_no_repository_code(self):
+        self.assertIn("permissions: {}", self.text.splitlines())
+        self.assertEqual(self.permissions(self.build), [("contents", "read")])
+        self.assertEqual(self.permissions(self.release),
+                         [("contents", "write"), ("id-token", "write"), ("attestations", "write")])
+        self.assertEqual([k for k in self.text.splitlines() if k.strip().startswith("permissions:")],
+                         ["permissions: {}", "    permissions:", "    permissions:"])
+        self.assertEqual(self.release[:2], [("", "needs", "build"), ("", "if", "github.event_name == 'push'")])
+        self.assertEqual([action for action, _, _ in self.release if action],
+                         ["actions/download-artifact", "actions/download-artifact", "actions/attest"])
+        self.assertNotIn("checkout", self.text.split("\n  release:\n", 1)[1])
+
+    def test_the_build_job_runs_the_ci_jobs_then_the_release_job_for_the_tag_or_v0_0_0(self):
+        runs = [value for _, key, value in self.build if key == "run"]
+        self.assertEqual(runs, ["brew install ninja", "python3 tools/ci.py tools", "python3 tools/ci.py launcher",
+                                "python3 tools/ci.py kit", 'python3 tools/ci.py release --tag "$RELEASE_TAG"'])
+        self.assertEqual([value for _, key, value in self.build if key == "RELEASE_TAG"],
                          ["${{ github.event_name == 'push' && github.ref_name || 'v0.0.0' }}"])
-        self.assertEqual(self.keys[:3], [("", "runs-on", "macos-26"), ("", "env", ""), ("", "RELEASE_TAG",
-                         "${{ github.event_name == 'push' && github.ref_name || 'v0.0.0' }}")])
-        self.assertEqual([(action, key, value) for action, key, value in self.keys if action == "actions/checkout"],
+        self.assertEqual([(action, key, value) for action, key, value in self.build if action == "actions/checkout"],
                          [("actions/checkout", "submodules", "true"),
                           ("actions/checkout", "persist-credentials", "false")])
+        self.assertEqual([k for k in self.build if k[0] == "actions/upload-artifact"], [
+            ("actions/upload-artifact", "name", "release"),
+            ("actions/upload-artifact", "path", f"{self.WORKSPACE}/{ci.RELEASE_FILES}"),
+            ("actions/upload-artifact", "if-no-files-found", "error")])
+        self.assertEqual([value for _, key, value in self.build if key == "if"], [])
 
-    def test_it_attests_the_zip_and_install_sh_then_drafts_a_release_of_both_only_on_a_push(self):
-        workspace = "${{ github.workspace }}"
-        release = self.keys.index(("", "run", 'python3 tools/ci.py release --tag "$RELEASE_TAG"'))
-        attest = self.keys.index(("actions/attest", "subject-path",
-                                  f"{workspace}/{ci.ZIP}, {workspace}/{ci.INSTALL_SCRIPT}"))
-        draft = self.keys.index(("", "name", "Draft the release"))
-        self.assertLess(release, attest)
-        self.assertLess(attest, draft)
-        self.assertEqual([k for k in self.keys if k[0] == "actions/attest"], [self.keys[attest]])
-        self.assertEqual(self.keys[draft:], [
+    def test_the_release_job_attests_the_two_files_then_drafts_a_release_of_both(self):
+        names = [Path(ci.RELEASE_ZIP).name, Path(ci.INSTALL_SCRIPT).name]
+        self.assertEqual([k for k in self.release if k[0] in ("actions/download-artifact", "actions/attest")], [
+            ("actions/download-artifact", "name", "release"),
+            ("actions/download-artifact", "path", f"{self.WORKSPACE}/release"),
+            ("actions/attest", "subject-path", ", ".join(f"{self.WORKSPACE}/release/{n}" for n in names))])
+        draft = self.release.index(("", "name", "Draft the release"))
+        self.assertEqual(self.release[draft - 1][0], "actions/attest")
+        self.assertEqual(self.release[draft:], [
             ("", "name", "Draft the release"),
-            ("", "if", "github.event_name == 'push'"),
             ("", "env", ""),
             ("", "GH_TOKEN", "${{ github.token }}"),
-            ("", "run", f'gh release create "$RELEASE_TAG" "{ci.ZIP}" "{ci.INSTALL_SCRIPT}" --repo "$GITHUB_REPOSITORY"'
-                        ' --draft --verify-tag --title "$RELEASE_TAG" --notes ""')])
-        self.assertEqual([value for _, key, value in self.keys if key == "if"], ["github.event_name == 'push'"])
+            ("", "run", f'gh release create "$GITHUB_REF_NAME" release/{names[0]} release/{names[1]}'
+                        ' --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$GITHUB_REF_NAME" --notes ""')])
 
 
 def top_level(text: str, key: str) -> list[str]:

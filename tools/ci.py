@@ -23,8 +23,10 @@ such as a Mac's com.apple.provenance, which a plain unzip turns into files that 
 
 The release job runs only when named, with `--tag TAG`, as .github/workflows/release.yml runs
 it: `tools/ci.py release --tag v1.2.3`. It takes the app job's steps with the tag's version, 1.2.3
-for v1.2.3 or v1.2.3-rc1, and then writes `app job/install.sh` with make_install_script.py for
-the zip at the tag's download URL. The workflow attests both files and drafts the release.
+for v1.2.3 or v1.2.3-rc1. Then it copies the zip into `app job/release/` and writes
+`app job/release/install.sh` beside it with make_install_script.py, for the zip at the tag's
+download URL. The workflow's build job uploads that folder, and on a pushed tag its release job,
+the only one that can write, attests both files and drafts the release.
 
 Exits 0 when every step passed, 1 when a step failed and 2 on an unknown job, a --tag without
 the release job or the release job without one, or a tag that isn't v and a version.
@@ -52,9 +54,11 @@ APP_STUB = f"{APP_JOB}/stub game"
 LAUNCHER = "launcher/.build/release/Dragoon"  # what `swift build -c release` makes
 APP_VERSION = "0.0.0"  # CI's app is never released, so it has no version of its own
 RELEASE = "release"  # a job only release.yml runs, by name and with --tag
-INSTALL_SCRIPT = f"{APP_JOB}/install.sh"
+RELEASE_FILES = f"{APP_JOB}/release"  # what release.yml uploads: the zip and install.sh
+RELEASE_ZIP = f"{RELEASE_FILES}/Dragoon.zip"
+INSTALL_SCRIPT = f"{RELEASE_FILES}/install.sh"
 DOWNLOADS = "https://github.com/lunchbox-recomp/dragoon/releases/download"
-RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+){0,2})(?:-[0-9A-Za-z.]+)?")
+RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+){0,2})(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?")
 
 Step = tuple[str, "list[str] | Callable[[], int]"]
 
@@ -161,11 +165,13 @@ def release_version(tag: str) -> str | None:
 
 
 def release_steps(tag: str) -> list[Step]:
-    """The app job's steps with the tag's version, then install.sh for the tag's download URL."""
+    """The app job's steps with the tag's version, then the zip and install.sh for the tag's
+    download URL in RELEASE_FILES, the folder release.yml uploads."""
     version = release_version(tag)
     assert version, tag
     return app_steps(version) + [
-        ("Write install.sh", ["python3", "launcher/tools/make_install_script.py", "--zip", ZIP,
+        ("Copy the zip for the release", ["ditto", ZIP, RELEASE_ZIP]),
+        ("Write install.sh", ["python3", "launcher/tools/make_install_script.py", "--zip", RELEASE_ZIP,
                               "--url", f"{DOWNLOADS}/{tag}/Dragoon.zip", "--out", INSTALL_SCRIPT]),
     ]
 

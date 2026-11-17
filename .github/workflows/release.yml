@@ -1,18 +1,18 @@
 name: Release
-# A pushed v* tag builds the unsigned app, writes install.sh for it, attests both and drafts a
-# release holding them. A dispatch run does the same, for the tag v0.0.0, and drafts nothing.
+# A pushed v* tag builds the unsigned app and writes install.sh for it in the build job, which can
+# only read. The release job, the only one that can write, takes the two files, attests them and
+# drafts a release holding them. A dispatch run builds for the tag v0.0.0 and stops there.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-permissions:
-  contents: write
-  id-token: write
-  attestations: write
+permissions: {}
 jobs:
-  # tools/ci.py holds the steps, as it does for ci.yml, so a Mac runs the same ones.
-  release:
+  # tools/ci.py holds the build's steps, as it does for ci.yml, so a Mac runs the same ones.
+  build:
     runs-on: macos-26
+    permissions:
+      contents: read
     env:
       RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || 'v0.0.0' }}
     steps:
@@ -30,11 +30,29 @@ jobs:
         run: python3 tools/ci.py kit
       - name: Release job
         run: python3 tools/ci.py release --tag "$RELEASE_TAG"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: ${{ github.workspace }}/app job/release
+          if-no-files-found: error
+  # No checkout, so none of the repository's code runs while the job holds write permissions.
+  release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: macos-26
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: ${{ github.workspace }}/release
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: ${{ github.workspace }}/app job/Dragoon.zip, ${{ github.workspace }}/app job/install.sh
+          subject-path: ${{ github.workspace }}/release/Dragoon.zip, ${{ github.workspace }}/release/install.sh
       - name: Draft the release
-        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$RELEASE_TAG" "app job/Dragoon.zip" "app job/install.sh" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$RELEASE_TAG" --notes ""
+        run: gh release create "$GITHUB_REF_NAME" release/Dragoon.zip release/install.sh --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$GITHUB_REF_NAME" --notes ""
