@@ -56,7 +56,9 @@ def fill(template: str, url: str, digest: str) -> str:
     for placeholder in PLACEHOLDERS:
         if template.count(placeholder) != 1:
             raise ValueError(f"{TEMPLATE.name} holds {placeholder} {template.count(placeholder)} times, not once")
-    return template.replace("@URL@", url).replace("@SHA256@", digest)
+    # One pass, so a URL that holds @SHA256@ keeps it.
+    values = {"@URL@": url, "@SHA256@": digest}
+    return re.sub("|".join(PLACEHOLDERS), lambda m: values[m.group(0)], template)
 
 
 def main(argv: list[str]) -> int:

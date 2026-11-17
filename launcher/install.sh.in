@@ -4,11 +4,12 @@
 # launcher/tools/make_install_script.py writes this file for each release from
 # launcher/install.sh.in, with the zip's URL and SHA-256 below.
 #
-# It needs an Apple silicon Mac on macOS 14 or later and refuses while Dragoon or its game runs.
-# It downloads the zip into a temporary folder, checks its SHA-256, unzips it beside the
-# installed app and swaps the new app in. Builds and saves in ~/Library/Application Support/Dragoon
-# stay as they are. It never runs sudo, never changes extended attributes and never installs
-# Apple's Command Line Tools, which the launcher asks for itself.
+# It needs an Apple silicon Mac on macOS 14 or later and refuses while this user's Dragoon or
+# its game runs. It downloads the zip into a temporary folder, checks its SHA-256, unzips it
+# beside the installed app and swaps the new app in, holding a lock so two copies can't swap at
+# once. Builds and saves in ~/Library/Application Support/Dragoon stay as they are. It never
+# runs sudo, never changes extended attributes and never installs Apple's Command Line Tools,
+# which the launcher asks for itself.
 #
 # The script is one function, called on its last line, so a download cut short runs nothing.
 set -eu
@@ -18,21 +19,34 @@ sha256='@SHA256@'
 
 download=
 stage=
+locked=
+swapped=
 
 fail() {
 	printf '%s\n' "$1" >&2
 	exit 1
 }
 
+# Runs on every exit. Until the new app is in place, an earlier app moved aside goes back where
+# it was. If something else is there by then, or the move back fails, it stays in the stage
+# folder, which is kept and named.
 clean_up() {
-	if [ -n "$download" ]; then rm -rf "$download"; fi
-	if [ -n "$stage" ]; then rm -rf "$stage"; fi
+	if [ -n "$download" ]; then rm -rf "$download" || :; fi
+	if [ -n "$stage" ] && [ -z "$swapped" ] && { [ -e "$stage/previous.app" ] || [ -L "$stage/previous.app" ]; }; then
+		if [ -e "$app" ] || [ -L "$app" ] || ! mv "$stage/previous.app" "$app"; then
+			printf 'The app that was at %s is now at %s\n' "$app" "$stage/previous.app" >&2
+			stage=
+		fi
+	fi
+	if [ -n "$stage" ]; then rm -rf "$stage" || :; fi
+	if [ -n "$locked" ]; then rmdir "$locked" || :; fi
 }
 
 install_dragoon() {
-	arch=$(uname -m)
-	if [ "$arch" != arm64 ]; then
-		fail "Dragoon needs a Mac with Apple silicon. This one reports $arch."
+	# 1 on Apple silicon, under Rosetta too. An Intel Mac has no such key.
+	arm64=$(sysctl -n hw.optional.arm64 2> /dev/null || :)
+	if [ "$arm64" != 1 ]; then
+		fail "Dragoon needs a Mac with Apple silicon. This one has an Intel processor."
 	fi
 	version=$(sw_vers -productVersion)
 	major=${version%%.*}
@@ -42,9 +56,14 @@ install_dragoon() {
 	if [ "$major" -lt 14 ]; then
 		fail "Dragoon needs macOS 14 or later. This Mac has macOS $version."
 	fi
-	if pgrep -x Dragoon > /dev/null || pgrep -x dragoon > /dev/null; then
+	uid=$(id -u)
+	if pgrep -x -U "$uid" Dragoon > /dev/null || pgrep -x -U "$uid" dragoon > /dev/null; then
 		fail "Dragoon is open. Quit Dragoon and its game, then run this again."
 	fi
+	case ${HOME:-} in
+		/*) ;;
+		*) fail "HOME is '${HOME:-}', which isn't a full path. Nothing was installed." ;;
+	esac
 
 	apps="$HOME/Applications"
 	app="$apps/Dragoon.app"
@@ -52,9 +71,10 @@ install_dragoon() {
 	trap 'exit 1' HUP INT TERM
 
 	# A template, since macOS's mktemp -d alone ignores TMPDIR.
-	download=$(mktemp -d "${TMPDIR:-/tmp}/dragoon-download.XXXXXX")
+	download=$(mktemp -d "${TMPDIR:-/tmp}/dragoon-download.XXXXXX") ||
+		fail "Couldn't make a temporary folder. Nothing was installed."
 	printf 'Downloading %s\n' "$url"
-	if ! curl -fsSL -o "$download/Dragoon.zip" "$url"; then
+	if ! curl -fsSL -g -o "$download/Dragoon.zip" "$url"; then
 		fail "The download failed. Nothing was installed."
 	fi
 	got=$(shasum -a 256 "$download/Dragoon.zip" | cut -d ' ' -f 1)
@@ -65,19 +85,27 @@ install_dragoon() {
 		exit 1
 	fi
 
-	mkdir -p "$apps"
-	stage=$(mktemp -d "$apps/.Dragoon-install.XXXXXX")
-	ditto -x -k "$download/Dragoon.zip" "$stage"
+	mkdir -p "$apps" || fail "Couldn't make $apps. Nothing was installed."
+	if ! mkdir "$apps/.Dragoon-install.lock" 2> /dev/null; then
+		fail "Another copy of this installer is running. If none is, delete $apps/.Dragoon-install.lock and run this again."
+	fi
+	locked="$apps/.Dragoon-install.lock"
+	stage=$(mktemp -d "$apps/.Dragoon-install.XXXXXX") ||
+		fail "Couldn't make a folder in $apps. Nothing was installed."
+	ditto -x -k "$download/Dragoon.zip" "$stage" || fail "Couldn't unzip the download. Nothing was installed."
 	if [ ! -d "$stage/Dragoon.app" ]; then
 		fail "The download holds no Dragoon.app. Nothing was installed."
 	fi
 	if [ -e "$app" ] || [ -L "$app" ]; then
 		mv "$app" "$stage/previous.app"
 	fi
-	if ! mv "$stage/Dragoon.app" "$app"; then
-		if [ -e "$stage/previous.app" ]; then mv "$stage/previous.app" "$app"; fi
-		fail "Couldn't move Dragoon into $apps. The app there is as it was."
+	if [ -e "$app" ] || [ -L "$app" ]; then
+		fail "Something else put a Dragoon.app in $apps during the install. Nothing was installed."
 	fi
+	if ! mv "$stage/Dragoon.app" "$app"; then
+		fail "Couldn't move Dragoon.app into $apps. Nothing was installed."
+	fi
+	swapped=1
 	printf 'Dragoon is in %s\n' "$apps"
 	open "$app"
 }
