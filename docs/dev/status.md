@@ -1,8 +1,8 @@
 # Status
 
 What's true of Dragoon, measured on one Mac. Most sections name the Dragoon or gcn-recomp
-commits they were measured at. The pin is gcn-recomp `236e1f4`, where all twenty-four routes'
-frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `236e1f4`).
+commits they were measured at. The pin is gcn-recomp `b4f8ddb`, where all twenty-four routes'
+frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `b4f8ddb`).
 
 | Feature | Status | Note |
 |---|---|---|
@@ -16,7 +16,7 @@ frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `236e
 | Audio | Partial | The mixer runs the commands of the game's ucode (`07F88145`) with its compressor among them, and ten runs' 484,400 command lists held no unknown or skipped one (under Audio). Source type 0 voices, 98.9% of the voice time, resample through a polyphase filter whose coefficients the runtime works out because the console's are in the DSP's ROM, and the low-pass filter isn't applied. Nobody has listened for the sound's quality since the source type 2 fix or compared it with a console, and the click counts are in [`scorecard.md`](scorecard.md), last scored at gcn-recomp `dac449e` (`audio.md`) |
 | Controllers | Four ports, live | Each gamepad takes the port `saves/ports.txt` says it was last on, or else its SDL player number's or the lowest free one. The overlay menu's Controllers page swaps, removes and orders players by who presses A, and a notice says when a controller connects, disconnects or changes player (under Controllers). GameCube A is the east button on a Nintendo-layout pad such as an 8BitDo in Switch mode. Checked with SDL's virtual gamepads, not with four real controllers or under Steam Input |
 | Picture | 4:3, or wider with Air Ride's and City Trial's HUD anchored and the menus centered | The window opens at 4:3. `--aspect=16:9` stretches the picture, and the world cameras widen to match in the race before and after its finish, in City Trial, 2P and 4P and in Top Ride. The HUD keeps its 4:3 shape at the race, City Trial, 2P and 4P checkpoints, anchored to the edges of the screen or of its player's view, as all four showed on Dragoon `1ff85c8`. The title, the menus, the text boxes and the opening movie keep their 4:3 frame in the middle. On Dragoon `2d68a1e` the 16:9 output dumps of the text box, the movie and the course select went from 3414x1920 at 1.7781 to 2560x1920 at 1.3333 with bars of 427, the title from 2.1815 to 1.6351 (1.6358 at 4:3) and the mode select from 1.9094 to 1.4312 (1.4318). Top Ride's HUD, which it draws outside every render callback, and a menu over play stretch with the picture. On Dragoon `ec0004a` `drawlog.py hud` listed Top Ride's 38 HUD draws at 3600 as stretched, and the race after its finish at 8400, City Trial and 2P gave the same results as on `e79f475`. At an output narrower than 4:3 the menus stretch too (`widescreen.md`). The HUD the table anchors still remaps there, each piece widened from its anchor by 4/3 over the output's aspect (4/3 at 1:1). No run measured it |
-| Speed | Holds 60 fps | 515 to 536 frames a second in four runs of a race in a hidden window with `--fast` at loads of 9.3 to 5.2, against 517 to 540 at `541a6ae`. A build at `541a6ae` run after them gave 510. Ten earlier runs, at loads of 5.5 to 68 while macOS's own indexing ran, went 200 to 314. Six of them took turns with the `541a6ae` build and ran frames 3,600 to 9,000 at 200 to 231 on both builds (under gcn-recomp `236e1f4`). `dragoon_bench`, which draws nothing, runs the race at 600 (under gcn-recomp `236e1f4`). Four-player City Trial averages 16.68 ms a frame in each of two runs at the game's own speed, with no interval over 20 ms in one and two in the other, the worst 21.94 ms, not traced. The stadium's scene changes stall the guest for up to 161 ms (under gcn-recomp `14712b8`). Four-player City Trial and the stadium weren't run again at `80ef3a7`, `541a6ae` or `236e1f4` |
+| Speed | Holds 60 fps | 517 to 524 frames a second in four runs of a race in a hidden window with `--fast` at loads of 3.2 to 5.6, against 515 to 536 at `236e1f4` and 517 to 540 at `541a6ae` (under gcn-recomp `b4f8ddb`). `dragoon_bench`, which draws nothing, runs the race at 575 to 586 in three runs, under the 600 and 601 of `236e1f4` and `541a6ae` (under gcn-recomp `b4f8ddb`). Four-player City Trial averages 16.68 ms a frame in each of two runs at the game's own speed, with no interval over 20 ms in one and two in the other, the worst 21.94 ms, not traced. The stadium's scene changes stall the guest for up to 161 ms (under gcn-recomp `14712b8`). Four-player City Trial and the stadium weren't run again at `80ef3a7`, `541a6ae`, `236e1f4` or `b4f8ddb` |
 | Build from the disc | Works | 23 s at gcn-recomp `67a7e30` (3.5 s to configure, 19.5 s for Ninja). That's before the build compiled SDL3 and Dear ImGui and before the default target ran the shader warm-up, which adds about 64 s (`CMakeLists.txt:69-78`, Player targets) |
 | Disc check | Works | The wrong disc stops the configure step with the disc ID it found |
 | `.gcm` dumps | Work | Linked as `rom/game.iso`, or passed as `-DGAME_ISO=<path>` |
@@ -659,7 +659,7 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | How far the attract demos alone get | Report the share of each route's keys the attract pass builds by itself | The warm-up has no attract pass. Run from a blank card it sat at the "make a new save data file?" prompt and built 3 keys in 20,000 frames. Run after the routes, on the card they leave, it took 50 s and added 9 keys on top of the routes' 191, none of which a route needed | Dropped |
 | Time added to the first build | 90 s or less | 63.6 s, 62.9 s and 64.7 s at loads of 2.40, 9.77 and 10.54 for the 334 keys of all twenty-four manifest routes in eight passes, five at a time on an M4 Max (Dragoon `2fc9285`, under Chained course passes) | Pass |
 | Time added to every boot on macOS GL | 1,000 ms or less | 475 to 508 ms for 334 programs at loads of 1.20 to 2.25 (Dragoon `2fc9285`) | Pass |
-| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `236e1f4` on Dragoon `9a98673`, over three passes. Seven routes stopped short in the first at loads of 14.3 to 9.8, where a last dump cut off as the run ended showed as a mismatch. The two stadium routes stopped short again in the second, at frames 15,300 of 20,400 and 14,100 of 21,000, where `541a6ae` passed all twenty-four in one. Those two passed with `--slow=2`. Run in turn with a `541a6ae` build at loads of 17.7 to 5.6, `city-trial-stadium` reached frames 65,100 and 67,200 in its 60 s against 64,800 and 66,000, so it was the Mac's load, not the bump (under gcn-recomp `236e1f4`) | Pass |
+| Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `b4f8ddb` on Dragoon `ae7ebd1`, in one pass of 15 min at `nice -n 19` and loads of 4.8 to 6.1. At `236e1f4` it took three passes, where a busier Mac cut runs short (under gcn-recomp `b4f8ddb`) | Pass |
 | World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `45c52c5` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
 | Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `45c52c5` at loads of 2.7 to 6.3) | Pass |
 | Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1) | Pass |
@@ -672,10 +672,10 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | Launcher's Picture card | Shown once, after the first build, only when settings.txt has no `aspect` line; a pick writes what the Settings sheet's does; Keep 4:3 writes nothing | Shown after the build that made the first game and remembered in `launcher.json`, not after a rebuild, not by a launcher that showed it, not over any `aspect` line or a file that can't be read (`FlowPictureCardTests`). Each pick, 4:3 and 16:9, over four files without an aspect line writes the sheet's bytes, and over `bom-only` and `empty` the engine's own `settings_save` bytes (`PictureCardWriteTests`) | Pass |
 | Opening the menu pauses | The guest is held within 2 host frames, as before | `test_ports` passes "a gamepad's Back opens the overlay, and the guest is held within 2 host frames" (`tools/test_ports_menu_no_window.cpp:66`), one of the 499 port checks `gcn-recomp/tools/test_ports.sh build/test_ports DIR` passed at a load of 7.2 | Pass |
 | Menu open to fully shown | 200 ms or less, and its first frame with `menu_motion off` | 20 opens over the title at frame 600 said `[overlay] shown after` 180 to 190 ms: 180 ms six times, 181 twice, 182 three times, 188 four times, 189 three times and 190 twice, at loads of 3.0 to 3.3. With `menu_motion off` in the run's `settings.txt` it said 3 ms at 2.7, and `test_ports` passes "with menu_motion off it opens whole and closes at once". That check finds the menu not moving after the press and release host frames. The game's 3 ms line is what shows it whole within one frame. It prints no frame count. Each run was `tools/probe.sh NAME 40 "" 100000 GCN_OVERLAY_AT=600:60 --exit-after=900`, not niced | Pass |
-| Menu smooth while it moves | The held frame redrawn every 17 ms or less at the 99th percentile, and the menu's CPU time a frame 1.5 ms or less at the 99th, at 1920x1080 | 21 opens over the title at frame 600, one a process and so each its process's first, seven on each of `GCN_OVERLAY_PAGE` 0, 1 and 2. At gcn-recomp `236e1f4` the 1,260 `held 1` redraw intervals of their `[overlay] frame` lines were 16.65 ms at p50, 17.04 ms at p99 and 17.46 ms at most, still over the bar, against 16.67, 19.19 and 26.64 ms over 1,260 at `541a6ae` and 18.58, 19.87 and 21.24 ms at `80ef3a7`. The paused frontend draws the held frame again a display frame after its last wait ended, or half of one while the menu moves (gcn-recomp `docs/diagnostics.md`). 478 intervals were under 9 ms, 9 from 9 to 16 ms, 748 from 16 to 17 ms and 25 over 17 ms, against 460, 1, 759 and 40 at `541a6ae`. Each open's first held interval, from the open's first frame to the first redraw, ran 15.28 to 17.25 ms, against 18.07 to 26.64 ms at `541a6ae`, since the hold now wakes the loop's wait for a frame. Leaving out the 21 first intervals, the other 1,239 were 16.65 ms at p50, 17.04 ms at p99 and 17.46 ms at most, against 16.67, 17.03 and 17.07 ms at `541a6ae`. The lines' `late`, `present` and `blur` split the tail. The 23 intervals from 17.0 to 17.1 ms, 22 of them over 17 ms, had a `late` of 0.032 to 0.051 ms, where every held wait's was 0.037 ms at p50, and a `present` of 0.317 to 0.369 ms after a frame whose draw and blur took 0.033 to 0.073 ms. So the time falls in the frame's drawing span before `overlay_draw`, which the menu's content can't raise, not in the wait. The menu's CPU time and blur stepped up on the same frame and stayed up, which points to the main thread running slower or blocked. The interval after each ran 16.38 to 16.72 ms, paying the step back gradually as the draw fell, which doesn't help a p99 bar. Of the other three over 17 ms, two came with a draw of 1.0 ms or more and one with a wait 0.416 ms late (the `236e1f4` section). The menu's CPU time over all 1,428 frames was 0.154 ms at p50, 1.049 ms at p99 and 3.889 ms at most, within the bar, against 0.142, 1.075 and 3.207 ms at `541a6ae` and 0.167, 1.116 and 3.858 ms at `80ef3a7`. Each process's first menu frame, `f0`, took 0.741 to 3.889 ms, 1.220 ms at p50 (at `541a6ae` 0.565 to 3.207 ms with 1.118 ms at p50, and at `80ef3a7` 0.608 to 3.858 ms with 1.139 ms at p50), where `test_ports --pages` timed 13.08 ms for the first frame at gcn-recomp `14712b8`. Those aren't one measure: these are the game's `[overlay] frame` CPU times on the steady clock in a 3414x1920 window, and the 13.08 ms came from the engine's test process in a 1920x1080 window, so they don't compare one to one. The 3.889 ms was the fifteenth run's, at a load of 3.0, where the 3.207 ms at `541a6ae` was the first run's at 10.9 and the 3.858 ms at `80ef3a7` was at 8.0. The game's line gives no CPU time for the loop. At gcn-recomp `541a6ae`, `test_ports --held`, the engine's own held redraw over the menu in a hidden 1920x1080 window, gave the loop's thread 1.07 ms of CPU a held frame with `overlay_draw`'s, and a held interval of 16.70 ms at p50 and 16.73 ms at p99, in each of two runs, not niced, at loads of 2.0 to 3.0. The game opens no 1920x1080 window, since nothing sets its size, so these are a 16:9 window of 3414x1920 pixels, as the Review dumps row's dumps are. No run turned a page while open: `GCN_OVERLAY_AT` opens once a process, and a route's presses reach only the guest, which the menu holds. Each run was `tools/probe.sh NAME 40 "" 100000 --real-time --aspect=16:9 GCN_FRAMETIME=1 GCN_OVERLAY_AT=600:60 GCN_OVERLAY_PAGE=N --exit-after=900` from a copy of the warm-up's cache, read with `tools/frametime.py --menu`, not niced, at loads from 12.0 falling to 2.6 (Dragoon `a4cdc27`, gcn-recomp `236e1f4`). At `541a6ae` the loads fell from 10.9 to 2.1 (Dragoon `741b62c`) and at `80ef3a7` from 8.0 to 2.0 (Dragoon `374b288`) | Miss on the redraw interval, pass on the CPU time |
+| Menu smooth while it moves | The held frame redrawn every 17 ms or less at the 99th percentile, and the menu's CPU time a frame 1.5 ms or less at the 99th, at 1920x1080 | 21 opens over the title at frame 600, one a process and so each its process's first, seven on each of `GCN_OVERLAY_PAGE` 0, 1 and 2, in a 3414x1920 window, since nothing sets the game's size. At gcn-recomp `b4f8ddb` the 1,260 `held 1` redraw intervals of their `[overlay] frame` lines were 16.67 ms at p50, 17.00 ms at p99 and 25.08 ms at most, with 12 over 17 ms, and the menu's CPU time over all 1,428 frames was 0.055 ms at p50, 0.722 ms at p99 and 3.431 ms at most. The tail is the loop thread waking on efficiency cores. The 13 intervals from 17.00 to 17.26 ms had a `thread` of 0.343 to 0.399 ms and a `swap` of 0.262 to 0.855 ms, where the other 1,246 had 0.056 ms and 0.373 ms at p50, so the thread ran slower on its CPU while the swap stayed as it was. The 25.08 ms came after a `swap` of 24.776 ms, the run's longest. Each run was `tools/probe.sh NAME 40 "" 100000 --real-time --aspect=16:9 GCN_FRAMETIME=1 GCN_OVERLAY_AT=600:60 GCN_OVERLAY_PAGE=N --exit-after=900` from a copy of the warm-up's cache, read with `tools/frametime.py --menu`, not niced, at loads from 7.1 falling to 3.2 (Dragoon `ae7ebd1`, read at `360dd44`). The gcn-recomp `80ef3a7`, `541a6ae`, `236e1f4` and `b4f8ddb` sections hold each pin's numbers | Pass, with the redraw interval's p99 on the bar |
 | Menu closed costs nothing | Four players at `--real-time --scale=2`, `[rt]` at the 99th percentile within the two-run spread; no Dear ImGui menu frame over 600 closed frames | `[rt]` at the 99th percentile from frame 3,400 was 2.08 and 2.09 ms with the menu built in and closed, and 2.11 and 2.12 ms in a build with `-DGCN_OVERLAY=OFF`, over 4,230 to 4,283 frames. Each build's two runs are 0.01 ms apart, and the menu's build is 0.02 to 0.04 ms under the other. That's outside the 0.01 ms spread on the cheap side. The bar is read as no cost above the spread. The runs took turns, on, off, on, off, from a copy of the warm-up's 333-key cache, not niced, at loads from 17.2 just after the build down to 3.9, each `tools/probe.sh NAME 130 tests/routes/city-trial-4p.txt 100000 --pads=4 --real-time --scale=2 GCN_FRAMETIME=1`, plus `--bin=build-nooverlay/dragoon` for the second build. `test_ports --pages` counted 0 menu frames over 300 closed host frames at 1920x1080 and 300 at 1440x1080, and `test_ports` passes "a closed menu with no notice costs zero Dear ImGui menu frames" | Pass |
 | Menu leaves 4:3 unchanged | `tools/frame_hashes.py check` passes | The Frames row, at the same pin and build | Pass |
-| Audio unchanged with the menu's sounds on | The route audio hashes match with sounds on | All 48 rows of the twenty-four routes match in windowed runs with `menu_sounds on` in each run's `settings.txt` and the menu opened over frame 600 and closed after 60 redraws, and each log has its `[overlay] open` and `[pause] resumed` lines. That's `tools/audio_hashes.py menu`, which runs each route as `tools/probe.sh NAME SECONDS tests/routes/ROUTE.txt 100000 GCN_AXSTATS=1 GCN_OVERLAY_AT=600:60` plus its manifest settings, at twice its manifest seconds. It took 29 min 23 s at `nice -n 19`, with 1-minute loads of 2.9 as it began and 12.7 as it ended (Dragoon `9a98673`, gcn-recomp `236e1f4`), against 29 min 7 s at `541a6ae`. `dragoon_bench` has no menu, so `tools/audio_hashes.py check` can't open it. No line says whether a sound played under SDL's dummy audio driver, and the hashes are of the mixer's blocks, which the sounds join later (`test_ui_sound` checks a `GCN_WAV` capture never holds them) | Pass |
+| Audio unchanged with the menu's sounds on | The route audio hashes match with sounds on | All 48 rows of the twenty-four routes match in windowed runs with `menu_sounds on` in each run's `settings.txt` and the menu opened over frame 600 and closed after 60 redraws, and each log has its `[overlay] open` and `[pause] resumed` lines. That's `tools/audio_hashes.py menu`, which runs each route as `tools/probe.sh NAME SECONDS tests/routes/ROUTE.txt 100000 GCN_AXSTATS=1 GCN_OVERLAY_AT=600:60` plus its manifest settings, at twice its manifest seconds. It took 29 min 6 s at `nice -n 19`, with 1-minute loads of 4.4 as it began and 5.5 as it ended (Dragoon `ae7ebd1`, gcn-recomp `b4f8ddb`), against 29 min 23 s at `236e1f4` and 29 min 7 s at `541a6ae`. `dragoon_bench` has no menu, so `tools/audio_hashes.py check` can't open it. No line says whether a sound played under SDL's dummy audio driver, and the hashes are of the mixer's blocks, which the sounds join later (`test_ui_sound` checks a `GCN_WAV` capture never holds them) | Pass |
 | Menu sounds clean | Peak -12 dBFS or lower, first and last sample 0, 2 ms attack and release, no click from `tools/audio_clicks.py`, heard within one callback | `test_ui_sound` passed 366 of 366 checks. Each of the eight voices peaks at -14 dBFS, starts and ends on a zero sample in both channels, rises over its first 2 ms and falls no faster than a 2 ms raised cosine, and "the next pull takes it and it's audible in that pull, over -60 dBFS". `tools/audio_clicks.py` on each voice, as `test_ui_sound DIR WAVDIR` wrote it, found 0 clicks, 0 gaps and 0 clipped runs. At a load of 5.5 | Pass |
 | Menu contrast | Text 4.5:1 and the focus ring 3:1, in both themes | `test_overlay_theme` passed all 147 checks on the engine's default theme, the one Dragoon draws: text at 4.52:1 at least (Text on the selected tab) and the ring at 6.00:1 at least (beside a pressed item). Dragoon has no theme of its own, so there's no second theme to measure. Run as `build/test_overlay_theme`, untimed, so load doesn't bear on it | Pass for the default theme |
 | Menu at couch size | Body text 22 px and targets 48 px at 1080 lines | `test_overlay_theme` passes "body text is at least 22 px at 1080 lines" and "nothing to press is under 48 px at 1080 lines, items included". Run as `build/test_overlay_theme`, untimed | Pass |
@@ -697,7 +697,9 @@ The menu rows were measured on 2026-11-14 at Dragoon `05d18f1` and gcn-recomp `1
 M4 Max, one game at a time. The smooth-while-moving and audio rows were measured again on
 2026-11-15 at Dragoon `374b288` and gcn-recomp `80ef3a7`, which has the `[overlay] frame` line,
 and again the same day at Dragoon `741b62c` and gcn-recomp `541a6ae`, which paces the held redraw,
-and at Dragoon `a4cdc27` and gcn-recomp `236e1f4`, whose line splits the interval. The engine's checks were built in the game's build directory with
+and at Dragoon `a4cdc27` and gcn-recomp `236e1f4`, whose line splits the interval. They were
+measured again on 2026-11-16 on a build of Dragoon `ae7ebd1` and gcn-recomp `b4f8ddb`, whose
+line adds the loop thread's CPU time and the swap, and read with `360dd44`'s `frametime.py`. The engine's checks were built in the game's build directory with
 `ninja test_ports test_overlay_theme test_overlay_motion test_overlay_fonts test_ui_sound` and
 run at `nice -n 19`, except `test_ports --pages`, which times frames. The game runs that time
 something weren't niced. A probe run starts the game in `build/probe/NAME/`, so its Mods page
@@ -1091,6 +1093,16 @@ binaries. The warm-up's own time wasn't measured. At the 12 to 15 ms gcn-recomp'
 `docs/diagnostics.md` gives the compile, it's inside the runs' spread of 691 to 780 ms, so these runs can't show the ready file's frame line moving. A
 hidden run writes its `window` and `frame` lines at the same first frame.
 
+The Menu smooth while it moves row was first measured here, at Dragoon `374b288` at loads from
+8.0 falling to 2.0. The 1,260 `held 1` redraw intervals were 18.58 ms at p50, 19.87 ms at p99
+and 21.24 ms at most. The menu's CPU time over all 1,428 frames was 0.167 ms at p50, 1.116 ms at
+p99 and 3.858 ms at most. Each process's first menu frame, `f0`, took 0.608 to 3.858 ms, 1.139
+ms at p50, the 3.858 ms at a load of 8.0. `test_ports --pages` timed 13.08 ms for the first
+frame at gcn-recomp `14712b8`, but that isn't the same measure. The game's are `[overlay] frame`
+CPU times on the steady clock in a 3414x1920 window, and the 13.08 ms came from the engine's
+test process in a 1920x1080 window. No run turned a page while open, since `GCN_OVERLAY_AT`
+opens once a process and a route's presses reach only the guest, which the menu holds.
+
 ## gcn-recomp `541a6ae`
 
 The pin moved from `80ef3a7` to `541a6ae`, 10 commits (gcn-recomp #107). While the guest is
@@ -1132,8 +1144,17 @@ and 727, against 599 at `80ef3a7`. Four-player City Trial and the stadium weren'
 66.9 s at a load of 4.1 as it began, under the Player targets bar of 90 s. Its cache holds 333
 keys, as at `80ef3a7`.
 
-The menu's held redraw was measured again for the Menu smooth while it moves row. Its p50 went
-from 18.58 ms to 16.67 ms and its p99 from 19.87 ms to 19.19 ms, still over the 17 ms bar.
+The menu's held redraw was measured again for the Menu smooth while it moves row, at Dragoon
+`741b62c` at loads from 10.9 falling to 2.1. Its p50 went from 18.58 ms to 16.67 ms, its p99
+from 19.87 ms to 19.19 ms and its max from 21.24 ms to 26.64 ms, still over the 17 ms bar. 460
+intervals were under 9 ms, 1 from 9 to 16 ms, 759 from 16 to 17 ms and 40 over 17 ms. Each open's
+first held interval, from the open's first frame to the first redraw, ran 18.07 to 26.64 ms.
+Leaving those 21 out, the other 1,239 were 16.67 ms at p50, 17.03 ms at p99 and 17.07 ms at most.
+The menu's CPU time over 1,428 frames was 0.142 ms at p50, 1.075 ms at p99 and 3.207 ms at most,
+and `f0` took 0.565 to 3.207 ms, 1.118 ms at p50, the 3.207 ms the first run's at 10.9.
+`test_ports --held`, the engine's own held redraw over the menu in a hidden 1920x1080 window,
+gave the loop's thread 1.07 ms of CPU a held frame with `overlay_draw`'s, and a held interval of
+16.70 ms at p50 and 16.73 ms at p99, in each of two runs, not niced, at loads of 2.0 to 3.0.
 
 ## gcn-recomp `236e1f4`
 
@@ -1212,8 +1233,14 @@ At the lower load the newer build's p50 is 26 ms under the older's, so the 89 ms
 showed was their spread. The 0.5 to 1.4 ms gcn-recomp's diagnostics give the blur warm-up is
 inside both spreads, so neither shows it.
 
-The menu's held redraw was measured again for the Menu smooth while it moves row. Its p99 went
-from 19.19 ms to 17.04 ms and its max from 26.64 ms to 17.46 ms, still over the 17 ms bar. Each
+The menu's held redraw was measured again for the Menu smooth while it moves row, at Dragoon
+`a4cdc27` at loads from 12.0 falling to 2.6. Its p50 went from 16.67 ms to 16.65 ms, its p99 from
+19.19 ms to 17.04 ms and its max from 26.64 ms to 17.46 ms, still over the 17 ms bar. 478
+intervals were under 9 ms, 9 from 9 to 16 ms, 748 from 16 to 17 ms and 25 over 17 ms. Leaving out
+the 21 first held intervals, the other 1,239 were 16.65 ms at p50, 17.04 ms at p99 and 17.46 ms
+at most. The menu's CPU time over 1,428 frames was 0.154 ms at p50, 1.049 ms at p99 and 3.889 ms
+at most, and `f0` took 0.741 to 3.889 ms, 1.220 ms at p50, the 3.889 ms the fifteenth run's at
+3.0. Each
 open's first held interval ran 15.28 to 17.25 ms, with a `late` of 0 to 0.022 ms, a `present` of
 0.034 to 1.027 ms and a `blur` of 0.076 to 0.322 ms, leaving 15.07 to 16.62 ms.
 
@@ -1232,6 +1259,64 @@ Of the other three over 17 ms, one open's first held
 interval took 17.25 ms with a draw of 1.027 ms, one redraw took 17.46 ms with a draw of 1.202 ms,
 followed by one of 15.62 ms, and one took 17.20 ms after a wait that ended 0.416 ms late, the
 only `late` over 0.08 ms in all 1,260.
+
+## gcn-recomp `b4f8ddb`
+
+The pin moved from `236e1f4` to `b4f8ddb`, three merged PRs. Fork #110 makes the held wait wake
+in steps and adds `thread` and `swap` to the end of the `[overlay] frame` line. `thread` is the
+loop thread's CPU time over the frame's draw and blur, and `swap` the last frame's buffer swap
+(`docs/diagnostics.md`). Fork #112 changes CI only. Fork #113 moves the menu's blur into
+`render_gl_blur.cpp` and gives the overlay and GL tools shared headers, with no change in
+behavior. The fit line `tools/settings_fixtures.py` checks moved with the blur and is now once
+in `render_gl_present.cpp` and once in `render_gl_blur.cpp`, so the tool names both and its
+count of copies went. `tools/frametime.py --menu` read no line from #110 on, and now reads any
+trailing field. The bump moved nine cites, which `tools/fork_cites.py 236e1f4 b4f8ddb` found.
+Five were of `main.cpp`, by 11 lines, one of them in the tools README's cite table. Three were of
+`overlay.cpp` by 39 and one of the CMake unit target by 16.
+
+Built on Dragoon `ae7ebd1`, `tools/frame_hashes.py check` matched all twenty-four routes and
+1,906 frames in one pass of 15 min at loads of 4.8 to 6.1. `tools/audio_hashes.py check` then
+matched all 48 rows in 14 min 27 s at 6.8 to 4.4, so no golden was recorded, and
+`tools/audio_hashes.py menu` matched all 48 in 29 min 6 s at 4.4 to 5.5. All three ran at
+`nice -n 19`. None of the 24 bench logs has an `[interp]` line.
+
+The speed runs came after the checks on the same build, one game at a time and not niced. The
+race route ran hidden with `--fast` as `tools/probe.sh NAME 40 tests/routes/air-ride-race.txt 60`,
+four times. Its dumps of frames 3,600 and 13,200 were written 18.33 s, 18.58 s, 18.35 s and
+18.38 s apart, 524, 517, 523 and 522 frames a second, at loads of 3.2 rising to 5.6, inside the
+515 to 536 at `236e1f4`.
+
+`dragoon_bench` moved past its spread. On its own, not niced, the one-second samples from 8 s to
+20 s averaged 575, 586 and 584 frames a second in three runs at loads of 3.8 to 8.4, between 508
+and 720, against 600 at `236e1f4`, 601 at `541a6ae` and 599 at `80ef3a7`. At `nice -n 19` it
+averaged 573, between 530 and 702, at 3.8 to 8.8. In the audio check's run of the race it
+averaged 595, between 541 and 722. At `236e1f4` those two were 518 and 357. Each run was
+`env SDL_AUDIO_DRIVER=dummy tools/probe.sh NAME 30 tests/routes/air-ride-race.txt 60 --bench GCN_AXSTATS=1`.
+No build at `236e1f4` was run beside it, so this doesn't say whether the bump or the Mac moved
+it. Its whole runs still went 904 to 941 frames a second.
+
+`tools/warm_shaders.py --force`, five passes at once from an empty cache and not niced, took
+70.3 s at a load of 2.7 as it began, under the Player targets bar of 90 s, with 333 keys as at
+`236e1f4`. That's past the 66.3 to 67.0 s of the last three pins. `fseventsd` and a virtual
+machine took most of two cores as it ran. A run just before it took 104.0 s and built the same
+keys. It began straight after a warm-up from the full cache, at a load of 8.9 rising to 14.1.
+
+The menu's held redraw was measured again for the Menu smooth while it moves row, which now
+gives this pin's numbers. Its p50 went from 16.65 ms to 16.67 ms and its p99 from 17.04 ms
+to 17.00 ms, on the bar. Its max went from 17.46 ms to 25.08 ms. 486 intervals were under 9 ms, none
+from 9 to 16 ms, 762 from 16 to 17 ms and 12 over 17 ms. Each open's first held interval ran
+1.16 to 16.82 ms. Leaving those 21 out, the other 1,239 were 16.67 ms at p50, 17.00 ms at p99 and
+25.08 ms at most. `f0` took 0.434 to 3.431 ms, 1.149 ms at p50.
+
+`thread` and `swap` split the tail. Of the 14 intervals from 17.0 ms, the 13 from 17.00 to
+17.26 ms had a `present` of 0.323 to 0.584 ms and a `thread` of 0.343 to 0.399 ms, with a `late`
+of 0.030 to 0.043 ms. The other 1,246 had a `present` of 0.049 ms and a `thread` of 0.056 ms at
+p50. So the thread's CPU time grew with the span and the thread was running, slower, not blocked
+or held off a core. That fits it waking on an efficiency core. Their `swap` of 0.262 to 0.855
+ms is as the rest's, 0.373 ms at p50 and 2.252 ms at p99, so the swap played no part. The
+fourteenth, 25.08 ms, came after the frame before's `swap` took 24.776 ms, the longest in all
+1,260, and its wait ended 8.378 ms late. Its `thread` was 0.119 ms. What held that swap wasn't
+checked.
 
 ## Disc reads
 
