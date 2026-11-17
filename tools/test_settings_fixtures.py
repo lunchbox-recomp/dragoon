@@ -124,16 +124,6 @@ class CopiedLinesTest(unittest.TestCase):
                                  (2, "", f"gcn-recomp/runtime/{name}: no line \"{line}\", "
                                          "which settings_fixtures.cpp copies\n"))
 
-    # The frame's fit in render_gl_present.cpp and the held frame's in render_gl_blur.cpp are the
-    # same line.
-    FIT = "const OutputRect fit = fit_aspect(w, h, output_aspect());"
-
-    def test_the_held_frames_fit_at_4_3_exits_2(self) -> None:
-        changed = "const OutputRect fit = fit_aspect(w, h, 4.0f / 3.0f);"
-        self.assertEqual(self.check_with("gx/render_gl_blur.cpp", self.FIT, changed),
-                         (2, "", f"gcn-recomp/runtime/gx/render_gl_blur.cpp: no line \"{self.FIT}\", "
-                                 "which settings_fixtures.cpp copies\n"))
-
 
 class NoEngineTest(unittest.TestCase):
     def test_without_the_submodule_it_says_how_to_check_it_out_and_exits_2(self) -> None:

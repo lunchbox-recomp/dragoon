@@ -139,9 +139,10 @@ class MenuTest(unittest.TestCase):
     def test_garbage_after_cpu_leaves_the_line_and_its_whole_fields(self):
         base = menu_line(1, 1, 16.0, 0.1)
         lines = [base + "  late  0.3", base + "  late  0.300ms  present  1.2", base + "  late ms",
-                 base + "  late  0.300ms  and more", base + "  blur  0.100ms", base + "  late  1.2.3ms"]
+                 base + "  late  0.300ms  and more", base + "  blur  0.100ms", base + "  late  1.2.3ms",
+                 base + "  late  0.300mspresent  1.000ms"]
         self.assertEqual([f.pre for f in frametime.parse_menu(lines)],
-                         [{}, {"late": 0.3}, {}, {"late": 0.3}, {"blur": 0.1}, {}])
+                         [{}, {"late": 0.3}, {}, {"late": 0.3}, {"blur": 0.1}, {}, {"late": 0.3}])
 
     def test_late_present_and_blur_take_the_held_redraws_that_have_each(self):
         # f8 opens held with interval 0, so it's no redraw and its fields stay out
