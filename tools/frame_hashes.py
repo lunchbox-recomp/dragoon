@@ -8,10 +8,10 @@ Routes and their probe settings are in tests/hashes/manifest.txt; with no ROUTE 
 runs. Goldens are in tests/hashes/gl/<route>.txt, one "frame_NNNNN <sha1>" line per
 frame. --aspect=16:9 runs each route with probe.sh --aspect=16:9 and keeps its goldens in
 tests/hashes/gl-16x9/ instead. --aspect=4:3 is the default, and gives probe.sh no --aspect,
-as the 4:3 goldens were recorded. check prints one status line per route and one line per frame that changed or wasn't
-reached. record rewrites the goldens, and writes none for a route that skipped a dump. A
-check reads every golden before it runs the game. The frames come from the player's disc, so
-they're deleted once hashed and never committed.
+as the 4:3 goldens were recorded. check prints one status line per route and one line per
+frame that changed or wasn't reached. record rewrites the goldens, and writes none for a
+route that skipped a dump. A check reads every golden before it runs the game. The frames
+come from the player's disc, so they're deleted once hashed and never committed.
 
 --slow=N gives each route N times its seconds, for a build that runs slower than the one the
 goldens came from. N is a whole number from 1 and defaults to 1. record refuses it, since
