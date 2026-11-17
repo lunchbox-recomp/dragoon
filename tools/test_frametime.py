@@ -94,9 +94,10 @@ class StatsTest(unittest.TestCase):
 
 
 def menu_line(n: int, held: int, interval: float, cpu: float, *pre: float) -> str:
-    """The engine's line, with as many of late, present and blur as `pre` gives, as gcn-recomp
-    236e1f4 prints them. With none it's the line from before 236e1f4."""
-    tail = "".join(f"  {key} {ms:6.3f}ms" for key, ms in zip(("late", "present", "blur"), pre))
+    """The engine's line, with as many of late, present, blur, thread and swap as `pre` gives.
+    With none it's the line from before gcn-recomp 236e1f4, with three 236e1f4's and with five
+    b4f8ddb's."""
+    tail = "".join(f"  {key} {ms:6.3f}ms" for key, ms in zip(("late", "present", "blur", "thread", "swap"), pre))
     return f"[overlay] frame f{n} held {held} interval {interval:6.2f}ms  cpu {cpu:6.3f}ms" + tail
 
 
@@ -113,39 +114,34 @@ NEW_OPEN = [menu_line(0, 0, 0, 2.0, 0.0, 9.0, 0.0), menu_line(1, 1, 20.0, 0.3, 0
 
 
 class MenuTest(unittest.TestCase):
-    def test_parses_each_field_of_the_engines_line(self):
+    def test_parses_the_line_from_80ef3a7(self):
         self.assertEqual(frametime.parse_menu(["[overlay] frame f12 held 1 interval  16.67ms  cpu  0.245ms\n"]),
-                         [frametime.MenuFrame(12, True, 16.67, 0.245, None, None, None)])
+                         [frametime.MenuFrame(12, True, 16.67, 0.245)])
 
     def test_parses_late_present_and_blur_from_236e1f4(self):
         line = "[overlay] frame f12 held 1 interval  17.05ms  cpu  0.245ms  late  0.351ms  present  0.212ms  blur  0.064ms\n"
-        self.assertEqual(frametime.parse_menu([line]), [frametime.MenuFrame(12, True, 17.05, 0.245, 0.351, 0.212, 0.064)])
+        self.assertEqual(frametime.parse_menu([line]),
+                         [frametime.MenuFrame(12, True, 17.05, 0.245, {"late": 0.351, "present": 0.212, "blur": 0.064})])
 
-    def test_a_line_with_only_some_of_the_new_fields_reads_those(self):
-        frames = frametime.parse_menu([menu_line(1, 1, 16.0, 0.1, 0.3), menu_line(2, 1, 16.0, 0.1, 0.3, 1.5)])
-        self.assertEqual([(f.late_ms, f.present_ms, f.blur_ms) for f in frames], [(0.3, None, None), (0.3, 1.5, None)])
+    def test_parses_thread_and_swap_from_b4f8ddb(self):
+        line = ("[overlay] frame f12 held 1 interval  17.05ms  cpu  0.245ms  late  0.351ms  present  0.212ms"
+                "  blur  0.064ms  thread  0.250ms  swap  1.020ms\n")
+        self.assertEqual(frametime.parse_menu([line])[0].pre,
+                         {"late": 0.351, "present": 0.212, "blur": 0.064, "thread": 0.25, "swap": 1.02})
 
-    def test_garbled_new_fields_are_skipped(self):
+    def test_a_field_it_doesnt_name_is_read_and_left_out_of_the_summary(self):
+        frames = frametime.parse_menu([menu_line(0, 0, 0, 1.0), menu_line(1, 1, 16.0, 0.1) + "  gpu  2.000ms  late  0.300ms"])
+        self.assertEqual(frames[1].pre, {"gpu": 2.0, "late": 0.3})
+        s = frametime.menu_summary({"a": frames})
+        self.assertNotIn("gpu", s)
+        self.assertEqual(s["late"], {"n": 1, "p50": 0.3, "p99": 0.3, "max": 0.3})
+
+    def test_garbage_after_cpu_leaves_the_line_and_its_whole_fields(self):
         base = menu_line(1, 1, 16.0, 0.1)
         lines = [base + "  late  0.3", base + "  late  0.300ms  present  1.2", base + "  late ms",
-                 base + "  present  1.000ms  late  0.300ms", base + "  blur  0.100ms  blur  0.100ms",
-                 base + "  late  0.300ms  present  1.000ms  blur  0.100ms  and more", base + "  lat  0.300ms",
-                 base + "late  0.300ms", base + "  late  0.300mspresent  1.000ms",
-                 base + "  late  0.300ms  present  1.000msblur  0.100ms"]
-        self.assertEqual(frametime.parse_menu(lines), [])
-
-    def test_a_line_missing_a_middle_field_is_skipped(self):
-        # The engine prints all three or none; a line that skips one isn't its line
-        base = menu_line(1, 1, 16.0, 0.1)
-        lines = [base + "  blur  0.100ms", base + "  present  1.000ms", base + "  late  0.300ms  blur  0.100ms",
-                 base + "  present  1.000ms  blur  0.100ms"]
-        self.assertEqual(frametime.parse_menu(lines), [])
-
-    def test_a_bad_number_in_a_new_field_exits_2_naming_the_log(self):
-        a = write_file(temp_dir(self), "a.txt", menu_line(0, 0, 0, 1.0) + "  late  1.2.3ms\n")
-        code, _, err = run_main(frametime.main, "--menu", str(a))
-        self.assertEqual(code, 2)
-        self.assertIn(f"{a}: an [overlay] frame line has a bad number", err)
+                 base + "  late  0.300ms  and more", base + "  blur  0.100ms", base + "  late  1.2.3ms"]
+        self.assertEqual([f.pre for f in frametime.parse_menu(lines)],
+                         [{}, {"late": 0.3}, {}, {"late": 0.3}, {"blur": 0.1}, {}])
 
     def test_late_present_and_blur_take_the_held_redraws_that_have_each(self):
         # f8 opens held with interval 0, so it's no redraw and its fields stay out
@@ -159,8 +155,16 @@ class MenuTest(unittest.TestCase):
 
     def test_a_log_from_before_236e1f4_has_none_of_the_new_spreads(self):
         s = frametime.menu_summary({"a": frametime.parse_menu(FIRST_OPEN)})
-        self.assertEqual((s["late"], s["present"], s["blur"]), ({"n": 0}, {"n": 0}, {"n": 0}))
+        self.assertEqual([s[key] for key, _ in frametime.PRE_FIELDS], [{"n": 0}] * 5)
         self.assertEqual(s["interval"]["n"], 2)
+
+    def test_thread_and_swap_take_the_held_redraws_from_b4f8ddb(self):
+        lines = [menu_line(0, 0, 0, 2.0, 0.0, 9.0, 0.0, 8.0, 0.0), menu_line(1, 1, 17.2, 0.3, 0.04, 0.35, 0.3, 0.6, 0.9),
+                 menu_line(2, 1, 16.6, 0.2, 0.03, 0.03, 0.07, 0.09, 1.1)]
+        s = frametime.menu_summary({"a": frametime.parse_menu(lines), "b": frametime.parse_menu(NEW_OPEN)})
+        self.assertEqual(s["thread"], {"n": 2, "p50": 0.09, "p99": 0.6, "max": 0.6})
+        self.assertEqual(s["swap"], {"n": 2, "p50": 0.9, "p99": 1.1, "max": 1.1})
+        self.assertEqual(s["late"]["n"], 5)
 
     def test_main_prints_late_present_and_blur_beside_the_interval(self):
         a = write_file(temp_dir(self), "a.txt", "\n".join(NEW_OPEN) + "\n")
@@ -171,13 +175,23 @@ class MenuTest(unittest.TestCase):
         self.assertIn("  held wait's lateness (late): n 3  p50 0.010  p99 0.350  max 0.350 ms", out)
         self.assertIn("  draw before the menu (present): n 3  p50 0.300  p99 4.000  max 4.000 ms", out)
         self.assertIn("  blurred backdrop (blur): n 3  p50 0.060  p99 0.500  max 0.500 ms", out)
+        self.assertIn("  loop thread's CPU time (thread): n 0", out)
         code, out, _ = run_main(frametime.main, "--menu", str(b), "--json")
         self.assertEqual(json.loads(out)["late"], {"n": 0})
+
+    def test_main_prints_thread_and_swap_under_blur(self):
+        a = write_file(temp_dir(self), "a.txt", "\n".join([menu_line(0, 0, 0, 2.0, 0, 9.0, 0, 8.0, 0),
+                                                         menu_line(1, 1, 17.2, 0.3, 0.04, 0.35, 0.3, 0.6, 0.9)]) + "\n")
+        code, out, _ = run_main(frametime.main, "--menu", str(a))
+        self.assertEqual(code, 0)
+        self.assertIn("  blurred backdrop (blur): n 1  p50 0.300  p99 0.300  max 0.300 ms\n"
+                      "  loop thread's CPU time (thread): n 1  p50 0.600  p99 0.600  max 0.600 ms\n"
+                      "  last frame's swap (swap): n 1  p50 0.900  p99 0.900  max 0.900 ms\n", out)
 
     def test_other_lines_and_cut_off_lines_are_skipped(self):
         lines = ["[overlay] shown after 180 ms", "[rt] f5 render  2.00ms", "x " + menu_line(0, 1, 1, 1),
                  "[overlay] frame f3 held 1 interval  16.67ms  cpu  0.2", "[overlay] frame f3 held 2 interval 1.00ms  cpu 1.000ms",
-                 menu_line(4, 1, 16.0, 0.1) + " and more"]
+                 "[overlay] frame f0 held 0 interval 1.2.3ms  cpu  0.100ms", "", "\x00garbage ms 1.000ms"]
         self.assertEqual(frametime.parse_menu(lines), [])
 
     def test_a_line_from_before_the_held_field_is_skipped(self):
@@ -185,16 +199,15 @@ class MenuTest(unittest.TestCase):
         self.assertEqual(frametime.parse_menu(["[overlay] frame f3 interval  16.00ms  cpu  0.100ms"]), [])
 
     def test_a_line_with_no_interval_and_the_first_line_start_an_open(self):
-        opens = frametime.menu_opens(frametime.parse_menu([menu_line(7, 1, 16.0, 0.1)] + SECOND_OPEN))
-        self.assertEqual([[f.n for f in o] for o in opens], [[7], [4, 5, 6]])
+        self.assertEqual(frametime.menu_opens(frametime.parse_menu([menu_line(7, 1, 16.0, 0.1)] + SECOND_OPEN)), 2)
 
     def test_the_redraw_interval_reads_held_1_lines_alone(self):
         frames = frametime.parse_menu(FIRST_OPEN + SECOND_OPEN)
-        self.assertEqual(frametime.redraws(frames), [16.0, 17.0, 8.0])
+        self.assertEqual([f.interval_ms for f in frametime.held_redraws(frames)], [16.0, 17.0, 8.0])
 
     def test_a_held_open_frame_has_no_interval_to_give(self):
-        self.assertEqual(frametime.redraws(frametime.parse_menu([menu_line(0, 1, 0, 1.0), menu_line(1, 1, 9.0, 1.0)])),
-                         [9.0])
+        frames = frametime.parse_menu([menu_line(0, 1, 0, 1.0), menu_line(1, 1, 9.0, 1.0)])
+        self.assertEqual([f.interval_ms for f in frametime.held_redraws(frames)], [9.0])
 
     def test_the_cpu_time_takes_every_frame_and_the_first_opens_first_frame(self):
         s = frametime.menu_summary({"a": frametime.parse_menu(FIRST_OPEN + SECOND_OPEN)})
@@ -232,13 +245,6 @@ class MenuTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn(f"{a}: no [overlay] frame lines", err)
         self.assertIn("before gcn-recomp 9776d98", err)
-
-    def test_a_log_with_a_bad_number_exits_2_naming_it(self):
-        a = write_file(temp_dir(self), "a.txt", "[overlay] frame f0 held 0 interval 1.2.3ms  cpu  0.100ms\n")
-        code, _, err = run_main(frametime.main, "--menu", str(a))
-        self.assertEqual(code, 2)
-        self.assertIn(f"{a}: an [overlay] frame line has a bad number", err)
-        self.assertEqual(len(err.splitlines()), 1)
 
     def test_the_frame_options_and_a_second_log_without_menu_exit_2(self):
         a = write_file(temp_dir(self), "a.txt", "\n".join(FIRST_OPEN) + "\n")

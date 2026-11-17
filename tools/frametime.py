@@ -17,14 +17,17 @@ copies a frame to the display in strips prints more than one [ft] line a batch, 
 pairing doesn't follow.
 
 --menu reads the overlay menu's lines instead, "[overlay] frame f<n> held <0|1> interval
-<ms>ms  cpu <ms>ms  late <ms>ms  present <ms>ms  blur <ms>ms" (gcn-recomp docs/diagnostics.md),
-from each LOG, one run each, pooled. An engine before gcn-recomp 236e1f4 prints no late, present
-or blur, and a line may end after any of them, but not skip one. A log's first line and each line with interval 0
-start an open. It prints the opens, the paused redraw interval from the held 1 lines that have
-one, and the late, present and blur of those same lines that have each, then the menu's CPU time
-over every frame it drew, each with n, p50, p99 and max, then the CPU time of each log's f0
-line, the first frame of the process's first open. A log whose lines don't start at f0 says it
-has none. --from, --slow and --late don't apply to it.
+<ms>ms  cpu <ms>ms" and any "<name> <ms>ms" fields after them (gcn-recomp docs/diagnostics.md),
+from each LOG, one run each, pooled. A log's first line and each line with interval 0 start an
+open, and a reopen during a fade out prints no interval 0, so it counts with the open before it.
+It prints the opens, the paused redraw interval from the held 1 lines that have one, as
+gcn-recomp's diagnostics.md says, and the late, present, blur, thread and swap of those same
+lines that have each, then the menu's CPU time over every frame it drew, each with n, p50, p99
+and max. An engine before gcn-recomp 236e1f4 prints none of those five and one before b4f8ddb
+no thread or swap, which then have n 0, and a field it doesn't name is left out. Last comes the
+CPU time of each log's f0 line, the first frame of the process's first open. A log whose lines
+don't start at f0 says it has none. --from, --slow and --late don't apply to it. GCN_OVERLAY_AT
+opens the menu once a process, so 20 opens take 20 runs.
 
 Exits 0 once it has read the logs, 2 on a bad argument, a log it can't read, a log with no
 frame from N on, or under --menu one with no [overlay] frame line.
@@ -45,15 +48,16 @@ FT = re.compile(r"^\[ft\] f(\d+) guest\s+([\d.]+)ms.*?"
                 r"(draws\s+\d+/\s*\d+\s+verts\s+\d+\s+idx\s+\d+)\s")
 RT = re.compile(r"^\[rt\] f(\d+) render\s+([\d.]+)ms")
 SHADER = re.compile(r"^\[shaders\] compiled program \d+ in ([\d.]+) ms")
-# The last ms stops a line cut off mid-number, and the $ one with more text after it. A line
-# with no held field, from an engine before gcn-recomp 9776d98, doesn't parse. late, present and
-# blur came in 236e1f4, in that order. A line that ends after one of them is read, so each group
-# holds the next, and one with a field missing in the middle doesn't parse.
-MENU = re.compile(r"^\[overlay\] frame f(\d+) held ([01]) interval\s+([\d.]+)ms\s+cpu\s+([\d.]+)ms"
-                  r"(?:\s+late\s+([\d.]+)ms(?:\s+present\s+([\d.]+)ms(?:\s+blur\s+([\d.]+)ms)?)?)?$")
-# The fields of a held redraw's line that split its interval, as --menu prints them.
+# The fields every line has. The ms after a number stops a line cut off mid-number. A line with
+# no held field, from an engine before gcn-recomp 9776d98, doesn't parse.
+MENU = re.compile(r"^\[overlay\] frame f(\d+) held ([01]) interval\s+(\d+\.\d+)ms\s+cpu\s+(\d+\.\d+)ms(.*)")
+# Each `NAME <ms>ms` field after them.
+PRE = re.compile(r"\s+(\w+)\s+(\d+\.\d+)ms")
+# The fields after cpu that --menu summarizes, as it prints them. late, present and blur came in
+# gcn-recomp 236e1f4, thread and swap in b4f8ddb. Any other is read and left out.
 PRE_FIELDS = (("late", "held wait's lateness (late)"), ("present", "draw before the menu (present)"),
-              ("blur", "blurred backdrop (blur)"))
+              ("blur", "blurred backdrop (blur)"), ("thread", "loop thread's CPU time (thread)"),
+              ("swap", "last frame's swap (swap)"))
 
 
 @dataclass
@@ -120,42 +124,30 @@ class MenuFrame:
     held: bool
     interval_ms: float
     cpu_ms: float
-    late_ms: float | None = None  # None where the line has no such field
-    present_ms: float | None = None
-    blur_ms: float | None = None
+    pre: dict[str, float] = field(default_factory=dict)  # the fields after cpu, by name
 
 
 def parse_menu(lines) -> list[MenuFrame]:
     """The [overlay] frame lines, in the order the log has them."""
     frames = []
     for line in lines:
-        if m := MENU.match(line.rstrip("\r\n")):
-            late, present, blur = (None if v is None else float(v) for v in m.group(5, 6, 7))
-            frames.append(MenuFrame(int(m[1]), m[2] == "1", float(m[3]), float(m[4]), late, present, blur))
+        if m := MENU.match(line):
+            pre = {name: float(ms) for name, ms in PRE.findall(m[5])}
+            frames.append(MenuFrame(int(m[1]), m[2] == "1", float(m[3]), float(m[4]), pre))
     return frames
 
 
-def menu_opens(frames: list[MenuFrame]) -> list[list[MenuFrame]]:
-    """One log's frames by open. An open's first frame has no interval, which the line gives
-    as 0, and so does the log's first frame. A reopen during a fade out keeps its interval,
-    so it counts with the open before it."""
-    opens: list[list[MenuFrame]] = []
-    for f in frames:
-        if not opens or f.interval_ms == 0:
-            opens.append([])
-        opens[-1].append(f)
-    return opens
+def menu_opens(frames: list[MenuFrame]) -> int:
+    """How many opens one log's frames hold. An open's first frame has no interval, which the
+    line gives as 0, and the log's first frame starts one too. A reopen during a fade out keeps
+    its interval, so it counts with the open before it."""
+    return sum(1 for i, f in enumerate(frames) if i == 0 or f.interval_ms == 0)
 
 
 def held_redraws(frames: list[MenuFrame]) -> list[MenuFrame]:
     """The paused redraws: the held 1 lines, less an open's first frame, which has an interval
     of 0. A fade out and the frames before the hold lands are paced by the guest."""
     return [f for f in frames if f.held and f.interval_ms > 0]
-
-
-def redraws(frames: list[MenuFrame]) -> list[float]:
-    """The paused redraw intervals."""
-    return [f.interval_ms for f in held_redraws(frames)]
 
 
 def _spread(values: list[float]) -> dict:
@@ -171,20 +163,16 @@ def menu_summary(logs: dict[str, list[MenuFrame]]) -> dict:
     frames = [f for fs in logs.values() for f in fs]
     first = {name: fs[0].cpu_ms if fs[0].n == 0 else None for name, fs in logs.items()}
     held = held_redraws(frames)
-    pre = {key: _spread([ms for f in held if (ms := getattr(f, f"{key}_ms")) is not None])
-           for key, _ in PRE_FIELDS}
-    return {"logs": len(logs), "opens": sum(len(menu_opens(fs)) for fs in logs.values()),
-            "frames": len(frames), "interval": _spread(redraws(frames)), **pre,
+    pre = {key: _spread([f.pre[key] for f in held if key in f.pre]) for key, _ in PRE_FIELDS}
+    return {"logs": len(logs), "opens": sum(menu_opens(fs) for fs in logs.values()),
+            "frames": len(frames), "interval": _spread([f.interval_ms for f in held]), **pre,
             "cpu": _spread([f.cpu_ms for f in frames]),
             "first_cpu": _spread([ms for ms in first.values() if ms is not None]), "first": first}
 
 
 def read_menu(log: Path) -> list[MenuFrame]:
     with log.open(errors="replace") as lines:
-        try:
-            frames = parse_menu(lines)
-        except ValueError as e:  # a time such as 1.2.3, which the pattern lets through
-            raise ValueError(f"{log}: an [overlay] frame line has a bad number: {e}") from None
+        frames = parse_menu(lines)
     if not frames:
         raise ValueError(f"{log}: no [overlay] frame lines; was GCN_FRAMETIME=1 set and the menu "
                          f"open? An engine before gcn-recomp 9776d98 prints them with no held field")
