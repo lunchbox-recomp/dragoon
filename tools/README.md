@@ -814,7 +814,7 @@ It prints one `kind: path (detail)` line per finding and nothing when the bundle
 
 `--repo` names the Dragoon checkout the reference snapshot is exported from, the one holding the tool unless you give another. `--manifest` names another manifest.
 
-A path that no manifest line allows is a finding, so a new file in the app starts as a line in the manifest. The app's budget in the manifest is an estimate, with a guess for the launcher and Sparkle. The engine kit sits at `Contents/Resources/kit/`, beside the snapshot.
+A path that no manifest line allows is a finding, so a new file in the app starts as a line in the manifest. The app's budget in the manifest is the measured app plus a quarter. It gets measured again once Sparkle is in. The engine kit sits at `Contents/Resources/kit/`, beside the snapshot.
 
 ## bundle_manifest.py
 
