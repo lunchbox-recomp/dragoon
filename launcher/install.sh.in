@@ -1,0 +1,85 @@
+#!/bin/sh
+# Installs Dragoon.app in ~/Applications from a release's zip:
+#   curl -fsSL https://github.com/lunchbox-recomp/dragoon/releases/latest/download/install.sh | sh
+# launcher/tools/make_install_script.py writes this file for each release from
+# launcher/install.sh.in, with the zip's URL and SHA-256 below.
+#
+# It needs an Apple silicon Mac on macOS 14 or later and refuses while Dragoon or its game runs.
+# It downloads the zip into a temporary folder, checks its SHA-256, unzips it beside the
+# installed app and swaps the new app in. Builds and saves in ~/Library/Application Support/Dragoon
+# stay as they are. It never runs sudo, never changes extended attributes and never installs
+# Apple's Command Line Tools, which the launcher asks for itself.
+#
+# The script is one function, called on its last line, so a download cut short runs nothing.
+set -eu
+
+url='@URL@'
+sha256='@SHA256@'
+
+download=
+stage=
+
+fail() {
+	printf '%s\n' "$1" >&2
+	exit 1
+}
+
+clean_up() {
+	if [ -n "$download" ]; then rm -rf "$download"; fi
+	if [ -n "$stage" ]; then rm -rf "$stage"; fi
+}
+
+install_dragoon() {
+	arch=$(uname -m)
+	if [ "$arch" != arm64 ]; then
+		fail "Dragoon needs a Mac with Apple silicon. This one reports $arch."
+	fi
+	version=$(sw_vers -productVersion)
+	major=${version%%.*}
+	case $major in
+		'' | *[!0-9]*) fail "Dragoon needs macOS 14 or later. This Mac reports macOS $version." ;;
+	esac
+	if [ "$major" -lt 14 ]; then
+		fail "Dragoon needs macOS 14 or later. This Mac has macOS $version."
+	fi
+	if pgrep -x Dragoon > /dev/null || pgrep -x dragoon > /dev/null; then
+		fail "Dragoon is open. Quit Dragoon and its game, then run this again."
+	fi
+
+	apps="$HOME/Applications"
+	app="$apps/Dragoon.app"
+	trap clean_up EXIT
+	trap 'exit 1' HUP INT TERM
+
+	# A template, since macOS's mktemp -d alone ignores TMPDIR.
+	download=$(mktemp -d "${TMPDIR:-/tmp}/dragoon-download.XXXXXX")
+	printf 'Downloading %s\n' "$url"
+	if ! curl -fsSL -o "$download/Dragoon.zip" "$url"; then
+		fail "The download failed. Nothing was installed."
+	fi
+	got=$(shasum -a 256 "$download/Dragoon.zip" | cut -d ' ' -f 1)
+	if [ "$got" != "$sha256" ]; then
+		printf "The download's SHA-256 doesn't match the release's. Nothing was installed.\n" >&2
+		printf '  release   %s\n' "$sha256" >&2
+		printf '  download  %s\n' "$got" >&2
+		exit 1
+	fi
+
+	mkdir -p "$apps"
+	stage=$(mktemp -d "$apps/.Dragoon-install.XXXXXX")
+	ditto -x -k "$download/Dragoon.zip" "$stage"
+	if [ ! -d "$stage/Dragoon.app" ]; then
+		fail "The download holds no Dragoon.app. Nothing was installed."
+	fi
+	if [ -e "$app" ] || [ -L "$app" ]; then
+		mv "$app" "$stage/previous.app"
+	fi
+	if ! mv "$stage/Dragoon.app" "$app"; then
+		if [ -e "$stage/previous.app" ]; then mv "$stage/previous.app" "$app"; fi
+		fail "Couldn't move Dragoon into $apps. The app there is as it was."
+	fi
+	printf 'Dragoon is in %s\n' "$apps"
+	open "$app"
+}
+
+install_dragoon
