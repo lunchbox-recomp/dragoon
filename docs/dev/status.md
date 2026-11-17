@@ -100,7 +100,7 @@ Here that was `/opt/homebrew/bin/pkg-config`, which found 1.0.29 (`PC_LibUSB_VER
 `build/CMakeCache.txt`).
 
 `-DDRAGOON_TESTS=ON` adds a third download, GoogleTest 1.17.0's source release, which Dragoon's
-own `CMakeLists.txt:41-45` pins by SHA-256 and CI's macOS job turns on (`tools/ci.py:79-80`).
+own `CMakeLists.txt:41-45` pins by SHA-256 and CI's macOS job turns on (`tools/ci.py:106-107`).
 A configure at gcn-recomp `782d7fa` with no disc and CMake 4.4.4 fetched it.
 
 | | GoogleTest |
@@ -132,7 +132,7 @@ timeout (`Modules/GoogleTest.cmake:580-582`), and a nonzero exit stops the build
 `Modules/GoogleTestAddTests.cmake:226-241`). Only `gtest` and `gtest_main` were built here,
 and the discovery and CTest steps were read from CMake's files, not run.
 
-CI's macOS job runs `ninja unit` (`tools/ci.py:82`), which builds the engine's own unit tests
+CI's macOS job runs `ninja unit` (`tools/ci.py:109`), which builds the engine's own unit tests
 and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
 (`gcn-recomp/CMakeLists.txt:1444-1447`). It builds `dragoon_tests` too and runs it once to list
 its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's

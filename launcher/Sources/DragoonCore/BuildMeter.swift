@@ -1,7 +1,7 @@
 import Foundation
 
 /// The recipe's steps as the build bar's segments, each as wide as the seconds it took on the
-/// Mac the build was measured on, the first build on an M4 Max in `tools/README.md:686`. That
+/// Mac the build was measured on, the first build on an M4 Max in `tools/README.md:703`. That
 /// build took 95.2 s and timed every step but the swap, so the swap is the 0.2 s left over.
 /// Package and swap together are a sliver at the end.
 public enum BuildSegment: String, CaseIterable, Comparable, Sendable {

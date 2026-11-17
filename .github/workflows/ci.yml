@@ -52,3 +52,23 @@ jobs:
           persist-credentials: false
       - name: Launcher job
         run: python3 tools/ci.py launcher
+  app:
+    needs: kit
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-kit
+          path: ${{ github.workspace }}/engine kit
+      - name: App job
+        run: python3 tools/ci.py app
+      # Uploaded as the zip itself, so the artifact is the file a release would carry.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ github.workspace }}/app job/Dragoon.zip
+          archive: false
+          if-no-files-found: error

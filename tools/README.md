@@ -602,9 +602,11 @@ tools/check_no_game_data.py
 
 ## ci.py
 
-Does the commit pass CI? ci.py runs every step of CI's four jobs, `tools`, `macos`, `kit` and `launcher`, from the repository's root. The workflow runs each job by name, so a Mac without a runner runs the same steps. It stops at the first step that fails and exits 1, and an unknown job exits 2.
+Does the commit pass CI? ci.py runs every step of CI's five jobs, `tools`, `macos`, `kit`, `launcher` and `app`, from the repository's root. The workflow runs each job by name, so a Mac without a runner runs the same steps. It stops at the first step that fails and exits 1, and an unknown job exits 2.
 
 The `kit` job leaves the kit in `engine kit/` and links it against stub tables in `stub game/`, with a space in each name because a player's path may have one. It deletes both first, so a second run starts from scratch there. The builds go to `build-nodisc/` and `build-kit/` and a second run reuses them, so delete those for a fresh build.
+
+The `app` job builds the unsigned app from the kit in `engine kit/`, so on a Mac it runs after the `kit` job, and in CI after the workflow downloads the `engine-kit` artifact. It works in `app job/`, which it deletes first. It runs `swift build -c release` for the launcher, exports a snapshot with `export_source.py` and builds the app with `make_app.py`. Then it zips the app with `ditto -c -k --keepParent` into `app job/Dragoon.zip`, unzips that into a fresh directory, runs `check_bundle.py` on the copy and links the copy's own `Contents/Resources/kit` against the stub tables. The workflow uploads the zip as it is, unarchived.
 
 ```
 tools/ci.py

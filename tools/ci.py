@@ -4,13 +4,20 @@
 Usage: tools/ci.py [JOB ...]
 
 Run it from the repository's root, with the gcn-recomp submodule checked out. With no JOB it
-runs every job: tools, macos, kit and launcher. A job's steps run in order, and the first
+runs every job: tools, macos, kit, launcher and app. A job's steps run in order, and the first
 one that fails stops the run. .github/workflows/ci.yml installs what a runner lacks and runs
 each job by name, so a step changes here and nowhere else.
 
 The kit job leaves the engine kit in `engine kit/` and links it against stub tables in
 `stub game/`. Both names have a space, as a player's path may, and the job deletes both
 before it starts.
+
+The app job takes the kit from `engine kit/`, where the kit job or the workflow's download
+of its artifact left it, and works in `app job/`, which it deletes before it starts. It builds
+the launcher with `swift build -c release`, exports a source snapshot and builds the unsigned
+app with make_app.py. It zips the app with `ditto -c -k --keepParent` into
+`app job/Dragoon.zip`, unzips that into a fresh directory, runs check_bundle.py on the copy and
+links the copy's own kit against the stub tables, as a release's zip would be checked.
 
 Exits 0 when every step passed, 1 when a step failed and 2 on an unknown job.
 """
@@ -27,6 +34,14 @@ from pathlib import Path
 PYTHONS = ["python3", "/usr/bin/python3"]
 KIT = "engine kit"
 STUB = "stub game"
+APP_JOB = "app job"
+SNAPSHOT = f"{APP_JOB}/source"
+BUILT = f"{APP_JOB}/build"
+ZIP = f"{APP_JOB}/Dragoon.zip"
+UNZIPPED = f"{APP_JOB}/unzipped"
+APP_STUB = f"{APP_JOB}/stub game"
+LAUNCHER = "launcher/.build/release/Dragoon"  # what `swift build -c release` makes
+APP_VERSION = "0.0.0"  # CI's app is never released, so it has no version of its own
 
 Step = tuple[str, "list[str] | Callable[[], int]"]
 
@@ -38,27 +53,39 @@ def clear_kit() -> int:
     return 0
 
 
-def link_stub() -> int:
-    """Link the kit against stub tables that stand in for the recompiler's output, so a
-    framework missing from game_libs.txt fails the link."""
-    gen = Path(STUB, "gen")
+def link_stub(kit: str = KIT, stub: str = STUB) -> int:
+    """Link KIT, in a new directory STUB, against stub tables that stand in for the
+    recompiler's output, so a framework missing from game_libs.txt fails the link."""
+    gen = Path(stub, "gen")
     try:
         gen.mkdir(parents=True, exist_ok=True)
         shutil.copy("tests/kit/stub_tables.c", gen)
         sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True,
                              check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError) as e:
-        print(f"couldn't set up {STUB}: {e}", flush=True)
+        print(f"couldn't set up {stub}: {e}", flush=True)
         return 1
-    kit = os.path.abspath(KIT)
+    kit = os.path.abspath(kit)
     code = subprocess.run(["make", "-f", f"{kit}/Makefile", f"KIT={kit}", f"SDK={sdk}",
-                           "CC=clang", "CXX=clang++"], cwd=STUB).returncode
+                           "CC=clang", "CXX=clang++"], cwd=stub).returncode
     if code:
         return code
-    if not os.access(Path(STUB, "dragoon"), os.X_OK):
-        print(f"{STUB}/dragoon wasn't linked", flush=True)
+    if not os.access(Path(stub, "dragoon"), os.X_OK):
+        print(f"{stub}/dragoon wasn't linked", flush=True)
         return 1
     return 0
+
+
+def clear_app() -> int:
+    """Delete the last app job's work, since make_app.py won't write over an app."""
+    shutil.rmtree(APP_JOB, ignore_errors=True)
+    return 0
+
+
+def link_app_stub() -> int:
+    """Link the unzipped app's own kit against the stub tables, which shows the copy a player
+    downloads still builds a game."""
+    return link_stub(f"{UNZIPPED}/Dragoon.app/Contents/Resources/kit", APP_STUB)
 
 
 def launcher_steps() -> list[Step]:
@@ -93,6 +120,19 @@ JOBS: dict[str, Callable[[], list[Step]]] = {
         ("Link the kit against stub tables", link_stub),
     ],
     "launcher": launcher_steps,
+    "app": lambda: [
+        ("Delete the last app", clear_app),
+        ("Build the launcher", ["swift", "build", "-c", "release", "--package-path", "launcher"]),
+        ("Export the source snapshot", ["python3", "tools/export_source.py", os.path.abspath(SNAPSHOT)]),
+        ("Build the app", ["python3", "launcher/tools/make_app.py", "--out", os.path.abspath(BUILT),
+                           "--version", APP_VERSION, "--launcher", LAUNCHER, "--kit", os.path.abspath(KIT),
+                           "--source", os.path.abspath(SNAPSHOT)]),
+        ("Zip the app", ["ditto", "-c", "-k", "--keepParent", f"{BUILT}/Dragoon.app", ZIP]),
+        ("Unzip it into a fresh directory", ["ditto", "-x", "-k", ZIP, UNZIPPED]),
+        ("Check the unzipped app", ["python3", "tools/check_bundle.py", f"{UNZIPPED}/Dragoon.app",
+                                    "--commit", "HEAD"]),
+        ("Link the unzipped app's kit against stub tables", link_app_stub),
+    ],
 }
 
 

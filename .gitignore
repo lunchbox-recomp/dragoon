@@ -44,3 +44,5 @@ launcher/.build/
 # What tools/ci.py's kit job leaves
 /engine kit/
 /stub game/
+# What its app job leaves
+/app job/

@@ -76,6 +76,18 @@ class Jobs(unittest.TestCase):
             ["python3", "tools/engine_kit.py", "--build", "build-kit", "--out", os.path.abspath("engine kit"),
              "--strip-debug"],
             "link_stub"])
+        snapshot, built = os.path.abspath("app job/source"), os.path.abspath("app job/build")
+        self.assertEqual(self.commands("app"), [
+            "clear_app",
+            ["swift", "build", "-c", "release", "--package-path", "launcher"],
+            ["python3", "tools/export_source.py", snapshot],
+            ["python3", "launcher/tools/make_app.py", "--out", built, "--version", "0.0.0",
+             "--launcher", "launcher/.build/release/Dragoon", "--kit", os.path.abspath("engine kit"),
+             "--source", snapshot],
+            ["ditto", "-c", "-k", "--keepParent", "app job/build/Dragoon.app", "app job/Dragoon.zip"],
+            ["ditto", "-x", "-k", "app job/Dragoon.zip", "app job/unzipped"],
+            ["python3", "tools/check_bundle.py", "app job/unzipped/Dragoon.app", "--commit", "HEAD"],
+            "link_app_stub"])
 
     def test_the_launcher_job_runs_swift_only_where_the_launcher_has_a_package(self):
         in_temp_dir(self)
@@ -169,6 +181,23 @@ class KitSteps(unittest.TestCase):
             Path(path).mkdir(parents=True)
         self.assertEqual(ci.clear_kit(), 0)
         self.assertFalse(Path("engine kit").exists() or Path("stub game").exists())
+
+    def test_the_app_job_links_the_unzipped_apps_own_kit(self):
+        with mock.patch.dict(os.environ, {"MAKE_LINKS": "1"}):
+            self.assertEqual(run_main(lambda argv: ci.link_app_stub())[0], 0)
+        kit = f"{self.root}/app job/unzipped/Dragoon.app/Contents/Resources/kit"
+        self.assertEqual(self.log.read_text().splitlines(), [
+            f"{self.root}/app job/stub game", "-f", f"{kit}/Makefile", f"KIT={kit}", "SDK=/sdk dir",
+            "CC=clang", "CXX=clang++"])
+        self.assertEqual(Path("app job/stub game/gen/stub_tables.c").read_text(), "// stub tables\n")
+        self.assertFalse(Path("stub game").exists())
+
+    def test_clear_app_deletes_the_last_app_job_and_leaves_the_kit(self):
+        for path in ("app job/unzipped/Dragoon.app", "engine kit/lib"):
+            Path(path).mkdir(parents=True)
+        self.assertEqual(ci.clear_app(), 0)
+        self.assertFalse(Path("app job").exists())
+        self.assertTrue(Path("engine kit/lib").is_dir())
 
 
 if __name__ == "__main__":
