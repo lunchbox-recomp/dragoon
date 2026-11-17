@@ -36,10 +36,11 @@ jobs:
           path: ${{ github.workspace }}/app job/release
           if-no-files-found: error
   # No checkout, so none of the repository's code runs while the job holds write permissions.
+  # Its two actions are node24 and the image has gh, so it needs no Mac.
   release:
     needs: build
     if: github.event_name == 'push'
-    runs-on: macos-26
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       id-token: write

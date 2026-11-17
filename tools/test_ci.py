@@ -211,8 +211,8 @@ class ReleaseWorkflow(unittest.TestCase):
         self.assertEqual(top_level(self.text, "on"), ["  push:", '    tags: ["v*"]', "  workflow_dispatch:"])
         self.assertEqual(list(self.jobs), ["build", "release"])
         self.assertNotIn("secrets.", self.text)
-        for keys in (self.build, self.release):
-            self.assertIn(("", "runs-on", "macos-26"), keys)
+        self.assertEqual([value for _, key, value in self.build if key == "runs-on"], ["macos-26"])
+        self.assertEqual([value for _, key, value in self.release if key == "runs-on"], ["ubuntu-24.04"])
 
     def test_only_the_release_job_can_write_and_it_runs_no_repository_code(self):
         self.assertIn("permissions: {}", self.text.splitlines())

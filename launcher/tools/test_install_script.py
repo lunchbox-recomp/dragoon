@@ -14,7 +14,8 @@ from testutil import run_main, temp_dir, tree
 
 # The fakes log each call to $FAKE_RECORDS as "NAME ARGS".
 # - sysctl -n hw.optional.arm64 prints 1, as on Apple silicon, or fails as an Intel Mac's does
-#   when the switch "intel" is on.
+#   when the switch "intel" is on. The script runs /usr/sbin/sysctl by its full path, so this fake
+#   sits apart from the others, off PATH, and reaches the script through DRAGOON_INSTALL_SYSCTL.
 # - uname says x86_64, as it does in a Terminal under Rosetta, so a script that asked it would
 #   refuse every Mac here.
 # - sw_vers says what the switch file "macos" holds, or 14.0, the oldest macOS the app runs on.
@@ -24,11 +25,18 @@ from testutil import run_main, temp_dir, tree
 # - mv counts its calls. On call N it fails when "fail mv N" is on, sends SIGTERM to the script
 #   and fails when "term on mv N" is on, and moves and then makes a new directory where its first
 #   argument was when "intruder on mv N" is on. Otherwise it runs the real one.
+# - rm counts its calls and sends SIGTERM to the script on call N when "term on rm N" is on, then
+#   runs the real one. Only the exit trap runs rm.
 FAKES: dict[str, str] = {}
-SCRIPTS = {
+SYSCTL = {
     "sysctl": '#!/bin/sh\necho "sysctl $*" >> "$FAKE_RECORDS"\n'
               'if [ -e "$FAKE_SWITCHES/intel" ]; then echo "sysctl: unknown oid \'$2\'" >&2; exit 1; fi\n'
               'echo 1\n',
+}
+SCRIPTS = {
+    "rm": '#!/bin/sh\necho "rm $*" >> "$FAKE_RECORDS"\nn=$(grep -c "^rm " "$FAKE_RECORDS")\n'
+          'if [ -e "$FAKE_SWITCHES/term on rm $n" ]; then kill -TERM "$PPID"; fi\n'
+          'exec /bin/rm "$@"\n',
     "uname": '#!/bin/sh\necho "uname $*" >> "$FAKE_RECORDS"\necho x86_64\n',
     "sw_vers": '#!/bin/sh\necho "sw_vers $*" >> "$FAKE_RECORDS"\n'
                'if [ -e "$FAKE_SWITCHES/macos" ]; then cat "$FAKE_SWITCHES/macos"; else echo 14.0; fi\n',
@@ -57,6 +65,7 @@ V2 = {"Contents/Info.plist": "<plist>2</plist>\n", "Contents/MacOS/Dragoon": "th
 
 def setUpModule() -> None:
     FAKES.update(fake_tools.write(SCRIPTS))
+    FAKES.update(fake_tools.write(SYSCTL))
 
 
 def sha256(path: Path) -> str:
@@ -98,13 +107,17 @@ class InstallScript(fake_tools.FakeToolsTest):
         return out
 
     def install(self, script: Path, piped: bool = False, home: str | None = None,
-                left: int = 0, lock: bool = False) -> subprocess.CompletedProcess:
+                left: int = 0, lock: bool = False, real_sysctl: bool = False,
+                path: str = "/usr/bin:/bin:/usr/sbin:/sbin") -> subprocess.CompletedProcess:
         """Run SCRIPT under /bin/sh as `sh FILE`, or fed on stdin as `curl ... | sh` does, with HOME
-        set to HOME if given. Check it left no download folder and, beside the app, LEFT stage
+        set to HOME if given and the fakes ahead of PATH. The fake sysctl stands in for the real one
+        unless REAL_SYSCTL. Check it left no download folder and, beside the app, LEFT stage
         folders and a lock only if LOCK."""
         env = {"HOME": str(self.home) if home is None else home, "TMPDIR": str(self.tmp),
-               "PATH": f"{Path(FAKES['open']).parent}:/usr/bin:/bin:/usr/sbin:/sbin",
+               "PATH": f"{Path(FAKES['open']).parent}:{path}",
                "FAKE_RECORDS": str(self.records), "FAKE_SWITCHES": str(self.switches)}
+        if not real_sysctl:
+            env["DRAGOON_INSTALL_SYSCTL"] = FAKES["sysctl"]
         if piped:
             with script.open("rb") as f:
                 done = subprocess.run(["/bin/sh"], stdin=f, env=env, capture_output=True, text=True)
@@ -206,6 +219,16 @@ class InstallScript(fake_tools.FakeToolsTest):
         self.installed("v1")
         self.assertEqual(self.calls("open"), [])
 
+    def test_a_second_signal_during_the_exit_trap_still_puts_the_earlier_app_back(self):
+        v2 = self.first_install()
+        # The swap fails, and the trap's first rm, of the download folder, sends a SIGTERM.
+        self.switch("fail mv 2", "term on rm 1")
+        done = self.install(v2)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn(f"Couldn't move Dragoon.app into {self.apps}. Nothing was installed.", done.stderr)
+        self.installed("v1")
+        self.assertEqual(len(self.calls("mv")), 3)
+
     def test_a_failed_move_back_keeps_the_earlier_app_and_names_where_it_is(self):
         v2 = self.first_install()
         self.switch("fail mv 2", "fail mv 3")
@@ -235,8 +258,8 @@ class InstallScript(fake_tools.FakeToolsTest):
         (self.apps / LOCK).mkdir()
         done = self.install(v2, lock=True)
         self.assertEqual(done.returncode, 1)
-        self.assertIn(f"Another copy of this installer is running. If none is, delete {self.apps / LOCK}"
-                      " and run this again.", done.stderr)
+        self.assertIn(f'Another copy of this installer is running. If none is, run rmdir "{self.apps / LOCK}"'
+                      " and then this again.", done.stderr)
         self.assertTrue((self.apps / LOCK).is_dir())
         self.installed("v1")
         self.assertEqual(self.calls("mv"), [])
@@ -265,6 +288,13 @@ class InstallScript(fake_tools.FakeToolsTest):
         self.assertEqual(done.returncode, 1)
         self.assertIn("The download failed. Nothing was installed.", done.stderr)
         self.assertFalse(self.apps.exists())
+
+    @unittest.skipUnless(subprocess.run(["/usr/sbin/sysctl", "-n", "hw.optional.arm64"], capture_output=True,
+                                        text=True).stdout.strip() == "1", "needs a Mac with Apple silicon")
+    def test_the_real_sysctl_is_found_without_usr_sbin_on_path(self):
+        done = self.install(self.script(self.fixture("v1", V1)), real_sysctl=True, path="/usr/bin:/bin")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.installed("v1")
 
     def test_an_intel_mac_is_refused_before_any_download(self):
         self.switch("intel")

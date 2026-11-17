@@ -29,8 +29,9 @@ fail() {
 
 # Runs on every exit. Until the new app is in place, an earlier app moved aside goes back where
 # it was. If something else is there by then, or the move back fails, it stays in the stage
-# folder, which is kept and named.
+# folder, which is kept and named. A second signal is ignored, so it can't stop this half done.
 clean_up() {
+	trap '' HUP INT TERM
 	if [ -n "$download" ]; then rm -rf "$download" || :; fi
 	if [ -n "$stage" ] && [ -z "$swapped" ] && { [ -e "$stage/previous.app" ] || [ -L "$stage/previous.app" ]; }; then
 		if [ -e "$app" ] || [ -L "$app" ] || ! mv "$stage/previous.app" "$app"; then
@@ -43,8 +44,10 @@ clean_up() {
 }
 
 install_dragoon() {
-	# 1 on Apple silicon, under Rosetta too. An Intel Mac has no such key.
-	arm64=$(sysctl -n hw.optional.arm64 2> /dev/null || :)
+	# 1 on Apple silicon, under Rosetta too. An Intel Mac has no such key. sysctl is named by its
+	# full path, since a PATH without /usr/sbin would otherwise read as Intel. The tests point
+	# DRAGOON_INSTALL_SYSCTL at a fake.
+	arm64=$("${DRAGOON_INSTALL_SYSCTL:-/usr/sbin/sysctl}" -n hw.optional.arm64 2> /dev/null || :)
 	if [ "$arm64" != 1 ]; then
 		fail "Dragoon needs a Mac with Apple silicon. This one has an Intel processor."
 	fi
@@ -86,10 +89,13 @@ install_dragoon() {
 	fi
 
 	mkdir -p "$apps" || fail "Couldn't make $apps. Nothing was installed."
+	# No signal between taking the lock and noting it, so the trap always removes a lock it took.
+	trap '' HUP INT TERM
 	if ! mkdir "$apps/.Dragoon-install.lock" 2> /dev/null; then
-		fail "Another copy of this installer is running. If none is, delete $apps/.Dragoon-install.lock and run this again."
+		fail "Another copy of this installer is running. If none is, run rmdir \"$apps/.Dragoon-install.lock\" and then this again."
 	fi
 	locked="$apps/.Dragoon-install.lock"
+	trap 'exit 1' HUP INT TERM
 	stage=$(mktemp -d "$apps/.Dragoon-install.XXXXXX") ||
 		fail "Couldn't make a folder in $apps. Nothing was installed."
 	ditto -x -k "$download/Dragoon.zip" "$stage" || fail "Couldn't unzip the download. Nothing was installed."
