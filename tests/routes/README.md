@@ -23,7 +23,7 @@ to be plugged in with `--pads=N`.
 | `air-ride-courses-2.txt` | The same on Magma Flows, Machine Passage and Beanstalk Park | 19400 |
 | `city-trial.txt` | City Trial, one player, the clock running | 3300 |
 | `city-trial-4p.txt` | City Trial, four players on ports 1 to 4, each steering its own way | 3480 |
-| `city-trial-2p.txt` | City Trial, two players on ports 1 and 2, in two views | 3480, not in `tests/hashes/manifest.txt` |
+| `city-trial-2p.txt` | City Trial, two players on ports 1 and 2, in two views | 3480 |
 | `city-trial-stadium.txt` | City Trial with a three-minute clock, then the Drag Race 3 stadium and its results, one player | 20400 |
 | `city-trial-stadium-4p.txt` | The same with four players on ports 1 to 4 and no CPUs | 21000 |
 | `top-ride-grass.txt` | A Top Ride race on Grass, one player and three CPUs, past the countdown | 3600 |
@@ -84,7 +84,7 @@ applies each press where the game reads the controller, at the frame the game ha
 | `air-ride-race.txt` | 4200 and 6000 | Three in a row |
 | `city-trial.txt` | 3300 and 4500 | Two, nine minutes apart |
 | `city-trial-4p.txt` | 2700 and 3300 | Two |
-| `city-trial-2p.txt` | 3480 | Two in a row |
+| `city-trial-2p.txt` | Every 60th to 3480, 58 frames | Two in a row at 3480 before it joined the manifest, then a `record` and the `check` after it |
 | The seven other Air Ride course routes | Every 60th to 4200, 70 frames | A `tools/frame_hashes.py record` and the `check` straight after it |
 | The seven Top Ride routes and the two stadium routes | Every dumped frame | A `record` and the `check` after it |
 

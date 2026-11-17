@@ -15,6 +15,10 @@
 # passes built late. So Sky Sands and Magma Flows open the two air-ride-courses routes as their
 # own routes race them, to frames 14,400 and 12,700, while the other two keep passes of their own.
 #
+# city-trial-2p checks the entry screen with both players OK at 2700 and the two views at 3480,
+# 80 frames into the steering, as city-trial-4p does. It has a pass of its own, since played from
+# the eight other passes' cache to frame 4380 it compiled 7 programs none of them builds.
+#
 # air-ride-race, air-ride-celestial-valley and air-ride-beanstalk-park get the programs they first
 # draw past their own stretches from Sky Sands, which draws them by frame 14,186. Of the keys
 # air-ride-race's own pass built, 8 come from passes other than air-ride-courses-1.
@@ -28,6 +32,7 @@ menu           20 60 1200 warm-from=city-trial-stadium
 air-ride-race  30 60 4200,6000 warm-from=air-ride-courses-1
 city-trial     25 60 3300 warm-from=city-trial-stadium
 city-trial-4p  30 60 2700,3480 --pads=4 warm-from=city-trial-stadium-4p
+city-trial-2p  30 60 2700,3480 --pads=2
 air-ride-celestial-valley  25 60 4200 warm-from=air-ride-courses-1
 air-ride-sky-sands         25 60 4200 warm-from=air-ride-courses-1
 air-ride-frozen-hillside   25 60 4200 warm=6000
