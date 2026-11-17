@@ -18,7 +18,7 @@ from unittest import mock
 
 import bot_link
 from bot_link import BUTTONS, Link, LinkSetupError, Outcome, Pad, encode_pads, run, socket_path
-from testutil import RUN_LIMIT, run_main, temp_dir, time_limit, write_file
+from testutil import BOOT_WAIT, RUN_LIMIT, run_main, temp_dir, time_limit, write_file
 
 REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 
@@ -60,6 +60,7 @@ REAL_PROBE = Path(__file__).resolve().parent / "probe.sh"
 #   "exit_late"      seconds the probe lingers after a plain exit, with the link closed
 #   "term_elsewhere" a SIGTERM is taken on a second thread, which leaves the wait on the link
 #                    uninterrupted, as one that CPython takes just before that wait does
+#   "never_booted"   plays without writing `booted`, so the RunClock never sees the game up
 # A read outside 80000000 to 817FFFFF, or of fewer than 1 or more than 256 bytes, stops the game.
 FAKE_PROBE = r'''#!@PYTHON@
 import atexit, json, os, signal, socket, sys, time
@@ -251,7 +252,8 @@ def play(frames, forever=False, connect_after=0, begun=False):
 if plan.get("refuse"):
     print(plan["refuse"], file=sys.stderr)
     sys.exit(2)
-open("booted", "w").close()  # the interpreter is up, which starts the test's RunClock
+if not plan.get("never_booted"):
+    open("booted", "w").close()  # the interpreter is up, which starts the test's RunClock
 play(plan["frames"], plan.get("forever", False), plan.get("connect_after", 0))
 if plan.get("last_says"):
     say(plan["last_says"])
@@ -338,7 +340,11 @@ class RunClock:
     """time.monotonic for bot_link in a test. It stands still until the fake game is up, when its
     `booted` file is in RUN_DIR, and then runs with the real clock plus what `advance` adds. So a
     run's SECONDS and its hang count from the game's start and not from its interpreter's, which
-    takes seconds on a loaded machine, and a bot can take seconds of the run without sleeping."""
+    takes seconds on a loaded machine, and a bot can take seconds of the run without sleeping.
+    A game that isn't up after `boot_wait` wall seconds gets the clock running all the same, so
+    the run still has its deadline."""
+
+    boot_wait = BOOT_WAIT
 
     def __init__(self, run_dir: Path) -> None:
         self.booted = run_dir / "booted"
@@ -349,7 +355,7 @@ class RunClock:
     def monotonic(self) -> float:
         now = time.monotonic()
         if self.behind is None:
-            if not self.booted.exists():
+            if not self.booted.exists() and now - self.start < self.boot_wait:
                 return self.start
             self.behind = now - self.start
         return now - self.behind
@@ -413,6 +419,22 @@ class FakeProbeCase(unittest.TestCase):
         """The run's seconds since the game was up when the run sent it SIGTERM. go returns as much
         as half a second later, while the game shuts down with the link open."""
         return self.clock.at(self.record()["term_at"])
+
+
+class BootWaitTest(FakeProbeCase):
+    """Under a limit far short of RUN_LIMIT, so a clock that waits for ever for a game to be up
+    fails here in seconds rather than holding the suite."""
+
+    limit = 15.0
+
+    def test_a_game_the_clock_never_sees_up_still_runs_into_the_time_limit(self):
+        self.plan([0], forever=True, never_booted=True)
+        with mock.patch.object(RunClock, "boot_wait", 1.0):
+            outcome = self.go(neutral, seconds=1)
+        self.assertEqual(outcome.reason, bot_link.TIME_LIMIT)
+        self.assertGreater(outcome.frames, 1)
+        self.assertFalse((self.run_dir() / "booted").exists())
+        self.assertEqual(self.record()["link_at_term"], "open")
 
 
 class PadTest(unittest.TestCase):

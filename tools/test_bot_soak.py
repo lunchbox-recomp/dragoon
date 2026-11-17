@@ -18,7 +18,7 @@ import bot_record
 import bot_soak
 from bot_watch import engine_picture
 from testengine import PICTURE_ADDR, axv, built_sha, make_tree, set_plan
-from testutil import RUN_LIMIT, TimeLimit, commit, run_main, temp_dir, time_limit
+from testutil import BOOT_WAIT, RUN_LIMIT, TimeLimit, commit, run_main, temp_dir, time_limit
 
 SEED = "3"
 
@@ -35,7 +35,11 @@ def at(do: list, *, frame: Optional[int] = None, race: Optional[int] = None, pro
 
 class HeldClock:
     """A stand-in for bot_link's time module whose clock stands still until the game first
-    connects and then runs at the real rate, so a run's seconds all pass with the game linked."""
+    connects and then runs at the real rate, so a run's seconds all pass with the game linked.
+    A game that hasn't connected after `boot_wait` wall seconds gets the clock running all the
+    same, so the run still has its deadline."""
+
+    boot_wait = BOOT_WAIT
 
     def __init__(self) -> None:
         self.held: Optional[float] = None  # the real time it stood still at
@@ -43,6 +47,8 @@ class HeldClock:
 
     def monotonic(self) -> float:
         now = time.monotonic()
+        if self.lost is None and self.held is not None and now - self.held >= self.boot_wait:
+            self.lost = self.boot_wait
         if self.lost is not None:
             return now - self.lost
         if self.held is None:
@@ -64,6 +70,14 @@ def count_from_the_connect(test: unittest.TestCase) -> None:
     for patch in (mock.patch.object(bot_link, "time", clock), mock.patch.object(bot_link, "_accept", accepted)):
         patch.start()
         test.addCleanup(patch.stop)
+
+
+class HeldClockTest(unittest.TestCase):
+    def test_it_stands_still_until_boot_wait_when_the_game_never_connects_and_then_runs(self) -> None:
+        clock = HeldClock()
+        reads = [100.0, 105.0, 100.0 + BOOT_WAIT, 103.0 + BOOT_WAIT]
+        with mock.patch.object(time, "monotonic", side_effect=reads):
+            self.assertEqual([clock.monotonic() for _ in reads], [100.0, 100.0, 100.0, 103.0])
 
 
 class SoakCase(unittest.TestCase):
