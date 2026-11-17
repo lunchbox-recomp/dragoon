@@ -8,9 +8,10 @@ source Contents/Resources/source
 
 # The download is 60 MB at most (the player target in the launcher plan).
 budget dmg 60000000
-# At Dragoon bb9f473, run through CI's app job's steps, the engine kit was 7.0 MB, the source
-# snapshot 12.6 MB and the release launcher 2,779,784 bytes. The app came to 22,370,108 bytes,
-# and a quarter more is 27,962,635, rounded up to the next whole MB. Sparkle isn't in yet, and
+# At Dragoon 8bf6f75, run through CI's app job's steps on a Mac, the app came to 22,370,160
+# bytes. The source snapshot was 12,334,644 bytes, the engine kit 6,991,993 and the signed
+# release launcher 2,781,792. The seal, Info.plist and license made up the other 261,731.
+# A quarter more is 27,962,700 bytes, rounded up to the next whole MB. Sparkle isn't in yet, and
 # L14 measures again once it is. Keep it under 101 MB so the generated C alone breaks it.
 budget app 28000000
 
