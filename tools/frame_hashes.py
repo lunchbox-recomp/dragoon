@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Did a change alter what the renderer draws? Run routes and compare their frame hashes.
 
-Usage: frame_hashes.py check  [ROUTE ...] [--slow=N]
-       frame_hashes.py record [ROUTE ...]
+Usage: frame_hashes.py check  [ROUTE ...] [--slow=N] [--aspect=16:9]
+       frame_hashes.py record [ROUTE ...] [--aspect=16:9]
 
 Routes and their probe settings are in tests/hashes/manifest.txt; with no ROUTE every route
 runs. Goldens are in tests/hashes/gl/<route>.txt, one "frame_NNNNN <sha1>" line per
-frame. check prints one status line per route and one line per frame that changed or wasn't
+frame. --aspect=16:9 runs each route with probe.sh --aspect=16:9 and keeps its goldens in
+tests/hashes/gl-16x9/ instead. --aspect=4:3 is the default, and gives probe.sh no --aspect,
+as the 4:3 goldens were recorded. check prints one status line per route and one line per frame that changed or wasn't
 reached. record rewrites the goldens, and writes none for a route that skipped a dump. A
 check reads every golden before it runs the game. The frames come from the player's disc, so
 they're deleted once hashed and never committed.
@@ -38,6 +40,9 @@ ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "tools" / "probe.sh"
 HASHES = ROOT / "tests" / "hashes"
 GOLDEN_LINE = re.compile(r"frame_(\d{5,}) ([0-9a-f]{40})")
+# Each aspect a route is hashed at, and the directory under HASHES its goldens are in
+GOLDENS = {"4:3": "gl", "16:9": "gl-16x9"}
+DEFAULT_ASPECT = "4:3"
 
 
 def hash_frames(directory: Path) -> dict[int, str]:
@@ -78,18 +83,19 @@ def reached(got: dict[int, str], needed: int) -> str:
     return f"reached frame {max(got)} (needs {needed})"
 
 
-def probe_args(route: Route, name: str, slow: int) -> list[str]:
+def probe_args(route: Route, name: str, slow: int, aspect: str = DEFAULT_ASPECT) -> list[str]:
     stop = [f"--exit-after={max(route.required) + route.dump_every}"] if slow > 1 else []
+    wide = [] if aspect == DEFAULT_ASPECT else [f"--aspect={aspect}"]
     return [str(PROBE), name, str(route.seconds * slow), str(route_file(route.name)),
-            str(route.dump_every), *stop, *route.extra]
+            str(route.dump_every), *stop, *wide, *route.extra]
 
 
-def hash_route(route: Route, slow: int = 1) -> dict[int, str]:
+def hash_route(route: Route, slow: int = 1, aspect: str = DEFAULT_ASPECT) -> dict[int, str]:
     out = ROOT / "build" / "probe" / f"hashes-{route.name}"
     if out.exists():
         remove_run(out)  # a blank memory card, and no frames from an older build
     try:
-        run_probe(probe_args(route, out.name, slow), ROOT, route.name)
+        run_probe(probe_args(route, out.name, slow, aspect), ROOT, route.name)
         return hash_frames(out)
     finally:
         if out.exists():
@@ -128,17 +134,19 @@ def main(argv: list[str]) -> int:
     ap.add_argument("routes", nargs="*")
     ap.add_argument("--slow", default=None, metavar="N",
                     help="check: give each route N times its seconds (default 1)")
+    ap.add_argument("--aspect", choices=GOLDENS, default=DEFAULT_ASPECT,
+                    help="the picture's aspect, and so which goldens (default 4:3)")
     args = ap.parse_args(argv)
     if args.mode == "record" and args.slow is not None:
         ap.error("--slow is for check")
     try:
         slow = 1 if args.slow is None else slow_factor(args.slow)
         routes = select_routes(args.routes, MANIFEST)
-        paths = {r.name: HASHES / "gl" / f"{r.name}.txt" for r in routes}
+        paths = {r.name: HASHES / GOLDENS[args.aspect] / f"{r.name}.txt" for r in routes}
         goldens = {r.name: read_golden(paths[r.name]) for r in routes} if args.mode == "check" else {}
         failed = 0
         for route in routes:
-            got = hash_route(route, slow)
+            got = hash_route(route, slow, args.aspect)
             if args.mode == "record":
                 ok = record_route(route, got, paths[route.name])
             else:

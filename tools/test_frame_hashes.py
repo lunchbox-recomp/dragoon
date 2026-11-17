@@ -106,6 +106,24 @@ class HashRouteTest(unittest.TestCase):
                          [str(frame_hashes.PROBE), "hashes-title", "20", str(routes.route_file("title")), "60",
                           "--pads=4"])
 
+    def test_16_9_puts_the_aspect_after_any_stop_and_before_the_routes_settings(self):
+        route = frame_hashes.Route("title", 20, 60, [60, 120], ["--pads=4"])
+        run = mock.Mock()
+        with (mock.patch.object(frame_hashes, "remove_run"),
+              mock.patch.object(subprocess, "run", run),
+              mock.patch.object(frame_hashes, "hash_frames", return_value={60: A}),
+              mock.patch.object(Path, "exists", return_value=False)):
+            frame_hashes.hash_route(route, 2, "16:9")
+        self.assertEqual(run.call_args.args[0],
+                         [str(frame_hashes.PROBE), "hashes-title", "40", str(routes.route_file("title")), "60",
+                          "--exit-after=180", "--aspect=16:9", "--pads=4"])
+
+    def test_4_3_gives_probe_no_aspect_as_the_4_3_goldens_were_recorded(self):
+        route = frame_hashes.Route("title", 20, 60, [120], [])
+        self.assertEqual(frame_hashes.probe_args(route, "hashes-title", 1, "4:3"),
+                         frame_hashes.probe_args(route, "hashes-title", 1))
+        self.assertFalse([a for a in self.probe_line(route, 1) if a.startswith("--aspect")])
+
     def test_removes_a_directory_left_from_an_earlier_run_before_and_after(self):
         remove = self.run_route(True, mock.Mock())
         self.assertEqual(remove.call_args_list, [mock.call(self.out), mock.call(self.out)])
@@ -198,6 +216,15 @@ class SlowRunTest(unittest.TestCase):
     def test_a_slowed_run_of_a_route_whose_dumps_are_far_apart_still_dumps_its_last_frame(self):
         route = frame_hashes.Route("stadium", 60, 300, [300, 900], [])
         self.assertEqual(sorted(frame_hashes.hash_route(route, 5)), [300, 600, 900, 1200])
+
+    def test_the_game_gets_the_aspect_through_probe_only_at_16_9(self):
+        seen = self.root / "args.txt"
+        write_file(self.root / "build", "dragoon",
+                   f"#!/bin/sh\nprintf '%s\\n' \"$@\" > '{seen}'\n").chmod(0o755)
+        frame_hashes.hash_route(self.route, 1, "16:9")
+        self.assertIn("--aspect=16:9", seen.read_text().splitlines())
+        frame_hashes.hash_route(self.route)
+        self.assertFalse([a for a in seen.read_text().splitlines() if a.startswith("--aspect")])
 
 
 class MainTest(unittest.TestCase):
@@ -299,11 +326,52 @@ class MainTest(unittest.TestCase):
         hash_route.assert_not_called()
         self.assertFalse((self.hashes / "gl" / "title.txt").exists())
 
+    def test_16_9_records_and_checks_its_own_goldens_and_leaves_the_4_3_ones_alone(self):
+        four_three = self.golden(frame_hashes.format_golden({60: A, 120: B}, 120))
+        got = {60: C, 120: B}
+        code, _, _, hash_route = self.main(got, "record", "--aspect=16:9")
+        self.assertEqual(code, 0)
+        self.assertEqual(hash_route.call_args.args[2], "16:9")
+        self.assertEqual(frame_hashes.read_golden(self.hashes / "gl-16x9" / "title.txt"), got)
+        self.assertEqual(frame_hashes.read_golden(four_three), {60: A, 120: B})
+        for argv in (("--aspect=16:9",), ("--aspect", "16:9")):
+            with self.subTest(argv=argv):
+                code, out, _, hash_route = self.main(got, "check", *argv)
+                self.assertEqual(code, 0)
+                self.assertIn("OK, 2 frames match", out)
+                self.assertEqual(hash_route.call_args.args[2], "16:9")
+        self.assertEqual(self.main(got, "check")[0], 1)
+
+    def test_4_3_is_the_default_and_uses_gl(self):
+        self.golden(frame_hashes.format_golden({60: A, 120: B}, 120))
+        for argv in ((), ("--aspect=4:3",)):
+            with self.subTest(argv=argv):
+                code, _, _, hash_route = self.main({60: A, 120: B}, "check", *argv)
+                self.assertEqual(code, 0)
+                self.assertEqual(hash_route.call_args.args[2], "4:3")
+
+    def test_a_16_9_check_with_no_16_9_golden_exits_2_naming_it_without_running_the_game(self):
+        self.golden(frame_hashes.format_golden({60: A, 120: B}, 120))
+        code, _, err, hash_route = self.main({60: A, 120: B}, "check", "--aspect=16:9")
+        self.assertEqual(code, 2)
+        self.assertIn(str(self.hashes / "gl-16x9" / "title.txt"), err)
+        hash_route.assert_not_called()
+
+    def test_an_aspect_with_no_goldens_exits_2_without_running_the_game(self):
+        for bad in ("21:9", "16x9", "window", ""):
+            with self.subTest(bad=bad):
+                code, _, err, hash_route = self.main({60: A}, "record", f"--aspect={bad}")
+                self.assertEqual(code, 2)
+                self.assertIn("--aspect", err)
+                hash_route.assert_not_called()
+        self.assertEqual(sorted(p.name for p in self.hashes.iterdir()), ["gl", "manifest.txt"])
+
     def test_help_exits_0(self):
         code, out, _ = run_main(frame_hashes.main, "--help")
         self.assertEqual(code, 0)
         self.assertIn("Usage:", out)
         self.assertIn("--slow=N", out)
+        self.assertIn("--aspect=16:9", out)
 
 
 if __name__ == "__main__":
