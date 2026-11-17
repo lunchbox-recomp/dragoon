@@ -104,8 +104,8 @@ class LinkLines:
 
 # The wall seconds a test that starts a probe.sh run may take. The slowest takes about 3.
 RUN_LIMIT = 120.0
-# The wall seconds a test's clock for bot_link stands still waiting for the fake game before it
-# runs anyway. A clock held until the game is up gives a run whose fake never gets there no
+# The time.monotonic seconds a test's clock for bot_link stands still waiting for the fake game
+# before it runs anyway, which on macOS don't count a sleep. A clock held until the game is up gives a run whose fake never gets there no
 # deadline at all, so the run would last until RUN_LIMIT, or for ever under a fake that keeps
 # sending frames to a test with no limit. This is far past a loaded machine's slowest start.
 BOOT_WAIT = 20.0

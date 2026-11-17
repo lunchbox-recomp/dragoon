@@ -341,8 +341,8 @@ class RunClock:
     `booted` file is in RUN_DIR, and then runs with the real clock plus what `advance` adds. So a
     run's SECONDS and its hang count from the game's start and not from its interpreter's, which
     takes seconds on a loaded machine, and a bot can take seconds of the run without sleeping.
-    A game that isn't up after `boot_wait` wall seconds gets the clock running all the same, so
-    the run still has its deadline."""
+    A game that isn't up after `boot_wait` monotonic seconds gets the clock running all the same,
+    so the run still has its deadline."""
 
     boot_wait = BOOT_WAIT
 
@@ -430,7 +430,7 @@ class BootWaitTest(FakeProbeCase):
     def test_a_game_the_clock_never_sees_up_still_runs_into_the_time_limit(self):
         self.plan([0], forever=True, never_booted=True)
         with mock.patch.object(RunClock, "boot_wait", 1.0):
-            outcome = self.go(neutral, seconds=1)
+            outcome = self.go(neutral, seconds=5)  # 6 s to start and connect on a loaded machine
         self.assertEqual(outcome.reason, bot_link.TIME_LIMIT)
         self.assertGreater(outcome.frames, 1)
         self.assertFalse((self.run_dir() / "booted").exists())

@@ -36,8 +36,8 @@ def at(do: list, *, frame: Optional[int] = None, race: Optional[int] = None, pro
 class HeldClock:
     """A stand-in for bot_link's time module whose clock stands still until the game first
     connects and then runs at the real rate, so a run's seconds all pass with the game linked.
-    A game that hasn't connected after `boot_wait` wall seconds gets the clock running all the
-    same, so the run still has its deadline."""
+    A game that hasn't connected after `boot_wait` monotonic seconds gets the clock running all
+    the same, so the run still has its deadline."""
 
     boot_wait = BOOT_WAIT
 
@@ -75,9 +75,12 @@ def count_from_the_connect(test: unittest.TestCase) -> None:
 class HeldClockTest(unittest.TestCase):
     def test_it_stands_still_until_boot_wait_when_the_game_never_connects_and_then_runs(self) -> None:
         clock = HeldClock()
-        reads = [100.0, 105.0, 100.0 + BOOT_WAIT, 103.0 + BOOT_WAIT]
+        reads = [100.0, 105.0, 99.5 + BOOT_WAIT, 100.0 + BOOT_WAIT, 103.0 + BOOT_WAIT]
         with mock.patch.object(time, "monotonic", side_effect=reads):
-            self.assertEqual([clock.monotonic() for _ in reads], [100.0, 100.0, 100.0, 103.0])
+            self.assertEqual([clock.monotonic() for _ in reads[:4]], [100.0] * 4)
+            # Running from the read at BOOT_WAIT itself, so a connect after it doesn't move the clock.
+            self.assertEqual(clock.lost, BOOT_WAIT)
+            self.assertEqual(clock.monotonic(), 103.0)
 
 
 class SoakCase(unittest.TestCase):
