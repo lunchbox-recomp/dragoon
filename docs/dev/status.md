@@ -908,6 +908,30 @@ on the same build at `nice -n 19` and matched by `check --aspect=16:9` straight 
 16:9, under Player targets). Before the record a 4:3 check of the twenty-four older routes
 matched all 1,906 frames in 18 min at loads of 3.2 to 4.5.
 
+## Nightly
+
+`tools/nightly.py run` reruns the frame, state and audio goldens, the shader compiles from a
+fresh warm-up, the timed rows above and four bot soaks on the real game, one game at a time and
+only on AC power. The rows it reruns stay as measured here, and it never edits this file. Its
+table of steps and bars is in `tools/README.md`.
+
+```
+tools/nightly.py run
+tools/nightly.py run --only shaders timed
+tools/nightly.py install-agent
+```
+
+Read `build/nightly/YYYY-MM-DD-HHMM/summary.txt` first. Its regressions section lists each check
+that flipped since the last report, each new failure and each timed number more than 10% off the
+last report or this file's number, with the route, the frame or field and the dump or log to
+open. "Drew differently" is a frame whose hash changed, and "played differently" a checkpoint
+whose state from guest RAM changed. A side-by-side PNG puts the golden frame on the left when
+`build/nightly/golden-build/` can draw it again. `report.json` holds every check, and the run
+exits 2 with the step marked skipped-battery when the Mac was on battery.
+
+`install-agent` writes the launchd job for 01:30 and prints it, and nothing loads it until
+`launchctl bootstrap gui/UID FILE` does or the next login.
+
 ## gcn-recomp `95e1c6b`
 
 The pin moved from `782d7fa` to `95e1c6b`, 57 commits. Empty string switches now read as unset.
