@@ -383,6 +383,58 @@ A bench that crashes prints no report, and probe.sh exits 1. That counts as a ro
 tools/audio_hashes.py menu title
 ```
 
+## state_goldens.py
+
+Does a route still play the same? It plays each manifest route through bot_link.py with a bot that presses nothing and, at each of the route's required frames, reads the game's state from guest RAM by kar_ram.json's names. It compares that with `tests/hashes/state/<route>.txt`, or `state-16x9/` at 16:9, whose README says what a line holds and which values aren't mapped. A changed value means the route played differently, whatever its frames show.
+
+```
+tools/state_goldens.py check air-ride-race --aspect=16:9
+tools/state_goldens.py record
+```
+
+`record` plays at 4:3 and `check` at either aspect against the same goldens. Each run is `build/probe/state-ROUTE/`, which starts from a blank memory card and is deleted after. A run gets twice its manifest seconds and quits one dump interval past its last checkpoint. It exits 0, 1 or 2 as frame_hashes.py does.
+
+## route_compiles.py
+
+Which routes compile a shader in play after the warm-up? It plays each route from a copy of a cache, unpaced to the frame its warm-up pass plays it to, and counts the `[shaders] compiled program` lines, as status.md's "Shaders compiled at 16:9" row ran them. `--help` gives the command each run is. A route compiled nothing when it reached that frame with no such line.
+
+```
+tools/route_compiles.py --cache build/probe/warm/saves/shaders.bin --aspect=16:9 top-ride-sky
+```
+
+## timed_bars.py
+
+What do the timed Player targets measure on this build? It holds the runs behind status.md's four-player, boot, race and menu rows, each read into numbers. Their bars are data beside them, with the number status.md gave. Its docstring says what each run is. It has no command line.
+
+## nightly.py
+
+Is everything a player gets still as it was? `nightly.py run` plays every check on the real game one game at a time, and writes a report a person can read in one screen. It's meant for the Mac's nights on AC power under launchd, and runs on demand too.
+
+```
+tools/nightly.py run
+tools/nightly.py run --only shaders
+tools/nightly.py run --only frames --routes air-ride-race
+tools/nightly.py install-agent
+```
+
+| Step | What it plays | The bar |
+|---|---|---|
+| `frames` | Every route at 4:3 and 16:9, one bot run each, dumping frames | Every frame hashes as its golden, and every checkpoint's state matches `tests/hashes/state/` or `state-16x9/` |
+| `audio` | Every route as `audio_hashes.py check` plays it | Every row matches |
+| `shaders` | A fresh warm-up one pass at a time into a scratch cache, then every route at both aspects from it | 0 compiles on each, and each reaches its frame |
+| `timed` | timed_bars.py's runs from the same cache | Four players' `[rt]` p99 8 ms or less, 0 compiles and a boot of 1,000 ms or less. The race's results frame the same at 16:9 as at 4:3. The menu's held redraw p99 17 ms or less and its CPU time p99 1.5 ms or less |
+| `soak` | bot_soak.py for 30 minutes each in Air Ride, Top Ride and City Trial with one player and City Trial with four | No stop |
+
+Each step but `timed` is a child process at `nice -n 19`. The run holds `caffeinate -i`, and before every game process it asks `pmset -g batt` for AC power. On battery it writes the report so far with the step marked skipped-battery and the rest not-run, then exits 2. The timed numbers carry the 1-minute load as their run began and ended.
+
+The report is `build/nightly/YYYY-MM-DD-HHMM/`. The regressions come first in `summary.txt`. They're the checks that flipped since the last report or fail for the first time, and the timed numbers more than 10% off the last report or the number status.md gave. Each names the route, the frame or field and the file to look at. After them come the failures that were there last time, then a line a step for the passes and last what was skipped. `report.json` holds every check.
+
+A frame that drew differently keeps its dump in `dumps/`. `build/nightly/golden-build/` keeps a copy of the game from the last frames step where everything matched. When it draws that frame's golden hash again, the dump is a side-by-side PNG with the golden on the left (frame_pair.py). Otherwise the new frame stands alone beside the hash in the summary. The logs of failed shader, audio and timed checks are kept. Every other dump and run is deleted, and it never writes `tests/` or `docs/`.
+
+`--last` names the report to compare with, by default the newest earlier one. `--build DIR` plays the game in DIR through probe.sh's `--bin`, for a scratch worktree with no build of its own. `install-agent` writes `~/Library/LaunchAgents/org.lunchbox-recomp.dragoon.nightly.plist` and prints it. The job runs `nightly.py run` at 01:30 every day. Nothing loads it but `launchctl bootstrap` or the next login, and `uninstall-agent` removes it.
+
+nightly_steps.py holds what each step plays and nightly_report.py the comparison and the summary. nightly_agent.py holds the launchd job, power.py the AC check and frame_pair.py the side-by-side PNG. None has a command line. The tests play the frames step on testengine.py's fake game.
+
 ## interp_bisect.py
 
 Which functions change a route when the interpreter runs them? It reads every function start from `analysis/symbols.txt` and checks ROUTE with frame_hashes.py, or with audio_hashes.py under `--audio`. Each check sets `GCN_INTERPRET` to a list of starts, a file in `build/bisect/` with one hex address a line, named by absolute path.

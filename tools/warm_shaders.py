@@ -429,12 +429,14 @@ def start_order(plan: list[Pass], jobs: int) -> list[int]:
 
 
 def warm(game: Path, saves: Path, plan: list[Pass], jobs: int = 1,
-         report: Optional[Path] = None, disc: Optional[Path] = None) -> None:
+         report: Optional[Path] = None, disc: Optional[Path] = None,
+         before: Callable[[], None] = lambda: None) -> None:
     """Play every pass, JOBS at a time, and install the cache they build between them.
 
     A pass runs in a scratch directory of its own, with a blank memory card and a copy of
     the cache in SAVES, so it builds every key its route needs and no other pass is in its
-    way. The caches the passes leave are merged in the plan's order.
+    way. The caches the passes leave are merged in the plan's order. BEFORE is called as each
+    pass is about to start its game, and what it raises stops the warm-up as a failed pass does.
     """
     start = saves / CACHE
     with tempfile.TemporaryDirectory(prefix="dragoon-warmup-") as tmp:
@@ -454,6 +456,11 @@ def warm(game: Path, saves: Path, plan: list[Pass], jobs: int = 1,
         def play(i: int) -> None:
             if stop.is_set():
                 raise PassStopped
+            try:
+                before()
+            except BaseException:
+                stop.set()
+                raise
             began = time.monotonic()
             try:
                 run_pass(game, plan[i], scratch[i], stop, disc, lambda frame: shown(i, frame))

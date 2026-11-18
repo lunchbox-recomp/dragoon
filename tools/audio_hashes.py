@@ -113,20 +113,23 @@ def reached(got: dict[int, str], needed: int) -> str:
     return f"reached list {max(got)} (needs {needed})"
 
 
-def probe_args(route: Route, name: str, slow: int) -> list[str]:
+def probe_args(route: Route, name: str, slow: int, settings: tuple[str, ...] = ()) -> list[str]:
     return [str(PROBE), name, str(route.seconds * slow), str(route_file(route.name)),
-            str(route.dump_every), "GCN_AXSTATS=1", "--bench", *route.extra]
+            str(route.dump_every), "GCN_AXSTATS=1", "--bench", *route.extra, *settings]
 
 
-def hash_route(route: Route, slow: int = 1, allow_crash: bool = False) -> dict[int, str]:
+def hash_route(route: Route, slow: int = 1, allow_crash: bool = False,
+               settings: tuple[str, ...] = ()) -> dict[int, str]:
     """The hashes ROUTE's bench printed. A bench that printed no report (probe.sh exits 1) is a
-    ProbeFailed, unless ALLOW_CRASH, which says so and returns the hashes it got to."""
+    ProbeFailed, unless ALLOW_CRASH, which says so and returns the hashes it got to. SETTINGS are
+    more probe.sh settings, such as a --bin."""
     out = ROOT / "build" / "probe" / f"audio-{route.name}"
     if out.exists():
         remove_run(out)  # a blank memory card; the last run stays after this one, for its [ax] lines
     name = out.name
     try:
-        run_probe(probe_args(route, name, slow), ROOT, route.name, {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
+        run_probe(probe_args(route, name, slow, settings), ROOT, route.name,
+                  {**os.environ, "SDL_AUDIO_DRIVER": "dummy"})
     except ProbeFailed as e:
         if e.returncode != 1 or not allow_crash:  # 1 is the bench printing no report, which a crash does
             raise

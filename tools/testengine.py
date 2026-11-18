@@ -4,13 +4,16 @@
 link over testgame.FakeGame's menus, as `bot_link.run(probe=...)` runs it. It works in the same
 build/probe/NAME/ the real probe.sh does, keeps a session whose input log ends in `# end 0 FRAME`
 on every way out, says its `[session]`, `[reset]` and `[shaders]` lines in stdout.txt and puts a
-counter at PICTURE_ADDR that stands in for the picture's hash. On SIGTERM it saves and exits at
-once. It records what it saw in record.json. As the engine does, it ends the game once a
+counter at PICTURE_ADDR that stands in for the picture's hash. Every DUMP_EVERY frames it dumps
+frame_NNNNN.png, a 2x2 picture whose color comes from the frame number and the plan's "tint".
+On SIGTERM it saves and exits at once. It records what it saw in record.json. As the engine
+does, it ends the game once a
 process has shown the frames of an `--exit-after=N` setting, and stops it on a `done` that
 leaves out a port the bot drives. What it does besides play is in plan.json, which `set_plan`
 writes beside tools/:
 
   "race"     frames a race lasts before the game ends it, 3000 by default
+  "tint"     {"FRAME": N}, a blue of N in that frame's dump, which is 0 for the others
   "events"    a list of {"frame": N or "race": N, "process": P, "do": [ACTION, ...]}. It happens
               at frame N of process P (1 before a reset), or at the Nth frame of the first race
               the process plays, once. An ACTION is one of
@@ -54,6 +57,8 @@ import bot_menus
 from bot_link import Pad
 from testgame import FakeGame
 from testutil import FakeLink, LinkLines, signal_pipe
+from frame_pair import write_png
+from framediff import Image
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 name, seconds, script, every, *settings = sys.argv[1:]
@@ -251,6 +256,10 @@ while True:
     step(pads)
     if not game_frozen:
         game.advance(pads)
+    if frame and frame % int(every) == 0:
+        blue = plan.get("tint", {}).get(str(frame), 0)
+        with open("frame_%05d.png" % frame, "wb") as f:
+            f.write(write_png(Image(2, 2, 3, bytes([frame % 256, frame // 256 % 256, blue]) * 4)))
     if not picture_frozen:
         picture += 1
     link.put(@PICTURE@, struct.pack(">I", picture))
