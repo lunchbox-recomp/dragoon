@@ -14,6 +14,7 @@ writes beside tools/:
 
   "race"     frames a race lasts before the game ends it, 3000 by default
   "tint"     {"FRAME": N}, a blue of N in that frame's dump, which is 0 for the others
+  "bin_tint" "tint" for a game run with --bin=, which then ignores "tint"
   "events"    a list of {"frame": N or "race": N, "process": P, "do": [ACTION, ...]}. It happens
               at frame N of process P (1 before a reset), or at the Nth frame of the first race
               the process plays, once. An ACTION is one of
@@ -257,7 +258,7 @@ while True:
     if not game_frozen:
         game.advance(pads)
     if frame and frame % int(every) == 0:
-        blue = plan.get("tint", {}).get(str(frame), 0)
+        blue = plan.get("bin_tint" if setting("--bin=") else "tint", {}).get(str(frame), 0)
         with open("frame_%05d.png" % frame, "wb") as f:
             f.write(write_png(Image(2, 2, 3, bytes([frame % 256, frame // 256 % 256, blue]) * 4)))
     if not picture_frozen:

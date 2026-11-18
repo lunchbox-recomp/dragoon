@@ -27,7 +27,11 @@ MANIFEST = "title 20 60 60,120\nmenu  20 60 120\n"
 
 def fake_frame(frame: int, blue: int = 0) -> bytes:
     """The dump testengine's fake game writes at FRAME."""
-    return write_png(Image(2, 2, 3, bytes([frame % 256, frame // 256 % 256, blue]) * 4))
+    return write_png(fake_image(frame, blue))
+
+
+def fake_image(frame: int, blue: int = 0) -> Image:
+    return Image(2, 2, 3, bytes([frame % 256, frame // 256 % 256, blue]) * 4)
 
 
 def booting(read_at: int) -> tuple[int, dict]:
@@ -136,6 +140,32 @@ class FramesStepTest(unittest.TestCase):
         kept = sorted(p.relative_to(tree.report).as_posix() for p in (tree.report / "dumps").rglob("*.png"))
         self.assertEqual(kept, ["dumps/16x9/title/frame_00120.png", "dumps/4x3/title/frame_00120.png"])
         self.assertEqual((tree.report / kept[0]).read_bytes(), fake_frame(120, 9))
+        self.assertEqual(tree.runs_left(), [])
+
+    def golden_build(self, tree: FakeTree) -> None:
+        (tree.root / "build" / "nightly" / "golden-build").mkdir()
+        write_file(tree.root / "build" / "nightly" / "golden-build", "dragoon", "a game")
+
+    def test_a_golden_the_golden_build_draws_again_goes_beside_the_new_frame(self) -> None:
+        tree = FakeTree(self)
+        self.golden_build(tree)
+        set_plan(tree.root, tint={"120": 9})
+        checks = tree.by_id(tree.play("frames", tree.context(routes=["title"])))
+        problem = checks["frames 4:3 title"].problems[0]
+        self.assertEqual(problem.dump, "dumps/4x3/title/frame_00120-golden-left.png")
+        pair = read_png(tree.report / problem.dump)
+        self.assertEqual(pair, side_by_side(fake_image(120), fake_image(120, 9)))
+        self.assertTrue((tree.report / "dumps/4x3/title/frame_00120.png").is_file())
+        self.assertEqual(tree.games, 4)  # each aspect's route, and the golden build once for each
+        self.assertEqual(tree.runs_left(), [])
+
+    def test_no_pair_when_the_golden_build_draws_something_else(self) -> None:
+        tree = FakeTree(self)
+        self.golden_build(tree)
+        set_plan(tree.root, tint={"120": 9}, bin_tint={"120": 4})
+        checks = tree.by_id(tree.play("frames", tree.context(routes=["title"])))
+        self.assertEqual(checks["frames 4:3 title"].problems[0].dump, "dumps/4x3/title/frame_00120.png")
+        self.assertEqual(list((tree.report / "dumps").rglob("*golden-left.png")), [])
         self.assertEqual(tree.runs_left(), [])
 
     def test_a_different_screen_plays_differently_and_keeps_that_checkpoint(self) -> None:
