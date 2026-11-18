@@ -37,3 +37,15 @@ python3 tools/audio_hashes.py record title --lists 7200,20000
 `record` rewrites a route's golden at the `--lists` counts or at the ones it already has, and writes nothing for a route that misses any of them. Use it only when a change to the sound is on purpose. For a new route, pick multiples of 400 past the list where its hash first differs from every other route's, at counts where two bench runs give the same hash.
 
 The goldens hold only for unpaced runs, which `--bench` is, since a paced run makes catch-up jumps. The committed ones were recorded on an M4 Max under macOS 26 and held across repeated runs there, and no other machine has been checked. No audio is captured or committed, only the counts and hashes.
+
+## State goldens
+
+Each golden in `state/` holds the game's own state at a route's checkpoints, which are its required frames in `manifest.txt`. It's read from guest RAM by the names in `tools/kar_ram.json`. A line is the checkpoint, the frame it was read at and then each value. They're the scene's major and minor and how many play, with how many of them are people. Then come who plays each port and each player's speed and position. The lap, the place and the race timer aren't mapped in `kar_ram.json`, so no golden holds them. A route whose frames match but whose state doesn't played differently, and one whose state matches but whose frames don't drew differently.
+
+```sh
+python3 tools/state_goldens.py check
+python3 tools/state_goldens.py check --aspect=16:9
+python3 tools/state_goldens.py record
+```
+
+`--aspect=16:9` plays at 16:9 and keeps its goldens in `state-16x9/`, as the frame goldens do. Twenty-four routes read the same state at both aspects. `air-ride-courses-2` doesn't, since its third race, Beanstalk Park, plays out differently at 16:9. Its checkpoint at frame 19,400 has every rider's speed and position off by up to about 1 unit, while 15,600 matches, and both aspects gave the same values when run again. The values are numbers the game computed and nothing read from the disc, with each float written to nine figures.
