@@ -175,6 +175,21 @@ class PassesTest(unittest.TestCase):
                          [("tour", 12000), ("meadows", 6000 + warm_shaders.ROUTE_TAIL_FRAMES)])
 
 
+class RealPassesTest(unittest.TestCase):
+    # The frames these passes first draw a program no other pass builds, from a build of Dragoon
+    # ae3bfe8 at gcn-recomp b4f8ddb played unpaced past the passes' old ends of 5,100 and 19,500:
+    # the one air-ride-race draws at 5,338, and the one four Top Ride routes draw by 4,500
+    # (tests/hashes/manifest.txt).
+    LATE_KEYS = {"air-ride-checker-knights": 8436, "top-ride-courses": 19864}
+
+    def test_the_passes_that_draw_late_programs_play_past_them(self):
+        plan = {p.name: p.exit_after for p in warm_shaders.passes(
+            routes.parse_manifest(routes.MANIFEST.read_text()))}
+        for name, frame in self.LATE_KEYS.items():
+            with self.subTest(route=name):
+                self.assertGreater(plan[name], frame)
+
+
 TOTAL_FRAMES = TITLE_FRAMES + FOUR_FRAMES
 
 

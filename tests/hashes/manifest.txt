@@ -23,6 +23,14 @@
 # draw past their own stretches from Sky Sands, which draws them by frame 14,186. Of the keys
 # air-ride-race's own pass built, 8 come from passes other than air-ride-courses-1.
 #
+# Two programs come from passes played past their routes' frames, since the disc's fast reads
+# (gcn-recomp b5ec329) changed the chained races that drew them. air-ride-race draws one at frame
+# 5,338, a 36-vertex piece over a CPU rider, which air-ride-courses-1's Fantasy Meadows race drew
+# by frame 18,348 with timed reads and no longer does. Checker Knights' race draws it at 8,436,
+# so that pass plays to 8,600. Top Ride Sky, Fire, Water and Metal draw the other, an item a CPU
+# holds, which top-ride-courses drew in its Grass race with timed reads. Its Fire race draws it
+# at 19,864, so that pass plays to 20,050.
+#
 # Only shader_cache.py diff shows the passes still build every key, so any change to a pass or the
 # route it plays means diffing the new warm-up's cache against the last one both ways. A change to
 # what the -courses routes race also means running the eight air-ride routes unpaced to frame
@@ -39,7 +47,7 @@ air-ride-frozen-hillside   25 60 4200 warm=6000
 air-ride-magma-flows       25 60 4200 warm-from=air-ride-courses-2
 air-ride-beanstalk-park    25 60 4200 warm-from=air-ride-courses-2
 air-ride-machine-passage   25 60 4200 warm-from=air-ride-courses-2
-air-ride-checker-knights   25 60 4200
+air-ride-checker-knights   25 60 4200 warm=8600
 air-ride-courses-1         80 100 4200,17300,19100,22900 warm=23800
 air-ride-courses-2         70 100 4200,15600,19400 warm=20300
 top-ride-grass 30 60 3600 warm-from=top-ride-courses
@@ -49,6 +57,6 @@ top-ride-fire  30 60 3600 warm-from=top-ride-courses
 top-ride-light 30 60 3600 warm-from=top-ride-courses
 top-ride-water 30 60 3600 warm-from=top-ride-courses
 top-ride-metal 30 60 3600 warm-from=top-ride-courses
-top-ride-courses      75 100 3600,6100,8600,11100,13600,16100,18600 warm=19500
+top-ride-courses      75 100 3600,6100,8600,11100,13600,16100,18600 warm=20050
 city-trial-stadium    60 300 4800,15600,17100,20400
 city-trial-stadium-4p 70 300 4200,4800,15600,17100,21000 --pads=4
