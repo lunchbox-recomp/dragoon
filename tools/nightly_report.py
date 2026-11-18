@@ -171,7 +171,7 @@ def summary(head: list[str], checks: list[Check], last: Optional[list[Check]]) -
         budget -= len(shown)
         if len(group) > len(shown):
             out.append(f"  and {len(group) - len(shown)} more in {REPORT}")
-    passed = pass_lines(checks)
+    passed = pass_lines([c for c in checks if c.value is None or c not in regressions])
     if passed:
         out.append("Passes")
         out += passed

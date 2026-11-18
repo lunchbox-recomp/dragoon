@@ -304,8 +304,7 @@ class SummaryTest(unittest.TestCase):
             "Failing as last time (1)",
             "  frames 4:3 b: drew differently, frame 60 1 != golden 2 -> dumps/4x3/b/frame_00060.png",
             "Passes",
-            "  frames: 1 of 3 checks pass (1 frames)",
-            "  timed x: 5.00 ms (bar 8), load 2.0 to 3.0",
+            "  frames: 1 of 3 checks pass (1 frames)",  # timed x passed its bar, but it's listed above
             "Skipped",
             "  soak: skipped-battery (1 checks)"])
 
