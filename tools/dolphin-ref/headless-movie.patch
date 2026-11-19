@@ -1,5 +1,5 @@
 diff --git a/Source/Core/DolphinNoGUI/MainNoGUI.cpp b/Source/Core/DolphinNoGUI/MainNoGUI.cpp
-index 3bf40ea0d42be1b3258d14efb20fe7d3614e5b52..d3615e3000f945e77d84cbd942e22338d4f13dab 100644
+index 3bf40ea0d42be1b3258d14efb20fe7d3614e5b52..ee17145cedb68753fde299bbebc0d30cee841f6c 100644
 --- a/Source/Core/DolphinNoGUI/MainNoGUI.cpp
 +++ b/Source/Core/DolphinNoGUI/MainNoGUI.cpp
 @@ -15,12 +15,18 @@
@@ -21,7 +21,7 @@ index 3bf40ea0d42be1b3258d14efb20fe7d3614e5b52..d3615e3000f945e77d84cbd942e22338
  #include "Core/System.h"
  
  #include "UICommon/CommandLineParse.h"
-@@ -303,6 +309,31 @@ int main(const int argc, char* argv[])
+@@ -303,6 +309,40 @@ int main(const int argc, char* argv[])
  
    DolphinAnalytics::Instance().ReportDolphinStart("nogui");
  
@@ -30,15 +30,24 @@ index 3bf40ea0d42be1b3258d14efb20fe7d3614e5b52..d3615e3000f945e77d84cbd942e22338
 +  // it to reopen at login. Opt out, as [NSApp disableRelaunchOnLogin] does.
 +  {
 +    using Send = id (*)(id, SEL);
++    using Responds = BOOL (*)(id, SEL, SEL);
 +    const id app = reinterpret_cast<Send>(objc_msgSend)(
 +        reinterpret_cast<id>(objc_getClass("NSApplication")), sel_registerName("sharedApplication"));
-+    reinterpret_cast<Send>(objc_msgSend)(app, sel_registerName("disableRelaunchOnLogin"));
++    const SEL disable = sel_registerName("disableRelaunchOnLogin");
++    if (app && reinterpret_cast<Responds>(objc_msgSend)(
++                   app, sel_registerName("respondsToSelector:"), disable))
++      reinterpret_cast<Send>(objc_msgSend)(app, disable);
 +  }
 +#endif
 +
 +  // Play a movie the way DolphinQt's MainWindow does, before boot.
 +  if (options.is_set("movie"))
 +  {
++    if (!boot)
++    {
++      fprintf(stderr, "Could not boot the specified file\n");
++      return 1;
++    }
 +    const std::string movie_path = static_cast<const char*>(options.get("movie"));
 +    std::optional<std::string> savestate_path;
 +    if (!Core::System::GetInstance().GetMovie().PlayInput(movie_path, &savestate_path))
