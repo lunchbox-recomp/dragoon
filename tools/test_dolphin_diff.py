@@ -66,6 +66,7 @@ class TimelineTest(unittest.TestCase):
         with boot_at(0):
             got = dolphin_diff.checkpoints(route, ram(self.ROWS))
         self.assertEqual([c.frame for c in got], [0, 2, 4, 7, 10, 12, 14])
+        self.assertEqual(got[0].why, "scene 18/38 starts")  # at BOOT, so not moved
         self.assertEqual(got[1].why, "scene 2/0 starts")
         self.assertEqual(got[4].why, "scene 18/38, 10 frames in")
         self.assertEqual(got[3].why, "golden 7")
