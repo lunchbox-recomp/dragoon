@@ -1009,7 +1009,7 @@ reviewer of `84b6876` played its console-speed movie, the seventh, again and got
 
 `tools/dolphin_diff.py` plays a route in Dolphin from its converged movie and in Dragoon, both
 at console disc speed and one game at a time. It compares them at the route's goldens and at
-each scene's first frame and 10 frames in.
+each scene's first frame and 10 frames in, from frame 60 on.
 
 ```
 tools/dtm.py converge tests/routes/ROUTE.txt rom/game.iso --fields N --dir DIR --disc console
@@ -1019,15 +1019,54 @@ caffeinate -i nice -n 19 tools/dolphin_diff.py run ROUTE --movie DIR/movie-K.dtm
 Read `build/dolphin-diff/ROUTE/summary.txt` first. Each checkpoint has the Dolphin dump it was
 matched to and how sure the match is, then the picture score and, apart from it, the state.
 "still" means the dumps around it look alike, so the match can't be told from the picture.
-"refused" means Dolphin never showed that frame, and nothing is scored. The score is the share
+"refused" means no match, with the reason given. Nothing is scored there. The score is the share
 of pixels off by more than 4 in any channel, then the largest and mean channel error. Over
 0.1% goes to triage. Look at `sides/ROUTE-FRAME.png`, Dragoon, Dolphin and the difference, and
 record what it shows in `tests/hashes/dolphin-triage.txt`. Two runs of each side on top-ride-grass
 gave identical pictures and state, so any difference is between the two, not noise. That
-holds for those runs only. The triage file is one look, not a pass or fail. Deep in a race
-Dolphin's frame count falls behind its pictures, so a race checkpoint can show a later moment
-of Dolphin's than of Dragoon's. Check the race clock in both halves before reading anything
-into a race difference.
+holds for those runs only. The triage file is one look, not a pass or fail.
+
+The first count of Dolphin's game frames lost a frame every 60 fields from boot on. The game
+sets vi.renew_count back to 0 once every 60 fields (80410D84 to 80410DC0), and a frame it shows
+on that field went uncounted. vi.renew_last (80589C70) keeps what the count reached, and
+`dtm.game_frames` adds it on those fields. It now equals `vi.next_buffer`'s count of pictures on
+every field of a top-ride-grass run, 4400 fields and 67 resets. At the main menu's first field
+(1342) the old count gave 1003 and the new 1020, and at Top Ride's race (3793) 3234 and 3288.
+The old count agreed with Dragoon's frame count at scene changes only because that loss offset
+Dolphin's extra pictures. top-ride-grass's movie was converged again on the new count, in 7
+runs, and `dtm.py presses` found all 11 presses on their route frames. Its scenes now start at
+Dolphin's frames 1003, 1704, 2004, 2609 and 3235, within a frame of Dragoon's. air-ride-race and
+city-trial weren't run again, so their triage lines are from the old count.
+
+A checkpoint in a race past its first frame and 10 frames in is refused until race checkpoints
+are matched by the race timer. That refuses top-ride-grass 3600 and air-ride-race 4200 and
+6000. The two games' frame counts needn't keep step within a race, and there the moment matters
+most. The timer to try first is the global counter at 805361C0 (gm+0x7E8), which the main loop
+raises once a pass at 80006B08. It isn't tested yet. Failing that, the race clock's own value
+once it's mapped.
+
+On the new count and movie, top-ride-grass's checkpoints up to course select scored as before,
+and the state
+matched at every checkpoint compared, 1003 and 1013 included. The card prompt at 60 is the same
+panel on both sides, its edges apart.
+
+What the triage found:
+
+- Edges are a Dragoon bug. Dragoon draws about 0.084 to 0.09 of a pixel right and down of
+  Dolphin. A console samples a pixel at 7/12, and Dolphin applies a 1/12 correction for it
+  (VertexShaderManager.cpp, lines 341 to 357). gcn-recomp has none. This change doesn't fix it.
+- The starts differ by the seed. `main` seeds HSD_RandDefaultSeed (805DCD30) from OSGetTick at
+  80005A38, and the two sides boot with seeds 198 ticks apart (Dolphin 0x00B99D74, Dragoon
+  0x00B99CAE). Dolphin's timebase counts cycles/12 from 0 at the movie's RTC, and Dragoon's
+  counts 2 a loop back-edge with the wall clock as its RTC. Top Ride seeds again from
+  OSGetTime's low word at race setup (802842D8), and City Trial's stage RNG (805DD700) uses the
+  main seed. The seed isn't pinned here.
+- The card prompt and the SAVE icon are timing. Dolphin's prompt has its text from game frame
+  58 and Dragoon's from frame 4, so the first checkpoint is frame 60. Dolphin shows course
+  select without the SAVE icon, then 40 fields later the icon.
+- The main menu Kirby's state differed on the old count, where Dragoon's was 0 to 2 frames
+  behind Dolphin's over frames 909 to 1001. On the new count it matches at 1003 and 1013 on
+  top-ride-grass. The other two routes weren't run again.
 
 ## gcn-recomp `95e1c6b`
 
