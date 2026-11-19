@@ -1001,7 +1001,9 @@ pairing, and both sides read as a console's drive does. `dolphin_ref.py boot` re
 speed unless `--disc fast` says otherwise. The one-frame differences are Q4c's to explain.
 
 Two runs of the first movie gave the same watched words on every field and the same frame
-dumps, 3657 shared; one run stopped a dump later than the other. Comparing the pictures is Q4c.
+dumps, 3657 shared; one run stopped a dump later than the other. For the new mapping, the
+reviewer of `84b6876` played its console-speed movie, the seventh, again and got the same
+`ram.txt`. Comparing the pictures is Q4c.
 
 ## gcn-recomp `95e1c6b`
 

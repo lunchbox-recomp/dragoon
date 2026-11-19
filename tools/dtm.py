@@ -16,15 +16,15 @@ Dolphin polls on its video clock, not on the game's frames, so make maps one ont
 two steps.
 
 Polls to fields: the game sets the serial interface to poll twice a field from field 48 on, and
-it does in every scene top-ride-grass passes through, from the title to the race. Poll i is made
-in field poll_field(i), POLLS a field with POLL_SHIFT for the slower polling before. That was
-counted, not read from the source: with --count-polls, make puts each poll's number in the
-analog triggers, too little for the game's PADClamp to let through, and polls reads a run that
-watches WATCH, which holds the game's queue of raw pad reads, and prints the polls between the
-game's reads in each run of fields. It shows 2 a field throughout, with the game reading either
-the field's first poll or the last one of the field before (read_field). A field that shows 1
-or 3 is the read landing the other side of a poll, and one that shows 4 or 0 next to it is the
-same thing evened out.
+it does in every scene top-ride-grass passes through, from the title to the race. From field
+48 on, poll i is made in field poll_field(i), POLLS a field, with POLL_SHIFT for the slower
+polling before. That was counted, not read from the source: with --count-polls, make puts each
+poll's number in the analog triggers, too little for the game's PADClamp to let through, and
+polls reads a run that watches WATCH, which holds the game's queue of raw pad reads, and prints
+the polls between the game's reads in each run of fields. It shows 2 a field throughout, with
+the game reading either the field's first poll or the last one of the field before
+(read_field). A field that shows 1 or 3 is the read landing the other side of a poll, and one
+that shows 4 or 0 next to it is the same thing evened out.
 
 Fields to game frames: the game draws fewer frames than fields while it loads, so a field isn't
 a game frame. --timeline takes the game frames each field reached in an earlier run of the
