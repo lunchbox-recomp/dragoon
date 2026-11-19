@@ -941,6 +941,23 @@ builds `dragoon` and `dragoon_bench` and refuses a clone with changes or off `or
 skips a night it starts outside 01:00 to 06:00, and no run starts while another does or while a
 `dragoon` or `dragoon_bench` process runs.
 
+## Dolphin reference
+
+Dolphin is the reference for what the game should do and how its 4:3 picture should look. The
+goldens only say a frame hasn't changed, so the plan is to play our routes in Dolphin too and
+compare the state and the picture at each checkpoint. `tools/dolphin_ref.py` pins Dolphin 2609a
+(`409881c`), builds it from source with auto-update, analytics, RetroAchievements and the rest
+of its online parts off, and runs it with no network in `dolphin-ref/` beside this clone:
+
+```
+tools/dolphin_ref.py fetch
+tools/dolphin_ref.py audit-notes
+tools/dolphin_ref.py build
+tools/dolphin_ref.py boot rom/game.iso --frames 2000 --dump --out DIR
+```
+
+`audit-notes` lists what the audit of the tree found and what each finding became.
+
 ## gcn-recomp `95e1c6b`
 
 The pin moved from `782d7fa` to `95e1c6b`, 57 commits. Empty string switches now read as unset.

@@ -450,6 +450,21 @@ with the same `-DFETCHCONTENT_SOURCE_DIR_*` settings as a working clone's build,
 
 nightly_steps.py holds what each step plays and nightly_report.py the comparison and the summary. nightly_start.py holds the lock, the game and hour checks and the clone's update, and known_issues.py reads the known issues with their values. nightly_agent.py holds the launchd job, power.py the AC check and frame_pair.py the side-by-side PNG. None has a command line. The tests play the frames step on testengine.py's fake game and the other steps with their runs faked (test_nightly_steps.py).
 
+## dolphin_ref.py
+
+How do we get a Dolphin we can trust as the reference, and run it offline? It holds Dolphin's pinned release tag and commit, the CMake options and the user folder's config as data, and builds and runs that Dolphin in `dolphin-ref/` beside this clone.
+
+```
+tools/dolphin_ref.py fetch
+tools/dolphin_ref.py audit-notes
+tools/dolphin_ref.py build
+tools/dolphin_ref.py boot rom/game.iso --frames 2000 --dump --press 260:A:5,440:A:5,1040:A:5,1300:START:5 --out DIR
+```
+
+`fetch` clones the tag with its submodules from source, and `audit-notes` prints what the audit of that tree found and what became of each finding. `build` and `boot` refuse a tree whose HEAD isn't the pinned commit or whose submodules are off their pins. cmake, ninja and Dolphin all run under `sandbox-exec` with a profile that denies every network but Unix sockets, and Dolphin runs headless under `caffeinate -i` and `nice -n 19` with `dolphin-ref/user` as its user folder, never `~/Library/Application Support/Dolphin`.
+
+`boot` reads guest RAM through Dolphin's memory watcher, which sends the watched words over a Unix socket at the end of each video field, and stops Dolphin after N fields. The headless frontend never plays a `.dtm` movie, so `--press` writes port 1's presses into a pipe the pad reads, counted in Dolphin's fields, which aren't frame-exact. `--help` gives the files `--out` writes. The tests fake Dolphin, so they need neither the build nor the disc.
+
 ## interp_bisect.py
 
 Which functions change a route when the interpreter runs them? It reads every function start from `analysis/symbols.txt` and checks ROUTE with frame_hashes.py, or with audio_hashes.py under `--audio`. Each check sets `GCN_INTERPRET` to a list of starts, a file in `build/bisect/` with one hex address a line, named by absolute path.
