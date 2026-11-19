@@ -964,31 +964,44 @@ tools/dolphin_ref.py boot rom/game.iso --frames 2000 --dump --out DIR
 Dolphin now plays our routes as input movies. The tag's headless frontend took `-m` and never
 played it, so `tools/dolphin-ref/headless-movie.patch` has it call `PlayInput` before boot, as
 the Qt frontend does, and opt out of relaunch at login. It changes `MainNoGUI.cpp` and nothing
-else, and `build` and `boot` refuse a tree whose `git diff` isn't that patch. `tools/dtm.py`
-turns a route into a `.dtm`. The game polls the pad twice a field from field 48 on, counted
-with the triggers on top-ride-grass from the title to the race. Each poll gets the route's
-input at the game frame its field reached in the movie's own last run, so the movie is made
-again from its run until it comes out the same.
+else, and `build` and `boot` refuse a tree whose `git diff` isn't that patch, or that git was
+told to hide an edit in. `tools/dtm.py` turns a route into a `.dtm`. The game polls the pad
+twice a field from field 48 on, counted with the triggers on top-ride-grass from the title to
+the race. Each poll gets the route's input at the game frame the field before its read had
+reached in the movie's own last run, as `input_script_apply` gives it by
+`gx::g_frames_submitted`. `dtm.py converge` makes the movie again from its run until it comes
+out the same. From a first movie that maps field f to frame f, top-ride-grass took 7 runs at
+console disc speed and 3 fast. On each speed's last run `dtm.py presses` read the game's queue
+of pad reads and found all 11 presses read on their route frames.
 
-top-ride-grass on 2026-11-19: the field and game frame each scene started at in Dolphin, and
-the Dragoon frame `kar_ram.json` saw that scene at on the same route:
+Dragoon reads the disc fast by default ("Disc reads"), and the first movie ran Dolphin at
+console speed, where a press counted in fields is held longer than it says. So the movie was
+made at both speeds, and Dragoon `2702645` played the route at both with `tools/ram_peek.py`
+printing scene.major and scene.minor every frame. The game frame each scene started at on
+top-ride-grass on 2026-11-19, with Dolphin's field in brackets:
 
-| scene.major/minor | Dolphin field | Dolphin game frames | Dragoon saw it at |
-|---|---|---|---|
-| 18/0, then 18/38, booting | 169, 223 | 0 | frame 2 (city-trial-stadium) |
-| 2/0, the opening and title | 551 | 303 to 1002 | |
-| 3/2, the main menu | 1342 | 1003 to 1703 | |
-| 5/24, Top Ride's movie | 2148 | 1704 to 2003 | 1750 |
-| 5/7, course select | 2476 | 2004 to 2607 | 2050 |
-| 5/9, machine select | 3128 | 2608 to 3232 | 2650 |
-| 5/19, the race | 3792 | 3233 on | 3250 |
+| scene.major/minor | Dolphin console | Dolphin fast | Dragoon console | Dragoon fast |
+|---|---|---|---|---|
+| 18/0, then 18/38, booting | 0 (169, 223) | 0 (62, 116) | 2 | 2 |
+| 2/0, the opening and title | 304 (552) | 303 (429) | 303 | 303 |
+| 3/2, the main menu | 1003 (1342) | 1004 (1157) | 1003 | 1003 |
+| 5/24, Top Ride's movie | 1704 (2148) | 1704 (1877) | 1703 | 1702 |
+| 5/7, course select | 2004 (2476) | 2004 (2196) | 2003 | 2004 |
+| 5/9, machine select | 2608 (3128) | 2608 (2816) | 2608 | 2607 |
+| 5/19, the race | 3234 (3793) | 3234 (3459) | 3234 | 3233 |
+| game frame 3600 | (4264) | (3858) | | |
 
-Each Dragoon frame falls inside the game frames Dolphin had that scene for. Frame numbers don't
-line up while booting: Dolphin's game shows no frame until field 244, so its boot scenes all
-come at game frame 0. The state golden's one checkpoint, frame 3600, has scene 5/19, and Dolphin
-reached game frame 3600 at field 4264 in 5/19.
-Two runs of that movie gave the same watched words on every field and the same frame dumps,
-3657 shared; one run stopped a dump later than the other. Comparing the pictures is Q4c.
+Frame numbers don't line up while booting. Dolphin's game shows no frame until field 244 at
+console speed, so its boot scenes all come at game frame 0. By frame 3600 the fast disc is
+406 fields ahead, but it moves Dolphin's scene changes by one game frame at most. Against
+Dolphin at console speed, Dragoon at console speed is one frame off or less at every change and
+the same at three. Dolphin fast against Dragoon fast is up to two off and the same at two. So
+Q4c compares Dolphin and Dragoon both at console speed, by game frame. It's the closest
+pairing, and both sides read as a console's drive does. `dolphin_ref.py boot` reads at console
+speed unless `--disc fast` says otherwise. The one-frame differences are Q4c's to explain.
+
+Two runs of the first movie gave the same watched words on every field and the same frame
+dumps, 3657 shared; one run stopped a dump later than the other. Comparing the pictures is Q4c.
 
 ## gcn-recomp `95e1c6b`
 
