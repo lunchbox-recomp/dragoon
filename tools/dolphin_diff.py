@@ -50,18 +50,22 @@ pictures of different sizes are refused.
 The picture score is over all pixels: the share whose largest channel error is over TOLERANCE,
 and the largest and the mean channel error. A checkpoint whose share is over BUDGET goes to
 triage. threshold() gives TOLERANCE from repeat runs: the largest channel error two runs of one
-side give at the same checkpoint, which is 0 for both (repeat prints it), plus STEP, one level
-of the 6-bit colour a GameCube EFB in RGBA6 keeps, so a rounding difference between two
-correct renderers' blends and filters isn't counted. A side-by-side is Dragoon on the left,
-Dolphin in the middle and the difference on the right: black under TOLERANCE, and over it
-white for a small error through red for a large one.
+side give at the same checkpoint, which is 0 for both (repeat prints it), plus STEP, 4 levels
+of 255, so a rounding difference between two correct renderers' 8-bit blends and filters isn't
+counted. The game draws to an RGB8 EFB (HSD_PixelFormat at 805DE2AC reads 0), so neither side
+drops colour bits that a 6-bit format would. On the three routes first run, the checkpoints
+under BUDGET came out at 0 and every one over it had a largest error of 14 or more, so no
+result there turns on STEP. A side-by-side is Dragoon on the left, Dolphin in the middle and the
+difference on the right: black under TOLERANCE, and over it white for a small error through
+red for a large one.
 
 The state compare reads every state_goldens.FIELDS value at each checkpoint on both sides
 through kar_ram.read, from guest RAM in Dragoon and from the watched words in Dolphin's
 ram.txt, pointers followed as kar_ram.json's paths say. Dolphin reads RAM at the end of a field,
 partway into the next frame's work, so a checkpoint's values are taken from the fields at its
 game frame and the one either side. "same" is a match at its frame, "same, a frame off" one
-only next to it, and "differs" no match: a correctness bug, listed apart from the pictures.
+only next to it, and "differs" no match, with each value that differs listed apart from the
+picture's score for triage.
 
 The triage file, tests/hashes/dolphin-triage.txt, has one line a route and checkpoint:
 
@@ -109,9 +113,9 @@ SETTLE = 10  # frames after a scene's first for its settled checkpoint
 DRIFT = 12  # the dumps either side of the counted one a match may take
 COARSE = 4  # the coarse error looks at every 4th pixel each way
 MARGIN = 0.8  # a match is sure when its coarse error is under this times the next picture's
-STEP = 4  # one level of a 6-bit channel, 255 / 63, rounded down
+STEP = 4  # levels of 255 two correct renderers may round apart
 REPEAT_ERROR = 0  # the largest channel error two runs of one side gave (repeat, docs/dev/status.md)
-BUDGET = 0.001  # a checkpoint over this share of pixels goes to triage, as framediff.py's
+BUDGET = 0.001  # a checkpoint over this share of pixels goes to triage, framediff.py's default
 SLOW = 3  # a Dragoon run's seconds, times state_goldens.SLOW times the manifest's
 CLASSES = ("bug", "dolphin", "unclear", "within", "refused")
 TRIAGE_LINE = re.compile(r"(\S+) (\d+) share=(\d+(?:\.\d+)?)% max=(\d+) mean=(\d+(?:\.\d+)?) "

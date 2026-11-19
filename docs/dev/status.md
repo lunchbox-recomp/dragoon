@@ -1005,6 +1005,27 @@ dumps, 3657 shared; one run stopped a dump later than the other. For the new map
 reviewer of `84b6876` played its console-speed movie, the seventh, again and got the same
 `ram.txt`. Comparing the pictures is Q4c.
 
+### Dolphin comparison
+
+`tools/dolphin_diff.py` plays a route in Dolphin from its converged movie and in Dragoon, both
+at console disc speed and one game at a time. It compares them at the route's goldens and at
+each scene's first frame and 10 frames in.
+
+```
+tools/dtm.py converge tests/routes/ROUTE.txt rom/game.iso --fields N --dir DIR --disc console
+caffeinate -i nice -n 19 tools/dolphin_diff.py run ROUTE --movie DIR/movie-K.dtm
+```
+
+Read `build/dolphin-diff/ROUTE/summary.txt` first. Each checkpoint has the Dolphin dump it was
+matched to and how sure the match is, then the picture score and, apart from it, the state.
+"still" means the dumps around it look alike, so the match can't be told from the picture.
+"refused" means Dolphin never showed that frame, and nothing is scored. The score is the share
+of pixels off by more than 4 in any channel, then the largest and mean channel error. Over
+0.1% goes to triage. Look at `sides/ROUTE-FRAME.png`, Dragoon, Dolphin and the difference, and
+record what it shows in `tests/hashes/dolphin-triage.txt`. Two runs of each side on top-ride-grass
+gave identical pictures and state, so any difference is between the two, not noise. That
+holds for those runs only. The triage file is one look, not a pass or fail.
+
 ## gcn-recomp `95e1c6b`
 
 The pin moved from `782d7fa` to `95e1c6b`, 57 commits. Empty string switches now read as unset.

@@ -482,7 +482,7 @@ A route says what's down at each of the game's frames, and a movie what the pad 
 
 ## dolphin_diff.py
 
-Does Dragoon draw and play a route as Dolphin does? It plays a route in Dolphin from its converged movie and in Dragoon, both reading the disc at console speed, and compares the picture and the game's state at matched game frames.
+Does Dragoon draw and play a route as Dolphin does? It plays a route in Dolphin from its converged movie and in Dragoon, both reading the disc at console speed. Then it compares the picture and the game's state at matched game frames.
 
 ```
 tools/dtm.py converge tests/routes/top-ride-grass.txt rom/game.iso --fields 4400 --dir build/dtm/top-ride-grass --disc console
@@ -491,7 +491,7 @@ tools/dolphin_diff.py repeat RUN_A/dragoon RUN_B/dragoon
 tools/dolphin_diff.py triage
 ```
 
-`run` is `dolphin`, `dragoon` and `compare` in turn, one game at a time, into `build/dolphin-diff/ROUTE/`. The checkpoints are the route's required frames and each scene's first frame in Dolphin's run and 10 frames after it. Dolphin's game frame comes from `vi.renew_count` and Dragoon's is its own frame count. A Dolphin dump has no frame number, so the dump for a frame is counted from `vi.next_buffer`'s changes and then taken from the 12 dumps either side by the nearest picture, since Dolphin's own count drifts from the game's by a few. `summary.txt` gives each checkpoint's dump, how sure the match is, the share of pixels off by more than the tolerance, the largest and mean channel error, and the state: the same as Dolphin's at that frame, a frame off, or different. Both sides dump 640x480 at 4:3 before any scaling, and pictures of two sizes are refused, never scaled. `sides/` holds a side-by-side a checkpoint, Dragoon, Dolphin and the difference. `run` deletes both sides' frame dumps at the end. `repeat` gives the largest channel error between two runs of one side, which sets the tolerance. `tests/hashes/dolphin-triage.txt` holds a line a checkpoint with its class, and `--help` gives its format and the rest. The tests fake both sides' runs, so they need neither Dolphin nor the disc.
+`run` is `dolphin`, `dragoon` and `compare` in turn, one game at a time, into `build/dolphin-diff/ROUTE/`. The checkpoints are the route's required frames and each scene's first frame in Dolphin's run and 10 frames after it. Dolphin's game frame comes from `vi.renew_count` and Dragoon's is its own frame count. A Dolphin dump has no frame number, so the dump for a frame is counted from `vi.next_buffer`'s changes and then taken from the 12 dumps either side by the nearest picture, since Dolphin's own count drifts from the game's by a few. `summary.txt` gives each checkpoint's dump and how sure the match is. Then come the share of pixels off by more than the tolerance and the largest and mean channel error. Last comes the state, which is the same as Dolphin's at that frame, a frame off or different. Both sides dump 640x480 at 4:3 before any scaling, and pictures of two sizes are refused, never scaled. `sides/` holds a side-by-side a checkpoint, Dragoon, Dolphin and the difference. `run` deletes both sides' frame dumps at the end. `repeat` gives the largest channel error between two runs of one side, which sets the tolerance. `tests/hashes/dolphin-triage.txt` holds a line a checkpoint with its class, and `--help` gives its format and the rest. The tests fake both sides' runs, so they need neither Dolphin nor the disc.
 
 ## interp_bisect.py
 
