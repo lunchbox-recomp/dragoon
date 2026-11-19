@@ -30,7 +30,8 @@ top-ride-grass's movie converged on this count, each scene starts in Dolphin's r
 frame of where it starts in Dragoon's (1003, 1704, 2004, 2609 and 3235 against 1003, 1703, 2003,
 2608 and 3234), since the route's presses start most of them. Within a scene the two counts
 needn't keep step, and in a race the moment matters most, so a checkpoint in a race past its
-settled one is refused until race checkpoints are matched by the race timer.
+settled one is refused until race checkpoints are matched by the race timer. City Trial's city
+counts as a race.
 
 A Dolphin dump has no frame number: it writes one PNG for each new picture its VI shows.
 vi.next_buffer changes once for each picture the game puts up, so the pictures by a field are its
@@ -128,8 +129,8 @@ DISC = "console"
 SETTLE = 10  # frames after a scene's first for its settled checkpoint
 BOOT = 60  # the first checkpoint: Dolphin's card prompt has its text from 58, Dragoon's from 4
 # The races, by scene.major and scene.minor. A checkpoint further in than its settled one waits
-# for the race timer.
-RACES = {(4, 18): "Air Ride's race", (5, 19): "Top Ride's race"}
+# for the race timer. City Trial's city counts as one.
+RACES = {(4, 18): "Air Ride's race", (5, 19): "Top Ride's race", (6, 18): "City Trial's city"}
 DRIFT = 12  # the dumps either side of the counted one a match may take
 COARSE = 4  # the coarse error looks at every 4th pixel each way
 MARGIN = 0.8  # a match is sure when its coarse error is under this times the next picture's

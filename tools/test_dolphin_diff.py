@@ -96,6 +96,13 @@ class TimelineTest(unittest.TestCase):
         self.assertEqual(got[4].refuse, "11 frames into Top Ride's race, where a game frame "
                                         "isn't matched until the race timer is")
 
+    def test_city_trial_s_city_counts_as_a_race(self):
+        rows = [(0x06000012, 0, A), (0x06000012, 1, B)]
+        with boot_at(0):
+            got = dolphin_diff.checkpoints(Route("r", 30, 60, [11], []), ram(rows))
+        self.assertEqual([(c.frame, c.refuse[:30]) for c in got],
+                         [(0, ""), (10, ""), (11, "11 frames into City Trial's ci")])
+
 
 class PictureMatchTest(unittest.TestCase):
     def setUp(self):
