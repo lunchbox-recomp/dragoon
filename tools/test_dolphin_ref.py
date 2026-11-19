@@ -285,14 +285,17 @@ class ProfileTest(unittest.TestCase):
         return self.sandboxed(profile, sys.executable, "-I", "-c", code, *args)
 
     def test_each_profile_writes_only_its_folder_the_scratch_and_dev_null(self):
-        for profile, own, others in ((self.build, "build", ("user", "src", "")),
-                                     (self.run_, "user", ("build", "src", ""))):
+        for make, own, others in ((dolphin_ref.build_profile, "build", ("user", "src", "")),
+                                  (dolphin_ref.run_profile, "user", ("build", "src", ""))):
             with self.subTest(own=own):
-                self.assertEqual(self.sandboxed(profile, "/usr/bin/touch",
-                                                str(self.root / own / "a"),
+                root = self.base / f"root-{own}"
+                for name in ("user", "build", "src"):
+                    (root / name).mkdir(parents=True)
+                profile = make(root, [str(self.scratch)])
+                self.assertEqual(self.sandboxed(profile, "/usr/bin/touch", str(root / own / "a"),
                                                 str(self.scratch / own)), 0)
                 self.assertEqual(self.python(profile, "open('/dev/null', 'w').write('x')"), 0)
-                for path in (*(self.root / name / "b" for name in others), self.other / "c"):
+                for path in (*(root / name / "b" for name in others), self.other / own):
                     self.assertNotEqual(self.sandboxed(profile, "/usr/bin/touch", str(path)), 0,
                                         path)
                     self.assertFalse(path.exists(), path)

@@ -30,10 +30,11 @@ ROOT/build, and run_profile lets Dolphin write only ROOT/user, so neither can ch
 Dolphin can't change build/. Both may also write this user's temp and cache folders (USER_DIRS)
 and /dev/null. Dolphin's profile allows one more thing, sending to a Unix socket inside
 ROOT/user, which is the memory watcher's. --out needs no allowance, since boot itself moves the
-dumps there once Dolphin has stopped. Every denial goes into the unified log with DENIED, so
-  log show --last 10m --predicate 'eventMessage CONTAINS "dolphin-ref"'
-lists what a run was refused. Each process's write to /dev/dtracehelper is among them, which
-only stops it offering DTrace probes.
+dumps there once Dolphin has stopped. Every denial goes to the unified log with DENIED, but only
+live: `log show` can miss them afterwards. To see what a run was refused, start
+  log stream --style compact --predicate 'eventMessage CONTAINS "dolphin-ref"'
+before it and stop it after. Each process's write to /dev/dtracehelper is among the denials,
+which only stops it offering DTrace probes.
 
 boot counts frames by Dolphin's memory watcher, which sends one datagram over that socket at
 the end of every video field. Each datagram lists the watched words that changed, so --watch
@@ -123,8 +124,8 @@ GETCONF = "/usr/bin/getconf"
 # This user's temp folder, where TMPDIR points, and cache folder, the T and C under
 # /private/var/folders. Nothing else of that user's folder there.
 USER_DIRS = ("DARWIN_USER_TEMP_DIR", "DARWIN_USER_CACHE_DIR")
-# What each denial the profiles make carries into the unified log. A deny rule without a message
-# logs nothing.
+# What each denial the profiles make carries into the unified log, for `log stream` to catch. A
+# deny rule without a message logs nothing.
 DENIED = "dolphin-ref"
 CAFFEINATE = ("/usr/bin/caffeinate", "-i")
 NICE = ("/usr/bin/nice", "-n", "19")
