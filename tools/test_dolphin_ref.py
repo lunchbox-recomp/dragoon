@@ -212,6 +212,68 @@ class PatchTreeTest(unittest.TestCase):
         with self.assertRaisesRegex(dolphin_ref.Refused, f"changed or untracked: M  {FRONTEND}"):
             self.check()
 
+    def test_an_edit_marked_assume_unchanged_or_skip_worktree_is_refused(self):
+        for flag, tag in (("--assume-unchanged", "h "), ("--skip-worktree", "S ")):
+            with self.subTest(flag=flag):
+                (self.src / FRONTEND).write_text(PLAYED)
+                (self.src / CORE).write_text("edited\n")
+                git(self.src, "update-index", flag, CORE)
+                with self.assertRaisesRegex(dolphin_ref.Refused, f"skip-worktree\\): {tag}{CORE}"):
+                    self.check()
+                git(self.src, "update-index", flag.replace("--", "--no-"), CORE)
+                git(self.src, "checkout", "--", CORE)
+
+    def test_an_untracked_file_in_a_new_folder_is_named(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        (self.src / "Source/Core/New").mkdir()
+        (self.src / "Source/Core/New/Movie2.cpp").write_text("new\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, r"\?\? Source/Core/New/Movie2.cpp"):
+            self.check()
+
+    def test_an_untracked_file_info_exclude_hides_is_refused(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        (self.src / ".git" / "info").mkdir(exist_ok=True)
+        (self.src / ".git" / "info" / "exclude").write_text("*.h\n")
+        (self.src / "Source/Core/Core/Movie.h").write_text("hidden\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, "!! Source/Core/Core/Movie.h"):
+            self.check()
+
+    def test_an_untracked_file_the_trees_gitignore_hides_is_refused(self):
+        self.head = commit(self.src, {".gitignore": "*.h\n"})
+        (self.src / FRONTEND).write_text(PLAYED)
+        (self.src / "Source/Core/Core/Movie.h").write_text("hidden\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, "!! Source/Core/Core/Movie.h"):
+            self.check()
+
+    def test_info_attributes_or_a_local_filter_is_refused(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        attributes = self.src / ".git" / "info" / "attributes"
+        attributes.parent.mkdir(exist_ok=True)
+        attributes.write_text("*.cpp filter=hide\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, "attributes isn't empty"):
+            self.check()
+        attributes.write_text("\n")
+        self.check()
+        git(self.src, "config", "filter.hide.clean", "cat")
+        with self.assertRaisesRegex(dolphin_ref.Refused, "local git config sets filter.hide.clean"):
+            self.check()
+
+    def test_the_users_git_config_cant_hide_an_edit(self):
+        base = temp_dir(self)
+        (base / "attributes").write_text("*.cpp filter=hide\n")
+        (base / "config").write_text(f"[core]\n\tattributesFile = {base / 'attributes'}\n"
+                                     "[filter \"hide\"]\n\tclean = sed -e s/MOVIE/movie/\n")
+        (self.src / FRONTEND).write_text(PLAYED)
+        (self.src / CORE).write_text("MOVIE\n")
+        env = {**os.environ, "GIT_CONFIG_GLOBAL": str(base / "config")}
+        with mock.patch.dict(os.environ, env):
+            # With that config git itself no longer sees the edit to CORE.
+            seen = subprocess.run(["git", "-C", str(self.src), "status", "--porcelain"],
+                                  capture_output=True, text=True, env=env, check=True).stdout
+            self.assertEqual(seen, f" M {FRONTEND}\n")
+            with self.assertRaisesRegex(dolphin_ref.Refused, f"changed or untracked:  M {CORE}"):
+                self.check()
+
     def test_a_patch_outside_the_frontend_or_not_in_place_is_refused(self):
         (self.src / CORE).write_text("edited\n")
         core = dolphin_ref.git(self.src, *dolphin_ref.DIFF)
@@ -259,6 +321,8 @@ class RealPatchTest(unittest.TestCase):
         body = "\n".join(added)
         self.assertIn("GetMovie().PlayInput(movie_path, &savestate_path)", body)
         self.assertIn('sel_registerName("disableRelaunchOnLogin")', body)
+        self.assertIn('sel_registerName("respondsToSelector:"), disable))', body)
+        self.assertLess(body.index("if (!boot)"), body.index("PlayInput"))
         self.assertFalse(any(line.startswith("-") and not line.startswith("---") for line in
                              dolphin_ref.PATCH.read_text(encoding="utf-8").splitlines()))
 
@@ -345,12 +409,17 @@ class CommandTest(unittest.TestCase):
                                    dolphin_ref.run_profile(self.root)])
         self.assertEqual(cmd[8], str(self.root / "build" / "Binaries" / "dolphin-emu-nogui"))
         self.assertEqual(cmd[9:15], ["-u", str(user), "-p", "headless", "-v", "Metal"])
-        self.assertEqual(cmd[-2:], ["-e", ISO])
-        self.assertNotIn("-C", cmd)
+        self.assertEqual(cmd[-4:], ["-C", "Dolphin.Core.FastDiscSpeed=False", "-e", ISO])
+        self.assertEqual(cmd.count("-C"), 1)
+
+    def test_boot_reads_the_disc_at_the_speed_it_is_given(self):
+        cmd = dolphin_ref.boot_command(self.root, self.root / "user", Path(ISO), disc="fast")
+        self.assertEqual(cmd[-4:], ["-C", "Dolphin.Core.FastDiscSpeed=True", "-e", ISO])
 
     def test_boot_with_dumps_turns_frame_dumping_on(self):
         cmd = dolphin_ref.boot_command(self.root, self.root / "user", Path(ISO), dump=True)
-        self.assertEqual(cmd[-4:], ["-C", "Dolphin.Movie.DumpFrames=True", "-e", ISO])
+        self.assertEqual(cmd[-6:], ["-C", "Dolphin.Core.FastDiscSpeed=False", "-C", "Dolphin.Movie.DumpFrames=True",
+                                    "-e", ISO])
 
     def test_boot_with_a_movie_plays_it_with_m_before_the_disc(self):
         cmd = dolphin_ref.boot_command(self.root, self.root / "user", Path(ISO), dump=True,
@@ -489,8 +558,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(ini["Core"]["EnableCheats"], "False")
         # What a movie with bSaveConfig off leaves to the run's config.
         self.assertEqual([ini["Core"][k] for k in ("CPUCore", "DSPHLE", "CPUThread",
-                                                   "FastDiscSpeed", "SlotA", "SlotB")],
-                         ["4", "True", "False", "False", "1", "255"])
+                                                   "SlotA", "SlotB")],
+                         ["4", "True", "False", "1", "255"])
+        self.assertNotIn("FastDiscSpeed", ini["Core"])  # boot's --disc sets it
         dsu = configparser.ConfigParser(interpolation=None)
         dsu.read(user / "Config" / "DSUClient.ini")
         self.assertEqual(dsu["Server"]["Enabled"], "False")
@@ -522,9 +592,18 @@ class FreshConsoleTest(unittest.TestCase):
 
 class PressTest(unittest.TestCase):
     def test_a_press_goes_down_at_its_frame_and_up_its_duration_later(self):
-        self.assertEqual(dolphin_ref.parse_presses("260:A:5, 1300:START+D_DOWN:2", 2000), {
+        self.assertEqual(dolphin_ref.parse_presses("260:A:5, 1300:DOWN+START:2", 2000), {
             260: ["PRESS A"], 265: ["RELEASE A"], 1300: ["PRESS START", "PRESS D_DOWN"],
             1302: ["RELEASE START", "RELEASE D_DOWN"]})
+
+    def test_it_reads_presses_as_the_routes_parser_does(self):
+        self.assertEqual(dolphin_ref.parse_presses("10:UP+LEFT+RIGHT:1", 20)[10],
+                         ["PRESS D_UP", "PRESS D_LEFT", "PRESS D_RIGHT"])
+        with mock.patch.object(dolphin_ref.routes, "parse_route",
+                               side_effect=ValueError("bad")) as parse:
+            with self.assertRaisesRegex(dolphin_ref.Refused, "--press bad"):
+                dolphin_ref.parse_presses("10:A:1", 20)
+        parse.assert_called_once_with("10:A:1")
 
     def test_a_press_has_to_end_by_the_last_frame(self):
         self.assertEqual(dolphin_ref.parse_presses("95:A:5", 100), {95: ["PRESS A"],
@@ -533,7 +612,8 @@ class PressTest(unittest.TestCase):
             dolphin_ref.parse_presses("96:A:5", 100)
 
     def test_bad_presses_are_refused(self):
-        for script in ("260:A", "260:Q:5", "0:A:5", "260:A:0", "x:A:5", "1:A:2:3", "260:DOWN:5"):
+        for script in ("260:A", "260:Q:5", "0:A:5", "260:A:0", "x:A:5", "1:A:2:3",
+                       "260:D_DOWN:5", "2/260:A:5", "260:SR:5"):
             with self.subTest(script=script), self.assertRaises(dolphin_ref.Refused):
                 dolphin_ref.parse_presses(script, 2000)
 
@@ -555,7 +635,7 @@ class WatchTest(unittest.TestCase):
 
     def test_the_default_is_scene_majors_word_wherever_it_sits_in_it(self):
         for address in (0x80001234, 0x80001237):
-            table = {"scene.major": SimpleNamespace(address=address)}
+            table = {"scene.major": SimpleNamespace(address=address, path=())}
             with self.subTest(address=address), \
                     mock.patch.object(dolphin_ref.kar_ram, "load", return_value=table):
                 self.assertEqual(dolphin_ref.default_watch(), "80001234")
@@ -564,6 +644,14 @@ class WatchTest(unittest.TestCase):
         for text, word in (("80000000", "80000000"), ("817ffffc", "817FFFFC"),
                            ("805361AC", "805361AC")):
             self.assertEqual(dolphin_ref.watch_address(text), word)
+
+    def test_a_kar_ram_name_gives_the_word_holding_it(self):
+        for name, word in (("scene.minor", "805361AC"), ("vi.renew_count", "805DE2CC"),
+                           ("pad.queue_write", "8058B080")):
+            with self.subTest(name=name):
+                self.assertEqual(dolphin_ref.watch_address(name), word)
+        with self.assertRaisesRegex(argparse.ArgumentTypeError, "behind a pointer"):
+            dolphin_ref.watch_address("player1.x")
 
     def test_a_word_outside_main_ram_or_unaligned_is_refused(self):
         for text in ("7FFFFFFC", "81800000", "817FFFFE", "805361AD", "805361AE",
@@ -705,7 +793,7 @@ class MainTest(unittest.TestCase):
 
     def test_boot_plays_a_movie_by_its_full_path(self):
         self.built()
-        (self.root / "route.dtm").write_bytes(b"DTM\x1a")
+        (self.root / "route.dtm").write_bytes(b"DTM\x1aGKYE01" + bytes(246))
         run = dolphin_ref.Run(10, 1.0, 0, [{"805361AC": 0}] * 10)
         with mock.patch.object(dolphin_ref, "check_tree", return_value="a" * 40), \
                 mock.patch.object(dolphin_ref, "check_user", return_value=self.root / "user"), \
@@ -716,6 +804,16 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 0, err)
         cmd = play.call_args.args[0]
         self.assertEqual(cmd[-4:], ["-m", str(self.root / "route.dtm"), "-e", str(self.iso)])
+
+    def test_boot_refuses_a_movie_for_another_game_and_runs_nothing(self):
+        self.built()
+        (self.root / "route.dtm").write_bytes(b"DTM\x1aGALE01" + bytes(246))
+        with mock.patch.object(dolphin_ref, "check_tree", return_value="a" * 40), \
+                mock.patch.object(dolphin_ref, "play", side_effect=AssertionError("ran")):
+            code, out, err = self.boot("--movie", str(self.root / "route.dtm"))
+        self.assertEqual(code, 2)
+        self.assertIn("a movie for GALE01, not GKYE01", err)
+        self.assertFalse((self.root / "user").exists())
 
     def test_build_refuses_a_tree_off_its_pin_and_runs_nothing(self):
         real_run = dolphin_ref.subprocess.run
