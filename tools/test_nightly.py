@@ -229,6 +229,14 @@ class BatteryTest(unittest.TestCase):
         self.assertEqual([(c.id, c.status) for c in checks], [("frames", SKIPPED_BATTERY)])
         self.assertTrue(stopped)
 
+    def test_a_pmset_that_cant_say_stops_the_run_with_a_report(self) -> None:
+        def unreadable() -> None:
+            raise ValueError("pmset -g batt: no power source on its first line, ''")
+        checks, _, stopped = nightly.run_steps(["frames", "audio"], temp_dir(self), unreadable,
+                                               lambda step: self.fail("a step ran with no power source"))
+        self.assertEqual([(c.id, c.status) for c in checks], [("frames", SKIPPED_BATTERY), ("audio", NOT_RUN)])
+        self.assertIn("no power source", stopped or "")
+
 
 def check(id_: str, status: str = PASS, **kw) -> Check:
     return Check(id_, id_.split(" ")[0], status, **kw)
