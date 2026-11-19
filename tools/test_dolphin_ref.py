@@ -9,6 +9,7 @@ import shutil
 import signal
 import socket
 import stat
+import struct
 import subprocess
 import sys
 import time
@@ -672,7 +673,7 @@ class SeedPinTest(unittest.TestCase):
                 self.assertEqual(int(m["value"], 16), (word & 0xFFFF) << 16)
 
     @unittest.skipUnless(shutil.which("c++"), "no C++ compiler")
-    def test_the_switch_is_off_unless_dragoon_seed_pin_is_set_to_something_but_0(self):
+    def test_the_switch_is_on_only_with_dragoon_seed_pin_1(self):
         folder = temp_dir(self)
         driver = folder / "driver.cpp"
         driver.write_text('#include <cstdio>\nextern "C" int dragoon_seed_pinned(void);\n'
@@ -681,7 +682,8 @@ class SeedPinTest(unittest.TestCase):
         subprocess.run(["c++", "-std=c++17", "-o", str(exe), str(driver),
                         str(self.ROOT / "src" / "seed_pin.cpp")], check=True)
         env = {k: v for k, v in os.environ.items() if k != "DRAGOON_SEED_PIN"}
-        for value, want in ((None, "0"), ("", "0"), ("0", "0"), ("1", "1"), ("yes", "1")):
+        for value, want in ((None, "0"), ("", "0"), ("0", "0"), ("1", "1"), ("yes", "0"),
+                            ("2", "0"), ("10", "0")):
             with self.subTest(value=value):
                 run_env = env if value is None else {**env, "DRAGOON_SEED_PIN": value}
                 got = subprocess.run([str(exe)], env=run_env, capture_output=True, text=True)
@@ -706,6 +708,31 @@ class SeedPinTest(unittest.TestCase):
                 self.assertIn(call, ("OSGetTick", "OSGetTime"))
                 # OSGetTime returns its low word in r4, OSGetTick its tick in r3.
                 self.assertEqual(int(m["reg"]), 3 if call == "OSGetTick" else 4)
+
+    def test_the_disc_s_word_at_each_site_is_the_bl_it_replaces(self):
+        # The player's DOL, extracted by the build. Never in git, so CI skips this.
+        dol = self.ROOT / "build" / "main.dol"
+        if not dol.is_file():
+            self.skipTest(f"no {dol}")
+        data = dol.read_bytes()
+        offsets = struct.unpack(">18I", data[0x00:0x48])
+        starts = struct.unpack(">18I", data[0x48:0x90])
+        sizes = struct.unpack(">18I", data[0x90:0xD8])
+
+        def word(address: int) -> int:
+            for offset, start, size in zip(offsets, starts, sizes):
+                if start <= address < start + size:
+                    return struct.unpack(">I", data[offset + address - start:][:4])[0]
+            self.fail(f"{address:08X} isn't in the DOL")
+
+        for address, m in self.pins().items():
+            with self.subTest(address=f"{address:08X}"):
+                w = word(address)
+                self.assertEqual((w >> 26, w & 3), (18, 1))  # bl, relative
+                displacement = w & 0x03FFFFFC
+                if displacement & 0x02000000:
+                    displacement -= 0x04000000
+                self.assertEqual((address + displacement) & 0xFFFFFFFF, int(m["call"], 16))
 
 
 class FreshConsoleTest(unittest.TestCase):

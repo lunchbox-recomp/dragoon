@@ -13,7 +13,7 @@ namespace {
 
 const bool g_on = [] {
     const char* e = getenv("DRAGOON_SEED_PIN");
-    return e && *e && strcmp(e, "0") != 0;
+    return e && strcmp(e, "1") == 0;
 }();
 
 }  // namespace
