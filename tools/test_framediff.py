@@ -121,12 +121,18 @@ class DiffTest(unittest.TestCase):
     def test_counts_pixels_over_tolerance_and_ignores_alpha(self):
         a = framediff.Image(2, 1, 4, bytes([10, 10, 10, 0, 10, 10, 10, 0]))
         b = framediff.Image(2, 1, 4, bytes([13, 10, 10, 255, 10, 10, 14, 0]))
-        self.assertEqual(framediff.diff(a, b, 3), (2, 1, 4))
+        self.assertEqual(framediff.diff(a, b, 3), (2, 1, 4, 7 / 6, None))
 
     def test_rgb_against_rgba(self):
         a = framediff.Image(1, 1, 3, bytes([1, 2, 3]))
         b = framediff.Image(1, 1, 4, bytes([1, 2, 3, 9]))
-        self.assertEqual(framediff.diff(a, b, 0), (1, 0, 0))
+        self.assertEqual(framediff.diff(a, b, 0), (1, 0, 0, 0.0, None))
+
+    def test_the_map_marks_pixels_over_the_tolerance_by_how_far(self):
+        a = framediff.Image(3, 1, 3, bytes([10] * 9))
+        b = framediff.Image(3, 1, 3, bytes([13, 10, 10, 10, 10, 210, 10, 14, 10]))
+        got = framediff.diff(a, b, 3, with_map=True).map
+        self.assertEqual(got, framediff.Image(3, 1, 3, bytes([0, 0, 0, 255, 55, 55, 255, 251, 251])))
 
     def test_different_sizes_are_refused(self):
         with self.assertRaisesRegex(ValueError, "a.png and b.png: sizes differ"):

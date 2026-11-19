@@ -17,7 +17,7 @@ import argparse
 import sys
 import zlib
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 from frame_dumps import frame_files
 
@@ -85,17 +85,37 @@ def read_png(path: Path) -> Image:
     return Image(w, h, ch, bytes(out))
 
 
-def diff(a: Image, b: Image, tolerance: int, where: str = "images") -> tuple[int, int, int]:
+class Diff(NamedTuple):
+    """Two images' difference: the pixels compared, those whose largest RGB difference is over
+    the tolerance, the largest difference, the mean RGB difference over every channel, and with
+    with_map a map of it: black at or under the tolerance, and over it white for a small
+    difference through red for a large one."""
+    pixels: int
+    over: int
+    worst: int
+    mean: float
+    map: Optional[Image]
+
+
+def diff(a: Image, b: Image, tolerance: int, where: str = "images",
+         with_map: bool = False) -> Diff:
     if (a.width, a.height) != (b.width, b.height):
         raise ValueError(f"{where}: sizes differ: {a.width}x{a.height} and {b.width}x{b.height}")
-    over = worst = 0
+    over = worst = total = 0
+    out = bytearray() if with_map else None
     for i in range(a.width * a.height):
-        d = max(abs(a.pixels[i * a.channels + k] - b.pixels[i * b.channels + k]) for k in range(3))
+        ds = [abs(a.pixels[i * a.channels + k] - b.pixels[i * b.channels + k]) for k in range(3)]
+        d = max(ds)
+        total += sum(ds)
         if d > worst:
             worst = d
         if d > tolerance:
             over += 1
-    return a.width * a.height, over, worst
+        if out is not None:
+            out += bytes((255, 255 - d, 255 - d)) if d > tolerance else b"\0\0\0"
+    n = a.width * a.height
+    picture = Image(a.width, a.height, 3, bytes(out)) if out is not None else None
+    return Diff(n, over, worst, total / (3 * n) if n else 0.0, picture)
 
 
 def main(argv: list[str]) -> int:
@@ -117,8 +137,8 @@ def main(argv: list[str]) -> int:
         failed = worst = 0
         for n in common:
             try:
-                pixels, over, frame_worst = diff(read_png(fa[n]), read_png(fb[n]), args.tolerance,
-                                                  f"{fa[n]} and {fb[n]}")
+                pixels, over, frame_worst, _, _ = diff(read_png(fa[n]), read_png(fb[n]),
+                                                       args.tolerance, f"{fa[n]} and {fb[n]}")
             except ValueError as e:
                 raise ValueError(f"frame {n}: {e}") from None
             share = over / pixels
