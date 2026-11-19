@@ -345,5 +345,37 @@
     "means": "Where port 4's Kirby is, along. None when there's no Kirby.",
     "route": "city-trial-4p.txt",
     "frames": [2000, 3520]
+  },
+  "pad.queue_length": {
+    "address": "8058B080",
+    "type": "u8",
+    "means": "How many entries the sysdolphin library's queue of raw pad reads holds (HSD_PadState's first byte). The game reads the pads once a field into it.",
+    "values": {
+      "5": "five"
+    },
+    "route": "top-ride-grass.txt",
+    "frames": [2, 3600]
+  },
+  "pad.queue_write": {
+    "address": "8058B082",
+    "type": "u8",
+    "means": "The queue entry the game writes the next read into, from 0 (HSD_PadState's third byte). The entry before it holds the latest read.",
+    "route": "top-ride-grass.txt",
+    "frames": [2, 3600]
+  },
+  "pad.queue": {
+    "address": "80535300",
+    "type": "bytes",
+    "length": 52,
+    "means": "The first entry of the queue of raw pad reads, lbl_80535300, where HSD_PadState's queue pointer leads. Each entry is this long and starts with port 1's PADStatus: the buttons (u16), the main stick, the C stick, then the triggers, L and R.",
+    "route": "top-ride-grass.txt",
+    "frames": [2, 3600]
+  },
+  "vi.renew_count": {
+    "address": "805DE2CC",
+    "type": "u32",
+    "means": "HSD_VIRenewCount: the frames the game has shown since it last set it to 0, which it does once every 60 fields along with HSD_VIRetraceCount.",
+    "route": "top-ride-grass.txt",
+    "frames": [2, 3600]
   }
 }
