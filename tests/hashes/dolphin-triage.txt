@@ -8,8 +8,8 @@ top-ride-grass 0 share=0% max=0 mean=0 refused Dolphin's run has put up no pictu
 top-ride-grass 10 share=9.493% max=254 mean=10.47 unclear the memory card prompt has its text and Yes and No in Dragoon and an empty panel in Dolphin, and every Dolphin dump in reach is that empty panel; Dolphin's card check takes console time before the game counts frames
 top-ride-grass 304 share=0.000% max=0 mean=0.00 within under the budget
 top-ride-grass 314 share=3.444% max=24 mean=0.29 dolphin the logos' edges only, a texel's difference in where they're sampled
-top-ride-grass 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, a texel's difference in where they're sampled
-top-ride-grass 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, a texel's difference in where they're sampled
+top-ride-grass 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, a texel's difference in where they're sampled; apart from the picture, the state differs: the menu Kirby is up to 0.12 units from Dolphin's on each axis, unclear
+top-ride-grass 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, a texel's difference in where they're sampled; the state differs as at 1003
 top-ride-grass 1704 share=0.000% max=0 mean=0.00 within under the budget
 top-ride-grass 1714 share=0.000% max=0 mean=0.00 within under the budget
 top-ride-grass 2004 share=2.826% max=230 mean=1.29 unclear the SAVE icon is up in Dragoon and not yet in Dolphin, where the sliding thumbnails line up; the rest is edges
@@ -23,8 +23,8 @@ air-ride-race 0 share=0% max=0 mean=0 refused Dolphin's run has put up no pictur
 air-ride-race 10 share=9.493% max=254 mean=10.47 unclear the same memory card prompt as top-ride-grass 10, text in Dragoon and an empty panel in Dolphin
 air-ride-race 304 share=0.000% max=0 mean=0.00 within under the budget
 air-ride-race 314 share=3.444% max=24 mean=0.29 dolphin the logos' edges only, as top-ride-grass 314
-air-ride-race 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, as top-ride-grass 1003
-air-ride-race 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, as top-ride-grass 1013
+air-ride-race 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, and the menu Kirby's state, as top-ride-grass 1003
+air-ride-race 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, and the menu Kirby's state, as top-ride-grass 1013
 air-ride-race 1604 share=0.000% max=0 mean=0.00 within under the budget
 air-ride-race 1614 share=0.000% max=0 mean=0.00 within under the budget
 air-ride-race 1904 share=2.658% max=234 mean=1.24 unclear the SAVE icon is up in Dragoon and not yet in Dolphin, as top-ride-grass 2004; the rest is edges
@@ -39,8 +39,8 @@ city-trial 0 share=0% max=0 mean=0 refused Dolphin's run has put up no picture b
 city-trial 10 share=9.493% max=254 mean=10.47 unclear the same memory card prompt as top-ride-grass 10, text in Dragoon and an empty panel in Dolphin
 city-trial 304 share=0.000% max=0 mean=0.00 within under the budget
 city-trial 314 share=3.444% max=24 mean=0.29 dolphin the logos' edges only, as top-ride-grass 314
-city-trial 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, as top-ride-grass 1003
-city-trial 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, as top-ride-grass 1013
+city-trial 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, and the menu Kirby's state, as top-ride-grass 1003
+city-trial 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, and the menu Kirby's state, as top-ride-grass 1013
 city-trial 1804 share=0.000% max=0 mean=0.00 within under the budget
 city-trial 1814 share=3.159% max=14 mean=0.36 dolphin the three mode logos' edges only
 city-trial 2105 share=3.166% max=199 mean=1.30 unclear the SAVE icon is up in Dragoon and not yet in Dolphin, as top-ride-grass 2004; the rest is edges
