@@ -147,7 +147,13 @@ PATCH_SCOPE = "Source/Core/DolphinNoGUI/"
 # (colour, prefixes, abbreviated hashes) can't.
 DIFF = ("diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-relative", "--full-index",
         "--src-prefix=a/", "--dst-prefix=b/")
-GIT_ISOLATION = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+# No user or system config, and fsmonitor off whatever a repository's own config says: a
+# submodule's core.fsmonitor=true would have git start a daemon, and wait on it, before
+# check_unhidden reaches that submodule to refuse it.
+GIT_ISOLATION = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+                 "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.fsmonitor",
+                 "GIT_CONFIG_VALUE_0": "false"}
+GIT_TIMEOUT = 300  # seconds any one git command may take, the real tree's slowest taking a few
 # git status, flagged so it lists every untracked and ignored file and every submodule change.
 STATUS = ("status", "--porcelain", "--ignore-submodules=none", "--untracked-files=all",
           "--ignored")
@@ -342,14 +348,18 @@ def sandboxed(profile: str, cmd: Sequence[str]) -> list[str]:
 
 
 def git_env() -> dict[str, str]:
-    """This environment with the user's and the system's git config left out (GIT_ISOLATION),
-    so only the tree's own config, which check_tree vets, can change what git reports."""
+    """This environment with the user's and the system's git config left out and fsmonitor off
+    (GIT_ISOLATION), so only the tree's own config, which check_tree vets, can change what git
+    reports, and no git command waits on an fsmonitor daemon."""
     return {**os.environ, **GIT_ISOLATION}
 
 
-def git(src: Path, *args: str) -> str:
-    out = subprocess.run(["git", "-C", str(src), *args], capture_output=True, text=True,
-                         env=git_env())
+def git(src: Path, *args: str, timeout: float = GIT_TIMEOUT) -> str:
+    try:
+        out = subprocess.run(["git", "-C", str(src), *args], capture_output=True, text=True,
+                             env=git_env(), timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"{src}: git {' '.join(args)} took over {timeout:g} s") from None
     if out.returncode:
         raise Refused(f"{src}: git {' '.join(args)} failed: {out.stderr.strip()}")
     return out.stdout

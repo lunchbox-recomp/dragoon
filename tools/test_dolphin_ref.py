@@ -27,7 +27,8 @@ class FakeDolphin:
     """Stands in for a Dolphin process: popen sends MESSAGES to the memory watcher's socket, one
     datagram each, before it returns. play binds the socket before it starts the process, so
     they're all waiting when it first reads, however slow the machine, and a short timeout
-    can't run out before the first comes."""
+    can't run out before the first comes. The socket queues 32 small datagrams, so a fake
+    sends fewer."""
 
     pid = 4242
 
@@ -42,6 +43,7 @@ class FakeDolphin:
         self.cmd = cmd
         self.kwargs = kwargs
         out = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        out.settimeout(5)  # a send to a full socket fails the test instead of waiting forever
         for message in self.messages:
             out.sendto(message, str(self.sock_path))
         out.close()
@@ -143,10 +145,27 @@ class NestedSubmoduleTest(unittest.TestCase):
         self.assertEqual(dolphin_ref.check_tree(self.top, sha=self.head, patch=""), self.head)
 
     def test_a_key_off_the_allowlist_in_a_nested_submodule_is_refused(self):
-        git(self.leaf, "config", "core.fsmonitor", "true")
+        git(self.leaf, "config", "filter.hide.clean", "cat")
         with self.assertRaisesRegex(dolphin_ref.Refused, "mid/leaf: local git config sets "
-                                                         "core.fsmonitor"):
+                                                         "filter.hide.clean"):
             dolphin_ref.check_tree(self.top, sha=self.head, patch="")
+
+    def test_git_runs_with_fsmonitor_off_whatever_a_submodule_says(self):
+        # core.fsmonitor=true has git start a daemon and wait on it, which check_tree's
+        # commands would do in the submodule before check_unhidden refuses it. Only the config
+        # is read here, so no daemon starts even if the override broke.
+        git(self.leaf, "config", "core.fsmonitor", "true")
+        self.assertEqual(dolphin_ref.git(self.leaf, "config", "core.fsmonitor").strip(), "false")
+        self.assertEqual(dolphin_ref.git(self.leaf, "config", "--local", "core.fsmonitor").strip(),
+                         "true")
+
+    def test_a_git_command_that_takes_too_long_is_refused(self):
+        with self.assertRaisesRegex(dolphin_ref.Refused, r"git status took over 0.5 s"):
+            with mock.patch.object(dolphin_ref.subprocess, "run",
+                                   side_effect=subprocess.TimeoutExpired("git", 0.5)) as run:
+                dolphin_ref.git(self.top, "status", timeout=0.5)
+        self.assertEqual(run.call_args.kwargs["timeout"], 0.5)
+        self.assertEqual(dolphin_ref.GIT_TIMEOUT, 300)
 
     def test_a_nested_submodule_off_its_pin_is_refused_as_drift(self):
         commit(self.leaf, {"leaf.txt": "2"})

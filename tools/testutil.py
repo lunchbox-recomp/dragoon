@@ -300,9 +300,10 @@ def fake_hdiutil(directory: Path, records: Path) -> Path:
 
 
 def git(repo: Path, *args: str) -> str:
-    """Run git in REPO under GIT_ENV and return its output, stripped."""
+    """Run git in REPO under GIT_ENV and return its output, stripped. A fixture's git command
+    that takes over two minutes fails the test instead of holding up the suite."""
     done = subprocess.run(["git", "-C", str(repo), *args], env={**os.environ, **GIT_ENV},
-                          capture_output=True, text=True, check=True)
+                          capture_output=True, text=True, check=True, timeout=120)
     return done.stdout.strip()
 
 
