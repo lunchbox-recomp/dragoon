@@ -5,8 +5,8 @@
 # "the pixel centre" below: Dragoon draws about 1/12 of a pixel right and down of Dolphin, which
 # corrects for the console's 7/12 pixel centre and gcn-recomp doesn't. "the seed": both sides
 # seed HSD_RandDefaultSeed (805DCD30) from OSGetTick at 80005A38, 198 ticks apart at boot.
+# Every route's movie was converged on the count from vi.renew_last.
 tolerance=4 budget=0.1%
-# top-ride-grass, with the count from vi.renew_last and its movie converged on it.
 top-ride-grass 60 share=2.677% max=46 mean=0.40 state=same bug the card prompt with its text on both sides; its edges and text outlines only, the pixel centre
 top-ride-grass 304 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 top-ride-grass 314 share=3.444% max=24 mean=0.29 state=same bug the logos' edges only, the pixel centre
@@ -21,30 +21,30 @@ top-ride-grass 2619 share=2.879% max=199 mean=0.35 state=same bug the player ent
 top-ride-grass 3235 share=2.864% max=153 mean=0.55 state=same setup the starting grid differs, P1's place and the CPUs' colours, from the seed: Top Ride seeds again from OSGetTime's low word at race setup (802842D8); the rest is edges
 top-ride-grass 3245 share=21.012% max=205 mean=3.08 state=same setup the same grid as at 3235 with the course faded in, and its fine texture detail off by the pixel centre
 top-ride-grass 3600 share=0% max=0 mean=0 state=none refused 365 frames into Top Ride's race, where a game frame isn't matched until the race timer is
-# air-ride-race and city-trial: scored on the count before vi.renew_last and not run again, so
-# they have no frame 60; their card prompt was the one top-ride-grass's was.
+air-ride-race 60 share=2.677% max=46 mean=0.40 state=same bug the card prompt, as top-ride-grass 60
 air-ride-race 304 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 air-ride-race 314 share=3.444% max=24 mean=0.29 state=same bug the logos' edges only, as top-ride-grass 314
-air-ride-race 1003 share=0.421% max=88 mean=0.10 state=differs bug the gears' edges only, as top-ride-grass 1003; the menu Kirby's state differed on the old count and matches on top-ride-grass's new one
-air-ride-race 1013 share=3.896% max=139 mean=0.43 state=differs bug the mode select's edges and text outlines only, and the menu Kirby's state, as at 1003
+air-ride-race 1003 share=0.421% max=88 mean=0.10 state=same bug the gears' edges only, as top-ride-grass 1003
+air-ride-race 1013 share=3.896% max=139 mean=0.43 state=same bug the mode select's edges and text outlines only, as top-ride-grass 1013
 air-ride-race 1604 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 air-ride-race 1614 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 air-ride-race 1904 share=2.658% max=234 mean=1.24 state=same timing the SAVE icon's load order, as top-ride-grass 2004; the rest is edges
 air-ride-race 1914 share=10.436% max=206 mean=1.29 state=same bug edges and the course thumbnails, as top-ride-grass 2014
 air-ride-race 2209 share=0.491% max=36 mean=0.07 state=same bug the title's and the tab's edges only, the pixel centre
 air-ride-race 2219 share=2.736% max=189 mean=0.39 state=same bug the player entry screen's edges and text outlines only, the pixel centre
-air-ride-race 3122 share=2.637% max=75 mean=0.27 state=same bug the course title's and the frame's edges only, the pixel centre
-air-ride-race 3132 share=4.419% max=132 mean=0.69 state=same bug edges and fine detail in the course behind the title, likely the pixel centre; every player's place and speed matches
-air-ride-race 4200 share=0% max=0 mean=0 state=none refused in Air Ride's race past its first 10 frames, where a game frame isn't matched until the race timer is; on the old count it scored 90.078% with the clocks 18.6 frames apart
-air-ride-race 6000 share=0% max=0 mean=0 state=none refused as at 4200; on the old count it scored 91.665% with the clocks 45 frames apart
+air-ride-race 3123 share=2.674% max=69 mean=0.30 state=same bug the course title card's edges and text outlines only, the pixel centre
+air-ride-race 3133 share=4.787% max=145 mean=0.75 state=same bug edges and fine detail in the course behind the title, likely the pixel centre; every player's place and speed matches
+air-ride-race 4200 share=0% max=0 mean=0 state=none refused 1077 frames into Air Ride's race, where a game frame isn't matched until the race timer is
+air-ride-race 6000 share=0% max=0 mean=0 state=none refused 2877 frames into Air Ride's race, where a game frame isn't matched until the race timer is
+city-trial 60 share=2.677% max=46 mean=0.40 state=same bug the card prompt, as top-ride-grass 60
 city-trial 304 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 city-trial 314 share=3.444% max=24 mean=0.29 state=same bug the logos' edges only, as top-ride-grass 314
-city-trial 1003 share=0.421% max=88 mean=0.10 state=differs bug the gears' edges only, and the menu Kirby's state, as air-ride-race 1003
-city-trial 1013 share=3.896% max=139 mean=0.43 state=differs bug the mode select's edges and text outlines only, and the menu Kirby's state, as air-ride-race 1003
+city-trial 1003 share=0.421% max=88 mean=0.10 state=same bug the gears' edges only, as top-ride-grass 1003
+city-trial 1013 share=3.896% max=139 mean=0.43 state=same bug the mode select's edges and text outlines only, as top-ride-grass 1013
 city-trial 1804 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 city-trial 1814 share=3.159% max=14 mean=0.36 state=same bug the three mode logos' edges only, the pixel centre
 city-trial 2105 share=3.166% max=199 mean=1.30 state=same timing the SAVE icon's load order, as top-ride-grass 2004; the rest is edges
 city-trial 2115 share=2.655% max=189 mean=0.42 state=same bug the player entry screen's edges and text outlines only, the pixel centre
-city-trial 2734 share=28.770% max=79 mean=1.85 state=differs unclear the city shows faintly behind the title card in Dragoon and not yet in Dolphin, and Dolphin's players don't exist yet while Dragoon's do; on the old count
+city-trial 2734 share=28.770% max=79 mean=1.85 state=differs unclear the city shows faintly behind the title card in Dragoon and not yet in Dolphin, and Dolphin's players don't exist yet while Dragoon's do
 city-trial 2744 share=94.318% max=145 mean=24.41 state=differs setup every player starts somewhere else in the city, from the seed: City Trial's stage RNG (805DD700) uses the main seed
-city-trial 3300 share=94.451% max=255 mean=31.00 state=differs setup the players are elsewhere from the start at 2744; the clocks read 4:54.10 and 4:54.03 and the HUD matches
+city-trial 3300 share=92.641% max=254 mean=29.15 state=differs setup the players are elsewhere from the start at 2744; the clocks read 4:54.10 and 4:54.16 and the HUD matches

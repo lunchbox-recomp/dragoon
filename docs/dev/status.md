@@ -1033,10 +1033,10 @@ on that field went uncounted. vi.renew_last (80589C70) keeps what the count reac
 every field of a top-ride-grass run, 4400 fields and 67 resets. At the main menu's first field
 (1342) the old count gave 1003 and the new 1020, and at Top Ride's race (3793) 3234 and 3288.
 The old count agreed with Dragoon's frame count at scene changes only because that loss offset
-Dolphin's extra pictures. top-ride-grass's movie was converged again on the new count, in 7
-runs, and `dtm.py presses` found all 11 presses on their route frames. Its scenes now start at
-Dolphin's frames 1003, 1704, 2004, 2609 and 3235, within a frame of Dragoon's. air-ride-race and
-city-trial weren't run again, so their triage lines are from the old count.
+Dolphin's extra pictures. All three routes' movies were converged again on the new count, each
+in 7 runs, and `dtm.py presses` found all 11 presses on their route frames on each.
+top-ride-grass's scenes now start at Dolphin's frames 1003, 1704, 2004, 2609 and 3235, within a
+frame of Dragoon's.
 
 A checkpoint in a race past its first frame and 10 frames in is refused until race checkpoints
 are matched by the race timer. That refuses top-ride-grass 3600 and air-ride-race 4200 and
@@ -1045,10 +1045,9 @@ most. The timer to try first is the global counter at 805361C0 (gm+0x7E8), which
 raises once a pass at 80006B08. It isn't tested yet. Failing that, the race clock's own value
 once it's mapped.
 
-On the new count and movie, top-ride-grass's checkpoints up to course select scored as before,
-and the state
-matched at every checkpoint compared, 1003 and 1013 included. The card prompt at 60 is the same
-panel on both sides, its edges apart.
+On the new count and movies, most menu checkpoints scored exactly as before. The state matched
+at every checkpoint compared before City Trial's city, 1003 and 1013 included. The card prompt
+at 60 is the same panel on both sides, its edges apart.
 
 What the triage found:
 
@@ -1066,7 +1065,7 @@ What the triage found:
   select without the SAVE icon, then 40 fields later the icon.
 - The main menu Kirby's state differed on the old count, where Dragoon's was 0 to 2 frames
   behind Dolphin's over frames 909 to 1001. On the new count it matches at 1003 and 1013 on
-  top-ride-grass. The other two routes weren't run again.
+  all three routes.
 
 ## gcn-recomp `95e1c6b`
 
