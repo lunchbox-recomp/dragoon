@@ -947,7 +947,9 @@ Dolphin is the reference for what the game should do and how its 4:3 picture sho
 goldens only say a frame hasn't changed, so the plan is to play our routes in Dolphin too and
 compare the state and the picture at each checkpoint. `tools/dolphin_ref.py` pins Dolphin 2609a
 (`409881c`), builds it from source with auto-update, analytics, RetroAchievements and the rest
-of its online parts off, and runs it with no network in `dolphin-ref/` beside this clone:
+of its online parts off, and runs it in `dolphin-ref/` beside this clone under a sandbox that
+denies all network, DNS included, and every write outside `dolphin-ref/` and the temp folders.
+The one socket Dolphin may send to is its memory watcher's, inside `dolphin-ref/user`:
 
 ```
 tools/dolphin_ref.py fetch
