@@ -388,13 +388,21 @@ class WatchTest(unittest.TestCase):
     def test_the_default_is_the_word_holding_scene_major(self):
         self.assertEqual(dolphin_ref.default_watch(), "805361AC")
 
+    def test_the_default_is_scene_majors_word_wherever_it_sits_in_it(self):
+        for address in (0x80001234, 0x80001237):
+            table = {"scene.major": SimpleNamespace(address=address)}
+            with self.subTest(address=address), \
+                    mock.patch.object(dolphin_ref.kar_ram, "load", return_value=table):
+                self.assertEqual(dolphin_ref.default_watch(), "80001234")
+
     def test_an_aligned_word_in_main_ram_passes(self):
         for text, word in (("80000000", "80000000"), ("817ffffc", "817FFFFC"),
                            ("805361AC", "805361AC")):
             self.assertEqual(dolphin_ref.watch_address(text), word)
 
     def test_a_word_outside_main_ram_or_unaligned_is_refused(self):
-        for text in ("7FFFFFFC", "81800000", "817FFFFE", "805361AD", "805361AF", "zz"):
+        for text in ("7FFFFFFC", "81800000", "817FFFFE", "805361AD", "805361AE",
+                     "805361AF", "zz"):
             with self.subTest(text=text), self.assertRaises(Exception) as caught:
                 dolphin_ref.watch_address(text)
             self.assertEqual(type(caught.exception).__name__, "ArgumentTypeError")
