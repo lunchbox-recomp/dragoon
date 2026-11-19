@@ -2,59 +2,21 @@ from __future__ import annotations
 
 import hashlib
 import json
-import plistlib
 import unittest
 from pathlib import Path
 
+import known_issues
 import nightly
-import nightly_agent
 import nightly_report
-import nightly_steps
 import power
 import route_compiles
 import state_goldens
 from frame_pair import side_by_side, write_png
 from framediff import Image, read_png
+from nightly_fakes import AC, BATTERY, FakePmset, FakeTree, booting, fake_frame, fake_image
 from nightly_report import FAIL, NOT_RUN, PASS, SKIPPED_BATTERY, Check, Problem
-from testengine import make_tree, set_plan
-from testutil import run_main, temp_dir, write_file
-
-AC = "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t100%; charged; 0:00 remaining present: true\n"
-BATTERY = "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1)\t80%; discharging; 4:00 remaining\n"
-# Two routes the fake game plays. It never leaves the boot screen, which is all a state check needs.
-MANIFEST = "title 20 60 60,120\nmenu  20 60 120\n"
-
-
-def fake_frame(frame: int, blue: int = 0) -> bytes:
-    """The dump testengine's fake game writes at FRAME."""
-    return write_png(fake_image(frame, blue))
-
-
-def fake_image(frame: int, blue: int = 0) -> Image:
-    return Image(2, 2, 3, bytes([frame % 256, frame // 256 % 256, blue]) * 4)
-
-
-def booting(read_at: int) -> tuple[int, dict]:
-    """The state the fake game shows at the boot screen, read at READ_AT."""
-    state = {f: state_goldens.NONE if f.split(".")[-1] in "xyz" else "0" for f in state_goldens.FIELDS}
-    state["scene.minor"] = "38"
-    return read_at, state
-
-
-class FakePmset:
-    """pmset -g batt as a script that prints whatever `now` was last set to."""
-
-    def __init__(self, test: unittest.TestCase, text: str = AC) -> None:
-        self.dir = temp_dir(test)
-        self.script = write_file(self.dir, "pmset", f"#!/bin/sh\ncat '{self.dir}/batt.txt'\n")
-        self.script.chmod(0o755)
-        self.now(text)
-
-    def now(self, text: str) -> None:
-        write_file(self.dir, "batt.txt", text)
-
-    def command(self) -> list[str]:
-        return [str(self.script)]
+from testengine import ENGINE_SHA, built_sha, set_plan
+from testutil import temp_dir, write_file
 
 
 class PowerTest(unittest.TestCase):
@@ -70,51 +32,6 @@ class PowerTest(unittest.TestCase):
         pmset.now(BATTERY)
         with self.assertRaisesRegex(power.OnBattery, "Battery Power"):
             power.require_ac(pmset.command())
-
-
-class FakeTree:
-    """A tree with testengine's fake probe.sh, a two-route manifest and goldens that match what
-    the fake game draws and shows, which a test then changes."""
-
-    def __init__(self, test: unittest.TestCase) -> None:
-        self.root = temp_dir(test)
-        make_tree(self.root)
-        set_plan(self.root)
-        hashes = self.root / "tests" / "hashes"
-        for d in ("gl", "gl-16x9", "state", "state-16x9"):
-            (hashes / d).mkdir(parents=True)
-        write_file(hashes, "manifest.txt", MANIFEST)
-        for name, frames in (("title", [60, 120]), ("menu", [60, 120])):
-            text = "".join(f"frame_{f:05d} {hashlib.sha1(fake_frame(f)).hexdigest()}\n" for f in frames)
-            write_file(hashes / "gl", f"{name}.txt", text)
-            write_file(hashes / "gl-16x9", f"{name}.txt", text)
-        for d in state_goldens.STATES.values():
-            write_file(hashes / d, "title.txt",
-                       state_goldens.format_golden("title", {60: booting(60), 120: booting(120)}))
-            write_file(hashes / d, "menu.txt", state_goldens.format_golden("menu", {120: booting(120)}))
-        self.report = self.root / "build" / "nightly" / "2026-11-18-0130"
-        self.report.mkdir(parents=True)
-        self.games = 0
-
-    def context(self, before=None, **kw) -> nightly_steps.Context:
-        def counted() -> None:
-            if before is not None:
-                before()
-            self.games += 1
-        return nightly_steps.Context(self.root, self.report, before=counted, say=lambda text: None, **kw)
-
-    def play(self, step: str, ctx: nightly_steps.Context) -> list[Check]:
-        code = nightly.play_step(step, ctx)
-        if code not in (0, nightly.STOPPED_ON_BATTERY):
-            raise AssertionError(f"{step} exited {code}")
-        return nightly_report.from_json(json.loads((ctx.work / f"{step}.json").read_text())["checks"])
-
-    def by_id(self, checks: list[Check]) -> dict[str, Check]:
-        return {c.id: c for c in checks}
-
-    def runs_left(self) -> list[str]:
-        probe = self.root / "build" / "probe"
-        return sorted(p.name for p in probe.iterdir()) if probe.is_dir() else []
 
 
 class FramesStepTest(unittest.TestCase):
@@ -186,6 +103,81 @@ class FramesStepTest(unittest.TestCase):
         self.assertEqual(checks["state 4:3 menu"].status, FAIL)
         self.assertIn("no state golden", checks["state 4:3 menu"].detail)
         self.assertEqual(checks["frames 4:3 menu"].status, PASS)
+
+    def test_a_changed_hash_is_named_in_full(self) -> None:
+        tree = FakeTree(self)
+        set_plan(tree.root, tint={"120": 9})
+        checks = tree.by_id(tree.play("frames", tree.context(routes=["title"])))
+        new, golden = (hashlib.sha1(fake_frame(120, b)).hexdigest() for b in (9, 0))
+        self.assertEqual(checks["frames 4:3 title"].problems[0].what, f"{new} != golden {golden}")
+
+    def test_16x9_plays_against_the_same_state_golden(self) -> None:
+        tree = FakeTree(self)
+        set_plan(tree.root, events=[{"frame": 100, "do": [["screen", 5]]}])
+        checks = tree.by_id(tree.play("frames", tree.context(routes=["title"])))
+        self.assertEqual([(p.where, p.what) for p in checks["state 16:9 title"].problems],
+                         [("frame 120 scene.minor", "5 != golden 38")])
+
+
+class KnownIssueTest(unittest.TestCase):
+    def play(self, known: str, **plan) -> dict[str, Check]:
+        tree = FakeTree(self)
+        tree.known(f"# a comment\n{known}\n")
+        set_plan(tree.root, **plan)
+        return tree.by_id(tree.play("frames", tree.context(routes=["title"])))
+
+    def test_failing_first_at_its_checkpoint_is_the_known_issue(self) -> None:
+        checks = self.play("state title 16:9 120 the screen is 5 at 16:9",
+                           events=[{"frame": 100, "do": [["screen", 5]]}])
+        self.assertEqual((checks["state 16:9 title"].status, checks["state 16:9 title"].known),
+                         (FAIL, "the screen is 5 at 16:9"))
+        self.assertIsNone(checks["state 4:3 title"].known)  # the other aspect fails as any check does
+        self.assertEqual([c.id for c in nightly_report.failing(list(checks.values()))], ["state 4:3 title"])
+
+    def test_failing_at_another_checkpoint_is_a_failure(self) -> None:
+        checks = self.play("state title 16:9 60 it goes wrong at 60", events=[{"frame": 100, "do": [["screen", 5]]}])
+        self.assertIsNone(checks["state 16:9 title"].known)
+        self.assertIn("the known issue fails first at 60", checks["state 16:9 title"].detail)
+
+    def test_one_that_passes_is_marked_so_its_line_can_go(self) -> None:
+        checks = self.play("frames title 4:3 120 a frame drew differently")
+        self.assertEqual((checks["frames 4:3 title"].status, checks["frames 4:3 title"].known),
+                         (PASS, "a frame drew differently"))
+
+    def test_a_bad_line_is_refused(self) -> None:
+        with self.assertRaisesRegex(ValueError, "line 1"):
+            known_issues.parse("state title 4:3 bug with no checkpoint\n")
+
+
+class GoldenBuildTest(unittest.TestCase):
+    def tree(self) -> FakeTree:
+        tree = FakeTree(self)
+        write_file(tree.root / "build", "dragoon", "the game")
+        return tree
+
+    def golden(self, tree: FakeTree) -> Path:
+        return tree.root / "build" / "nightly" / "golden-build"
+
+    def test_a_frames_step_that_passed_every_route_copies_the_game_and_its_commits(self) -> None:
+        tree = self.tree()
+        tree.play("frames", tree.context())
+        self.assertEqual((self.golden(tree) / "dragoon").read_text(), "the game")
+        self.assertEqual((self.golden(tree) / "commit.txt").read_text(), f"dragoon ?\nengine {built_sha(1)}\n")
+
+    def test_only_some_routes_copy_nothing(self) -> None:
+        tree = self.tree()
+        tree.play("frames", tree.context(routes=["title", "menu"]))
+        self.assertFalse(self.golden(tree).exists())
+
+    def test_a_failure_copies_nothing_but_a_known_issue_does(self) -> None:
+        tree = self.tree()
+        set_plan(tree.root, tint={"120": 9})
+        tree.play("frames", tree.context())
+        self.assertFalse(self.golden(tree).exists())
+        set_plan(tree.root, events=[{"frame": 100, "do": [["screen", 5]]}])
+        tree.known("state menu 4:3 120 a\nstate menu 16:9 120 b\nstate title 4:3 120 c\nstate title 16:9 120 d\n")
+        tree.play("frames", tree.context())
+        self.assertTrue((self.golden(tree) / "dragoon").is_file())
 
 
 class StateCompareTest(unittest.TestCase):
@@ -264,24 +256,34 @@ class ChangesTest(unittest.TestCase):
         self.assertEqual(nightly_report.changes([check("soak a", SKIPPED_BATTERY)], [check("soak a")]), {})
 
 
-class TenPercentTest(unittest.TestCase):
-    def test_a_move_past_ten_percent_of_last_or_status_is_a_regression(self) -> None:
+class SlowerTest(unittest.TestCase):
+    def test_more_than_ten_percent_slower_than_last_or_status_is_a_regression(self) -> None:
         last = [timed("timed a", 4.0), timed("timed b", 4.0), timed("timed c", 4.0)]
-        now = [timed("timed a", 4.41), timed("timed b", 4.39), timed("timed c", 4.0, status_value=3.6)]
+        now = [timed("timed a", 4.41), timed("timed b", 4.4), timed("timed c", 4.0, status_value=3.6)]
         self.assertEqual(nightly_report.changes(now, last), {
-            "timed a": ["10% off last's 4"], "timed c": ["11% off status.md's 3.6"]})
+            "timed a": ["10% slower than last's 4"], "timed c": ["11% slower than status.md's 3.6"]})
 
-    def test_down_counts_as_much_as_up(self) -> None:
-        self.assertEqual(nightly_report.changes([timed("timed a", 3.5)], [timed("timed a", 4.0)]),
-                         {"timed a": ["12% off last's 4"]})
+    def test_a_small_number_must_also_be_more_than_the_floor_slower(self) -> None:
+        self.assertEqual(nightly_report.FLOOR, 0.25)
+        now = [timed("timed a", 1.25), timed("timed b", 1.26)]  # 25% and 26% slower than 1.0
+        self.assertEqual(nightly_report.changes(now, [timed("timed a", 1.0), timed("timed b", 1.0)]),
+                         {"timed b": ["26% slower than last's 1"]})
+
+    def test_faster_is_no_regression_and_far_enough_under_status_is_improved(self) -> None:
+        now = [timed("timed a", 2.25, status_value=4.2), timed("timed b", 0.6, status_value=0.722),
+               timed("timed c", 3.8, status_value=4.2)]
+        self.assertEqual(nightly_report.changes(now, [timed("timed a", 4.0)]), {})
+        self.assertEqual([nightly_report.improved(c) for c in now],
+                         ["46% under status.md's 4.2, update status.md", None, "10% under status.md's 4.2, update status.md"])
+        self.assertIsNone(nightly_report.improved(timed("timed d", 3.83, status_value=4.2)))
 
     def test_a_count_isnt_held_to_ten_percent(self) -> None:
         now = [check("timed n", value=3.0)]
         self.assertEqual(nightly_report.changes(now, [check("timed n", value=1.0)]), {})
 
     def test_the_summary_shows_the_load_beside_the_number(self) -> None:
-        line = nightly_report.line(timed("timed a", 4.41), ["10% off last's 4"])
-        self.assertEqual(line, "  timed a: 4.41 ms (bar 8), load 2.0 to 3.0 [10% off last's 4]")
+        line = nightly_report.line(timed("timed a", 4.41), ["10% slower than last's 4"])
+        self.assertEqual(line, "  timed a: 4.41 ms (bar 8), load 2.0 to 3.0 [10% slower than last's 4]")
 
 
 class SummaryTest(unittest.TestCase):
@@ -298,7 +300,7 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(lines, [
             "head",
             "Regressions (2)",
-            "  timed x: 5.00 ms (bar 8), load 2.0 to 3.0 [25% off last's 4]",
+            "  timed x: 5.00 ms (bar 8), load 2.0 to 3.0 [25% slower than last's 4]",
             "  frames 4:3 a: drew differently, frame 120 3 != golden 4, and 1 more -> "
             "dumps/4x3/a/frame_00120.png [flipped, pass last time]",
             "Failing as last time (1)",
@@ -307,6 +309,21 @@ class SummaryTest(unittest.TestCase):
             "  frames: 1 of 3 checks pass (1 frames)",  # timed x passed its bar, but it's listed above
             "Skipped",
             "  soak: skipped-battery (1 checks)"])
+
+    def test_known_issues_and_improved_numbers_have_their_own_headings(self) -> None:
+        now = [check("state 16:9 r", FAIL, kind="played differently", known="bug 1",
+                     problems=[Problem("frame 9 speed", "1 != golden 2")]),
+               check("frames 4:3 r", known="bug 2"), timed("timed x", 2.0, status_value=4.0), check("frames 4:3 s")]
+        lines = nightly_report.summary(["head"], now, [check("state 16:9 r")]).splitlines()
+        self.assertEqual(lines, [
+            "head",
+            "Known issues (2)",
+            "  state 16:9 r: played differently, frame 9 speed 1 != golden 2 [known: bug 1]",
+            "  frames 4:3 r: passes now, so its line in known-issues.txt can go [known: bug 2]",
+            "Improved (1)",
+            "  timed x: 2.00 ms (bar 8), load 2.0 to 3.0 [50% under status.md's 4, update status.md]",
+            "Passes",
+            "  frames: 2 of 2 checks pass (2 frames)"])
 
     def test_a_long_list_is_cut_to_fit_one_screen(self) -> None:
         now = [check(f"frames 4:3 r{i}", FAIL) for i in range(100)]
@@ -347,6 +364,55 @@ class FinishTest(unittest.TestCase):
         self.assertEqual(nightly.finish(report, checks, {}, None, 0.0, [1.0, 1.0], None, report, lambda text: None), 1)
         self.assertEqual(sorted(p.name for p in (report / "logs").iterdir()), ["menu.log"])
 
+    def last(self, checks: list[Check]) -> Path:
+        return write_file(temp_dir(self), nightly_report.REPORT, json.dumps({"checks": nightly_report.to_json(checks)}))
+
+    def test_a_slower_checks_log_stays_though_it_passed_its_bar(self) -> None:
+        report = self.report()
+        checks = [timed("timed a", 5.0, status_value=4.0), timed("timed b", 4.0)]
+        checks[0].dump, checks[1].dump = "logs/4p.log", "logs/menu.log"
+        last = self.last([timed("timed a", 4.0), timed("timed b", 4.0)])
+        self.assertEqual(nightly.finish(report, checks, {}, None, 0.0, [1.0, 1.0], last, report, lambda text: None), 1)
+        self.assertEqual(sorted(p.name for p in (report / "logs").iterdir()), ["4p.log"])
+
+    def test_a_faster_number_and_a_known_issue_fail_nothing(self) -> None:
+        report = self.report()
+        checks = [timed("timed a", 2.0, status_value=4.0), check("state 16:9 r", FAIL, known="a bug")]
+        self.assertEqual(nightly.finish(report, checks, {}, None, 0.0, [1.0, 1.0], None, report, lambda text: None), 0)
+        self.assertIn("Result: pass, 0 regressions, 0 failing", (report / nightly_report.SUMMARY).read_text())
+
+    def test_the_built_engine_heads_the_report(self) -> None:
+        report = self.report()
+        steps = {"frames": {"seconds": 60, "built": ENGINE_SHA + "-dirty"}}
+        nightly.finish(report, [check("frames 4:3 r")], steps, None, 0.0, [1.0, 1.0], None, report, lambda text: None)
+        self.assertIn("gcn-recomp built 0123456-dirty, ", (report / nightly_report.SUMMARY).read_text())
+
+
+class LastReportTest(unittest.TestCase):
+    def test_a_report_that_wont_read_is_none_with_why(self) -> None:
+        d = temp_dir(self)
+        cases = {"missing": d / "nowhere", "a directory with no report": d,
+                 "not json": write_file(d, "a.json", "{"), "no checks": write_file(d, "b.json", "{}"),
+                 "a row that isn't a check": write_file(d, "c.json", '{"checks": [{"step": "x"}]}')}
+        for what, path in cases.items():
+            with self.subTest(what):
+                got, why = nightly_report.readable(path)
+                self.assertIsNone(got)
+                self.assertIn("isn't a report", why or "")
+
+    def test_an_older_or_newer_report_reads_with_its_odd_fields_dropped(self) -> None:
+        row = {**nightly_report.to_json([check("frames 4:3 r")])[0], "moved": True}
+        del row["known"]
+        path = write_file(temp_dir(self), nightly_report.REPORT, json.dumps({"checks": [row]}))
+        self.assertEqual(nightly_report.readable(path.parent), (path, None))
+        self.assertEqual(nightly_report.read(path), [check("frames 4:3 r")])
+
+    def test_the_summary_says_why_nothing_was_compared(self) -> None:
+        report = FinishTest.report(self)
+        nightly.finish(report, [], {}, None, 0.0, [1.0, 1.0], None, report, lambda text: None,
+                       last_note="x isn't a report")
+        self.assertIn("Last: x isn't a report", (report / nightly_report.SUMMARY).read_text())
+
 
 class FramePairTest(unittest.TestCase):
     def test_golden_left_gap_new_right(self) -> None:
@@ -374,21 +440,6 @@ class RouteCompilesTest(unittest.TestCase):
         c = route_compiles.read_log(self.LOG.replace("[shaders] compiled program", "[shaders] built"), 102)
         self.assertEqual((c.frames, c.ok, route_compiles.describe(c)), ([], False, "reached frame 101 of 102"))
         self.assertTrue(route_compiles.read_log(self.LOG.replace("[shaders] compiled program", "x"), 101).ok)
-
-
-class AgentTest(unittest.TestCase):
-    def test_install_prints_a_daily_0130_job_and_uninstall_removes_it(self) -> None:
-        agents = temp_dir(self)
-        code, out, _ = run_main(nightly.main, "install-agent", "--dir", str(agents))
-        self.assertEqual(code, 0)
-        path = agents / f"{nightly_agent.LABEL}.plist"
-        job = plistlib.loads(path.read_bytes())
-        self.assertEqual(job["StartCalendarInterval"], {"Hour": 1, "Minute": 30})
-        self.assertEqual(job["ProgramArguments"][1:], [str(nightly.ROOT / "tools" / "nightly.py"), "run"])
-        self.assertIn("<key>StartCalendarInterval</key>", out)
-        self.assertIn("isn't loaded", out)
-        code, out, _ = run_main(nightly.main, "uninstall-agent", "--dir", str(agents))
-        self.assertEqual((code, path.exists()), (0, False))
 
 
 if __name__ == "__main__":

@@ -3,8 +3,9 @@ step at a time and turns what it returns into the report.
 
   frames   every manifest route at 4:3 and 16:9 through state_goldens.py's bot run, dumping
            frames: each frame's SHA-1 against tests/hashes/gl/ or gl-16x9/ ("drew differently")
-           and the game's state at each checkpoint against tests/hashes/state/ or state-16x9/ ("played
-           differently"), from one game process a route and aspect
+           and the game's state at each checkpoint against tests/hashes/state/, the same at
+           both aspects ("played differently"), from one game process a route and aspect. A
+           check tests/hashes/known-issues.txt lists is marked known (known_issues.py)
   audio    every route's AX hashes against tests/hashes/audio/, as audio_hashes.py check runs them
   shaders  a fresh warm-up, one pass at a time, into a scratch cache, then every route at both
            aspects from that cache, as route_compiles.py plays them. Bar 0 compiles a run
@@ -18,7 +19,8 @@ build/nightly/golden-build/ draws the golden's hash for that frame, the golden f
 rebuilt from it and dumps/ gets the two side by side (frame_pair.py). Otherwise the new frame
 stands alone beside the golden's hash. A checkpoint that played differently keeps that
 frame's dump too. Every other dump and run directory is deleted. After a frames step where
-every check passed on every route, the build's game is copied to the golden build.
+every check but the known issues passed on every route, the build's game is copied to the
+golden build, with the commits it was built from in its commit.txt.
 
 Each step calls the context's `before` as each game process is about to start, which raises
 power.OnBattery on battery. It has no command line.
@@ -36,8 +38,10 @@ from typing import Optional
 
 import audio_hashes
 import bot_link
+import bot_record
 import bot_soak
 import frame_hashes
+import known_issues
 import route_compiles
 import state_goldens
 import timed_bars
@@ -75,6 +79,7 @@ class Context:
     menu_runs: int = timed_bars.MENU_RUNS
     seed: int = 0
     say: Callable[[str], None] = print
+    built: Optional[str] = None  # the engine commit the game says it was built from, once a run has said
 
     @property
     def probe(self) -> Path:
@@ -151,17 +156,30 @@ def keep_frames(ctx: Context, run_dir: Path, route: Route, aspect: str, frames: 
     return kept
 
 
+def known(check: Check, first: Optional[int], issues: dict[str, known_issues.Issue]) -> Check:
+    """CHECK marked as its known issue when it passes, or fails first at the issue's checkpoint
+    (FIRST). One that fails anywhere else stays a failure like any other."""
+    issue = issues.get(check.id)
+    if issue is not None and (check.status == PASS or first == issue.checkpoint):
+        check.known = issue.bug
+    elif issue is not None:
+        check.detail += f", where the known issue fails first at {issue.checkpoint}"
+    return check
+
+
 def frames_route(ctx: Context, route: Route, aspect: str) -> list[Check]:
     golden_path = ctx.hashes / frame_hashes.GOLDENS[aspect] / f"{route.name}.txt"
-    state_path = ctx.hashes / state_goldens.STATES[aspect] / f"{route.name}.txt"
+    state_path = ctx.hashes / state_goldens.STATE / f"{route.name}.txt"
     golden = frame_hashes.read_golden(golden_path)
     states_golden = state_goldens.read_golden(state_path) if state_path.is_file() else None
+    issues = known_issues.read(ctx.hashes)
     ctx.before()
     outcome, states = state_goldens.play(route, f"nightly-{tag(aspect)}-{route.name}", aspect=aspect,
                                          every=route.dump_every, probe=ctx.probe, settings=ctx.bin())
     try:
+        ctx.built = ctx.built or bot_record.built_engine(outcome.run_dir / "session")
         got = frame_hashes.hash_frames(outcome.run_dir)
-        drew = [(f, "not reached" if f not in got else f"{got[f][:8]} != golden {h[:8]}")
+        drew = [(f, "not reached" if f not in got else f"{got[f]} != golden {h}")
                 for f, h in sorted(golden.items()) if got.get(f) != h]
         played = state_goldens.compare(states_golden, states) if states_golden else []
         bad = state_goldens.ended_badly(outcome)
@@ -187,13 +205,15 @@ def frames_route(ctx: Context, route: Route, aspect: str) -> list[Check]:
         state_check = Check(f"state {aspect} {route.name}", "frames", FAIL if problems else PASS,
                             kind="played differently", route=route.name, problems=problems,
                             detail=f"{len(states_golden)} checkpoints")
+        known(state_check, None if bad else next((f for f, _, _ in played), None), issues)
+    known(frame_check, drew[0][0] if drew else None, issues)
     return [frame_check, state_check]
 
 
 def guarded(done: Callable[[Check], None], check_id: str, step: str, route: str,
             play: Callable[[], list[Check]]) -> bool:
     """Hand each check PLAY returns to DONE, or one failed CHECK_ID when it couldn't run, such as
-    a missing golden or a probe.sh that exited 2. True when every check passed."""
+    a missing golden or a probe.sh that exited 2. True when every check but a known issue passed."""
     try:
         checks = play()
     except (OSError, ValueError, bot_link.LinkSetupError) as e:
@@ -201,7 +221,7 @@ def guarded(done: Callable[[Check], None], check_id: str, step: str, route: str,
                         detail=str(e).splitlines()[0] if str(e) else type(e).__name__)]
     for c in checks:
         done(c)
-    return all(c.status == PASS for c in checks)
+    return all(c.status == PASS or c.known is not None for c in checks)
 
 
 def frames(ctx: Context, done: Callable[[Check], None]) -> None:
@@ -216,6 +236,8 @@ def frames(ctx: Context, done: Callable[[Check], None]) -> None:
             rebuild.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ctx.game, rebuild)
             ctx.say(f"golden build: {ctx.game} copied to {rebuild}")
+        (rebuild.parent / "commit.txt").write_text(
+            f"dragoon {bot_record.commits(ctx.root)['dragoon'] or '?'}\nengine {ctx.built or '?'}\n")
 
 
 def audio_route(ctx: Context, route: Route) -> list[Check]:
@@ -290,14 +312,15 @@ def load() -> float:
     return os.getloadavg()[0]
 
 
-def timed_check(key: str, value: Optional[float], loads: list[float], dump: Optional[str] = None,
-                passed: Optional[bool] = None) -> Check:
+def timed_check(key: str, value: Optional[float], loads: list[float], dump: Optional[str] = None) -> Check:
+    """KEY's number against its bar. Only a number in ms is held to nightly_report's slower rule."""
     bar = timed_bars.BARS[key]
-    if passed is None:
-        passed = value is not None and (bar.limit is None or value <= bar.limit)
-    return Check(f"timed {key}", "timed", PASS if passed else FAIL, kind="over its bar", detail=bar.label,
-                 value=value, unit=bar.unit, limit=bar.limit, status_value=bar.status,
-                 timed=key != "4p.compiles", load=loads, dump=dump)
+    passed = (value is not None and (bar.limit is None or value <= bar.limit)
+              and (bar.exact is None or value == bar.exact))
+    kind = "over its bar" if bar.exact is None else f"not frame {bar.exact:g}"
+    return Check(f"timed {key}", "timed", PASS if passed else FAIL, kind=kind, detail=bar.label,
+                 value=value, unit=bar.unit, limit=bar.limit if bar.exact is None else bar.exact,
+                 status_value=bar.status, timed=bar.unit == "ms", load=loads, dump=dump)
 
 
 def timed(ctx: Context, done: Callable[[Check], None]) -> None:
@@ -316,15 +339,11 @@ def timed(ctx: Context, done: Callable[[Check], None]) -> None:
         return [timed_check(key, got[key], loads, ctx.rel(logs / "4p.log"))
                 for key in ("4p.rt_p99", "4p.compiles", "boot.ms")]
 
-    results: dict[str, Optional[int]] = {}
-
     def race(aspect: str) -> list[Check]:
         began = load()
-        frame = results[aspect] = timed_bars.race_finish(aspect, probe=ctx.probe, settings=ctx.bin(),
-                                                         before=ctx.before)
-        same = frame is not None and (aspect == "4:3" or frame == results.get("4:3"))
+        frame = timed_bars.race_finish(aspect, probe=ctx.probe, settings=ctx.bin(), before=ctx.before)
         return [timed_check(f"race.results_{aspect}", float(frame) if frame is not None else None,
-                            [began, load()], passed=same)]
+                            [began, load()])]
 
     def menu() -> list[Check]:
         began = load()

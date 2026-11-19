@@ -6,25 +6,32 @@ with the same check in the last report:
 
   flipped    it passed last time and fails now, or failed and passes now
   new        it fails now and the last report has no such check, or there is no last report
-  moved      a timed number more than 10% off its value in the last report, or off the number
-             status.md gave, whether or not it's inside its bar
+  slower     a timed number more than 10% and more than FLOOR ms above its value in the last
+             report, or above the number status.md gave, whether or not it's inside its bar
   same       it fails now as it did last time
 
-summary.txt fits on one screen. The regressions come first, the flipped, new and moved checks,
+A timed number that far below status.md's is improved, which fails nothing but says status.md
+can be updated. A check that's a known issue (known_issues.py) is neither.
+
+summary.txt fits on one screen. The regressions come first, the flipped, new and slower checks,
 each with the route, the frame or field, and the dump or log to look at. Then the checks that
-fail as they did last time, then one line per step for what passed, then what was skipped.
-report.json holds every check in full, for tools. It has no command line.
+fail as they did last time, the known issues, the improved numbers, one line per step for what
+passed and last what was skipped. report.json holds every check in full, for tools. It has no
+command line.
 """
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Optional
 
 PASS, FAIL = "pass", "fail"
 SKIPPED_BATTERY, NOT_RUN = "skipped-battery", "not-run"
-MOVE = 0.10  # how far a timed number may move from its last value or status.md's
+MOVE = 0.10  # how far a timed number may rise above its last value or status.md's
+# And by more than this many ms. It's 1.5% of a 60 Hz frame's 16.67 ms, under which no number
+# here costs a player a frame, and it keeps a 0.72 ms number from failing on a 0.08 ms wobble.
+FLOOR = 0.25
 REPORT = "report.json"
 SUMMARY = "summary.txt"
 LINES = 40  # the most lines the regressions and same-failure sections take between them
@@ -53,6 +60,7 @@ class Check:
     timed: bool = False  # whether the 10% rule applies
     load: Optional[list[float]] = None  # the 1-minute load as the run began and ended
     dump: Optional[str] = None  # the file to look at for the whole check
+    known: Optional[str] = None  # the bug, for a known issue failing where it's known to or passing now
 
 
 def to_json(checks: list[Check]) -> list[dict]:
@@ -60,24 +68,41 @@ def to_json(checks: list[Check]) -> list[dict]:
 
 
 def from_json(rows: list[dict]) -> list[Check]:
-    return [Check(**{**r, "problems": [Problem(**p) for p in r.get("problems", [])]}) for r in rows]
+    """The checks in a report's rows. A field an older or newer report has that Check doesn't is
+    dropped, and one it lacks takes Check's default."""
+    names = {f.name for f in fields(Check)}
+    return [Check(**{**{k: v for k, v in r.items() if k in names},
+                     "problems": [Problem(**p) for p in r.get("problems", [])]}) for r in rows]
 
 
-def off(value: Optional[float], against: Optional[float]) -> Optional[float]:
-    """How far VALUE is from AGAINST, as a share of AGAINST. None when either is missing or AGAINST
-    is 0, which no share can be taken of."""
-    if value is None or against is None or against == 0:
+def past(value: Optional[float], against: Optional[float]) -> Optional[float]:
+    """How far VALUE is above AGAINST as a share of it, when that's more than MOVE and more than
+    FLOOR ms. None when it isn't or either is missing."""
+    if value is None or against is None or against <= 0:
         return None
-    return abs(value - against) / abs(against)
+    if value > against * (1 + MOVE) and value - against > FLOOR:
+        return (value - against) / against
+    return None
+
+
+def improved(c: Check) -> Optional[str]:
+    """Why a timed number that passed should be written in status.md, None when it shouldn't:
+    it's as far below status.md's number as a regression would be above it."""
+    if not c.timed or c.status != PASS or c.value is None or c.status_value is None:
+        return None
+    share = past(c.status_value, c.value)
+    if share is None:
+        return None
+    return f"{(c.status_value - c.value) / c.status_value:.0%} under status.md's {c.status_value:g}, update status.md"
 
 
 def changes(checks: list[Check], last: Optional[list[Check]]) -> dict[str, list[str]]:
     """Each check's id with the reasons it's a regression, or ["same"] for one that fails as it
-    did last time. A check with neither is left out."""
+    did last time. A check with neither, or a known issue, is left out."""
     before = {c.id: c for c in last or []}
     out: dict[str, list[str]] = {}
     for c in checks:
-        if c.status not in (PASS, FAIL):
+        if c.status not in (PASS, FAIL) or c.known is not None:
             continue
         reasons = []
         prior = before.get(c.id)
@@ -88,14 +113,19 @@ def changes(checks: list[Check], last: Optional[list[Check]]) -> dict[str, list[
         if c.timed:
             for name, against in (("last", prior.value if prior is not None else None),
                                   ("status.md", c.status_value)):
-                share = off(c.value, against)
-                if share is not None and share > MOVE:
-                    reasons.append(f"{share:.0%} off {name}'s {against:g}")
+                share = past(c.value, against)
+                if share is not None:
+                    reasons.append(f"{share:.0%} slower than {name}'s {against:g}")
         if not reasons and c.status == FAIL:
             reasons.append("same")
         if reasons:
             out[c.id] = reasons
     return out
+
+
+def failing(checks: list[Check]) -> list[Check]:
+    """The checks that fail the run: every failure but a known issue's."""
+    return [c for c in checks if c.status == FAIL and c.known is None]
 
 
 def number(c: Check) -> str:
@@ -156,6 +186,8 @@ def summary(head: list[str], checks: list[Check], last: Optional[list[Check]]) -
     found = changes(checks, last)
     regressions = [c for c in checks if c.id in found and found[c.id] != ["same"]]
     same = [c for c in checks if found.get(c.id) == ["same"]]
+    known = [c for c in checks if c.known is not None and c.status in (PASS, FAIL)]
+    better = [c for c in checks if improved(c) is not None and c not in regressions]
     skipped: dict[str, list[str]] = {}
     for c in checks:
         if c.status in (SKIPPED_BATTERY, NOT_RUN):
@@ -171,7 +203,15 @@ def summary(head: list[str], checks: list[Check], last: Optional[list[Check]]) -
         budget -= len(shown)
         if len(group) > len(shown):
             out.append(f"  and {len(group) - len(shown)} more in {REPORT}")
-    passed = pass_lines([c for c in checks if c.value is None or c not in regressions])
+    if known:
+        out.append(f"Known issues ({len(known)})")
+        out += [line(c, [f"known: {c.known}"]) if c.status == FAIL
+                else f"  {c.id}: passes now, so its line in known-issues.txt can go [known: {c.known}]"
+                for c in known]
+    if better:
+        out.append(f"Improved ({len(better)})")
+        out += [line(c, [improved(c) or ""], dumps=False) for c in better]
+    passed = pass_lines([c for c in checks if c.value is None or (c not in regressions and c not in better)])
     if passed:
         out.append("Passes")
         out += passed
@@ -191,6 +231,20 @@ def last_report(nightly: Path, before: Path) -> Optional[Path]:
 
 def read(path: Path) -> list[Check]:
     return from_json(json.loads(path.read_text())["checks"])
+
+
+def readable(path: Optional[Path]) -> tuple[Optional[Path], Optional[str]]:
+    """PATH, a report.json or the directory holding one, when it reads as a report, or None and why
+    it doesn't, so a run that can't compare says so up front instead of failing at the end."""
+    if path is None:
+        return None, None
+    if path.is_dir():
+        path = path / REPORT
+    try:
+        read(path)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        return None, f"{path} isn't a report ({type(e).__name__}: {e}), so nothing is compared"
+    return path, None
 
 
 def write(directory: Path, head: list[str], info: dict, checks: list[Check],

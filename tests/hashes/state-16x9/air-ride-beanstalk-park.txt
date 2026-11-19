@@ -1,3 +1,0 @@
-# Game state at the air-ride-beanstalk-park route's checkpoints, read from guest RAM by tools/state_goldens.py:
-# the checkpoint, the frame it was read at, then each kar_ram.json value. Not mapped: lap, place, race timer.
-frame 4200 read 4200 scene.major=4 scene.minor=18 players.count=4 players.humans=1 player1.kind=0 player2.kind=1 player3.kind=1 player4.kind=1 player1.speed=31.4539204 player2.speed=22.4154434 player3.speed=26.5652771 player4.speed=29.0711899 player1.x=609.132507 player1.y=71.4509277 player1.z=-113.271049 player2.x=575.244751 player2.y=61.7011566 player2.z=-113.227974 player3.x=598.274963 player3.y=68.4689026 player3.z=-111.050339 player4.x=548.111145 player4.y=52.4307098 player4.z=-116.732658

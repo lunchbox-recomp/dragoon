@@ -8,8 +8,8 @@ each read into numbers with its bar beside it as data.
                 to every boot on macOS GL")
   race_finish   air-ride-race left alone, unpaced to frame 26,700 through bot_link.py, and the
                 frame Air Ride's results screen (scene.minor 11) first shows. The race's own
-                time on that screen isn't mapped in kar_ram.json, so the frame stands in for it
-                ("Simulation": the same at 16:9 as at 4:3)
+                time on that screen isn't mapped in kar_ram.json, so the frame stands in for it,
+                held to RESULTS_FRAME exactly at both aspects ("Simulation")
   menu_redraw   RUNS windowed runs over the title at --real-time --aspect=16:9 with the menu
                 opened at frame 600 for 60 redraws, GCN_OVERLAY_PAGE cycling 0, 1 and 2, read
                 with frametime.py --menu: the held redraw interval and the menu's CPU time at
@@ -41,19 +41,21 @@ FOUR_FROM = 3400  # where status.md's four-player numbers start
 RACE_FRAMES = 26700
 RACE_SECONDS = 150
 AIR_RESULTS = 11  # scene.minor on Air Ride's results
+RESULTS_FRAME = 13062
 MENU_RUNS = 21  # seven a page, as status.md's row
 MENU_PAGES = 3
 
 
 @dataclass(frozen=True)
 class Bar:
-    """A timed number's bar: LIMIT or less (or exactly SAME for an equal-at-both-aspects bar),
-    and the number status.md's row gave, None when it has none to compare."""
+    """A timed number's bar: LIMIT or less, or exactly EXACT, and the number status.md's row
+    gave, None when it has none to compare."""
     label: str
     unit: str
     limit: Optional[float]
     status: Optional[float]
     row: str  # the Player targets row in status.md
+    exact: Optional[float] = None
 
 
 BARS = {
@@ -62,8 +64,12 @@ BARS = {
     "4p.compiles": Bar("four players at 16:9, programs compiled", "", 0, 0, "Four players at 16:9"),
     "boot.ms": Bar("boot, programs from cache, four players at 16:9", "ms", 1000.0, 837.0,
                    "Time added to every boot on macOS GL"),
-    "race.results_4:3": Bar("race left alone, results screen at 4:3", "frame", None, None, "Simulation"),
-    "race.results_16:9": Bar("race left alone, results screen at 16:9", "frame", None, None, "Simulation"),
+    # The engine frame Air Ride's results first showed at gcn-recomp b4f8ddb, at both aspects. The
+    # race is the same race only if it ends on the same frame, so a pin that moves it moves this.
+    "race.results_4:3": Bar("race left alone, results screen at 4:3", "frame", None, None, "Simulation",
+                            exact=RESULTS_FRAME),
+    "race.results_16:9": Bar("race left alone, results screen at 16:9", "frame", None, None, "Simulation",
+                             exact=RESULTS_FRAME),
     "menu.interval_p99": Bar("menu held redraw interval p99", "ms", 17.0, 17.00, "Menu smooth while it moves"),
     "menu.cpu_p99": Bar("menu CPU time a frame p99", "ms", 1.5, 0.722, "Menu smooth while it moves"),
 }

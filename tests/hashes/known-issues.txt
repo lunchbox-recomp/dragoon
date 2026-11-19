@@ -1,0 +1,5 @@
+# Checks the nightly run expects to fail, each for a bug not fixed yet, read by tools/known_issues.py.
+# A line is the check (frames or state), the route, the aspect and the first checkpoint it fails at,
+# then what's wrong. The run lists each under Known issues and doesn't fail for it. One that passes
+# is listed as passing, so its line can go. One that fails at another checkpoint fails as any check does.
+state air-ride-courses-2 16:9 19400 Beanstalk Park plays differently at 16:9. Every rider's speed and position is off by up to about 1.1 units at 19400, while 15600 matches.

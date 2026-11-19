@@ -1,3 +1,0 @@
-# Game state at the air-ride-machine-passage route's checkpoints, read from guest RAM by tools/state_goldens.py:
-# the checkpoint, the frame it was read at, then each kar_ram.json value. Not mapped: lap, place, race timer.
-frame 4200 read 4200 scene.major=4 scene.minor=18 players.count=4 players.humans=1 player1.kind=0 player2.kind=1 player3.kind=1 player4.kind=1 player1.speed=0.0610193424 player2.speed=41.3119545 player3.speed=32.3648567 player4.speed=34.5721169 player1.x=-495.884491 player1.y=23.6839428 player1.z=297.765472 player2.x=-427.208771 player2.y=4.96764565 player2.z=-412.252441 player3.x=-337.391998 player3.y=0.676653862 player3.z=-511.970703 player4.x=-346.442108 player4.y=1.12194109 player4.z=-450.0867

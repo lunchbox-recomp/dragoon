@@ -2,8 +2,8 @@
 """Run every player check on the real game, one game at a time, and say what changed since last time.
 
 Usage: nightly.py run [--only STEP ...] [--routes ROUTE ...] [--build DIR] [--last REPORT]
-                      [--soak-minutes M] [--menu-runs N] [--seed N]
-       nightly.py install-agent [--dir DIR]
+                      [--soak-minutes M] [--menu-runs N] [--seed N] [--scheduled]
+       nightly.py install-agent [--dir DIR] [--clone CLONE] [--print]
        nightly.py uninstall-agent [--dir DIR]
 
 run plays the steps in order, or the --only ones (nightly_steps.py says what each plays and
@@ -16,8 +16,14 @@ marked skipped-battery and the steps after it not-run, and run exits 2.
 The report goes in build/nightly/YYYY-MM-DD-HHMM/: summary.txt, one screen, and report.json, the
 same for tools (nightly_report.py says what's in them). A check is compared with the same check
 in --last, a report.json or its directory, which defaults to the newest earlier report in
-build/nightly/. Dumps are kept only for checks that failed, under dumps/, audio/, shaders/ and
+build/nightly/. One that doesn't read as a report is said so in the summary's head and nothing
+is compared. Dumps are kept only for checks that failed, under dumps/, audio/, shaders/ and
 logs/. Nothing in tests/ or docs/ is written.
+
+A run holds build/nightly/run.lock and doesn't start while another holds it or a dragoon or
+dragoon_bench process runs (nightly_start.py). --scheduled is launchd's run: it's skipped
+outside 01:00 to 06:00, and otherwise fast-forwards this clone to origin/main, builds dragoon
+and dragoon_bench and runs again as that code, refusing a tree with changes or off origin/main.
 
 --routes plays only those manifest routes in frames, audio and shaders. --build DIR plays the game
 in DIR (DIR/dragoon, and DIR/dragoon_bench for audio) through probe.sh's --bin, for a tree with no
@@ -25,11 +31,14 @@ build of its own. --soak-minutes sets each of the four soaks' wall time (30 by d
 --menu-runs the menu's opens (21 by default), and --seed the soaks' seed (by default the run's
 date and time, so a night's soaks differ from the last's and the report names the seed).
 
-install-agent writes the launchd job that runs `nightly.py run` at 01:30 daily into DIR,
-~/Library/LaunchAgents by default, and prints it. It doesn't load it. uninstall-agent removes it.
+install-agent writes the launchd job that runs CLONE's `nightly.py run --scheduled` at 01:30
+daily into DIR, ~/Library/LaunchAgents by default, and prints it. CLONE is the dragoon-nightly
+clone beside this one by default. It doesn't load the job, and --print only prints it.
+uninstall-agent removes it.
 
-Exits 0 when every check passed and nothing regressed, 1 when a check failed or a timed number
-moved, 2 on a bad argument, a step that couldn't run, or a stop on battery.
+Exits 0 when every check but a known issue passed and nothing got slower, and when a launchd run
+is skipped outside its hours. 1 when a check failed or a timed number got slower, 2 on a bad
+argument, a step that couldn't run, a run that refused to start or a stop on battery.
 """
 from __future__ import annotations
 
@@ -46,6 +55,7 @@ from typing import Callable, Optional
 import bot_record
 import nightly_agent
 import nightly_report
+import nightly_start
 import nightly_steps
 import power
 from nightly_report import NOT_RUN, SKIPPED_BATTERY, Check, from_json, to_json
@@ -108,14 +118,14 @@ def run_steps(steps: list[str], report: Path, require_ac: Callable[[], None],
         try:
             require_ac()
             code = launch(step)
-        except power.OnBattery as e:
+        except (power.OnBattery, ValueError) as e:  # a pmset that can't say is no AC either
             code, why = STOPPED_ON_BATTERY, str(e)
         else:
             why = None
         result = step_result(report, step)
         checks += from_json(result["checks"])
         steps_info[step] = {"seconds": round(time.monotonic() - began), "load": [load, os.getloadavg()[0]],
-                            "exit": code}
+                            "exit": code, "built": result.get("built")}
         if code == STOPPED_ON_BATTERY:
             why = why or result.get("stopped") or "on battery"
             checks.append(Check(step, step, SKIPPED_BATTERY, detail=f"before a game process: {why}"))
@@ -149,25 +159,34 @@ def minutes(seconds: float) -> str:
 
 
 def finish(report: Path, checks: list[Check], steps_info: dict, stopped: Optional[str], began: float,
-           loads: list[float], last_path: Optional[Path], root: Path, say: Callable[[str], None] = print) -> int:
+           loads: list[float], last_path: Optional[Path], root: Path, say: Callable[[str], None] = print,
+           last_note: Optional[str] = None) -> int:
+    """Write the report. LAST_PATH is a report nightly_report.readable passed, and LAST_NOTE why
+    there's none when one was given but couldn't be read."""
     last = nightly_report.read(last_path) if last_path else None
     found = nightly_report.changes(checks, last)
     regressions = sorted(k for k, v in found.items() if v != ["same"])
-    failed = [c for c in checks if c.status == nightly_report.FAIL]
+    failed = nightly_report.failing(checks)
     commits = bot_record.commits(root)
+    # What the game says it was built from wins over the checkout's HEAD, which may not be it.
+    built = next((i["built"] for i in steps_info.values() if i.get("built")), None)
     wall = time.time() - began
     result = "stopped on battery" if stopped else "pass" if not failed and not regressions else "fail"
+    engine = (f"built {built[:7]}{'-dirty' if built.endswith('-dirty') else ''}" if built
+              else (commits["engine"] or "?")[:7])
     head = [f"Dragoon nightly {report.name}, Dragoon {(commits['dragoon'] or '?')[:7]}, gcn-recomp "
-            f"{(commits['engine'] or '?')[:7]}, {minutes(wall)}, load {loads[0]:.1f} to {loads[1]:.1f}",
+            f"{engine}, {minutes(wall)}, load {loads[0]:.1f} to {loads[1]:.1f}",
             f"Result: {result}, {len(regressions)} regressions, {len(failed)} failing, "
             f"{sum(c.status == nightly_report.PASS for c in checks)} passing. Last report: "
             f"{last_path.parent.name if last_path else 'none'}",
             "Steps: " + ", ".join(f"{s} {minutes(i['seconds'])}" for s, i in steps_info.items())]
+    if last_note:
+        head.append(f"Last: {last_note}")
     if stopped:
         head.append(f"Stopped: {stopped}")
     info = {"started": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(began)), "wall_seconds": round(wall),
-            "load": loads, "commits": commits, "result": result, "stopped": stopped, "steps": steps_info,
-            "last": str(last_path) if last_path else None}
+            "load": loads, "commits": {**commits, "engine_built": built}, "result": result, "stopped": stopped,
+            "steps": steps_info, "last": str(last_path) if last_path else None, "last_note": last_note}
     text = nightly_report.write(report, head, info, checks, last)
     prune(report, checks, set(regressions))
     say(text.rstrip("\n"))
@@ -177,15 +196,42 @@ def finish(report: Path, checks: list[Check], steps_info: dict, stopped: Optiona
     return 0 if result == "pass" else 1
 
 
-def run(args: argparse.Namespace) -> int:
+def may_start(args: argparse.Namespace, argv: list[str]) -> int:
+    """The lock's descriptor once nothing stops the run. A launchd run (--scheduled) not yet
+    --updated fast-forwards and builds this clone, then runs again as the new code."""
+    lock = nightly_start.take_lock(NIGHTLY)
+    try:
+        running = nightly_start.games_running(args.pgrep.split() if args.pgrep else ("pgrep", "-x"))
+        if running:
+            raise nightly_start.Refused(f"{' and '.join(running)} is running, and a run plays one game at a time")
+        if args.scheduled and not args.updated:
+            nightly_start.update(ROOT)
+            os.close(lock)
+            os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve()), *argv, "--updated"])
+        if args.scheduled:
+            nightly_start.checked(ROOT)
+    except nightly_start.Refused:
+        os.close(lock)
+        raise
+    return lock
+
+
+def run(args: argparse.Namespace, argv: list[str]) -> int:
     began = time.time()
+    if args.scheduled and not nightly_start.in_window(time.localtime(began).tm_hour):
+        print(f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(began))}: skipped, since a launchd run starts "
+              f"from {nightly_start.WINDOW[0]:02d}:00 to {nightly_start.WINDOW[1]:02d}:00", flush=True)
+        return 0
+    try:
+        lock = may_start(args, argv)
+    except nightly_start.Refused as e:
+        print(f"nightly: not started: {e}", file=sys.stderr, flush=True)
+        return 2
     if args.seed is None:
         args.seed = default_seed(began)
     report = new_run_dir(NIGHTLY, began)
+    last_path, last_note = nightly_report.readable(args.last or nightly_report.last_report(NIGHTLY, report))
     report.mkdir(parents=True)
-    last_path = args.last if args.last else nightly_report.last_report(NIGHTLY, report)
-    if last_path is not None and last_path.is_dir():
-        last_path = last_path / nightly_report.REPORT
     awake = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
     pmset = args.pmset.split() if args.pmset else power.PMSET
     try:
@@ -194,10 +240,11 @@ def run(args: argparse.Namespace) -> int:
                                                 lambda: power.require_ac(pmset),
                                                 lambda step: child(step, report, step_args(args)))
         loads.append(os.getloadavg()[0])
-        return finish(report, checks, steps_info, stopped, began, loads, last_path, ROOT)
+        return finish(report, checks, steps_info, stopped, began, loads, last_path, ROOT, last_note=last_note)
     finally:
         awake.terminate()
         awake.wait()
+        os.close(lock)
 
 
 def step(args: argparse.Namespace) -> int:
@@ -217,7 +264,7 @@ def play_step(name: str, ctx: nightly_steps.Context) -> int:
     checks: list[Check] = []
 
     def save(stopped: Optional[str] = None) -> None:
-        out.write_text(json.dumps({"checks": to_json(checks), "stopped": stopped}, indent=1))
+        out.write_text(json.dumps({"checks": to_json(checks), "stopped": stopped, "built": ctx.built}, indent=1))
 
     def done(c: Check) -> None:
         checks.append(c)
@@ -248,6 +295,9 @@ def main(argv: list[str]) -> int:
         else:
             p.add_argument("--only", nargs="+", choices=list(nightly_steps.STEPS), metavar="STEP")
             p.add_argument("--last", type=Path, metavar="REPORT")
+            p.add_argument("--scheduled", action="store_true")
+            p.add_argument("--updated", action="store_true", help=argparse.SUPPRESS)  # after --scheduled's update
+            p.add_argument("--pgrep", help=argparse.SUPPRESS)  # a stand-in for pgrep -x, for a test
         p.add_argument("--routes", nargs="+", metavar="ROUTE")
         p.add_argument("--build", type=Path, metavar="DIR")
         p.add_argument("--soak-minutes", type=float, default=nightly_steps.SOAK_MINUTES, metavar="M")
@@ -255,12 +305,19 @@ def main(argv: list[str]) -> int:
         p.add_argument("--seed", type=int, metavar="N")
         p.add_argument("--pmset", help=argparse.SUPPRESS)  # a stand-in for pmset -g batt, for a test
     for name in ("install-agent", "uninstall-agent"):
-        sub.add_parser(name).add_argument("--dir", type=Path, default=nightly_agent.AGENTS)
+        p = sub.add_parser(name)
+        p.add_argument("--dir", type=Path, default=nightly_agent.AGENTS)
+        if name == "install-agent":
+            p.add_argument("--clone", type=Path, default=nightly_agent.CLONE)
+            p.add_argument("--print", action="store_true", dest="print_only")
     args = ap.parse_args(argv)
     if args.command == "install-agent":
-        target = nightly_agent.install(ROOT, sys.executable, args.dir)
-        print(target.read_text(), end="")
-        print(f"wrote {target}; it isn't loaded. launchctl bootstrap gui/{os.getuid()} {target} loads it")
+        job = nightly_agent.plist(args.clone.resolve())
+        print(job.decode(), end="")
+        if args.print_only:
+            return 0
+        target = nightly_agent.install(job, args.dir)
+        print(f"wrote {target}, which isn't loaded. launchctl bootstrap gui/{os.getuid()} {target} loads it")
         return 0
     if args.command == "uninstall-agent":
         print(f"removed {nightly_agent.path(args.dir)}" if nightly_agent.uninstall(args.dir)
@@ -276,9 +333,7 @@ def main(argv: list[str]) -> int:
         if args.seed is None:
             ap.error("step takes --seed")
         return step(args)
-    if args.last is not None and not args.last.exists():
-        ap.error(f"--last: no {args.last}")
-    return run(args)
+    return run(args, argv)
 
 
 if __name__ == "__main__":

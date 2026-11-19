@@ -1,3 +1,0 @@
-# Game state at the top-ride-light route's checkpoints, read from guest RAM by tools/state_goldens.py:
-# the checkpoint, the frame it was read at, then each kar_ram.json value. Not mapped: lap, place, race timer.
-frame 3600 read 3600 scene.major=5 scene.minor=19 players.count=1 players.humans=1 player1.kind=4 player2.kind=4 player3.kind=4 player4.kind=4 player1.speed=0 player2.speed=0 player3.speed=0 player4.speed=0 player1.x=none player1.y=none player1.z=none player2.x=none player2.y=none player2.z=none player3.x=none player3.y=none player3.z=none player4.x=none player4.y=none player4.z=none

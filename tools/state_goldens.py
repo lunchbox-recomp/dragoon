@@ -16,9 +16,10 @@ tests/hashes/state/<route>.txt, one line a checkpoint:
 They hold numbers the game computed and nothing read from the disc. A value behind a null
 pointer, such as a player who isn't in the race, is "none", and a float is written with nine
 figures, enough to give back the f32. record rewrites the goldens, and writes none for a route
-that didn't reach every checkpoint. --aspect=16:9 plays at 16:9 and keeps its goldens in
-tests/hashes/state-16x9/, as frame_hashes.py does, since air-ride-courses-2 plays its third race
-differently at 16:9.
+that didn't reach every checkpoint. The state doesn't depend on the picture, so there is one
+golden a route: record plays at 4:3, and check --aspect=16:9 plays at 16:9 against the same
+golden. A route that differs at 16:9 is a bug, listed in tests/hashes/known-issues.txt until
+it's fixed.
 
 Each run is build/probe/state-ROUTE/, deleted first so the game starts from a blank memory
 card, and deleted after. A run gets twice its manifest seconds and quits one dump interval past
@@ -45,7 +46,7 @@ from routes import MANIFEST, Route, route_file, select_routes
 
 ROOT = Path(__file__).resolve().parents[1]
 HASHES = ROOT / "tests" / "hashes"
-STATES = {"4:3": "state", "16:9": "state-16x9"}  # the directory under HASHES each aspect's goldens are in
+STATE = "state"  # the directory under HASHES the goldens are in, for both aspects
 PLAYERS = range(1, 5)
 # What a checkpoint reads, all of it kar_ram.json's. The players' values read none or 0 for a
 # port nobody plays, and Top Ride keeps its riders where these don't look (kar_ram.json).
@@ -177,11 +178,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("mode", choices=["check", "record"])
     ap.add_argument("routes", nargs="*")
     ap.add_argument("--aspect", choices=["4:3", "16:9"], default="4:3",
-                    help="the picture's aspect, and so which goldens (default 4:3)")
+                    help="the picture's aspect a check plays at (default 4:3)")
     args = ap.parse_args(argv)
+    if args.mode == "record" and args.aspect != "4:3":
+        ap.error("record plays at 4:3, and check --aspect=16:9 checks 16:9 against the same goldens")
     try:
         routes = select_routes(args.routes, MANIFEST)
-        paths = {r.name: HASHES / STATES[args.aspect] / f"{r.name}.txt" for r in routes}
+        paths = {r.name: HASHES / STATE / f"{r.name}.txt" for r in routes}
         goldens = {r.name: read_golden(paths[r.name]) for r in routes} if args.mode == "check" else {}
         failed = 0
         for route in routes:
