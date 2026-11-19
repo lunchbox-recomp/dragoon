@@ -4,35 +4,45 @@
 Usage: dolphin_ref.py [--root DIR] fetch
        dolphin_ref.py audit-notes
        dolphin_ref.py [--root DIR] build
-       dolphin_ref.py [--root DIR] boot ISO --frames N [--press SCRIPT] [--dump] [--watch ADDR]...
+       dolphin_ref.py boot ISO --frames N [--press SCRIPT] [--dump] [--watch ADDR]...
                       [--out DIR] [--timeout SECONDS]
 
 Dolphin is the reference for the game's logic and its 4:3 picture. ROOT is dolphin-ref beside
-this clone unless --root names another. It holds src/ (the pinned tag), build/ and user/, the
-only user folder a run gets, never ~/Library/Application Support/Dolphin.
+this clone unless --root names another. It holds src/ (the pinned tag), build/ and user/. boot
+refuses a user folder that doesn't resolve inside dolphin-ref beside this clone, so a run never
+gets ~/Library/Application Support/Dolphin or any other.
 
 fetch clones PIN's tag with its submodules into ROOT/src, from source only, and refuses a ROOT/src
 that's already there. audit-notes prints what the audit of that tree found and what each finding
-became. build configures with CMAKE_OPTIONS into ROOT/build and builds TARGETS with Ninja, both
-under the sandbox, then links the tree's Data/Sys where the binary looks for it. boot writes
-CONFIG into ROOT/user/Config and plays ISO headless on Metal under `caffeinate -i`, `nice -n 19`
-and the sandbox, on a fresh console with a blank card in slot A. It reads the disc where it is
-and never copies it.
+became. build configures with CMAKE_OPTIONS into ROOT/build and builds TARGETS with Ninja, links
+the tree's Data/Sys where the binary looks for it and records the tree's commit in BUILT. boot
+writes CONFIG into ROOT/user/Config and plays ISO headless on Metal under `caffeinate -i` and
+`nice -n 19`, on a fresh console with a blank card in slot A. It reads the disc where it is and
+never copies it.
 
-Every command but audit-notes refuses a ROOT/src whose HEAD isn't PIN's commit or whose
-submodules aren't at the commits it pins. Everything that runs Dolphin, cmake or ninja runs under
-`sandbox-exec` with SANDBOX, which denies all network but Unix sockets.
+build and boot refuse a ROOT/src whose HEAD isn't PIN's commit, whose submodules at any depth
+aren't at the commits it pins, or that `git status` finds changed or untracked files in. boot
+also refuses a build that BUILT doesn't say came from that commit.
 
-boot counts frames by Dolphin's memory watcher, which sends one datagram over a Unix socket at
+cmake and ninja run under `sandbox-exec` with build_profile, and Dolphin with run_profile. Both
+deny all network, so a DNS lookup fails too, and every file write outside ROOT, the per-user
+temp and cache folders under /private/var/folders and /dev/null. Compilers write their temp
+files there and Metal its shader cache. Dolphin's profile allows one more thing, sending to a
+Unix socket inside ROOT/user, which is the memory watcher's.
+
+boot counts frames by Dolphin's memory watcher, which sends one datagram over that socket at
 the end of every video field. Each datagram lists the watched words that changed, so --watch
-reads guest RAM every frame (a 32-bit word at a hex address, 805361AC by default, which holds
-scene.major in its top byte). Once N frames have ended it stops Dolphin with SIGINT, which
-Dolphin takes as a request to shut down.
+reads guest RAM every frame, a 32-bit word at an aligned hex address. By default it's the word
+holding kar_ram.json's scene.major. Once N frames have ended it sends SIGINT to the run's
+process group, which Dolphin takes as a request to shut down, and SIGKILL to whatever is left
+30 s later.
 
 The headless frontend takes -m but never plays the movie, so --press is the only input. It
 writes port 1's presses, in the routes' `frame:BUTTON[+BUTTON]:duration` syntax counted in
-Dolphin's frames, into a pipe the pad reads (PIPE). A press goes in as its frame's datagram
-comes, while Dolphin may already be a frame or more on, so a press isn't frame-exact.
+Dolphin's frames, into a pipe the pad reads (PIPE). The buttons are A, B, X, Y, Z, START, L, R
+and the D-pad's D_UP, D_DOWN, D_LEFT and D_RIGHT, as the pipe names them. Every press has to
+end by frame N. A press goes in as its frame's datagram comes, while Dolphin may already be a
+frame or more on, so a press isn't frame-exact.
 
 With --dump Dolphin writes a PNG each time the game shows a new picture, so a field that repeats
 the last picture adds none, and the dumps lag the frames a little when the run stops. --out DIR
@@ -41,7 +51,7 @@ sha256 and name), the dumps in DIR/frames/ and run.json (the command, the frames
 time). Without --out the dumps are deleted when the run ends.
 
 Exits 0 when the command ran, 1 when a run stopped before N frames, and 2 on a bad argument, a
-refused tree or user folder, or a step that failed.
+refused tree, build or user folder, or a step that failed.
 """
 from __future__ import annotations
 
@@ -58,6 +68,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional, Sequence
+
+import kar_ram
 
 
 @dataclass(frozen=True)
@@ -98,16 +110,20 @@ TARGETS = ("dolphin-nogui", "dolphin-tool")
 NOGUI = Path("Binaries") / "dolphin-emu-nogui"
 # A binary outside an app bundle looks for Sys here, beside itself.
 SYS_LINK = Path("Binaries") / "Contents" / "Resources" / "Sys"
+# What build writes into ROOT/build once the targets are built: the commit they came from.
+BUILT = "dolphin-ref-built.json"
 
-SANDBOX = "(version 1)(allow default)(deny network*)(allow network* (local unix))"
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
+# The per-user temp and cache folders. Compilers write their temp files here and Metal its
+# shader cache.
+SCRATCH = "/private/var/folders"
 CAFFEINATE = ("/usr/bin/caffeinate", "-i")
 NICE = ("/usr/bin/nice", "-n", "19")
 BUILD_NICE = ("/usr/bin/nice", "-n", "10")
-FORBIDDEN_USER = Path.home() / "Library" / "Application Support" / "Dolphin"
+GRACE = 30.0  # seconds a stopped run gets to shut down before SIGKILL
 
 # What the user folder's config holds. Online features are off, and the rest keeps a run
-# deterministic: one CPU thread, a fixed clock, no memory cards and no audio device.
+# deterministic: one CPU thread, a fixed clock, a blank card in slot A and no audio device.
 CONFIG = {
     "Dolphin.ini": {
         "General": {"UseDiscordPresence": "False", "UseGameCovers": "False", "GDBPort": "-1",
@@ -144,14 +160,16 @@ CONFIG = {
     "RetroAchievements.ini": {"Achievements": {"Enabled": "False"}},
 }
 DUMP_ON = ("Dolphin.Movie.DumpFrames=True",)
-WATCH_DEFAULT = ("805361AC",)
+WORD = 4  # the memory watcher reads 32-bit words
 SUN_PATH_MAX = 103  # sockaddr_un's 104 bytes on macOS, less the NUL
+WATCHER = Path("MemoryWatcher")
 PIPE = Path("Pipes") / "pad1"
 # Slot A's card when MemcardAPath is empty, and the console's SRAM. Each boot deletes both, so the
 # game starts on a fresh console with a blank card, as a route does.
 FRESH = (Path("GC") / "MemoryCardA.USA.raw", Path("GC") / "SRAM.raw")
-# The buttons --press takes, named as the routes and the pipe both name them.
-PIPE_BUTTONS = ("A", "B", "X", "Y", "Z", "START", "L", "R")
+# The buttons --press takes, as the pipe names them.
+PIPE_BUTTONS = ("A", "B", "X", "Y", "Z", "START", "L", "R", "D_UP", "D_DOWN", "D_LEFT",
+                "D_RIGHT")
 
 AUDIT_NOTES = (
     ("binary", "Externals/Qt (100 files): Qt 6.8.3 for Windows x64 and ARM64. A macOS build never "
@@ -177,8 +195,8 @@ AUDIT_NOTES = (
     ("net-build", "Externals/MoltenVK fetches MoltenVK from GitHub at build time. "
                   "ENABLE_VULKAN=OFF and USE_BUNDLED_MOLTENVK=OFF leave it out, and Metal draws."),
     ("net-build", "SFML's, watcher's and minizip-ng's own FetchContent calls are never reached: "
-                  "Dolphin builds those with its own CMakeLists and MZ_FETCH_LIBS=OFF. Configure "
-                  "and build ran under SANDBOX, so any fetch would have failed."),
+                  "Dolphin builds those with its own CMakeLists and MZ_FETCH_LIBS=OFF. build "
+                  "runs cmake and ninja under build_profile, which denies all network."),
     ("net-src", "Analytics (DolphinAnalytics.cpp, to analytics.dolphin-emu.org): "
                 "ENABLE_ANALYTICS=OFF, and CONFIG's Analytics.Enabled is False. Dolphin still "
                 "writes an Analytics.ID into Dolphin.ini, which nothing sends."),
@@ -187,14 +205,17 @@ AUDIT_NOTES = (
     ("net-src", "NetPlay and its traversal client, enet: built into core with no option. Only the "
                 "Qt frontend starts NetPlay, and nogui has no way to."),
     ("net-src", "UPnP (miniupnpc): USE_UPNP=OFF. Discord presence: USE_DISCORD_PRESENCE=OFF."),
-    ("net-src", "Game covers from art.gametdb.com and the Redump datfile from redump.info: Qt "
-                "only. CONFIG's UseGameCovers is False."),
+    ("net-src", "Game covers from art.gametdb.com, the Redump datfile from redump.info and "
+                "GeckoCodeConfig's code downloads: Qt only. CONFIG's UseGameCovers is False."),
+    ("net-src", "AMMediaboard (HW/DVD): the Triforce arcade board's network, which a GameCube "
+                "disc never reaches."),
     ("net-src", "The GameCube broadband adapter (EXI BBA: TAP, XLink, built-in, IPC), the Wii's "
-                "IOS network and KD requests, the DSU controller client, the GDB stub and the "
-                "USB Gecko: off unless configured. CONFIG sets SerialPort1 to none, DSU off and "
-                "GDBPort -1."),
-    ("net-src", "libcurl (Common/HttpRequest) is always linked, for the above. SANDBOX denies "
-                "every socket but Unix ones, so none of it can reach a network."),
+                "IOS network and KD requests, the DSU controller client, the GDB stub, the USB "
+                "Gecko, a GBA on a pad port (SI_DeviceGBA's TCP link) and real Wiimotes: off "
+                "unless configured. CONFIG sets SerialPort1 to none, DSU off and GDBPort -1, "
+                "and leaves every pad port but a standard pad on port 1 empty."),
+    ("net-src", "libcurl (Common/HttpRequest) is always linked, for the above. run_profile "
+                "denies all network, DNS included, but sends to the memory watcher's socket."),
 )
 
 
@@ -206,8 +227,30 @@ def default_root() -> Path:
     return Path(__file__).resolve().parents[2] / "dolphin-ref"
 
 
-def sandboxed(cmd: Sequence[str]) -> list[str]:
-    return [SANDBOX_EXEC, "-p", SANDBOX, *cmd]
+def profile_path(path: Path) -> str:
+    """PATH, resolved as the sandbox sees it, for a profile's string literal."""
+    text = str(path.resolve())
+    if '"' in text or "\\" in text:
+        raise Refused(f"{text}: a quote or backslash can't go in a sandbox profile")
+    return text
+
+
+def build_profile(root: Path, scratch: str = SCRATCH) -> str:
+    """No network at all, and no file writes outside ROOT, SCRATCH and /dev/null."""
+    return ("(version 1)(allow default)(deny network*)(deny file-write*)"
+            f'(allow file-write* (subpath "{profile_path(root)}") (subpath "{scratch}")'
+            ' (literal "/dev/null"))')
+
+
+def run_profile(root: Path, scratch: str = SCRATCH) -> str:
+    """build_profile, and sending to a Unix socket inside ROOT/user, the memory watcher's."""
+    user = profile_path(root / "user")
+    return (build_profile(root, scratch)
+            + f'(allow network-outbound (remote unix-socket (subpath "{user}")))')
+
+
+def sandboxed(profile: str, cmd: Sequence[str]) -> list[str]:
+    return [SANDBOX_EXEC, "-p", profile, *cmd]
 
 
 def git(src: Path, *args: str) -> str:
@@ -223,8 +266,9 @@ def submodule_drift(status: str) -> list[str]:
     return [line for line in status.splitlines() if line and line[0] != " "]
 
 
-def check_tree(src: Path, sha: str = PIN.sha) -> None:
-    """Refuse SRC unless its HEAD is SHA and every submodule is at its pinned commit."""
+def check_tree(src: Path, sha: str = PIN.sha) -> str:
+    """SRC's HEAD, refused unless it's SHA, every submodule at any depth is at its pinned commit
+    and git finds nothing changed or untracked, submodules included."""
     if not (src / ".git").exists():
         raise Refused(f"{src}: not a git checkout")
     head = git(src, "rev-parse", "HEAD").strip()
@@ -233,13 +277,30 @@ def check_tree(src: Path, sha: str = PIN.sha) -> None:
     drift = submodule_drift(git(src, "submodule", "status", "--recursive"))
     if drift:
         raise Refused(f"{src}: submodules off their pins: {'; '.join(drift)}")
+    changed = git(src, "status", "--porcelain", "--ignore-submodules=none").splitlines()
+    if changed:
+        more = f" and {len(changed) - 3} more" if len(changed) > 3 else ""
+        raise Refused(f"{src}: changed or untracked: {'; '.join(changed[:3])}{more}")
+    return head
+
+
+def check_build(build: Path, head: str) -> None:
+    """Refuse BUILD unless BUILT there says it was built from HEAD."""
+    try:
+        built = json.loads((build / BUILT).read_text(encoding="utf-8"))["src"]
+    except (OSError, ValueError, KeyError, TypeError):
+        raise Refused(f"{build / BUILT}: no record of the commit it was built from") from None
+    if built != head:
+        raise Refused(f"{build}: built from {built}, not {head}")
 
 
 def check_user(root: Path) -> Path:
-    """ROOT/user, refused when it resolves to Dolphin's own folder under ~/Library."""
+    """ROOT/user, refused unless it resolves inside dolphin-ref beside this clone."""
     user = root / "user"
-    if user.resolve() == FORBIDDEN_USER.resolve():
-        raise Refused(f"{user}: resolves to {FORBIDDEN_USER}, Dolphin's own user folder")
+    allowed = default_root().resolve()
+    real = user.resolve()
+    if real != allowed and allowed not in real.parents:
+        raise Refused(f"{user}: resolves to {real}, outside {allowed}")
     return user
 
 
@@ -248,13 +309,15 @@ def fetch_command(src: Path, pin: Pin = PIN) -> list[str]:
             "--jobs", "8", pin.url, str(src)]
 
 
-def configure_command(src: Path, build: Path, options: dict = CMAKE_OPTIONS) -> list[str]:
+def configure_command(root: Path, options: dict = CMAKE_OPTIONS) -> list[str]:
     defines = [f"-D{key}={value}" for key, value in options.items()]
-    return sandboxed(["cmake", "-S", str(src), "-B", str(build), "-G", "Ninja", *defines])
+    return sandboxed(build_profile(root), ["cmake", "-S", str(root / "src"), "-B",
+                                           str(root / "build"), "-G", "Ninja", *defines])
 
 
-def build_command(build: Path, targets: Sequence[str] = TARGETS) -> list[str]:
-    return sandboxed([*BUILD_NICE, "ninja", "-C", str(build), *targets])
+def build_command(root: Path, targets: Sequence[str] = TARGETS) -> list[str]:
+    return sandboxed(build_profile(root), [*BUILD_NICE, "ninja", "-C", str(root / "build"),
+                                           *targets])
 
 
 def write_config(user: Path, config: dict = CONFIG) -> None:
@@ -268,18 +331,17 @@ def write_config(user: Path, config: dict = CONFIG) -> None:
         (folder / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def boot_command(root: Path, iso: Path, dump: bool = False) -> list[str]:
-    user = check_user(root)
+def boot_command(root: Path, user: Path, iso: Path, dump: bool = False) -> list[str]:
     cmd = [str(root / "build" / NOGUI), "-u", str(user), "-p", "headless", "-v", "Metal"]
     for setting in DUMP_ON if dump else ():
         cmd += ["-C", setting]
     cmd += ["-e", str(iso)]
-    return [*CAFFEINATE, *NICE, *sandboxed(cmd)]
+    return [*CAFFEINATE, *NICE, *sandboxed(run_profile(root), cmd)]
 
 
-def parse_presses(script: str) -> dict[int, list[str]]:
+def parse_presses(script: str, frames: int) -> dict[int, list[str]]:
     """The pipe commands to send after each frame, from a route's `frame:BUTTON[+BUTTON]:duration`
-    presses: PRESS after FRAME and RELEASE after FRAME + duration."""
+    presses: PRESS after FRAME and RELEASE after FRAME + duration, which has to be by FRAMES."""
     commands: dict[int, list[str]] = {}
     for item in filter(None, (part.strip() for part in script.split(","))):
         fields = item.split(":")
@@ -289,6 +351,8 @@ def parse_presses(script: str) -> dict[int, list[str]]:
             raise Refused(f"--press {item!r}: not frame:BUTTON:duration") from None
         if len(fields) != 3 or frame < 1 or duration < 1:
             raise Refused(f"--press {item!r}: not frame:BUTTON:duration")
+        if frame + duration > frames:
+            raise Refused(f"--press {item!r}: ends after frame {frames}, the run's last")
         for button in fields[1].upper().split("+"):
             if button not in PIPE_BUTTONS:
                 raise Refused(f"--press {item!r}: no button {button}")
@@ -318,13 +382,21 @@ class Pipe:
             os.close(self.fd)
 
 
+def default_watch() -> str:
+    """The aligned word holding kar_ram.json's scene.major."""
+    entry = kar_ram.load()["scene.major"]
+    return f"{entry.address & ~(WORD - 1):08X}"
+
+
 def watch_address(text: str) -> str:
     try:
         value = int(text, 16)
     except ValueError:
         raise argparse.ArgumentTypeError(f"{text!r} isn't a hex address") from None
-    if not 0x80000000 <= value <= 0x817FFFFC:
+    if not kar_ram.in_ram(value, WORD):
         raise argparse.ArgumentTypeError(f"{text!r} is outside main RAM")
+    if value % WORD:
+        raise argparse.ArgumentTypeError(f"{text!r} isn't a multiple of {WORD}")
     return f"{value:08X}"
 
 
@@ -336,6 +408,20 @@ def parse_watch(message: bytes) -> dict[str, int]:
     return {pairs[i].upper(): int(pairs[i + 1], 16) for i in range(0, len(pairs) - 1, 2)}
 
 
+def fresh_console(user: Path, watched: Sequence[str]) -> Path:
+    """Delete FRESH's card and SRAM and the old pipe under USER, write the watcher's addresses
+    and make a new pipe. Returns the pipe's path."""
+    (user / WATCHER).mkdir(parents=True, exist_ok=True)
+    (user / WATCHER / "Locations.txt").write_text("\n".join(watched) + "\n")
+    pipe = user / PIPE
+    pipe.parent.mkdir(parents=True, exist_ok=True)
+    for path in (pipe, *(user / p for p in FRESH)):
+        if path.exists() or path.is_symlink():
+            path.unlink()
+    os.mkfifo(pipe)
+    return pipe
+
+
 @dataclass
 class Run:
     frames: int
@@ -344,13 +430,35 @@ class Run:
     ram: list[dict[str, int]]
 
 
+def stop(proc, grace: float = GRACE, killpg: Callable = os.killpg) -> None:
+    """SIGINT to PROC's process group, then SIGKILL to whatever of it is left after GRACE
+    seconds. PROC leads its own group, so this reaches Dolphin under caffeinate."""
+    try:
+        killpg(proc.pid, signal.SIGINT)
+    except ProcessLookupError:
+        return
+    deadline = time.monotonic() + grace
+    while time.monotonic() < deadline:
+        proc.poll()  # reaps the leader, so a group of one zombie reads as gone
+        try:
+            killpg(proc.pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    try:
+        killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait()
+
+
 def play(cmd: Sequence[str], sock_path: Path, frames: int, timeout: float,
          watched: Sequence[str], on_frame: Callable[[int], None] = lambda n: None,
-         popen: Callable = subprocess.Popen) -> Run:
-    """Start CMD, count the memory watcher's datagrams on SOCK_PATH and stop CMD with SIGINT once
-    FRAMES have come or TIMEOUT seconds pass with none. Each frame's entry holds every watched
-    word as it stands at that frame's end. ON_FRAME gets each frame's number, from 1, as its
-    datagram comes."""
+         popen: Callable = subprocess.Popen, killpg: Callable = os.killpg) -> Run:
+    """Start CMD in a process group of its own, count the memory watcher's datagrams on
+    SOCK_PATH and stop the group once FRAMES have come or TIMEOUT seconds pass with none. Each
+    frame's entry holds every watched word as it stands at that frame's end. ON_FRAME gets each
+    frame's number, from 1, as its datagram comes."""
     if len(str(sock_path).encode()) > SUN_PATH_MAX:
         raise Refused(f"{sock_path}: too long for a Unix socket")
     sock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -362,7 +470,7 @@ def play(cmd: Sequence[str], sock_path: Path, frames: int, timeout: float,
     state = {address: 0 for address in watched}
     ram: list[dict[str, int]] = []
     start = time.monotonic()
-    proc = popen(list(cmd))
+    proc = popen(list(cmd), start_new_session=True)
     try:
         while len(ram) < frames:
             try:
@@ -374,13 +482,7 @@ def play(cmd: Sequence[str], sock_path: Path, frames: int, timeout: float,
             on_frame(len(ram))
     finally:
         seconds = time.monotonic() - start
-        if proc.poll() is None:
-            proc.send_signal(signal.SIGINT)
-            try:
-                proc.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
+        stop(proc, killpg=killpg)
         sock.close()
         sock_path.unlink()
     return Run(len(ram), seconds, proc.returncode, ram)
@@ -439,39 +541,34 @@ def cmd_fetch(root: Path) -> int:
 
 def cmd_build(root: Path) -> int:
     src, build = root / "src", root / "build"
-    check_tree(src)
-    for cmd in (configure_command(src, build), build_command(build)):
+    head = check_tree(src)
+    for name, cmd in (("cmake", configure_command(root)), ("ninja", build_command(root))):
         if subprocess.run(cmd).returncode:
-            print(f"{build}: {cmd[3]} failed", file=sys.stderr)
+            print(f"{build}: {name} failed", file=sys.stderr)
             return 2
     link = build / SYS_LINK
     if not link.is_symlink():
         link.parent.mkdir(parents=True, exist_ok=True)
         link.symlink_to(src / "Data" / "Sys")
+    (build / BUILT).write_text(json.dumps({"src": head}) + "\n", encoding="utf-8")
     print(build / NOGUI)
     return 0
 
 
 def cmd_boot(root: Path, args: argparse.Namespace) -> int:
-    check_tree(root / "src")
+    check_build(root / "build", check_tree(root / "src"))
     if not args.iso.is_file():
         raise Refused(f"{args.iso}: no such disc")
     user = check_user(root)
-    pipe = Pipe(user / PIPE, parse_presses(args.press))
+    commands = parse_presses(args.press, args.frames)
+    watched = args.watch or [default_watch()]
     write_config(user)
-    watched = args.watch or list(WATCH_DEFAULT)
-    (user / "MemoryWatcher").mkdir(parents=True, exist_ok=True)
-    (user / "MemoryWatcher" / "Locations.txt").write_text("\n".join(watched) + "\n")
-    pipe.path.parent.mkdir(parents=True, exist_ok=True)
-    for path in (pipe.path, *(user / p for p in FRESH)):
-        if path.exists() or path.is_symlink():
-            path.unlink()
-    os.mkfifo(pipe.path)
+    pipe = Pipe(fresh_console(user, watched), commands)
     dumps = clear_dumps(user)
-    cmd = boot_command(root, args.iso, args.dump)
+    cmd = boot_command(root, user, args.iso, args.dump)
     try:
-        run = play(cmd, user / "MemoryWatcher" / "MemoryWatcher", args.frames, args.timeout,
-                   watched, pipe.frame)
+        run = play(cmd, user / WATCHER / "MemoryWatcher", args.frames, args.timeout, watched,
+                   pipe.frame)
     finally:
         pipe.close()
     count = 0
@@ -519,12 +616,13 @@ def main(argv: list[str]) -> int:
                       help="port 1's presses in the routes' syntax, by Dolphin's frames")
     boot.add_argument("--dump", action="store_true", help="dump every frame as a PNG")
     boot.add_argument("--watch", type=watch_address, action="append", metavar="ADDR",
-                      help="a word of guest RAM to read every frame (default 805361AC)")
+                      help="a word of guest RAM to read every frame (default: the word "
+                           "holding scene.major)")
     boot.add_argument("--out", type=Path, metavar="DIR")
     boot.add_argument("--timeout", type=float, default=60.0, metavar="SECONDS",
                       help="stop when no frame ends for this long (default 60)")
     args = ap.parse_args(argv)
-    root = (args.root or default_root()).absolute()
+    root = (args.root or default_root()).resolve()
     try:
         if args.command == "fetch":
             return cmd_fetch(root)
