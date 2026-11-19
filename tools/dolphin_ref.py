@@ -59,16 +59,17 @@ YES after a -- didn't: loginwindow still listed the run.
 boot counts frames by Dolphin's memory watcher, which sends one datagram over that socket at
 the end of every video field. Each datagram lists the watched words that changed, so --watch
 reads guest RAM every frame, a 32-bit word at an aligned hex address or the word holding a
-kar_ram.json name at a fixed address. By default it's the word holding scene.major. Once N frames have ended it sends SIGINT to the run's
-process group, which Dolphin takes as a request to shut down, and SIGKILL to whatever is left
-30 s later.
+kar_ram.json name at a fixed address. By default it's the word holding scene.major. Once N
+frames have ended it sends SIGINT to the run's process group, which Dolphin takes as a request
+to shut down, and SIGKILL to whatever is left 30 s later.
 
 --movie plays a .dtm (dtm.py makes one from a route) through -m, poll by poll, and turns on
 Dolphin's determinism mode, which it has only for a movie or NetPlay. boot refuses a movie
 whose game ID isn't the disc's, which would play on with its input ignored. Without one,
 --press writes port 1's buttons, in a route's syntax (routes.parse_route) counted in
-Dolphin's frames, into a pipe the pad reads (PIPE). Every press has to end by frame N. A press goes in as its frame's datagram comes, while Dolphin may already be a
-frame or more on, so a press isn't frame-exact. A run takes one or the other.
+Dolphin's frames, into a pipe the pad reads (PIPE). Every press has to end by frame N. A press
+goes in as its frame's datagram comes, while Dolphin may already be a frame or more on, so a
+press isn't frame-exact. A run takes one or the other.
 
 With --dump Dolphin writes a PNG each time the game shows a new picture, so a field that repeats
 the last picture adds none, and the dumps lag the frames a little when the run stops. --out DIR
@@ -150,8 +151,15 @@ GIT_ISOLATION = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 # git status, flagged so it lists every untracked and ignored file and every submodule change.
 STATUS = ("status", "--porcelain", "--ignore-submodules=none", "--untracked-files=all",
           "--ignored")
-# Local config keys that change what git status and git diff see of the work tree.
-HIDING_KEYS = ("filter.", "core.attributesfile")
+# The only local config keys a tree and its submodules may set, with an included file's keys
+# counted too: what a clone writes, which changes nothing git status or git diff sees of the
+# work tree. Every submodule a clone absorbs into .git/modules has core.worktree, and
+# check_unhidden holds that to the submodule's own folder. Any other key, such as a filter,
+# core.attributesFile, core.fsmonitor or include.path, is refused.
+LOCAL_KEYS = ("core.repositoryformatversion", "core.filemode", "core.bare",
+              "core.logallrefupdates", "core.ignorecase", "core.precomposeunicode",
+              "core.worktree")
+LOCAL_SECTIONS = ("remote.", "branch.", "submodule.")
 NOGUI = Path("Binaries") / "dolphin-emu-nogui"
 # A binary outside an app bundle looks for Sys here, beside itself.
 SYS_LINK = Path("Binaries") / "Contents" / "Resources" / "Sys"
@@ -374,16 +382,22 @@ def patch_paths(patch: str, scope: str = PATCH_SCOPE) -> list[str]:
 
 def check_unhidden(repo: Path) -> None:
     """Refuse REPO when its own git settings could hide a change from git status and git diff:
-    an info/attributes file with anything in it, or a local filter or attributes file."""
+    an info/attributes file with anything in it, a local config key outside LOCAL_KEYS and
+    LOCAL_SECTIONS, or a work tree that isn't REPO's own folder."""
     attributes = Path(git(repo, "rev-parse", "--git-path", "info/attributes").strip())
     if not attributes.is_absolute():
         attributes = repo / attributes
     if attributes.is_file() and attributes.read_text(encoding="utf-8", errors="replace").strip():
         raise Refused(f"{repo}: {attributes} isn't empty")
-    keys = [key for key in git(repo, "config", "--local", "--list", "--name-only").splitlines()
-            if key.lower().startswith(HIDING_KEYS)]
+    listed = git(repo, "config", "--local", "--includes", "--list", "--name-only").splitlines()
+    keys = [key for key in listed if key.lower() not in LOCAL_KEYS and
+            not key.lower().startswith(LOCAL_SECTIONS)]
     if keys:
-        raise Refused(f"{repo}: local git config sets {', '.join(keys)}")
+        raise Refused(f"{repo}: local git config sets {', '.join(dict.fromkeys(keys))}, "
+                      "which check_tree doesn't allow")
+    top = Path(git(repo, "rev-parse", "--show-toplevel").strip())
+    if top.resolve() != repo.resolve():
+        raise Refused(f"{repo}: git's work tree is {top}, not this folder")
 
 
 def check_tree(src: Path, sha: str = PIN.sha, patch: Optional[str] = None) -> str:
@@ -393,11 +407,13 @@ def check_tree(src: Path, sha: str = PIN.sha, patch: Optional[str] = None) -> st
     ignored file, a staged change or an edit in a submodule is refused. With PATCH "" the tree
     has to be clean. git runs without the user's and the system's config, and check_unhidden and
     ls-files -v refuse what could still hide a change from it: an assume-unchanged or
-    skip-worktree file, info/attributes or a local filter."""
+    skip-worktree file, info/attributes, a local config key off the allowlist (a filter, an
+    fsmonitor hook, an include) or a work tree moved by core.worktree."""
     if patch is None:
         patch = PATCH.read_text(encoding="utf-8")
     if not (src / ".git").exists():
         raise Refused(f"{src}: not a git checkout")
+    check_unhidden(src)
     head = git(src, "rev-parse", "HEAD").strip()
     if head != sha:
         raise Refused(f"{src}: HEAD is {head}, not the pinned {sha}")
@@ -405,8 +421,9 @@ def check_tree(src: Path, sha: str = PIN.sha, patch: Optional[str] = None) -> st
     drift = submodule_drift(modules)
     if drift:
         raise Refused(f"{src}: submodules off their pins: {'; '.join(drift)}")
-    for repo in [src, *(src / line.split()[1] for line in modules.splitlines() if line)]:
-        check_unhidden(repo)
+    for line in modules.splitlines():
+        if line:
+            check_unhidden(src / line.split()[1])
     hidden = [line for line in git(src, "ls-files", "-v", "--recurse-submodules").splitlines()
               if not line.startswith("H ")]
     if hidden:

@@ -136,6 +136,18 @@ class NestedSubmoduleTest(unittest.TestCase):
     def test_a_clean_nested_tree_passes(self):
         self.assertEqual(dolphin_ref.check_tree(self.top, sha=self.head, patch=""), self.head)
 
+    def test_absorbed_submodules_pass_with_their_work_trees_set_to_their_own_folders(self):
+        git(self.top, "submodule", "absorbgitdirs")
+        config = self.top / ".git" / "modules" / "mid" / "modules" / "leaf" / "config"
+        self.assertIn("worktree = ", config.read_text())
+        self.assertEqual(dolphin_ref.check_tree(self.top, sha=self.head, patch=""), self.head)
+
+    def test_a_key_off_the_allowlist_in_a_nested_submodule_is_refused(self):
+        git(self.leaf, "config", "core.fsmonitor", "true")
+        with self.assertRaisesRegex(dolphin_ref.Refused, "mid/leaf: local git config sets "
+                                                         "core.fsmonitor"):
+            dolphin_ref.check_tree(self.top, sha=self.head, patch="")
+
     def test_a_nested_submodule_off_its_pin_is_refused_as_drift(self):
         commit(self.leaf, {"leaf.txt": "2"})
         with self.assertRaisesRegex(dolphin_ref.Refused, r"submodules off their pins: \+\w+ "
@@ -252,6 +264,37 @@ class PatchTreeTest(unittest.TestCase):
         self.check()
         git(self.src, "config", "filter.hide.clean", "cat")
         with self.assertRaisesRegex(dolphin_ref.Refused, "local git config sets filter.hide.clean"):
+            self.check()
+
+    def test_a_clones_own_remote_and_branch_keys_pass(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        git(self.src, "config", "remote.origin.url", "https://example.invalid/dolphin.git")
+        git(self.src, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+        git(self.src, "config", "branch.main.remote", "origin")
+        git(self.src, "config", "branch.main.merge", "refs/heads/main")
+        self.assertEqual(self.check(), self.head)
+
+    def test_a_key_an_included_file_sets_is_refused(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        included = temp_dir(self) / "included"
+        included.write_text('[filter "hide"]\n\tclean = cat\n')
+        git(self.src, "config", "include.path", str(included))
+        with self.assertRaisesRegex(dolphin_ref.Refused, "local git config sets include.path, "
+                                                         "filter.hide.clean, which"):
+            self.check()
+
+    def test_an_fsmonitor_hook_is_refused(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        git(self.src, "config", "core.fsmonitor", str(temp_dir(self) / "hook"))
+        with self.assertRaisesRegex(dolphin_ref.Refused, "local git config sets core.fsmonitor, "
+                                                         "which"):
+            self.check()
+
+    def test_a_work_tree_moved_elsewhere_is_refused(self):
+        other = temp_dir(self) / "other"
+        commit(other, {FRONTEND: PLAYED, CORE: "movie\n"})
+        git(self.src, "config", "core.worktree", str(other))
+        with self.assertRaisesRegex(dolphin_ref.Refused, "git's work tree is .*other, not this"):
             self.check()
 
     def test_the_users_git_config_cant_hide_an_edit(self):
@@ -414,8 +457,8 @@ class CommandTest(unittest.TestCase):
 
     def test_boot_with_dumps_turns_frame_dumping_on(self):
         cmd = dolphin_ref.boot_command(self.root, self.root / "user", Path(ISO), dump=True)
-        self.assertEqual(cmd[-6:], ["-C", "Dolphin.Core.FastDiscSpeed=False", "-C", "Dolphin.Movie.DumpFrames=True",
-                                    "-e", ISO])
+        self.assertEqual(cmd[-6:], ["-C", "Dolphin.Core.FastDiscSpeed=False",
+                                    "-C", "Dolphin.Movie.DumpFrames=True", "-e", ISO])
 
     def test_boot_with_a_movie_plays_it_with_m_before_the_disc(self):
         cmd = dolphin_ref.boot_command(self.root, self.root / "user", Path(ISO), dump=True,
