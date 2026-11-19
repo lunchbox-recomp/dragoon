@@ -1,0 +1,55 @@
+diff --git a/Source/Core/DolphinNoGUI/MainNoGUI.cpp b/Source/Core/DolphinNoGUI/MainNoGUI.cpp
+index 3bf40ea0d42be1b3258d14efb20fe7d3614e5b52..d3615e3000f945e77d84cbd942e22338d4f13dab 100644
+--- a/Source/Core/DolphinNoGUI/MainNoGUI.cpp
++++ b/Source/Core/DolphinNoGUI/MainNoGUI.cpp
+@@ -15,12 +15,18 @@
+ #include <windows.h>
+ #endif
+ 
++#ifdef __APPLE__
++#include <objc/message.h>
++#include <objc/runtime.h>
++#endif
++
+ #include "Common/ScopeGuard.h"
+ #include "Core/Boot/Boot.h"
+ #include "Core/BootManager.h"
+ #include "Core/Core.h"
+ #include "Core/DolphinAnalytics.h"
+ #include "Core/Host.h"
++#include "Core/Movie.h"
+ #include "Core/System.h"
+ 
+ #include "UICommon/CommandLineParse.h"
+@@ -303,6 +309,31 @@ int main(const int argc, char* argv[])
+ 
+   DolphinAnalytics::Instance().ReportDolphinStart("nogui");
+ 
++#ifdef __APPLE__
++  // The Metal backend checks the process in with the window server, and loginwindow then lists
++  // it to reopen at login. Opt out, as [NSApp disableRelaunchOnLogin] does.
++  {
++    using Send = id (*)(id, SEL);
++    const id app = reinterpret_cast<Send>(objc_msgSend)(
++        reinterpret_cast<id>(objc_getClass("NSApplication")), sel_registerName("sharedApplication"));
++    reinterpret_cast<Send>(objc_msgSend)(app, sel_registerName("disableRelaunchOnLogin"));
++  }
++#endif
++
++  // Play a movie the way DolphinQt's MainWindow does, before boot.
++  if (options.is_set("movie"))
++  {
++    const std::string movie_path = static_cast<const char*>(options.get("movie"));
++    std::optional<std::string> savestate_path;
++    if (!Core::System::GetInstance().GetMovie().PlayInput(movie_path, &savestate_path))
++    {
++      fprintf(stderr, "Could not play the movie %s\n", movie_path.c_str());
++      return 1;
++    }
++    boot->boot_session_data.SetSavestateData(std::move(savestate_path),
++                                             DeleteSavestateAfterBoot::No);
++  }
++
+   if (!BootManager::BootCore(Core::System::GetInstance(), std::move(boot), wsi))
+   {
+     fprintf(stderr, "Could not boot the specified file\n");

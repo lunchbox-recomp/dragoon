@@ -2,27 +2,34 @@
 """How do we get a Dolphin we can trust as the reference, and run it offline?
 
 Usage: dolphin_ref.py [--root DIR] fetch
+       dolphin_ref.py [--root DIR] patch
        dolphin_ref.py audit-notes
        dolphin_ref.py [--root DIR] build
-       dolphin_ref.py boot ISO --frames N [--press SCRIPT] [--dump] [--watch ADDR]...
-                      [--out DIR] [--timeout SECONDS]
+       dolphin_ref.py boot ISO --frames N [--movie DTM | --press SCRIPT] [--dump]
+                      [--watch ADDR]... [--out DIR] [--timeout SECONDS]
 
 Dolphin is the reference for the game's logic and its 4:3 picture. ROOT is dolphin-ref beside
 this clone unless --root names another. It holds src/ (the pinned tag), build/ and user/. boot
 refuses a user folder that doesn't resolve inside dolphin-ref beside this clone, so a run never
 gets ~/Library/Application Support/Dolphin or any other.
 
-fetch clones PIN's tag with its submodules into ROOT/src, from source only, and refuses a ROOT/src
-that's already there. audit-notes prints what the audit of that tree found and what each finding
-became. build configures with CMAKE_OPTIONS into ROOT/build and builds TARGETS with Ninja, links
-the tree's Data/Sys where the binary looks for it and records the tree's commit in BUILT. boot
-writes CONFIG into ROOT/user/Config and plays ISO headless on Metal under `caffeinate -i` and
-`nice -n 19`, on a fresh console with a blank card in slot A. It reads the disc where it is and
-never copies it.
+fetch clones PIN's tag with its submodules into ROOT/src, from source only, refuses a ROOT/src
+that's already there and applies PATCH. patch applies PATCH to a ROOT/src that's clean at the
+pin, and does nothing to one it's already applied to. PATCH is the one change made to Dolphin,
+and only to the headless frontend (PATCH_SCOPE): it plays -m's movie before boot, the way
+DolphinQt's MainWindow does, where the tag's headless frontend takes -m and never plays it, and
+it opts out of relaunch at login (below). audit-notes prints what the
+audit of that tree found and what each finding became. build configures with CMAKE_OPTIONS into
+ROOT/build and builds TARGETS with Ninja, links the tree's Data/Sys where the binary looks for it
+and records the tree's commit and PATCH's sha256 in BUILT. boot writes CONFIG into
+ROOT/user/Config and plays ISO headless on Metal under `caffeinate -i` and `nice -n 19`, on a
+fresh console with a blank card in slot A. It reads the disc where it is and never copies it.
 
 build and boot refuse a ROOT/src whose HEAD isn't PIN's commit, whose submodules at any depth
-aren't at the commits it pins, or that `git status` finds changed or untracked files in. boot
-also refuses a build that BUILT doesn't say came from that commit.
+aren't at the commits it pins, or whose `git diff` isn't PATCH byte for byte. `git status` may
+list PATCH's files as changed in the work tree and nothing else, so an untracked file, a staged
+change or an edit anywhere else, submodules included, is refused. boot also refuses a build that
+BUILT doesn't say came from that commit with that PATCH.
 
 cmake and ninja run under `sandbox-exec` with build_profile, and Dolphin with run_profile. Both
 deny all network, so a DNS lookup fails too. build_profile lets cmake and ninja write only
@@ -32,9 +39,19 @@ and /dev/null. Dolphin's profile allows one more thing, sending to a Unix socket
 ROOT/user, which is the memory watcher's. --out needs no allowance, since boot itself moves the
 dumps there once Dolphin has stopped. Every denial goes to the unified log with DENIED, but only
 live: `log show` can miss them afterwards. To see what a run was refused, start
-  log stream --style compact --predicate 'eventMessage CONTAINS "dolphin-ref"'
-before it and stop it after. Each process's write to /dev/dtracehelper is among the denials,
-which only stops it offering DTrace probes.
+  log stream --style compact --predicate 'eventMessage CONTAINS "dolphin-ref" AND
+    eventMessage CONTAINS "deny("'
+(on one line) before it and stop it after. The second half leaves out lines that only name a
+dolphin-ref path, such as tccd's. Each process's write to /dev/dtracehelper is among the
+denials, which only stops it offering DTrace probes.
+
+The Metal backend asks AppKit about the screen, which checks Dolphin in with the window server.
+loginwindow then adds it to the apps it would reopen at login, in the snapshot it writes every
+few seconds while it runs. A reopened Dolphin would start by its path with no arguments,
+outside the sandbox and without -u, though with no arguments it only prints its help. PATCH
+also has the headless frontend call NSApplication's disableRelaunchOnLogin, and loginwindow
+then logs "app wantsToSuppressRelaunch" for it and leaves it out. -ApplePersistenceIgnoreState
+YES after a -- didn't: loginwindow still listed the run.
 
 boot counts frames by Dolphin's memory watcher, which sends one datagram over that socket at
 the end of every video field. Each datagram lists the watched words that changed, so --watch
@@ -43,12 +60,13 @@ holding kar_ram.json's scene.major. Once N frames have ended it sends SIGINT to 
 process group, which Dolphin takes as a request to shut down, and SIGKILL to whatever is left
 30 s later.
 
-The headless frontend takes -m but never plays the movie, so --press is the only input. It
+--movie plays a .dtm (dtm.py makes one from a route) through -m, poll by poll, and turns on
+Dolphin's determinism mode, which it has only for a movie or NetPlay. Without one, --press
 writes port 1's presses, in the routes' `frame:BUTTON[+BUTTON]:duration` syntax counted in
 Dolphin's frames, into a pipe the pad reads (PIPE). The buttons are A, B, X, Y, Z, START, L, R
 and the D-pad's D_UP, D_DOWN, D_LEFT and D_RIGHT, as the pipe names them. Every press has to
 end by frame N. A press goes in as its frame's datagram comes, while Dolphin may already be a
-frame or more on, so a press isn't frame-exact.
+frame or more on, so a press isn't frame-exact. A run takes one or the other.
 
 With --dump Dolphin writes a PNG each time the game shows a new picture, so a field that repeats
 the last picture adds none, and the dumps lag the frames a little when the run stops. --out DIR
@@ -113,6 +131,14 @@ CMAKE_OPTIONS = {
     "ENABLE_SDL": "OFF",
 }
 TARGETS = ("dolphin-nogui", "dolphin-tool")
+# The one change to the tag: the headless frontend plays -m's movie. It may touch only files
+# under PATCH_SCOPE.
+PATCH = Path(__file__).resolve().parent / "dolphin-ref" / "headless-movie.patch"
+PATCH_SCOPE = "Source/Core/DolphinNoGUI/"
+# git diff with every option that could change its text spelled out, so a user's git config
+# (colour, prefixes, abbreviated hashes) can't.
+DIFF = ("diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-relative", "--full-index",
+        "--src-prefix=a/", "--dst-prefix=b/")
 NOGUI = Path("Binaries") / "dolphin-emu-nogui"
 # A binary outside an app bundle looks for Sys here, beside itself.
 SYS_LINK = Path("Binaries") / "Contents" / "Resources" / "Sys"
@@ -134,13 +160,16 @@ GRACE = 30.0  # seconds a stopped run gets to shut down before SIGKILL
 
 # What the user folder's config holds. Online features are off, and the rest keeps a run
 # deterministic: one CPU thread, a fixed clock, a blank card in slot A and no audio device.
+# dtm.py's movies leave bSaveConfig off, so this config, not the movie, picks the CPU core (4,
+# the ARM64 JIT), the DSP, the disc speed and the cards.
 CONFIG = {
     "Dolphin.ini": {
         "General": {"UseDiscordPresence": "False", "UseGameCovers": "False", "GDBPort": "-1",
                     "GDBSocket": ""},
         "Analytics": {"Enabled": "False", "PermissionAsked": "True", "ID": ""},
         "AutoUpdate": {"UpdateTrack": "", "HashOverride": ""},
-        "Core": {"GFXBackend": "Metal", "CPUThread": "False", "DSPHLE": "True",
+        "Core": {"GFXBackend": "Metal", "CPUCore": "4", "CPUThread": "False", "DSPHLE": "True",
+                 "FastDiscSpeed": "False", "SyncGPU": "False",
                  "EnableCheats": "False", "EmulationSpeed": "0.00000000",
                  "EnableCustomRTC": "True", "CustomRTCValue": "946684800",
                  "SlotA": "1", "SlotB": "255", "SerialPort1": "255",
@@ -174,9 +203,10 @@ WORD = 4  # the memory watcher reads 32-bit words
 SUN_PATH_MAX = 103  # sockaddr_un's 104 bytes on macOS, less the NUL
 WATCHER = Path("MemoryWatcher")
 PIPE = Path("Pipes") / "pad1"
-# Slot A's card when MemcardAPath is empty, and the console's SRAM. Each boot deletes both, so the
-# game starts on a fresh console with a blank card, as a route does.
-FRESH = (Path("GC") / "MemoryCardA.USA.raw", Path("GC") / "SRAM.raw")
+# Slot A's card when MemcardAPath is empty, the card a movie plays on instead when there's none,
+# and the console's SRAM. Each boot deletes all three, so the game starts on a fresh console with
+# a blank card, as a route does.
+FRESH = (Path("GC") / "MemoryCardA.USA.raw", Path("GC") / "MovieA.raw", Path("GC") / "SRAM.raw")
 # The buttons --press takes, as the pipe names them.
 PIPE_BUTTONS = ("A", "B", "X", "Y", "Z", "START", "L", "R", "D_UP", "D_DOWN", "D_LEFT",
                 "D_RIGHT")
@@ -297,9 +327,32 @@ def submodule_drift(status: str) -> list[str]:
     return [line for line in status.splitlines() if line and line[0] != " "]
 
 
-def check_tree(src: Path, sha: str = PIN.sha) -> str:
+def patch_paths(patch: str, scope: str = PATCH_SCOPE) -> list[str]:
+    """The files PATCH changes, refused unless each is one already there under SCOPE, changed in
+    place with no rename, mode change, new or deleted file."""
+    paths = []
+    for line in patch.splitlines():
+        if line.startswith("diff --git "):
+            a, _, b = line[len("diff --git "):].partition(" ")
+            if not a.startswith("a/") or b != "b/" + a[2:]:
+                raise Refused(f"patch: {line!r} isn't one file changed in place")
+            paths.append(a[2:])
+        elif line.startswith(("new file", "deleted file", "rename ", "copy ", "old mode",
+                              "new mode", "similarity", "Binary files")):
+            raise Refused(f"patch: {line!r} isn't a change in place")
+    outside = [p for p in paths if not p.startswith(scope)]
+    if outside:
+        raise Refused(f"patch: {', '.join(outside)} outside {scope}")
+    return paths
+
+
+def check_tree(src: Path, sha: str = PIN.sha, patch: Optional[str] = None) -> str:
     """SRC's HEAD, refused unless it's SHA, every submodule at any depth is at its pinned commit
-    and git finds nothing changed or untracked, submodules included."""
+    and the work tree differs from HEAD by PATCH (PATCH's text by default) and nothing else.
+    git status may list only PATCH's files, as changed in the work tree, so an untracked file, a
+    staged change or an edit in a submodule is refused. With PATCH "" the tree has to be clean."""
+    if patch is None:
+        patch = PATCH.read_text(encoding="utf-8")
     if not (src / ".git").exists():
         raise Refused(f"{src}: not a git checkout")
     head = git(src, "rev-parse", "HEAD").strip()
@@ -308,21 +361,34 @@ def check_tree(src: Path, sha: str = PIN.sha) -> str:
     drift = submodule_drift(git(src, "submodule", "status", "--recursive"))
     if drift:
         raise Refused(f"{src}: submodules off their pins: {'; '.join(drift)}")
+    allowed = {f" M {path}" for path in patch_paths(patch)}
     changed = git(src, "status", "--porcelain", "--ignore-submodules=none").splitlines()
-    if changed:
-        more = f" and {len(changed) - 3} more" if len(changed) > 3 else ""
-        raise Refused(f"{src}: changed or untracked: {'; '.join(changed[:3])}{more}")
+    other = [line for line in changed if line not in allowed]
+    if other:
+        more = f" and {len(other) - 3} more" if len(other) > 3 else ""
+        raise Refused(f"{src}: changed or untracked: {'; '.join(other[:3])}{more}")
+    if git(src, *DIFF) != patch:
+        raise Refused(f"{src}: git diff isn't {PATCH.name}" if patch else
+                      f"{src}: git diff isn't empty")
     return head
 
 
-def check_build(build: Path, head: str) -> None:
-    """Refuse BUILD unless BUILT there says it was built from HEAD."""
+def patch_sha(patch: Optional[str] = None) -> str:
+    text = PATCH.read_text(encoding="utf-8") if patch is None else patch
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def check_build(build: Path, head: str, patch: Optional[str] = None) -> None:
+    """Refuse BUILD unless BUILT there says it was built from HEAD with PATCH (by its sha256)."""
     try:
-        built = json.loads((build / BUILT).read_text(encoding="utf-8"))["src"]
-    except (OSError, ValueError, KeyError, TypeError):
+        record = json.loads((build / BUILT).read_text(encoding="utf-8"))
+        built, patched = record["src"], record.get("patch")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
         raise Refused(f"{build / BUILT}: no record of the commit it was built from") from None
     if built != head:
         raise Refused(f"{build}: built from {built}, not {head}")
+    if patched != patch_sha(patch):
+        raise Refused(f"{build}: built with patch {patched}, not {PATCH.name}")
 
 
 def check_user(root: Path) -> Path:
@@ -362,10 +428,13 @@ def write_config(user: Path, config: dict = CONFIG) -> None:
         (folder / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def boot_command(root: Path, user: Path, iso: Path, dump: bool = False) -> list[str]:
+def boot_command(root: Path, user: Path, iso: Path, dump: bool = False,
+                 movie: Optional[Path] = None) -> list[str]:
     cmd = [str(root / "build" / NOGUI), "-u", str(user), "-p", "headless", "-v", "Metal"]
     for setting in DUMP_ON if dump else ():
         cmd += ["-C", setting]
+    if movie is not None:
+        cmd += ["-m", str(movie)]
     cmd += ["-e", str(iso)]
     return [*CAFFEINATE, *NICE, *sandboxed(run_profile(root), cmd)]
 
@@ -565,8 +634,29 @@ def cmd_fetch(root: Path) -> int:
     if subprocess.run(fetch_command(src)).returncode:
         print(f"{src}: clone failed", file=sys.stderr)
         return 2
-    check_tree(src)
     print(f"{src}: {PIN.tag} at {PIN.sha}")
+    return cmd_patch(root)
+
+
+def apply_command(src: Path, patch: Path = PATCH) -> list[str]:
+    return ["git", "-C", str(src), "apply", "--whitespace=nowarn", str(patch)]
+
+
+def cmd_patch(root: Path, sha: str = PIN.sha, patch: Path = PATCH) -> int:
+    """Apply PATCH to ROOT/src, clean at SHA, and check the tree is then exactly that."""
+    src = root / "src"
+    text = patch.read_text(encoding="utf-8")
+    try:
+        check_tree(src, sha, text)
+        print(f"{src}: {patch.name} already applied")
+        return 0
+    except Refused:
+        check_tree(src, sha, "")
+    if subprocess.run(apply_command(src, patch)).returncode:
+        print(f"{src}: git apply {patch.name} failed", file=sys.stderr)
+        return 2
+    check_tree(src, sha, text)
+    print(f"{src}: {patch.name} applied")
     return 0
 
 
@@ -581,7 +671,8 @@ def cmd_build(root: Path) -> int:
     if not link.is_symlink():
         link.parent.mkdir(parents=True, exist_ok=True)
         link.symlink_to(src / "Data" / "Sys")
-    (build / BUILT).write_text(json.dumps({"src": head}) + "\n", encoding="utf-8")
+    (build / BUILT).write_text(json.dumps({"src": head, "patch": patch_sha()}) + "\n",
+                               encoding="utf-8")
     print(build / NOGUI)
     return 0
 
@@ -590,13 +681,19 @@ def cmd_boot(root: Path, args: argparse.Namespace) -> int:
     check_build(root / "build", check_tree(root / "src"))
     if not args.iso.is_file():
         raise Refused(f"{args.iso}: no such disc")
+    if args.movie is not None:
+        if args.press:
+            raise Refused("--movie and --press: a run takes one or the other")
+        if not args.movie.is_file():
+            raise Refused(f"{args.movie}: no such movie")
     user = check_user(root)
     commands = parse_presses(args.press, args.frames)
     watched = args.watch or [default_watch()]
     write_config(user)
     pipe = Pipe(fresh_console(user, watched), commands)
     dumps = clear_dumps(user)
-    cmd = boot_command(root, user, args.iso, args.dump)
+    movie = args.movie.resolve() if args.movie is not None else None
+    cmd = boot_command(root, user, args.iso, args.dump, movie)
     try:
         run = play(cmd, user / WATCHER / "MemoryWatcher", args.frames, args.timeout, watched,
                    pipe.frame)
@@ -637,12 +734,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--root", type=Path, default=None,
                     help="the dolphin-ref folder (default: dolphin-ref beside this clone)")
     sub = ap.add_subparsers(dest="command", required=True)
-    sub.add_parser("fetch", help="clone the pinned tag with its submodules")
+    sub.add_parser("fetch", help="clone the pinned tag with its submodules and patch it")
+    sub.add_parser("patch", help="apply the headless movie patch to a clean tree")
     sub.add_parser("audit-notes", help="print the audit's findings and decisions")
     sub.add_parser("build", help="configure and build offline")
     boot = sub.add_parser("boot", help="play a disc headless for N frames")
     boot.add_argument("iso", type=Path, metavar="ISO")
     boot.add_argument("--frames", type=frame_count, required=True, metavar="N")
+    boot.add_argument("--movie", type=Path, metavar="DTM",
+                      help="a .dtm to play from power-on, such as dtm.py makes")
     boot.add_argument("--press", default="", metavar="SCRIPT",
                       help="port 1's presses in the routes' syntax, by Dolphin's frames")
     boot.add_argument("--dump", action="store_true", help="dump every frame as a PNG")
@@ -657,6 +757,8 @@ def main(argv: list[str]) -> int:
     try:
         if args.command == "fetch":
             return cmd_fetch(root)
+        if args.command == "patch":
+            return cmd_patch(root)
         if args.command == "audit-notes":
             return cmd_audit_notes()
         if args.command == "build":

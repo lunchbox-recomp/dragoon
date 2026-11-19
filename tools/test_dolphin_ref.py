@@ -92,7 +92,7 @@ class TreeTest(unittest.TestCase):
         self.head = commit(self.src, {"README.md": "dolphin"})
 
     def test_a_tree_at_its_pin_passes(self):
-        self.assertEqual(dolphin_ref.check_tree(self.src, sha=self.head), self.head)
+        self.assertEqual(dolphin_ref.check_tree(self.src, sha=self.head, patch=""), self.head)
 
     def test_a_tree_off_its_pin_is_refused(self):
         with self.assertRaisesRegex(dolphin_ref.Refused, "not the pinned"):
@@ -105,17 +105,17 @@ class TreeTest(unittest.TestCase):
     def test_a_folder_without_git_is_refused(self):
         bare = temp_dir(self)
         with self.assertRaisesRegex(dolphin_ref.Refused, "not a git checkout"):
-            dolphin_ref.check_tree(bare, sha=self.head)
+            dolphin_ref.check_tree(bare, sha=self.head, patch="")
 
     def test_an_edited_file_is_refused(self):
         (self.src / "README.md").write_text("edited")
         with self.assertRaisesRegex(dolphin_ref.Refused, "changed or untracked:  M README.md"):
-            dolphin_ref.check_tree(self.src, sha=self.head)
+            dolphin_ref.check_tree(self.src, sha=self.head, patch="")
 
     def test_an_untracked_file_is_refused(self):
         (self.src / "Movie.cpp").write_text("new")
         with self.assertRaisesRegex(dolphin_ref.Refused, r"\?\? Movie.cpp"):
-            dolphin_ref.check_tree(self.src, sha=self.head)
+            dolphin_ref.check_tree(self.src, sha=self.head, patch="")
 
     def test_drift_lists_moved_missing_and_conflicted_submodules(self):
         status = "\n".join([f" {'a' * 40} ok (x)", f"+{'b' * 40} moved (y)",
@@ -138,32 +138,157 @@ class NestedSubmoduleTest(unittest.TestCase):
         self.head = add_submodule(self.top, "mid")
 
     def test_a_clean_nested_tree_passes(self):
-        self.assertEqual(dolphin_ref.check_tree(self.top, sha=self.head), self.head)
+        self.assertEqual(dolphin_ref.check_tree(self.top, sha=self.head, patch=""), self.head)
 
     def test_a_nested_submodule_off_its_pin_is_refused_as_drift(self):
         commit(self.leaf, {"leaf.txt": "2"})
         with self.assertRaisesRegex(dolphin_ref.Refused, r"submodules off their pins: \+\w+ "
                                                          r"mid/leaf"):
-            dolphin_ref.check_tree(self.top, sha=self.head)
+            dolphin_ref.check_tree(self.top, sha=self.head, patch="")
 
     def test_an_edit_inside_a_nested_submodule_is_refused(self):
         (self.leaf / "leaf.txt").write_text("edited")
         with self.assertRaisesRegex(dolphin_ref.Refused, "changed or untracked:  M mid"):
-            dolphin_ref.check_tree(self.top, sha=self.head)
+            dolphin_ref.check_tree(self.top, sha=self.head, patch="")
+
+
+FRONTEND = "Source/Core/DolphinNoGUI/MainNoGUI.cpp"
+CORE = "Source/Core/Core/Movie.cpp"
+MAIN = "int main()\n{\n  return 0;\n}\n"
+PLAYED = "int main()\n{\n  PlayInput();\n  return 0;\n}\n"
+
+
+class PatchTreeTest(unittest.TestCase):
+    """A real repository with a frontend and a core file, and a patch made by editing the
+    frontend and taking check_tree's own git diff."""
+
+    def setUp(self):
+        self.src = temp_dir(self) / "src"
+        self.head = commit(self.src, {FRONTEND: MAIN, CORE: "movie\n"})
+        self.patch = self.diff_of(PLAYED)
+
+    def diff_of(self, text: str) -> str:
+        (self.src / FRONTEND).write_text(text)
+        diff = dolphin_ref.git(self.src, *dolphin_ref.DIFF)
+        git(self.src, "checkout", "--", FRONTEND)
+        return diff
+
+    def check(self) -> str:
+        return dolphin_ref.check_tree(self.src, sha=self.head, patch=self.patch)
+
+    def test_the_tree_with_exactly_the_patch_passes(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        self.assertEqual(self.check(), self.head)
+
+    def test_the_patch_and_one_more_edit_in_its_file_is_refused(self):
+        (self.src / FRONTEND).write_text(PLAYED + "// more\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, "git diff isn't headless-movie.patch"):
+            self.check()
+
+    def test_the_patch_and_an_edit_to_another_file_is_refused(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        (self.src / CORE).write_text("edited\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, f"changed or untracked:  M {CORE}"):
+            self.check()
+
+    def test_a_different_patch_is_refused(self):
+        (self.src / FRONTEND).write_text(MAIN.replace("return 0", "return 1"))
+        with self.assertRaisesRegex(dolphin_ref.Refused, "git diff isn't headless-movie.patch"):
+            self.check()
+
+    def test_a_clean_tree_is_refused_when_the_patch_is_due(self):
+        with self.assertRaisesRegex(dolphin_ref.Refused, "git diff isn't headless-movie.patch"):
+            self.check()
+
+    def test_the_patch_with_an_untracked_file_is_refused(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        (self.src / "Source/Core/DolphinNoGUI/New.cpp").write_text("new\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, r"\?\? Source/Core/DolphinNoGUI/New"):
+            self.check()
+
+    def test_the_patch_staged_is_refused(self):
+        (self.src / FRONTEND).write_text(PLAYED)
+        git(self.src, "add", FRONTEND)
+        with self.assertRaisesRegex(dolphin_ref.Refused, f"changed or untracked: M  {FRONTEND}"):
+            self.check()
+
+    def test_a_patch_outside_the_frontend_or_not_in_place_is_refused(self):
+        (self.src / CORE).write_text("edited\n")
+        core = dolphin_ref.git(self.src, *dolphin_ref.DIFF)
+        git(self.src, "checkout", "--", CORE)
+        with self.assertRaisesRegex(dolphin_ref.Refused, f"{CORE} outside"):
+            dolphin_ref.patch_paths(core)
+        for line in ("new file mode 100644", "deleted file mode 100644", "old mode 100644",
+                     "rename from x", "Binary files a/x and b/x differ"):
+            with self.subTest(line=line), self.assertRaises(dolphin_ref.Refused):
+                dolphin_ref.patch_paths(self.patch + line + "\n")
+        self.assertEqual(dolphin_ref.patch_paths(self.patch), [FRONTEND])
+
+    def test_patch_applies_to_a_clean_tree_then_finds_it_applied(self):
+        path = temp_dir(self) / "headless-movie.patch"
+        path.write_text(self.patch)
+        root = self.src.parent
+        for said in ("applied", "already applied"):
+            code, out, err = run_main(lambda argv: dolphin_ref.cmd_patch(root, self.head, path))
+            self.assertEqual(code, 0, err)
+            self.assertTrue(out.strip().endswith(f"headless-movie.patch {said}"), out)
+            self.assertEqual((self.src / FRONTEND).read_text(), PLAYED)
+
+    def test_patch_refuses_a_tree_with_another_edit_and_applies_nothing(self):
+        path = temp_dir(self) / "headless-movie.patch"
+        path.write_text(self.patch)
+        (self.src / CORE).write_text("edited\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, "changed or untracked"):
+            dolphin_ref.cmd_patch(self.src.parent, self.head, path)
+        self.assertEqual((self.src / FRONTEND).read_text(), MAIN)
+
+    def test_patch_applies_with_git_apply(self):
+        self.assertEqual(dolphin_ref.apply_command(Path("/r/src"), Path("/p/x.patch")),
+                         ["git", "-C", "/r/src", "apply", "--whitespace=nowarn", "/p/x.patch"])
+
+
+class RealPatchTest(unittest.TestCase):
+    def test_it_changes_only_the_headless_frontend(self):
+        text = dolphin_ref.PATCH.read_text(encoding="utf-8")
+        self.assertEqual(dolphin_ref.patch_paths(text),
+                         [dolphin_ref.PATCH_SCOPE + "MainNoGUI.cpp"])
+
+    def test_it_plays_the_movie_before_boot_and_opts_out_of_relaunch(self):
+        added = [line[1:] for line in dolphin_ref.PATCH.read_text(encoding="utf-8").splitlines()
+                 if line.startswith("+") and not line.startswith("+++")]
+        body = "\n".join(added)
+        self.assertIn("GetMovie().PlayInput(movie_path, &savestate_path)", body)
+        self.assertIn('sel_registerName("disableRelaunchOnLogin")', body)
+        self.assertFalse(any(line.startswith("-") and not line.startswith("---") for line in
+                             dolphin_ref.PATCH.read_text(encoding="utf-8").splitlines()))
 
 
 class BuildRecordTest(unittest.TestCase):
     def setUp(self):
         self.build = temp_dir(self)
 
-    def test_a_build_from_the_tree_passes(self):
-        (self.build / dolphin_ref.BUILT).write_text(json.dumps({"src": "a" * 40}))
+    def record(self, **fields) -> None:
+        (self.build / dolphin_ref.BUILT).write_text(json.dumps(fields))
+
+    def test_a_build_from_the_tree_with_the_patch_passes(self):
+        self.record(src="a" * 40, patch=dolphin_ref.patch_sha())
         dolphin_ref.check_build(self.build, "a" * 40)
 
     def test_a_build_from_another_tree_is_refused(self):
-        (self.build / dolphin_ref.BUILT).write_text(json.dumps({"src": "b" * 40}))
+        self.record(src="b" * 40, patch=dolphin_ref.patch_sha())
         with self.assertRaisesRegex(dolphin_ref.Refused, f"built from {'b' * 40}"):
             dolphin_ref.check_build(self.build, "a" * 40)
+
+    def test_a_build_without_the_patch_or_with_another_is_refused(self):
+        for patch in (None, dolphin_ref.patch_sha("other")):
+            self.record(src="a" * 40, **({} if patch is None else {"patch": patch}))
+            with self.subTest(patch=patch), \
+                    self.assertRaisesRegex(dolphin_ref.Refused, f"built with patch {patch}"):
+                dolphin_ref.check_build(self.build, "a" * 40)
+
+    def test_the_patch_sha_is_the_files_sha256(self):
+        self.assertEqual(dolphin_ref.patch_sha("x"),
+                         "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881")
 
     def test_a_build_with_no_record_is_refused(self):
         with self.assertRaisesRegex(dolphin_ref.Refused, "no record"):
@@ -226,6 +351,13 @@ class CommandTest(unittest.TestCase):
     def test_boot_with_dumps_turns_frame_dumping_on(self):
         cmd = dolphin_ref.boot_command(self.root, self.root / "user", Path(ISO), dump=True)
         self.assertEqual(cmd[-4:], ["-C", "Dolphin.Movie.DumpFrames=True", "-e", ISO])
+
+    def test_boot_with_a_movie_plays_it_with_m_before_the_disc(self):
+        cmd = dolphin_ref.boot_command(self.root, self.root / "user", Path(ISO), dump=True,
+                                       movie=Path("/movies/route.dtm"))
+        self.assertEqual(cmd[-6:], ["-C", "Dolphin.Movie.DumpFrames=True", "-m",
+                                    "/movies/route.dtm", "-e", ISO])
+        self.assertNotIn("-m", dolphin_ref.boot_command(self.root, self.root / "user", Path(ISO)))
 
     def test_configure_runs_sandboxed_with_everything_online_off(self):
         cmd = dolphin_ref.configure_command(self.root)
@@ -355,6 +487,10 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(ini["General"]["GDBPort"], "-1")
         self.assertEqual(ini["Core"]["SerialPort1"], "255")
         self.assertEqual(ini["Core"]["EnableCheats"], "False")
+        # What a movie with bSaveConfig off leaves to the run's config.
+        self.assertEqual([ini["Core"][k] for k in ("CPUCore", "DSPHLE", "CPUThread",
+                                                   "FastDiscSpeed", "SlotA", "SlotB")],
+                         ["4", "True", "False", "False", "1", "255"])
         dsu = configparser.ConfigParser(interpolation=None)
         dsu.read(user / "Config" / "DSUClient.ini")
         self.assertEqual(dsu["Server"]["Enabled"], "False")
@@ -369,14 +505,15 @@ class ConfigTest(unittest.TestCase):
 class FreshConsoleTest(unittest.TestCase):
     def test_the_card_sram_and_pipe_are_new_and_nothing_else_goes(self):
         user = temp_dir(self) / "user"
-        for name in ("GC/MemoryCardA.USA.raw", "GC/SRAM.raw", "GC/MemoryCardB.USA.raw",
-                     "Pipes/pad1"):
+        for name in ("GC/MemoryCardA.USA.raw", "GC/MovieA.raw", "GC/SRAM.raw",
+                     "GC/MemoryCardB.USA.raw", "Pipes/pad1"):
             (user / name).parent.mkdir(parents=True, exist_ok=True)
             (user / name).write_text("old")
         pipe = dolphin_ref.fresh_console(user, ["805361AC", "80536000"])
         self.assertEqual(pipe, user / "Pipes" / "pad1")
         self.assertTrue(stat.S_ISFIFO(pipe.stat().st_mode))
         self.assertFalse((user / "GC" / "MemoryCardA.USA.raw").exists())
+        self.assertFalse((user / "GC" / "MovieA.raw").exists())
         self.assertFalse((user / "GC" / "SRAM.raw").exists())
         self.assertTrue((user / "GC" / "MemoryCardB.USA.raw").exists())
         self.assertEqual((user / "MemoryWatcher" / "Locations.txt").read_text(),
@@ -540,14 +677,45 @@ class MainTest(unittest.TestCase):
         self.assertIn("built from", err)
         self.assertFalse((self.root / "user").exists())
 
-    def test_boot_refuses_a_press_past_the_run_and_runs_nothing(self):
+    def built(self) -> None:
         (self.root / "build").mkdir()
-        (self.root / "build" / dolphin_ref.BUILT).write_text(json.dumps({"src": "a" * 40}))
+        (self.root / "build" / dolphin_ref.BUILT).write_text(
+            json.dumps({"src": "a" * 40, "patch": dolphin_ref.patch_sha()}))
+
+    def test_boot_refuses_a_press_past_the_run_and_runs_nothing(self):
+        self.built()
         with mock.patch.object(dolphin_ref, "check_tree", return_value="a" * 40):
             code, out, err = self.boot("--press", "8:A:5")
         self.assertEqual(code, 2)
         self.assertIn("after frame 10", err)
         self.assertFalse((self.root / "user").exists())
+
+    def test_boot_refuses_a_movie_with_presses_or_no_movie_and_runs_nothing(self):
+        self.built()
+        movie = self.root / "route.dtm"
+        movie.write_bytes(b"DTM\x1a")
+        for extra, said in ((("--movie", str(movie), "--press", "1:A:1"), "one or the other"),
+                            (("--movie", str(self.root / "none.dtm")), "no such movie")):
+            with self.subTest(said=said), \
+                    mock.patch.object(dolphin_ref, "check_tree", return_value="a" * 40):
+                code, out, err = self.boot(*extra)
+            self.assertEqual(code, 2)
+            self.assertIn(said, err)
+            self.assertFalse((self.root / "user").exists())
+
+    def test_boot_plays_a_movie_by_its_full_path(self):
+        self.built()
+        (self.root / "route.dtm").write_bytes(b"DTM\x1a")
+        run = dolphin_ref.Run(10, 1.0, 0, [{"805361AC": 0}] * 10)
+        with mock.patch.object(dolphin_ref, "check_tree", return_value="a" * 40), \
+                mock.patch.object(dolphin_ref, "check_user", return_value=self.root / "user"), \
+                mock.patch.object(dolphin_ref, "play", return_value=run) as play:
+            code, out, err = run_main(dolphin_ref.main, "--root", str(self.root), "boot",
+                                      str(self.iso), "--frames", "10", "--movie",
+                                      str(self.root / "route.dtm"))
+        self.assertEqual(code, 0, err)
+        cmd = play.call_args.args[0]
+        self.assertEqual(cmd[-4:], ["-m", str(self.root / "route.dtm"), "-e", str(self.iso)])
 
     def test_build_refuses_a_tree_off_its_pin_and_runs_nothing(self):
         real_run = dolphin_ref.subprocess.run
@@ -568,7 +736,7 @@ class MainTest(unittest.TestCase):
         self.assertEqual([call.args[0][3] for call in run.call_args_list],
                          ["cmake", "/usr/bin/nice"])
         self.assertEqual(json.loads((self.root / "build" / dolphin_ref.BUILT).read_text()),
-                         {"src": "a" * 40})
+                         {"src": "a" * 40, "patch": dolphin_ref.patch_sha()})
         self.assertTrue((self.root / "build" / dolphin_ref.SYS_LINK).is_symlink())
 
     def test_build_names_the_step_that_failed(self):
