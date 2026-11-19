@@ -378,6 +378,13 @@
     "route": "top-ride-grass.txt",
     "frames": [2, 3600]
   },
+  "vi.renew_last": {
+    "address": "80589C70",
+    "type": "u32",
+    "means": "What vi.renew_count reached when the game last set it to 0, every 60 fields: the frames shown in those 60 fields. 60 when none was dropped. A field that resets the count can show a frame before the reset, and only this keeps it.",
+    "route": "top-ride-grass.txt",
+    "frames": [100, 400]
+  },
   "vi.next_buffer": {
     "address": "8056E4C0",
     "type": "u32",

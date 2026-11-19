@@ -21,15 +21,16 @@ compare run alone keep them. None of it goes in git.
 
 Checkpoints are game frames: the route's required frames in tests/hashes/manifest.txt, and the
 first frame of each scene Dolphin's run goes through, as dtm.scene_steps gives it, and SETTLE
-frames after that, once the picture has settled. Dolphin's game frame is dtm.game_frames,
-counted from vi.renew_count, which is what dtm.py gives the route's presses by and what Dragoon's
-own frame count matched within a frame at every scene change (docs/dev/status.md, Dolphin
-reference). In a race the count falls behind: dtm.game_frames misses the frame the game shows
-on a field where vi.renew_count also goes back to 0. In the first 1113 fields of the Air Ride
-race it gave 18 frames fewer than vi.next_buffer's pictures, and the race clocks were 18.6
-frames apart, so deep in a race a checkpoint gets a later moment of Dolphin's. Counting by
-pictures instead is open, since in the menus they run ahead of the game's frames. Dragoon's
-is its presented frame, the N of its frame_N.png and the frame the bot reads state at.
+frames after that, once the picture has settled. One before BOOT moves to BOOT, when both sides
+show the blank card's prompt. Dolphin's game frame is dtm.game_frames, from vi.renew_count and
+vi.renew_last, which is what dtm.py gives the route's presses by. It equals vi.next_buffer's
+count of the pictures the game puts up on every field of a top-ride-grass run. Dragoon's is
+its presented frame, the N of its frame_N.png and the frame the bot reads state at. With
+top-ride-grass's movie converged on this count, each scene starts in Dolphin's run within a
+frame of where it starts in Dragoon's (1003, 1704, 2004, 2609 and 3235 against 1003, 1703, 2003,
+2608 and 3234), since the route's presses start most of them. Within a scene the two counts
+needn't keep step, and in a race the moment matters most, so a checkpoint in a race past its
+settled one is refused until race checkpoints are matched by the race timer.
 
 A Dolphin dump has no frame number: it writes one PNG for each new picture its VI shows.
 vi.next_buffer changes once for each picture the game puts up, so the pictures by a field are its
@@ -42,9 +43,11 @@ either side of the counted one and takes the one nearest Dragoon's frame, on a c
 over every COARSE-th pixel each way. How sure the match is goes in the report: "sure" when the
 best is clearly the nearest (its coarse error under MARGIN times the next different
 picture's), "still" when every dump in reach shows the same picture, so a frame either way
-makes no difference, and "unsure" otherwise. A checkpoint is refused when no field of Dolphin's
-run reaches its game frame, which is so for the boot scenes at frame 0, when the dumps stop
-before it, when Dragoon has no frame there or when the two pictures aren't the same size.
+makes no difference, and "unsure" otherwise. A checkpoint is refused when it's in a race past
+its settled one, when no field of Dolphin's run reaches its game frame, when Dolphin has put
+up no picture by then, when the dumps stop before it, when Dragoon has no frame there or when
+the two pictures aren't the same size. A route with --pads is refused whole, since the movie
+and Dragoon's bot play port 1 only.
 
 Both sides dump the picture before any scaling to the window: Dolphin its raw XFB (GFX.ini's
 FrameDumpsResolutionType 2, InternalResolution 1) and Dragoon its EFB or XFB at --scale=1, so
@@ -57,9 +60,9 @@ triage. threshold() gives TOLERANCE from repeat runs: the largest channel error 
 side give at the same checkpoint, which is 0 for both (repeat prints it), plus STEP, 4 levels
 of 255, so a rounding difference between two correct renderers' 8-bit blends and filters isn't
 counted. The game draws to an RGB8 EFB (HSD_PixelFormat at 805DE2AC reads 0), so neither side
-drops colour bits that a 6-bit format would. On the three routes first run, the checkpoints
-under BUDGET came out at 0 and every one over it had a largest error of 14 or more, so no
-result there turns on STEP. A side-by-side is Dragoon on the left, Dolphin in the middle and the
+drops colour bits that a 6-bit format would. On the three routes run, the checkpoints under
+BUDGET came out at 0 and every one over it had a largest error of 14 or more, so no result
+there turns on STEP. A side-by-side is Dragoon on the left, Dolphin in the middle and the
 difference on the right: black under TOLERANCE, and over it white for a small error through
 red for a large one.
 
@@ -71,14 +74,22 @@ game frame and the one either side. "same" is a match at its frame, "same, a fra
 only next to it, and "differs" no match, with each value that differs listed apart from the
 picture's score for triage.
 
-The triage file, tests/hashes/dolphin-triage.txt, has one line a route and checkpoint:
+The triage file, tests/hashes/dolphin-triage.txt, starts with the tolerance and the budget its
+scores were taken at, then has one line a route and checkpoint:
 
-  ROUTE FRAME share=S% max=M mean=E CLASS REASON
+  tolerance=T budget=B%
+  ROUTE FRAME share=S% max=M mean=E state=STATE CLASS REASON
 
-S, M and E are the checkpoint's score when it was triaged, and CLASS one of CLASSES: bug (a
-Dragoon bug, the reason saying what's wrong), dolphin (Dolphin differs and it isn't our bug,
-such as its own inaccuracy or filtering by design), unclear, within (under BUDGET) or refused
-(no match, the reason saying why). # lines and blank lines are comments. parse_triage reads it.
+S, M and E are the checkpoint's score when it was triaged. STATE is the state compare's: same,
+near (a frame off), differs or none (not compared). CLASS is one of CLASSES:
+  bug      a Dragoon bug, the reason saying what's wrong
+  dolphin  Dolphin differs and it isn't our bug, such as its own inaccuracy
+  setup    the test makes the two sides differ, not Dragoon, such as an unpinned seed
+  timing   the same pictures in another order or a few frames apart, such as load order
+  unclear  not known yet
+  within   under BUDGET with the state the same
+  refused  no match, the reason saying why
+# lines and blank lines are comments. parse_triage reads it.
 
 repeat compares two dolphin/ folders by their dumps' sha256 or two dragoon/ folders frame by
 frame, and prints the largest channel error. triage checks the file parses.
@@ -103,6 +114,7 @@ import dolphin_ref
 import dtm
 import kar_ram
 import state_goldens
+import framediff
 from framediff import Image, read_png
 from frame_dumps import frame_files
 from frame_pair import side_by_side, write_png
@@ -114,6 +126,10 @@ ISO = ROOT / "rom" / "game.iso"
 TRIAGE = ROOT / "tests" / "hashes" / "dolphin-triage.txt"
 DISC = "console"
 SETTLE = 10  # frames after a scene's first for its settled checkpoint
+BOOT = 60  # the first checkpoint: Dolphin's card prompt has its text from 58, Dragoon's from 4
+# The races, by scene.major and scene.minor. A checkpoint further in than its settled one waits
+# for the race timer.
+RACES = {(4, 18): "Air Ride's race", (5, 19): "Top Ride's race"}
 DRIFT = 12  # the dumps either side of the counted one a match may take
 COARSE = 4  # the coarse error looks at every 4th pixel each way
 MARGIN = 0.8  # a match is sure when its coarse error is under this times the next picture's
@@ -121,9 +137,11 @@ STEP = 4  # levels of 255 two correct renderers may round apart
 REPEAT_ERROR = 0  # the largest channel error two runs of one side gave (repeat, docs/dev/status.md)
 BUDGET = 0.001  # a checkpoint over this share of pixels goes to triage, framediff.py's default
 SLOW = 3  # a Dragoon run's seconds, times state_goldens.SLOW times the manifest's
-CLASSES = ("bug", "dolphin", "unclear", "within", "refused")
+CLASSES = ("bug", "dolphin", "setup", "timing", "unclear", "within", "refused")
+STATES = {"same": "same", "same, a frame off": "near", "differs": "differs", "not read": "none"}
 TRIAGE_LINE = re.compile(r"(\S+) (\d+) share=(\d+(?:\.\d+)?)% max=(\d+) mean=(\d+(?:\.\d+)?) "
-                         r"(\S+) (\S.*)")
+                         r"state=(\S+) (\S+) (\S.*)")
+TRIAGE_HEAD = re.compile(r"tolerance=(\d+) budget=(\d+(?:\.\d+)?)%")
 FIELDS = state_goldens.FIELDS
 TABLE = kar_ram.load()
 
@@ -150,6 +168,7 @@ class Bad(Exception):
 class Checkpoint:
     frame: int
     why: str
+    refuse: str = ""  # why the checkpoint isn't compared, when it isn't
 
 
 @dataclass
@@ -176,8 +195,16 @@ class Triage:
     share: float
     max: int
     mean: float
+    state: str
     cls: str
     reason: str
+
+
+@dataclass(frozen=True)
+class TriageFile:
+    tolerance: int
+    budget: float
+    lines: list
 
 
 # Watches.
@@ -203,9 +230,9 @@ def state_watches(fields: Sequence[str] = FIELDS, table: dict = TABLE) -> list[s
 
 
 def watches(fields: Sequence[str] = FIELDS) -> list[str]:
-    """The scene word, the renew count and the XFB word for the timeline, then FIELDS' words."""
+    """The scene word, the renew counts and the XFB word for the timeline, then FIELDS' words."""
     head = [f"{dolphin_ref.word_of(n, TABLE):08X}"
-            for n in ("scene.major", "vi.renew_count", "vi.next_buffer")]
+            for n in ("scene.major", "vi.renew_count", "vi.renew_last", "vi.next_buffer")]
     return head + [w for w in state_watches(fields) if w not in head]
 
 
@@ -248,22 +275,38 @@ def state_of(words: dict[str, int], fields: Sequence[str] = FIELDS) -> dict[str,
 
 
 def checkpoints(route: Route, lines: Sequence[str]) -> list[Checkpoint]:
-    """ROUTE's required frames, and each scene's first frame in Dolphin's run and SETTLE after."""
+    """ROUTE's required frames, and each scene's first frame in Dolphin's run and SETTLE after,
+    none before BOOT. One in a race past its settled one is refused."""
     out = {f: f"golden {f}" for f in route.required}
-    last = None
+    scenes: list[tuple[int, tuple[int, int]]] = []
     for _, frame, major, minor in dtm.scene_steps(lines):
-        if (major, minor) == last:
+        if scenes and (major, minor) == scenes[-1][1]:
             continue  # the scene word's middle bytes changed, not the scene
-        last = (major, minor)
-        out.setdefault(frame, f"scene {major}/{minor} starts")
-        out.setdefault(frame + SETTLE, f"scene {major}/{minor}, {SETTLE} frames in")
-    return [Checkpoint(f, why) for f, why in sorted(out.items())]
+        scenes.append((frame, (major, minor)))
+        for f, why in ((frame, " starts"), (frame + SETTLE, f", {SETTLE} frames in")):
+            if f < BOOT:
+                f, why = BOOT, "the blank card's prompt"
+            else:
+                why = f"scene {major}/{minor}{why}"
+            out.setdefault(f, why)
+    found = []
+    for f, why in sorted(out.items()):
+        start, scene = 0, None
+        for s, k in scenes:
+            if s <= f:
+                start, scene = s, k
+        refuse = ""
+        if scene in RACES and f > start + SETTLE:
+            refuse = (f"{f - start} frames into {RACES[scene]}, where a game frame isn't matched "
+                      f"until the race timer is")
+        found.append(Checkpoint(f, why, refuse))
+    return found
 
 
 def pictures(lines: Sequence[str]) -> list[int]:
     """The pictures the game had put up by the end of each field: vi.next_buffer's changes
     since field 1."""
-    col = lines[0].split().index(f"{dolphin_ref.word_of('vi.next_buffer', TABLE):08X}")
+    col = dtm.column(lines[0].split(), dolphin_ref.word_of("vi.next_buffer", TABLE))
     out, count, last = [], 0, None
     for line in lines[1:]:
         value = line.split()[col]
@@ -301,24 +344,12 @@ def pick(errors: dict[int, float], same: dict[int, str], counted: int) -> tuple[
 
 
 def score(a: Image, b: Image, tolerance: int = TOLERANCE) -> tuple[Score, Image]:
-    """A's error against B over every pixel, and the difference map."""
-    if (a.width, a.height) != (b.width, b.height):
-        raise Bad(f"sizes differ: {a.width}x{a.height} and {b.width}x{b.height}")
-    over = worst = total = 0
-    out = bytearray()
-    for i in range(a.width * a.height):
-        d = [abs(a.pixels[i * a.channels + k] - b.pixels[i * b.channels + k]) for k in range(3)]
-        big = max(d)
-        total += sum(d)
-        worst = max(worst, big)
-        if big > tolerance:
-            over += 1
-            out += bytes((255, 255 - big, 255 - big))
-        else:
-            out += b"\0\0\0"
-    n = a.width * a.height
-    return (Score(over / n, worst, total / (3 * n)),
-            Image(a.width, a.height, 3, bytes(out)))
+    """A's error against B over every pixel, and framediff's difference map."""
+    try:
+        d = framediff.diff(a, b, tolerance, "the pictures", with_map=True)
+    except ValueError as e:
+        raise Bad(str(e)) from None
+    return Score(d.over / d.pixels, d.worst, d.mean), d.map
 
 
 # The runs.
@@ -359,7 +390,7 @@ class Keeper(state_goldens.Checkpoints):
 
 def cmd_dragoon(route: Route, out: Path) -> int:
     lines = dtm.read_lines(dolphin_dir(out) / "ram.txt")
-    frames = [c.frame for c in checkpoints(route, lines) if c.frame > 0]
+    frames = [c.frame for c in checkpoints(route, lines) if not c.refuse]
     name = f"dolphin-diff-{route.name}"
     run_dir = bot_link.run_directory(name)
     bot = Keeper(frames, run_dir)
@@ -460,6 +491,10 @@ def compare(route: Route, out: Path) -> dict:
     report = []
     for c in checkpoints(route, lines):
         entry: dict = {"frame": c.frame, "why": c.why}
+        if c.refuse:
+            entry.update(refused=c.refuse, state="not read", state_diff=[])
+            report.append(entry)
+            continue
         found, refused = compare_picture(c.frame, frames, shown, dumps, dragoon)
         if refused:
             entry["refused"] = refused
@@ -500,11 +535,15 @@ def summary(report: dict) -> str:
 
 def triage_line(route: str, e: dict) -> str:
     """A draft triage line for report entry E: within or refused, or unclear to be triaged."""
+    state = STATES[e["state"]]
     if "refused" in e:
-        return f"{route} {e['frame']} share=0% max=0 mean=0 refused {e['refused']}"
-    cls, why = ("unclear", "not triaged yet") if e["over"] else ("within", "under the budget")
+        return f"{route} {e['frame']} share=0% max=0 mean=0 state={state} refused {e['refused']}"
+    if e["over"] or e["state"] == "differs":
+        cls, why = "unclear", "not triaged yet"
+    else:
+        cls, why = "within", "under the budget and the state matching"
     return (f"{route} {e['frame']} share={100 * e['share']:.3f}% max={e['max']} "
-            f"mean={e['mean']:.2f} {cls} {why}")
+            f"mean={e['mean']:.2f} state={state} {cls} {why}")
 
 
 def cmd_compare(route: Route, out: Path) -> int:
@@ -512,8 +551,8 @@ def cmd_compare(route: Route, out: Path) -> int:
     (out / "report.json").write_text(json.dumps(report, indent=1) + "\n")
     text = summary(report)
     (out / "summary.txt").write_text(text)
-    (out / "triage-draft.txt").write_text(
-        "".join(triage_line(route.name, e) + "\n" for e in report["checkpoints"]))
+    (out / "triage-draft.txt").write_text(triage_head() + "\n" + "".join(
+        triage_line(route.name, e) + "\n" for e in report["checkpoints"]))
     print(text, end="")
     differs = [e for e in report["checkpoints"] if e["state"] == "differs"]
     return 1 if differs else 0
@@ -544,25 +583,42 @@ def cmd_repeat(a: Path, b: Path) -> int:
     return 0 if worst == REPEAT_ERROR else 1
 
 
-def parse_triage(text: str, where: str = "triage") -> list[Triage]:
-    """TEXT's triage lines, as the module docstring gives them. A ValueError names a malformed
-    line, an unknown class or a route's checkpoint listed twice."""
-    out, seen = [], set()
+def triage_head(tolerance: int = TOLERANCE, budget: float = BUDGET) -> str:
+    return f"tolerance={tolerance} budget={100 * budget:g}%"
+
+
+def parse_triage(text: str, where: str = "triage") -> TriageFile:
+    """TEXT's tolerance and budget and its triage lines, as the module docstring gives them. A
+    ValueError names a missing head line, a malformed line, an unknown state or class or a
+    route's checkpoint listed twice."""
+    head, out, seen = None, [], set()
     for n, line in enumerate(text.splitlines(), 1):
         if not line.strip() or line.startswith("#"):
             continue
+        if head is None:
+            head = TRIAGE_HEAD.fullmatch(line)
+            if not head:
+                raise ValueError(f"{where}: line {n}: not '{triage_head()}' or the like, which "
+                                 f"comes first: {line!r}")
+            continue
         m = TRIAGE_LINE.fullmatch(line)
         if not m:
-            raise ValueError(f"{where}: line {n}: not 'ROUTE FRAME share=S% max=M mean=E CLASS "
-                             f"REASON': {line!r}")
-        if m[6] not in CLASSES:
-            raise ValueError(f"{where}: line {n}: class {m[6]!r} isn't one of {', '.join(CLASSES)}")
+            raise ValueError(f"{where}: line {n}: not 'ROUTE FRAME share=S% max=M mean=E "
+                             f"state=STATE CLASS REASON': {line!r}")
+        if m[6] not in STATES.values():
+            raise ValueError(f"{where}: line {n}: state {m[6]!r} isn't one of "
+                             f"{', '.join(STATES.values())}")
+        if m[7] not in CLASSES:
+            raise ValueError(f"{where}: line {n}: class {m[7]!r} isn't one of {', '.join(CLASSES)}")
         key = (m[1], int(m[2]))
         if key in seen:
             raise ValueError(f"{where}: line {n}: {m[1]} {m[2]} is triaged twice")
         seen.add(key)
-        out.append(Triage(m[1], int(m[2]), float(m[3]) / 100, int(m[4]), float(m[5]), m[6], m[7]))
-    return out
+        out.append(Triage(m[1], int(m[2]), float(m[3]) / 100, int(m[4]), float(m[5]), m[6], m[7],
+                          m[8]))
+    if head is None:
+        raise ValueError(f"{where}: no '{triage_head()}' line")
+    return TriageFile(int(head[1]), float(head[2]) / 100, out)
 
 
 def main(argv: list[str]) -> int:
@@ -587,10 +643,14 @@ def main(argv: list[str]) -> int:
         if args.command == "repeat":
             return cmd_repeat(args.a, args.b)
         if args.command == "triage":
-            lines = parse_triage(args.file.read_text(), str(args.file))
-            print(f"{args.file}: {len(lines)} checkpoints triaged")
+            got = parse_triage(args.file.read_text(), str(args.file))
+            print(f"{args.file}: {len(got.lines)} checkpoints triaged at "
+                  f"{triage_head(got.tolerance, got.budget)}")
             return 0
         (route,) = select_routes([args.route], MANIFEST)
+        pads = state_goldens.route_pads(route)
+        if pads != 1:
+            raise Bad(f"{route.name}: plays {pads} pads, and both sides here play port 1 only")
         out = args.out or OUT / route.name
         out.mkdir(parents=True, exist_ok=True)
         code = 0

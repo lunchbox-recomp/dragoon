@@ -28,8 +28,9 @@ that shows 4 or 0 next to it is the same thing evened out.
 
 Fields to game frames: the game draws fewer frames than fields while it loads, so a field isn't
 a game frame. --timeline takes the game frames each field reached in an earlier run of the
-movie (game_frames, from kar_ram.json's vi.renew_count). Each poll gets the route's input at the
-game frame the field before its read had reached, as the engine gives it. The first movie has no
+movie (game_frames, from kar_ram.json's vi.renew_count and vi.renew_last, which count the
+pictures the game puts up). Each poll gets the route's input at the game frame the field before
+its read had reached, as the engine gives it by its own frame count. The first movie has no
 timeline and maps field f to frame f. converge plays a movie with dolphin_ref.py, makes the next
 from that run and stops when one comes out byte for byte the same as the one it played, or after
 --max runs. How many it takes depends on where it starts. presses shows where the game read each
@@ -90,9 +91,10 @@ QUEUE = TABLE["pad.queue"].address
 QUEUE_ENTRY = TABLE["pad.queue"].length
 TRIGGERS = 4  # the offset of the second word in an entry
 RENEW = dolphin_ref.word_of("vi.renew_count", TABLE)
+RENEW_LAST = dolphin_ref.word_of("vi.renew_last", TABLE)
 BUTTON_WORDS = tuple(QUEUE + QUEUE_ENTRY * k for k in range(QUEUE_LENGTH))
 TRIGGER_WORDS = tuple(a + TRIGGERS for a in BUTTON_WORDS)
-WATCH = (SCENE_WORD, RENEW, PAD_STATE, *BUTTON_WORDS, *TRIGGER_WORDS)
+WATCH = (SCENE_WORD, RENEW, RENEW_LAST, PAD_STATE, *BUTTON_WORDS, *TRIGGER_WORDS)
 # --count-polls puts poll i in the triggers as (i // COUNT_BASE % COUNT_BASE, i % COUNT_BASE).
 # The SDK's PADClamp makes a trigger at 30 or less 0, so the game never sees them.
 COUNT_BASE = 30
@@ -342,14 +344,18 @@ def poll_steps(lines: Sequence[str]) -> list[tuple[int, int, int, int, int]]:
 
 
 def game_frames(lines: Sequence[str]) -> list[int]:
-    """From a ram.txt watching RENEW, the game's frames by the end of each field: RENEW's low
-    byte counts the frames the game has shown since the last reset to 0, so a field adds what
-    it grew by, or all of it after a reset."""
-    col = column(lines[0].split(), RENEW)
+    """From a ram.txt watching RENEW and RENEW_LAST, the game's frames by the end of each field.
+    RENEW's low byte counts the frames the game has shown since it last set it to 0, so a field
+    adds what it grew by. A field that resets it adds what it reached before the reset, which
+    RENEW_LAST keeps, and what it has grown by since. Without RENEW_LAST a frame shown before
+    the reset on that field would be lost, one about every 60 fields while the game keeps up."""
+    head = lines[0].split()
+    col, kept = column(head, RENEW), column(head, RENEW_LAST)
     out, total, last = [], 0, 0
     for line in lines[1:]:
-        value = int(line.split()[col], 16) & 0xFF
-        total += value - last if value >= last else value
+        words = line.split()
+        value = int(words[col], 16) & 0xFF
+        total += value - last if value >= last else int(words[kept], 16) - last + value
         last = value
         out.append(total)
     return out

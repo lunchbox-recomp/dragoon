@@ -70,8 +70,9 @@ def queue_row(write: int, word: int, triggers: int = 0, renew: int = 0) -> dict:
 
 class AddressTest(unittest.TestCase):
     def test_the_words_come_from_kar_ram_json(self):
-        self.assertEqual((dtm.SCENE_WORD, dtm.PAD_STATE, dtm.QUEUE, dtm.QUEUE_ENTRY, dtm.RENEW),
-                         (0x805361AC, 0x8058B080, 0x80535300, 0x34, 0x805DE2CC))
+        self.assertEqual((dtm.SCENE_WORD, dtm.PAD_STATE, dtm.QUEUE, dtm.QUEUE_ENTRY, dtm.RENEW,
+                          dtm.RENEW_LAST),
+                         (0x805361AC, 0x8058B080, 0x80535300, 0x34, 0x805DE2CC, 0x80589C70))
         self.assertEqual(dtm.QUEUE_LENGTH, 5)
         self.assertEqual(dtm.TRIGGER_WORDS[1], 0x80535338)
 
@@ -210,10 +211,14 @@ class PollMappingTest(unittest.TestCase):
                 self.assertLessEqual(max(state["TriggerL"], state["TriggerR"]), 30)
 
     def test_game_frames_add_up_renew_across_its_resets(self):
-        # Field 4 resets the count and shows a frame, field 5 another.
-        lines = ["frame 805DE2CC", "1 00000000", "2 00000001", "3 00000003", "4 00000001",
-                 "5 00000002"]
-        self.assertEqual(dtm.game_frames(lines), [0, 1, 3, 4, 5])
+        # Field 4 shows a frame, resets the count at 4 and shows another; field 5 one more.
+        lines = ["frame 805DE2CC 80589C70", "1 00000000 00000000", "2 00000001 00000000",
+                 "3 00000003 00000000", "4 00000001 00000004", "5 00000002 00000004"]
+        self.assertEqual(dtm.game_frames(lines), [0, 1, 3, 5, 6])
+
+    def test_game_frames_need_the_count_a_reset_keeps(self):
+        with self.assertRaisesRegex(dtm.Bad, "doesn't watch 80589C70"):
+            dtm.game_frames(["frame 805DE2CC", "1 00000000"])
 
     def test_latest_is_the_entry_before_the_write_place(self):
         state = 0x05020300  # length 5, read place 2, write place 3, none waiting
@@ -282,7 +287,8 @@ class ConvergeTest(unittest.TestCase):
         def run(movie: Path, out: Path) -> int:
             self.played.append(movie.name)
             out.mkdir()
-            rows = [{dtm.RENEW: max(0, n - slow(len(self.played)))} for n in range(1, 301)]
+            shown = [max(0, n - slow(len(self.played))) for n in range(1, 301)]
+            rows = [{dtm.RENEW: f % 60, dtm.RENEW_LAST: 60 if f >= 60 else 0} for f in shown]
             (out / "ram.txt").write_text("\n".join(ram(rows)) + "\n")
             return 0
         return run
@@ -333,8 +339,9 @@ class RoundTripTest(unittest.TestCase):
 
     def test_steps_prints_each_scene_change_with_its_field_and_frame(self):
         ram_txt = temp_dir(self) / "ram.txt"
-        ram_txt.write_text("frame 805361AC 805DE2CC\n1 00000000 00000000\n2 12000000 00000001\n"
-                           "3 12000000 00000002\n4 05000013 00000003\n")
+        ram_txt.write_text("frame 805361AC 805DE2CC 80589C70\n1 00000000 00000000 00000000\n"
+                           "2 12000000 00000001 00000000\n3 12000000 00000002 00000000\n"
+                           "4 05000013 00000003 00000000\n")
         code, out, err = run_main(dtm.main, "steps", str(ram_txt), "--at", "2", "--at", "9")
         self.assertEqual(code, 0)
         self.assertEqual(out.splitlines(), [

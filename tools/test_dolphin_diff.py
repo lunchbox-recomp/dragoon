@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import dolphin_diff
 import dolphin_ref
@@ -14,15 +15,25 @@ from testutil import run_main, temp_dir, write_file
 
 SCENE = "805361AC"
 RENEW = "805DE2CC"
+RENEW_LAST = "80589C70"
 NEXT = "8056E4C0"
-HEAD = [SCENE, RENEW, NEXT]
+HEAD = [SCENE, RENEW, RENEW_LAST, NEXT]
 A, B = 0x806783C0, 0x8070E3C0  # the game's two XFBs
 
 
 def ram(rows: list[tuple[int, int, int]]) -> list[str]:
-    """A ram.txt watching the scene word, the renew count and vi.next_buffer, a field a row."""
-    return ["frame " + " ".join(HEAD)] + [
-        f"{n} " + " ".join(f"{v:08X}" for v in row) for n, row in enumerate(rows, 1)]
+    """A ram.txt watching the scene word, the renew counts and vi.next_buffer, a field a row,
+    each row (scene, renew, next). The count a reset keeps is the renew count the row before,
+    so a reset field adds only the frames shown after it."""
+    out, kept = ["frame " + " ".join(HEAD)], 0
+    for n, (scene, renew, nxt) in enumerate(rows, 1):
+        out.append(f"{n} " + " ".join(f"{v:08X}" for v in (scene, renew, kept, nxt)))
+        kept = renew
+    return out
+
+
+def boot_at(frame: int):
+    return mock.patch.object(dolphin_diff, "BOOT", frame)
 
 
 def flat(w: int, h: int, colour: tuple[int, int, int]) -> Image:
@@ -52,17 +63,37 @@ class TimelineTest(unittest.TestCase):
 
     def test_checkpoints_are_the_goldens_and_each_scene_start_and_settle(self):
         route = Route("r", 30, 60, [7], [])
-        lines = ram(self.ROWS)
-        got = dolphin_diff.checkpoints(route, lines)
+        with boot_at(0):
+            got = dolphin_diff.checkpoints(route, ram(self.ROWS))
         self.assertEqual([c.frame for c in got], [0, 2, 4, 7, 10, 12, 14])
         self.assertEqual(got[1].why, "scene 2/0 starts")
         self.assertEqual(got[4].why, "scene 18/38, 10 frames in")
         self.assertEqual(got[3].why, "golden 7")
+        self.assertEqual([c.refuse for c in got], [""] * 7)
+
+    def test_checkpoints_before_boot_are_one_at_boot(self):
+        with boot_at(11):
+            got = dolphin_diff.checkpoints(Route("r", 30, 60, [7], []), ram(self.ROWS))
+        self.assertEqual([(c.frame, c.why) for c in got],
+                         [(7, "golden 7"), (11, "the blank card's prompt"),
+                          (12, "scene 2/0, 10 frames in"), (14, "scene 3/2, 10 frames in")])
 
     def test_a_scene_word_change_that_keeps_the_scene_is_no_checkpoint(self):
         rows = [(0x02000000, 0, A), (0x02000000, 1, B), (0x02010000, 2, A), (0x03000002, 3, B)]
-        got = dolphin_diff.checkpoints(Route("r", 30, 60, [3], []), ram(rows))
+        with boot_at(0):
+            got = dolphin_diff.checkpoints(Route("r", 30, 60, [3], []), ram(rows))
         self.assertEqual([c.frame for c in got], [0, 3, 10, 13])
+
+    def test_a_checkpoint_deep_in_a_race_is_refused(self):
+        # Top Ride's race starts at frame 1; its start and settled checkpoints are compared.
+        rows = [(0x05000018, 0, A), (0x05000013, 1, B), (0x05000013, 2, A), (0x05000013, 3, B)]
+        with boot_at(0):
+            got = dolphin_diff.checkpoints(Route("r", 30, 60, [12, 13], []), ram(rows))
+        self.assertEqual([(c.frame, bool(c.refuse)) for c in got],
+                         [(0, False), (1, False), (10, False), (11, False), (12, True),
+                          (13, True)])
+        self.assertEqual(got[4].refuse, "11 frames into Top Ride's race, where a game frame "
+                                        "isn't matched until the race timer is")
 
 
 class PictureMatchTest(unittest.TestCase):
@@ -101,6 +132,7 @@ class PictureMatchTest(unittest.TestCase):
         self.assertEqual(dolphin_diff.pick({1: 0.0, 2: 0.0}, same, 1), (1, "still"))
         self.assertEqual(dolphin_diff.pick({1: 1.0, 3: 1.3}, same, 1), (1, "sure"))
         self.assertEqual(dolphin_diff.pick({1: 1.0, 3: 1.2}, same, 1), (1, "unsure"))
+        self.assertEqual(dolphin_diff.pick({1: 0.8, 3: 1.0}, same, 1), (1, "unsure"))  # at MARGIN
         self.assertEqual(dolphin_diff.pick({1: 1.0, 2: 0.0, 3: 0.5}, same, 3), (2, "sure"))
 
     def test_a_frame_dolphin_never_showed_is_refused(self):
@@ -150,7 +182,7 @@ class ScoreTest(unittest.TestCase):
 
 
 class ThresholdTest(unittest.TestCase):
-    def test_the_tolerance_is_the_repeat_error_and_one_six_bit_step(self):
+    def test_the_tolerance_is_the_repeat_error_and_a_rounding_step(self):
         self.assertEqual(dolphin_diff.threshold(0), 4)
         self.assertEqual(dolphin_diff.threshold(2), 6)
         self.assertEqual(dolphin_diff.threshold(0, step=0), 0)
@@ -161,12 +193,22 @@ class ThresholdTest(unittest.TestCase):
         self.assertFalse(dolphin_diff.over_budget(dolphin_diff.Score(budget, 255, 9.0)))
         self.assertTrue(dolphin_diff.over_budget(dolphin_diff.Score(budget * 1.01, 1, 0.0)))
 
-    def test_a_checkpoint_over_the_budget_goes_to_triage(self):
-        e = {"frame": 5, "share": dolphin_diff.BUDGET, "max": 9, "mean": 0.5, "over": False}
-        self.assertIn(" within ", dolphin_diff.triage_line("r", e))
+    def test_a_checkpoint_over_the_budget_or_with_its_state_off_goes_to_triage(self):
+        e = {"frame": 5, "share": dolphin_diff.BUDGET, "max": 9, "mean": 0.5, "over": False,
+             "state": "same, a frame off"}
+        self.assertEqual(dolphin_diff.triage_line("r", e),
+                         "r 5 share=0.100% max=9 mean=0.50 state=near within under the budget "
+                         "and the state matching")
         e.update(share=0.002, over=True)
         self.assertEqual(dolphin_diff.triage_line("r", e),
-                         "r 5 share=0.200% max=9 mean=0.50 unclear not triaged yet")
+                         "r 5 share=0.200% max=9 mean=0.50 state=near unclear not triaged yet")
+        e.update(share=0.0, over=False, state="differs")
+        self.assertIn(" state=differs unclear ", dolphin_diff.triage_line("r", e))
+
+    def test_a_refused_checkpoint_has_no_score(self):
+        e = {"frame": 5, "refused": "why not", "state": "not read"}
+        self.assertEqual(dolphin_diff.triage_line("r", e),
+                         "r 5 share=0% max=0 mean=0 state=none refused why not")
 
     def test_repeat_runs_of_dragoon_give_the_largest_error(self):
         a, b = temp_dir(self), temp_dir(self)
@@ -191,7 +233,7 @@ class StateTest(unittest.TestCase):
         got = dolphin_diff.state_watches(["scene.major", "scene.minor", "player1.x", "player1.y"])
         self.assertEqual(got, ["805361AC", "8055AA2C", "8055AA2C+2C", "8055AA2C+2C+300",
                                "8055AA2C+2C+304"])
-        self.assertEqual(dolphin_diff.watches()[:3], HEAD)
+        self.assertEqual(dolphin_diff.watches()[:4], HEAD)
 
     def test_values_are_read_from_the_watched_words_as_kar_ram_reads_them(self):
         row = {"805361AC": 0x05000013, "8055AA2C": 0x81000000, "8055AA2C+2C": 0x81200000,
@@ -223,6 +265,11 @@ class StateTest(unittest.TestCase):
         self.assertEqual(dolphin_diff.compare_state(want, 10, frames, rows),
                          ("differs", ["scene.major: Dragoon 5, Dolphin 4"]))
 
+    def test_what_differs_is_listed_from_the_first_field_at_the_frame(self):
+        frames, rows = self.frames_rows([(10, 0x04000000), (10, 0x03000000)])
+        self.assertEqual(dolphin_diff.compare_state({"scene.major": "5"}, 10, frames, rows),
+                         ("differs", ["scene.major: Dragoon 5, Dolphin 4"]))
+
     def test_a_frame_dolphin_never_reached_differs(self):
         frames, rows = self.frames_rows([(1, 0), (2, 0)])
         self.assertEqual(dolphin_diff.compare_state({"scene.major": "0"}, 9, frames, rows),
@@ -230,42 +277,63 @@ class StateTest(unittest.TestCase):
 
 
 class TriageTest(unittest.TestCase):
-    TEXT = ("# a comment\n\n"
-            "top-ride-grass 304 share=1.250% max=255 mean=2.10 bug the logo has no glow\n"
-            "top-ride-grass 0 share=0% max=0 mean=0 refused Dolphin's run never shows game frame 0\n")
+    TEXT = ("# a comment\n\ntolerance=4 budget=0.1%\n"
+            "top-ride-grass 304 share=1.250% max=255 mean=2.10 state=same bug no glow\n"
+            "top-ride-grass 60 share=0% max=0 mean=0 state=none refused no picture yet\n")
 
     def test_lines_read_back(self):
         got = dolphin_diff.parse_triage(self.TEXT)
-        t = got[0]
-        self.assertEqual((t.route, t.frame, t.max, t.cls, t.reason),
-                         ("top-ride-grass", 304, 255, "bug", "the logo has no glow"))
+        self.assertEqual((got.tolerance, got.budget), (4, 0.001))
+        t = got.lines[0]
+        self.assertEqual((t.route, t.frame, t.max, t.state, t.cls, t.reason),
+                         ("top-ride-grass", 304, 255, "same", "bug", "no glow"))
         self.assertAlmostEqual(t.share, 0.0125)
         self.assertAlmostEqual(t.mean, 2.1)
-        self.assertEqual([t.cls for t in got], ["bug", "refused"])
+        self.assertEqual([t.cls for t in got.lines], ["bug", "refused"])
 
-    def test_a_draft_line_parses(self):
-        line = dolphin_diff.triage_line("r", {"frame": 5, "share": 0.5, "max": 9, "mean": 0.5,
-                                              "over": True})
-        self.assertEqual(dolphin_diff.parse_triage(line)[0].share, 0.5)
+    def test_a_draft_parses(self):
+        e = {"frame": 5, "share": 0.5, "max": 9, "mean": 0.5, "over": True, "state": "same"}
+        text = dolphin_diff.triage_head() + "\n" + dolphin_diff.triage_line("r", e)
+        got = dolphin_diff.parse_triage(text)
+        self.assertEqual((got.tolerance, got.budget), (dolphin_diff.TOLERANCE, dolphin_diff.BUDGET))
+        self.assertEqual(got.lines[0].share, 0.5)
 
     def test_bad_lines_are_refused(self):
-        for text, why in (("r 1 share=1% max=2 mean=0 nope why\n", "isn't one of"),
-                          ("r 1 share=1% max=2 mean=0 bug\n", "not 'ROUTE"),
-                          ("r x share=1% max=2 mean=0 bug why\n", "not 'ROUTE"),
-                          ("r 1 share=1% max=2 mean=0 bug a\nr 1 share=1% max=2 mean=0 bug b\n",
-                           "triaged twice")):
+        head = "tolerance=4 budget=0.1%\n"
+        for text, why in ((head + "r 1 share=1% max=2 mean=0 state=same nope why\n",
+                           "class 'nope' isn't one of"),
+                          (head + "r 1 share=1% max=2 mean=0 state=odd bug why\n",
+                           "state 'odd' isn't one of"),
+                          (head + "r 1 share=1% max=2 mean=0 state=same bug\n", "not 'ROUTE"),
+                          (head + "r 1 share=1% max=2 mean=0 bug why\n", "not 'ROUTE"),
+                          (head + "r x share=1% max=2 mean=0 state=same bug why\n", "not 'ROUTE"),
+                          (head + "r 1 share=1% max=2 mean=0 state=same bug a\n"
+                                  "r 1 share=1% max=2 mean=0 state=same bug b\n", "triaged twice"),
+                          ("r 1 share=1% max=2 mean=0 state=same bug why\n", "comes first"),
+                          ("# nothing\n", "no 'tolerance=")):
             with self.subTest(text=text), self.assertRaisesRegex(ValueError, why):
                 dolphin_diff.parse_triage(text)
 
     def test_the_command_checks_a_file(self):
         path = write_file(temp_dir(self), "t.txt", self.TEXT)
         self.assertEqual(run_main(dolphin_diff.main, "triage", str(path))[:2],
-                         (0, f"{path}: 2 checkpoints triaged\n"))
+                         (0, f"{path}: 2 checkpoints triaged at tolerance=4 budget=0.1%\n"))
         write_file(path.parent, "t.txt", "junk\n")
         self.assertEqual(run_main(dolphin_diff.main, "triage", str(path))[0], 2)
 
-    def test_the_committed_file_parses(self):
-        self.assertTrue(dolphin_diff.parse_triage(dolphin_diff.TRIAGE.read_text()))
+    def test_the_committed_file_parses_at_the_tool_s_tolerance_and_budget(self):
+        got = dolphin_diff.parse_triage(dolphin_diff.TRIAGE.read_text())
+        self.assertEqual((got.tolerance, got.budget), (dolphin_diff.TOLERANCE, dolphin_diff.BUDGET))
+        self.assertTrue(got.lines)
+
+
+class PadsTest(unittest.TestCase):
+    def test_a_route_with_more_pads_is_refused(self):
+        route = Route("two", 30, 60, [100], ["--pads=2"])
+        with mock.patch.object(dolphin_diff, "select_routes", return_value=[route]):
+            code, _, err = run_main(dolphin_diff.main, "compare", "two")
+        self.assertEqual(code, 2)
+        self.assertIn("two: plays 2 pads, and both sides here play port 1 only", err)
 
 
 class KeeperTest(unittest.TestCase):
