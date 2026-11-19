@@ -156,14 +156,18 @@ def keep_frames(ctx: Context, run_dir: Path, route: Route, aspect: str, frames: 
     return kept
 
 
-def known(check: Check, first: Optional[int], issues: dict[str, known_issues.Issue]) -> Check:
-    """CHECK marked as its known issue when it passes, or fails first at the issue's checkpoint
-    (FIRST). One that fails anywhere else stays a failure like any other."""
+def known(check: Check, golden: dict, states: dict, bad: Optional[str],
+          issues: dict[str, known_issues.Issue]) -> Check:
+    """CHECK, a state check, marked as its known issue when it passes, or when the run ended as it
+    should and STATES match GOLDEN with the issue's values put in. Any other failure, a changed
+    value or another field at the issue's checkpoint too, stays a failure like any other."""
     issue = issues.get(check.id)
-    if issue is not None and (check.status == PASS or first == issue.checkpoint):
+    if issue is None:
+        return check
+    if check.status == PASS or (bad is None and not state_goldens.compare(issue.golden(golden), states)):
         check.known = issue.bug
-    elif issue is not None:
-        check.detail += f", where the known issue fails first at {issue.checkpoint}"
+    else:
+        check.detail += f", which isn't the known issue at {issue.checkpoint}"
     return check
 
 
@@ -205,8 +209,7 @@ def frames_route(ctx: Context, route: Route, aspect: str) -> list[Check]:
         state_check = Check(f"state {aspect} {route.name}", "frames", FAIL if problems else PASS,
                             kind="played differently", route=route.name, problems=problems,
                             detail=f"{len(states_golden)} checkpoints")
-        known(state_check, None if bad else next((f for f, _, _ in played), None), issues)
-    known(frame_check, drew[0][0] if drew else None, issues)
+        known(state_check, states_golden, states, bad, issues)
     return [frame_check, state_check]
 
 

@@ -126,27 +126,55 @@ class KnownIssueTest(unittest.TestCase):
         set_plan(tree.root, **plan)
         return tree.by_id(tree.play("frames", tree.context(routes=["title"])))
 
-    def test_failing_first_at_its_checkpoint_is_the_known_issue(self) -> None:
-        checks = self.play("state title 16:9 120 the screen is 5 at 16:9",
+    def check(self, known: str, screen_at: int = 100, screen: int = 5) -> Check:
+        """The 16:9 state check on the title route, whose screen turns SCREEN at frame SCREEN_AT."""
+        return self.play(known, events=[{"frame": screen_at, "do": [["screen", screen]]}])["state 16:9 title"]
+
+    def test_the_known_values_at_the_known_checkpoint_are_the_known_issue(self) -> None:
+        checks = self.play("state title 16:9 120 scene.minor=5 the screen is 5 at 16:9",
                            events=[{"frame": 100, "do": [["screen", 5]]}])
         self.assertEqual((checks["state 16:9 title"].status, checks["state 16:9 title"].known),
                          (FAIL, "the screen is 5 at 16:9"))
         self.assertIsNone(checks["state 4:3 title"].known)  # the other aspect fails as any check does
         self.assertEqual([c.id for c in nightly_report.failing(list(checks.values()))], ["state 4:3 title"])
 
-    def test_failing_at_another_checkpoint_is_a_failure(self) -> None:
-        checks = self.play("state title 16:9 60 it goes wrong at 60", events=[{"frame": 100, "do": [["screen", 5]]}])
-        self.assertIsNone(checks["state 16:9 title"].known)
-        self.assertIn("the known issue fails first at 60", checks["state 16:9 title"].detail)
+    def test_another_value_at_the_known_checkpoint_fails(self) -> None:
+        c = self.check("state title 16:9 120 scene.minor=5 the screen is 5", screen=6)
+        self.assertIsNone(c.known)
+        self.assertIn("which isn't the known issue at 120", c.detail)
+
+    def test_a_scene_change_in_a_field_the_issue_doesnt_name_fails(self) -> None:
+        c = self.check("state title 16:9 120 players.count=0 player1.kind=0 only the riders are off")
+        self.assertEqual((c.status, c.known, [p.where for p in c.problems]),
+                         (FAIL, None, ["frame 120 scene.minor"]))
+
+    def test_failing_first_at_an_earlier_checkpoint_fails(self) -> None:
+        c = self.check("state title 16:9 120 scene.minor=5 the screen is 5 from 120", screen_at=30)
+        self.assertEqual((c.known, [p.where for p in c.problems]),
+                         (None, ["frame 60 scene.minor", "frame 120 scene.minor"]))
+
+    def test_the_known_values_in_a_run_that_ended_early_fail(self) -> None:
+        checks = self.play("state title 16:9 120 scene.minor=5 the screen is 5",
+                           events=[{"frame": 100, "do": [["screen", 5]]}, {"frame": 150, "do": [["exit"]]}])
+        c = checks["state 16:9 title"]
+        self.assertIsNone(c.known)
+        self.assertIn("the run ended on", c.problems[-1].what)
 
     def test_one_that_passes_is_marked_so_its_line_can_go(self) -> None:
-        checks = self.play("frames title 4:3 120 a frame drew differently")
-        self.assertEqual((checks["frames 4:3 title"].status, checks["frames 4:3 title"].known),
-                         (PASS, "a frame drew differently"))
+        checks = self.play("state title 4:3 120 scene.minor=5 the screen is 5")
+        self.assertEqual((checks["state 4:3 title"].status, checks["state 4:3 title"].known),
+                         (PASS, "the screen is 5"))
+
+    def test_the_repos_known_issues_read(self) -> None:
+        issues = known_issues.read(nightly.ROOT / "tests" / "hashes")
+        c2 = issues["state 16:9 air-ride-courses-2"]
+        self.assertEqual((c2.checkpoint, len(c2.values), c2.values["player1.speed"]), (19400, 16, "26.0290222"))
 
     def test_a_bad_line_is_refused(self) -> None:
-        with self.assertRaisesRegex(ValueError, "line 1"):
-            known_issues.parse("state title 4:3 bug with no checkpoint\n")
+        for bad in ("state title 4:3 120 a bug with no values\n", "frames title 4:3 120 scene.minor=5 bug\n"):
+            with self.subTest(bad):
+                with self.assertRaisesRegex(ValueError, "line 1"):
+                    known_issues.parse(bad)
 
 
 class GoldenBuildTest(unittest.TestCase):
@@ -175,7 +203,7 @@ class GoldenBuildTest(unittest.TestCase):
         tree.play("frames", tree.context())
         self.assertFalse(self.golden(tree).exists())
         set_plan(tree.root, events=[{"frame": 100, "do": [["screen", 5]]}])
-        tree.known("state menu 4:3 120 a\nstate menu 16:9 120 b\nstate title 4:3 120 c\nstate title 16:9 120 d\n")
+        tree.known("".join(f"state {r} {a} 120 scene.minor=5 bug\n" for r in ("menu", "title") for a in ("4:3", "16:9")))
         tree.play("frames", tree.context())
         self.assertTrue((self.golden(tree) / "dragoon").is_file())
 

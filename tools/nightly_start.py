@@ -9,8 +9,9 @@
                 asleep starts when the Mac wakes, perhaps at noon, and a 3-hour run then is
                 skipped
   update        for the launchd run's own clone: a clean tree on main, fast-forwarded to
-                origin/main with its submodule, then `dragoon` and `dragoon_bench` built by
-                name with the cmake the build was configured with. Anything else refuses
+                origin/main with its submodule, whose pin must be on the fork's dragoon branch,
+                then `dragoon` and `dragoon_bench` built by name with the cmake the build
+                was configured with. Anything else refuses
 
 Each raises Refused or returns what it found. It has no command line.
 """
@@ -94,6 +95,17 @@ def cmake_command(build: Path) -> str:
     return m[1].strip()
 
 
+def pinned(engine: Path, run: Run = _run) -> None:
+    """Refuse unless ENGINE's checkout, the submodule's pin, is on the fork's dragoon branch, as
+    gates.py's pins gate holds a merge to. Main isn't protected, so this keeps a push to it from
+    building any engine commit at all at 01:30."""
+    _git(engine, run, "fetch", "--quiet", "origin", "dragoon")
+    done = run(["git", "-C", str(engine), "merge-base", "--is-ancestor", "HEAD", "origin/dragoon"])
+    if done.returncode != 0:
+        pin = _git(engine, run, "rev-parse", "HEAD")
+        raise Refused(f"gcn-recomp's pin {pin[:7]} isn't on origin/dragoon")
+
+
 def update(root: Path, run: Run = _run, say: Callable[[str], None] = print) -> str:
     """Fast-forward ROOT, a clean clone on main, to origin/main with its submodule and build the
     game. Returns the commit built."""
@@ -104,6 +116,7 @@ def update(root: Path, run: Run = _run, say: Callable[[str], None] = print) -> s
     _git(root, run, "fetch", "--quiet", "origin")
     _git(root, run, "merge", "--ff-only", "--quiet", "origin/main")
     _git(root, run, "submodule", "update", "--init", "--quiet")
+    pinned(root / "gcn-recomp", run)
     head = checked(root, run)
     build = root / "build"
     done = run([cmake_command(build), "--build", str(build), "--target", *TARGETS])

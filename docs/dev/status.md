@@ -925,8 +925,9 @@ Read `build/nightly/YYYY-MM-DD-HHMM/summary.txt` first. Its regressions section 
 that flipped since the last report, each new failure and each timed number more than 10% and
 0.25 ms slower than the last report or this file's number, with the route, the frame or field
 and the dump or log to open. "Drew differently" is a frame whose hash changed, and "played
-differently" a checkpoint whose state from guest RAM changed. The checks in
-`tests/hashes/known-issues.txt` come under Known issues and fail nothing, and a number that far
+differently" a checkpoint whose state from guest RAM changed. A state check that differs from
+its golden only by the values `tests/hashes/known-issues.txt` lists for it comes under Known
+issues and fails nothing, and a number that far
 faster than this file's comes under Improved, as a cue to measure the row again. A side-by-side
 PNG puts the golden frame on the left when `build/nightly/golden-build/` can draw it again.
 `report.json` holds every check, and the run exits 2 with the step marked skipped-battery when

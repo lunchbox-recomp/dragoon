@@ -79,17 +79,18 @@ class FakeGit:
     """A stand-in for the commands update runs, answering git's questions from what it's told."""
 
     def __init__(self, dirty: str = "", branch: str = "main", head: str = HEAD, main: str = HEAD,
-                 built: int = 0) -> None:
+                 built: int = 0, pinned: int = 0) -> None:
         self.answers = {("status", "--porcelain"): dirty, ("rev-parse", "--abbrev-ref", "HEAD"): branch,
                         ("rev-parse", "HEAD"): head, ("rev-parse", "origin/main"): main}
-        self.built = built
+        self.built, self.pinned = built, pinned
         self.ran: list[list[str]] = []
 
     def __call__(self, cmd: Sequence[str]) -> subprocess.CompletedProcess:
         cmd = list(cmd)
         self.ran.append(cmd)
         if cmd[0] == "git":
-            return subprocess.CompletedProcess(cmd, 0, self.answers.get(tuple(cmd[3:]), ""), "")
+            code = self.pinned if cmd[3] == "merge-base" else 0
+            return subprocess.CompletedProcess(cmd, code, self.answers.get(tuple(cmd[3:]), ""), "")
         return subprocess.CompletedProcess(cmd, self.built, "[1/1] Linking dragoon\n", "")
 
 
@@ -103,11 +104,20 @@ class UpdateTest(unittest.TestCase):
     def test_a_clean_clone_on_main_is_fast_forwarded_and_built_by_name(self) -> None:
         root, git = self.clone(), FakeGit()
         self.assertEqual(nightly_start.update(root, git, say=lambda text: None), HEAD)
-        self.assertEqual([c[3:] if c[0] == "git" else c for c in git.ran], [
+        engine = str(root / "gcn-recomp")
+        self.assertEqual([c[3:] if c[0] == "git" and c[2] == str(root) else c for c in git.ran], [
             ["status", "--porcelain"], ["rev-parse", "--abbrev-ref", "HEAD"], ["fetch", "--quiet", "origin"],
             ["merge", "--ff-only", "--quiet", "origin/main"], ["submodule", "update", "--init", "--quiet"],
+            ["git", "-C", engine, "fetch", "--quiet", "origin", "dragoon"],
+            ["git", "-C", engine, "merge-base", "--is-ancestor", "HEAD", "origin/dragoon"],
             ["status", "--porcelain"], ["rev-parse", "HEAD"], ["rev-parse", "origin/main"],
             ["/opt/cmake", "--build", str(root / "build"), "--target", "dragoon", "dragoon_bench"]])
+
+    def test_an_engine_pin_off_the_forks_dragoon_branch_refuses_before_the_build(self) -> None:
+        git = FakeGit(pinned=1)
+        with self.assertRaisesRegex(nightly_start.Refused, "gcn-recomp's pin 1111111 isn't on origin/dragoon"):
+            nightly_start.update(self.clone(), git, say=lambda text: None)
+        self.assertNotIn("--build", [arg for c in git.ran for arg in c])
 
     def test_changes_another_branch_or_another_commit_refuse(self) -> None:
         for git, why in ((FakeGit(dirty=" M tools/x.py"), "has changes: M tools/x.py"),
