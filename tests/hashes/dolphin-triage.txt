@@ -23,7 +23,7 @@ top-ride-grass 2609 share=0.554% max=147 mean=0.08 state=same bug the player ent
 top-ride-grass 2619 share=2.879% max=199 mean=0.35 state=same bug the player entry screen's edges and text outlines only, the pixel centre
 top-ride-grass 3235 share=2.019% max=153 mean=0.46 state=same bug the same grid and colours on both sides now the seeds are pinned; the title card's and logo's edges only, the pixel centre
 top-ride-grass 3245 share=20.273% max=201 mean=2.55 state=same bug the same grid and colours as at 3235 with the course faded in, and its fine texture detail off by the pixel centre
-top-ride-grass 3600 share=15.575% max=255 mean=2.37 state=same bug pass 367 of the race: every racer in the same place and the clock at 00:03:62 on both; edges and fine texture detail only, the pixel centre
+top-ride-grass 3600 share=15.575% max=255 mean=2.37 state=same bug pass 367 of the race, every racer where Dolphin has it in the picture, though the state compared here is only the scene and the seeds; edges and fine texture detail only, the pixel centre
 air-ride-race 60 share=2.677% max=46 mean=0.40 state=same bug the card prompt, as top-ride-grass 60
 air-ride-race 304 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 air-ride-race 314 share=3.444% max=24 mean=0.29 state=same bug the logos' edges only, as top-ride-grass 314
@@ -37,8 +37,8 @@ air-ride-race 2209 share=0.491% max=36 mean=0.07 state=same bug the title's and 
 air-ride-race 2219 share=2.736% max=189 mean=0.39 state=same bug the player entry screen's edges and text outlines only, the pixel centre
 air-ride-race 3123 share=2.674% max=69 mean=0.30 state=same bug the course title card's edges and text outlines only, the pixel centre
 air-ride-race 3133 share=4.787% max=145 mean=0.75 state=same bug edges and fine detail in the course behind the title, likely the pixel centre; every player's place and speed matches
-air-ride-race 4200 share=82.259% max=255 mean=28.41 state=differs bug pass 1079 of the race, every racer somewhere else, P1 third against Dolphin's fourth and the clock at 00:14:41 against 00:14:35; player2.speed first differs at frame 3336, pass 215, as the racers set off, and player2.x with it
-air-ride-race 6000 share=93.188% max=255 mean=37.89 state=differs bug pass 2879, the drift from 4200 grown: P1 third against Dolphin's second, its first lap 00:25:26 against 00:24:50; player2.speed first differs at frame 3336
+air-ride-race 4200 share=82.259% max=255 mean=28.41 state=differs bug pass 1079 of the race, every racer somewhere else and the match unsure; player2.x first differs at frame 3336, pass 215, by 1 ulp (c15a1723 against c15a1724) as the racers set off, after which it grows chaotically and the RNG first draws differently at pass 417. Likely Gekko's single-precision rounding, which gcn-recomp doesn't model
+air-ride-race 6000 share=93.188% max=255 mean=37.89 state=differs bug pass 2879, the drift from 4200 grown; player2.x first differs at frame 3336, pass 215, by 1 ulp, as at 4200
 city-trial 60 share=2.677% max=46 mean=0.40 state=same bug the card prompt, as top-ride-grass 60
 city-trial 304 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 city-trial 314 share=3.444% max=24 mean=0.29 state=same bug the logos' edges only, as top-ride-grass 314
@@ -50,4 +50,4 @@ city-trial 2105 share=3.166% max=199 mean=1.30 state=same timing the SAVE icon's
 city-trial 2115 share=2.655% max=189 mean=0.42 state=same bug the player entry screen's edges and text outlines only, the pixel centre
 city-trial 2734 share=1.753% max=79 mean=0.24 state=same bug the city faint behind the title card on both sides now the seeds are pinned, and the players exist on both; the card's edges only, the pixel centre
 city-trial 2744 share=5.605% max=144 mean=0.72 state=same bug every player starts in the same place on both sides now the seeds are pinned; edges only, the pixel centre
-city-trial 3300 share=29.757% max=255 mean=12.33 state=differs bug pass 568 of the city, the players somewhere else and the clock at 04:54:10 against Dolphin's 04:54:15; player1.x first differs at frame 2802, pass 70, in its last bit as Kirby drops in, and player1.y with it
+city-trial 3300 share=29.757% max=255 mean=12.33 state=differs bug pass 568 of the city, the players somewhere else and the match unsure; player1.x first differs at frame 2802, pass 70, by 1 ulp as Kirby drops in, and player1.y with it. Likely Gekko's single-precision rounding, as air-ride-race 4200

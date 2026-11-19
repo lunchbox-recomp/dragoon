@@ -1045,8 +1045,9 @@ at 60 is the same panel on both sides, its edges apart.
 #### The seed
 
 Both sides now draw the same random numbers in a diff. HSD_Rand's seed comes from the clock at
-five places, found by listing all 190 calls to OSGetTick and OSGetTime and following each result
-and every store through HSD_RandSeedPtr (805DCD38):
+five places. They were found by listing the clock reads, 154 calls to OSGetTick and OSGetTime
+and 36 to __OSGetSystemTime, and following each result and every store through HSD_RandSeedPtr
+(805DCD38):
 
 | Site | Call | Where the result goes | Pinned to |
 |---|---|---|---|
@@ -1058,8 +1059,7 @@ and every store through HSD_RandSeedPtr (805DCD38):
 
 The rest only time things or read the calendar. They're the card library's own generator and
 unlock, pad reads, HSD_Perf, alarms, DVD, SI, GX, audio, HVQM, the IP stack and the auto demo's
-calendar. The RTC
-isn't pinned. Dragoon's follows the wall clock in every session, yet its frame and state goldens
+calendar. The RTC isn't pinned. Dragoon's follows the wall clock in every session, yet its frame and state goldens
 repeat across days, so it reaches no compared state.
 
 Each site is one instruction, so each side replaces that one. Dolphin gets a `lis` in its place
@@ -1067,7 +1067,7 @@ from a game INI patch, `user/GameSettings/GKYE01.ini`, which `dolphin_ref.py` wr
 config (`SEED_PINS`). Dolphin applies an enabled `[OnFrame]` patch after the DOL loads and again
 every field, cheats setting or not. Dragoon's `recomp/patches.txt` has the same five sites call
 `dragoon_seed_pinned()` (`src/seed_pin.cpp`), which loads the same register with the same value
-when `DRAGOON_SEED_PIN` is set and not 0, and otherwise makes the original call, returning to
+when `DRAGOON_SEED_PIN` is 1, and otherwise makes the original call, returning to
 the next instruction. Only `dolphin_diff.py` sets it, and a test fails if another tool does.
 Without it `frame_hashes.py check` and `state_goldens.py check` matched on all 25 routes, four
 of them at `--slow=2` or `--slow=3` after running out of seconds with no frame changed.
@@ -1091,17 +1091,20 @@ It advances the same way on both sides. With the seeds pinned, `ram_peek.py` rea
 Dragoon frame and Dolphin's memory watcher on every field. At the same pass Dolphin's game frame
 is Dragoon's plus 1 at all 467 of Top Ride's passes. It's the same at 4869 of the 4875 passes
 both sides share of an Air Ride race on `air-ride-race`'s route, run to 16500 fields. City Trial
-has 766 of 767. The rest are at a scene's edges. The RNG seed matches at the same pass or the
-one either side until the two first draw differently. Top Ride's session seed matches to pass
-422, Air Ride's 805DCD30 to pass 416 and City Trial's to pass 360. Top Ride draws 9 times at
-pass 423 in Dragoon and 11 in Dolphin. The HUD clock doesn't keep step with the pass. At the
-same pass Air Ride's reads 00:14:41 in Dragoon and 00:14:35 in Dolphin, and City Trial's
-04:54:10 and 04:54:15. Top Ride's reads 00:03:62 on both at pass 367.
+has 766 of 767. The rest are at a scene's edges. The plus 1 is the sampling phase, not load
+order. Dolphin reads RAM at the end of a field, partway into a pass, so which pass's values a
+field shows depends on where the field ends in the loop. The review of #118 measured that phase
+flip mid-race, at pass 377. That's why a race's state is compared at its pass and the one either
+side. The RNG seed matches there until the two first draw differently. Top Ride's session seed
+matches to pass 422, Air Ride's 805DCD30 to pass 416 and City Trial's to pass 360. Top Ride
+draws 9 times at pass 423 in Dragoon and 11 in Dolphin, which is probably downstream of the
+rounding below.
 
 #### The rerun
 
 All three movies were converged again in 7 runs each. `dtm.py presses` found all 11 presses on
-their route frames on each. top-ride-grass, air-ride-race and city-trial ran on AC power, one game at a
+their route frames on each. top-ride-grass, air-ride-race and city-trial ran on AC power, one
+game at a
 time, with `log stream` watching the sandbox. Every menu checkpoint scored as before. The `setup`
 and `refused` lines are gone:
 
@@ -1118,11 +1121,21 @@ and `refused` lines are gone:
 
 With the seeds pinned a state that differs is Dragoon's bug, and the triage line names the first
 value to differ and the frame. `ram_peek.py` read every compared value on each Dragoon frame
-against Dolphin's at the same pass or one either side. In Air Ride's race player2.speed and
-player2.x first differ at frame 3336, pass 215, as the racers set off. Dragoon's CPU is at half
-Dolphin's speed. In City Trial player1.x and player1.y first differ at frame 2802, pass 70, in
-their last bit, as Kirby drops into the city. Neither cause is found yet. Top Ride matches to the
-end of its checkpoints, and its session seed first differs at frame 3656, pass 423.
+against Dolphin's at the same pass or one either side, and the review of #118 checked each at
+the matching row. Everything before is bit-equal on both routes:
+
+- In Air Ride's race player2.x is 1 ulp off at frame 3336, pass 215 (c15a1723 against
+  c15a1724) as the racers set off. player2.speed is 23 ulp off with it. From there it grows
+  chaotically, and the RNG first draws differently at pass 417.
+- In City Trial player1.x and player1.y are 1 ulp off at frame 2802, pass 70, as Kirby drops
+  into the city.
+- Top Ride matches to the end of its checkpoints, though it compares only the scene and the
+  seeds there. Its session seed first differs at frame 3656, pass 423.
+
+The likely shared cause, not proven, is Gekko's single-precision arithmetic, which Dolphin
+models and gcn-recomp doesn't. Gekko rounds frC to 25 bits in fmuls, fmadds, ps_mul and
+ps_madd, and fres and frsqrte give its estimate tables' values, where gcn-recomp computes them
+exactly. The fix belongs in gcn-recomp, in a step of its own.
 
 What the triage found:
 
