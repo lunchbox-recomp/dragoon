@@ -74,6 +74,7 @@ class TimelineTest(unittest.TestCase):
         self.assertEqual(got[3].why, "golden 7")
         self.assertEqual([c.race for c in got], [""] * 7)
         self.assertEqual([c.since for c in got], [1, 4, 7, 7, 7, 7, 7])
+        self.assertEqual([c.until for c in got], [4, 7, 0, 0, 0, 0, 0])
 
     def test_checkpoints_before_boot_are_one_at_boot(self):
         with boot_at(11):
@@ -113,6 +114,15 @@ class TimelineTest(unittest.TestCase):
         self.assertEqual(dolphin_diff.scene_passes([5, 1, 2], 1), [None, 1, 2])
         self.assertEqual(dolphin_diff.scene_passes([5, 6], 1), [None, None])
         self.assertEqual(dolphin_diff.first_field(dolphin_diff.scene_passes(counts, 3), 2), 7)
+
+    def test_a_scene_s_passes_end_where_the_next_scene_starts(self):
+        # The next scene's word comes at field 6, its count holding this one's 4 and 5 until it
+        # loads, so pass 4 and 5 belong to this scene only before field 6.
+        counts = [0, 1, 2, 3, 4, 4, 5, 0, 1]
+        self.assertEqual(dolphin_diff.scene_passes(counts, 1, 6),
+                         [0, 1, 2, 3, 4, None, None, None, None])
+        self.assertIsNone(dolphin_diff.first_field(dolphin_diff.scene_passes(counts, 1, 6), 5))
+        self.assertEqual(dolphin_diff.scene_passes([5, 6, 0], 1, 3), [None, None, None])
 
     def test_passes_are_read_from_their_column(self):
         lines = ["frame 805361AC 805361C0", "1 05000013 00000272", "2 05000013 00000001"]
@@ -338,11 +348,13 @@ class RaceCompareTest(unittest.TestCase):
 
     def setUp(self):
         self.out = temp_dir(self)
-        head = ["805361AC", "805DE2CC", "80589C70", "8056E4C0", "805361C0"]
+        head = ["805361AC", "805DE2CC", "80589C70", "8056E4C0", "805361C0", "805DCD30"]
         lines = ["frame " + " ".join(head)]
         for n in range(1, 31):
             count = 50 if n == 1 else n - 2
-            lines.append(f"{n} 05000013 {n:08X} 00000000 {(A, B)[n % 2]:08X} {count:08X}")
+            # rand.seed is the field number, so a state matches at one field only.
+            lines.append(f"{n} 05000013 {n:08X} 00000000 {(A, B)[n % 2]:08X} {count:08X} "
+                         f"{n:08X}")
         dolphin = self.out / "dolphin"
         (dolphin / "frames").mkdir(parents=True)
         write_file(dolphin, "ram.txt", "\n".join(lines) + "\n")
@@ -357,9 +369,9 @@ class RaceCompareTest(unittest.TestCase):
             png(self.out / "dragoon", f"frame_{frame:05d}.png", flat(4, 4, (grey, 0, 0)))
 
     def compare(self, read_20_at=20):
-        states = {"1": [1, {"scene.major": "5", "scene.passes": "50"}],
-                  "11": [11, {"scene.major": "5", "scene.passes": "8"}],
-                  "20": [read_20_at, {"scene.major": "5", "scene.passes": "6"}]}
+        states = {"1": [1, {"scene.major": "5", "scene.passes": "50", "rand.seed": "1"}],
+                  "11": [11, {"scene.major": "5", "scene.passes": "8", "rand.seed": "11"}],
+                  "20": [read_20_at, {"scene.major": "5", "scene.passes": "6", "rand.seed": "8"}]}
         write_file(self.out / "dragoon", "state.json",
                    dolphin_diff.json.dumps({"end": "exit_after", "detail": "", "states": states}))
         with boot_at(0):
@@ -372,6 +384,7 @@ class RaceCompareTest(unittest.TestCase):
         self.assertEqual((got[20]["dump"], got[20]["share"], got[20]["state"]), (8, 0.0, "same"))
         self.assertNotIn("pass", got[11])
         self.assertEqual(got[11]["field"], 11)  # by its game frame, as before
+        self.assertEqual((got[1]["state"], got[11]["state"]), ("same", "same"))
         self.assertIn("frame 20 (golden 20, pass 6):", dolphin_diff.summary(
             {"route": "r", "disc": "console", "tolerance": 4, "budget": 0.001,
              "dragoon_end": "exit_after", "checkpoints": list(got.values())}))
@@ -442,6 +455,8 @@ class TriageTest(unittest.TestCase):
                                   "r 1 share=1% max=2 mean=0 state=same bug b\n", "triaged twice"),
                           (head + "r 1 share=1% max=2 mean=0 state=differs bug it moves\n",
                            "says 'FIELD first differs at frame N'"),
+                          (head + "r 1 share=1% max=2 mean=0 state=same bug lap first differs at "
+                                  "frame 9\n", "with FIELD one of FIELDS"),
                           (head + "r 1 share=1% max=2 mean=0 state=differs bug lap first differs "
                                   "at frame 9\n", "with FIELD one of FIELDS"),
                           ("r 1 share=1% max=2 mean=0 state=same bug why\n", "comes first"),

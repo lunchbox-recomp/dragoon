@@ -36,10 +36,11 @@ settled one is matched by PASSES instead, the main loop's passes since the scene
 Dragoon reads at its frame. Its picture is the one up at the first field of the race whose
 passes are that, and its state is compared at the fields of that pass and the one either side.
 A scene's passes start at the first field from the scene's on with a count of 0 or 1
-(scene_passes), since the field or two before still hold the last scene's. Over Top Ride's race
-on top-ride-grass both sides hold the same RNG seeds at the same pass for as long as they draw
-alike, and Dolphin's game frame at each pass is Dragoon's frame plus 1. City Trial's city counts
-as a race.
+(scene_passes), since the field or two before still hold the last scene's, and end where the
+next scene's word starts. Over Top Ride's race on top-ride-grass both sides hold the same RNG
+seeds at the same pass for as long as they draw alike, and Dolphin's game frame at each pass is
+Dragoon's frame plus 1. That's the sampling phase: Dolphin reads RAM at the end of a field,
+partway into a pass, and the phase can flip within a race. City Trial's city counts as a race.
 
 A Dolphin dump has no frame number: it writes one PNG for each new picture its VI shows.
 vi.next_buffer changes once for each picture the game puts up, so the pictures by a field are its
@@ -101,7 +102,8 @@ near (a frame off), differs or none (not compared). CLASS is one of CLASSES:
   refused  no match, the reason saying why
 A bug whose state differs says which value differs first and the first Dragoon frame it does,
 as "FIELD first differs at frame N" with FIELD one of FIELDS, since with the seeds pinned a
-state that differs is Dragoon's to explain. # lines and blank lines are comments. parse_triage
+state that differs is Dragoon's to explain. Any line naming a FIELD that way names one of
+FIELDS. # lines and blank lines are comments. parse_triage
 reads it.
 
 repeat compares two dolphin/ folders by their dumps' sha256 or two dragoon/ folders frame by
@@ -188,6 +190,7 @@ class Checkpoint:
     why: str
     race: str = ""  # the race it's in past its settled frame, where PASSES matches it
     since: int = 0  # the Dolphin field its scene started at, from 1
+    until: int = 0  # the Dolphin field the next scene starts at, 0 when none does
 
 
 @dataclass
@@ -297,7 +300,7 @@ def state_of(words: dict[str, int], fields: Sequence[str] = FIELDS) -> dict[str,
 def checkpoints(route: Route, lines: Sequence[str]) -> list[Checkpoint]:
     """ROUTE's required frames, and each scene's first frame in Dolphin's run and SETTLE after,
     none before BOOT. One in a race past its settled one is matched by the race's passes, and
-    each keeps the Dolphin field its scene started at."""
+    each keeps the Dolphin fields its scene started at and the next one starts at."""
     out = {f: f"golden {f}" for f in route.required}
     scenes: list[tuple[int, tuple[int, int], int]] = []
     for field, frame, major, minor in dtm.scene_steps(lines):
@@ -312,12 +315,14 @@ def checkpoints(route: Route, lines: Sequence[str]) -> list[Checkpoint]:
             out.setdefault(f, why)
     found = []
     for f, why in sorted(out.items()):
-        start, scene, since = 0, None, 0
+        start, scene, since, until = 0, None, 0, 0
         for s, k, field in scenes:
             if s <= f:
-                start, scene, since = s, k, field
+                start, scene, since, until = s, k, field, 0
+            elif not until:
+                until = field
         race = RACES[scene] if scene in RACES and f > start + SETTLE else ""
-        found.append(Checkpoint(f, why, race, since))
+        found.append(Checkpoint(f, why, race, since, until))
     return found
 
 
@@ -327,14 +332,14 @@ def passes(lines: Sequence[str]) -> list[int]:
     return [int(line.split()[col], 16) for line in lines[1:]]
 
 
-def scene_passes(counts: Sequence[int], since: int) -> list[Optional[int]]:
-    """COUNTS for the scene that started at field SINCE, None before its passes do. The main loop
-    sets the count back to 0 as a scene loads, a few fields after the scene word changes, and
-    raises it from there, so they start at the first field from SINCE on whose count is 0 or 1.
-    All None when none is."""
-    begin = next((n for n in range(max(since, 1), len(counts) + 1) if counts[n - 1] <= 1),
-                 len(counts) + 1)
-    return [c if n >= begin else None for n, c in enumerate(counts, 1)]
+def scene_passes(counts: Sequence[int], since: int, until: int = 0) -> list[Optional[int]]:
+    """COUNTS for the scene that started at field SINCE and ended where the next started, at
+    UNTIL (0 when it didn't), None outside its passes. The main loop sets the count back to 0 as a
+    scene loads, a few fields after the scene word changes, and raises it from there, so they
+    start at the first field from SINCE on whose count is 0 or 1. All None when none is."""
+    end = until if until else len(counts) + 1
+    begin = next((n for n in range(max(since, 1), end) if counts[n - 1] <= 1), end)
+    return [c if begin <= n < end else None for n, c in enumerate(counts, 1)]
 
 
 def pictures(lines: Sequence[str]) -> list[int]:
@@ -541,7 +546,8 @@ def compare(route: Route, out: Path) -> dict:
                 report.append(entry)
                 continue
             at = int(state[PASSES])
-            keys, what, label = scene_passes(counts, c.since), f"pass {at} of {c.race}", "pass"
+            keys = scene_passes(counts, c.since, c.until)
+            what, label = f"pass {at} of {c.race}", "pass"
             entry["pass"] = at
         found, refused = compare_picture(c.frame, first_field(keys, at), what, shown, dumps,
                                          dragoon)
@@ -660,8 +666,9 @@ def parse_triage(text: str, where: str = "triage") -> TriageFile:
                              f"{', '.join(STATES.values())}")
         if m[7] not in CLASSES:
             raise ValueError(f"{where}: line {n}: class {m[7]!r} isn't one of {', '.join(CLASSES)}")
-        if m[6] == STATES["differs"] and m[7] == "bug" and not any(
-                d[1] in FIELDS for d in DIFFERS_AT.finditer(m[8])):
+        named = [d[1] for d in DIFFERS_AT.finditer(m[8])]
+        if (m[6] == STATES["differs"] and m[7] == "bug" and not named) or any(
+                f not in FIELDS for f in named):
             raise ValueError(f"{where}: line {n}: a bug whose state differs says 'FIELD first "
                              f"differs at frame N' with FIELD one of FIELDS: {line!r}")
         key = (m[1], int(m[2]))
