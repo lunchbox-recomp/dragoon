@@ -26,9 +26,9 @@ also refuses a build that BUILT doesn't say came from that commit.
 
 cmake and ninja run under `sandbox-exec` with build_profile, and Dolphin with run_profile. Both
 deny all network, so a DNS lookup fails too, and every file write outside ROOT, the per-user
-temp and cache folders under /private/var/folders and /dev/null. Compilers write their temp
-files there and Metal its shader cache. Dolphin's profile allows one more thing, sending to a
-Unix socket inside ROOT/user, which is the memory watcher's.
+temp and cache folders under /private/var/folders, where TMPDIR points, and /dev/null.
+Dolphin's profile allows one more thing, sending to a Unix socket inside ROOT/user, which is
+the memory watcher's.
 
 boot counts frames by Dolphin's memory watcher, which sends one datagram over that socket at
 the end of every video field. Each datagram lists the watched words that changed, so --watch
@@ -114,8 +114,7 @@ SYS_LINK = Path("Binaries") / "Contents" / "Resources" / "Sys"
 BUILT = "dolphin-ref-built.json"
 
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
-# The per-user temp and cache folders. Compilers write their temp files here and Metal its
-# shader cache.
+# The per-user temp and cache folders, where TMPDIR points.
 SCRATCH = "/private/var/folders"
 CAFFEINATE = ("/usr/bin/caffeinate", "-i")
 NICE = ("/usr/bin/nice", "-n", "19")
