@@ -105,3 +105,57 @@ def select_routes(names: list[str], manifest: Path = MANIFEST) -> list[Route]:
 
 def route_file(name: str) -> Path:
     return ROUTES / f"{name}.txt"
+
+
+# A route file's presses, as gcn-recomp's runtime/input_script.cpp reads them.
+BUTTONS = ("A", "B", "X", "Y", "Z", "L", "R", "START", "UP", "DOWN", "LEFT", "RIGHT")
+STICKS = {"SL": (0, -1), "SR": (0, 1), "SU": (1, 1), "SD": (1, -1)}  # axis (x 0, y 1), sign
+PORTS = 4
+FULL_PUSH = 100  # SL, SR, SU and SD with no amount
+
+
+@dataclass(frozen=True)
+class Press:
+    """One item of a route: BUTTONS down and the main stick pushed STICK (x, y, -100 to 100, 0
+    for an axis it leaves alone, as the engine's `if (s.sx)` does) on PORT (0 is port 1) for the
+    game's frames AT to AT + DURATION - 1."""
+    port: int
+    at: int
+    duration: int
+    buttons: frozenset
+    stick: tuple = (0, 0)
+
+
+def route_script(text: str) -> str:
+    """A route file's script: every line that isn't a # comment, joined."""
+    return "".join(line.strip() for line in text.splitlines()
+                   if line.strip() and not line.strip().startswith("#"))
+
+
+def parse_route(script: str) -> list[Press]:
+    """SCRIPT's presses, `[port/]frame:BUTTON[+BUTTON]:duration` each, comma-separated. Raises
+    ValueError for an item the engine would skip or misread, where the engine goes on without
+    it, since a press left out sends a route somewhere else."""
+    presses = []
+    for item in filter(None, (part.strip() for part in script.split(","))):
+        port, _, rest = item.rpartition("/")
+        fields = rest.split(":")
+        bad = ValueError(f"{item!r}: not [port/]frame:BUTTON[+BUTTON]:duration")
+        if len(fields) != 3 or not all(FRAME.fullmatch(f) or f == "0" for f in
+                                       (fields[0], fields[2], port or "1")):
+            raise bad
+        chan, at, duration = int(port or "1") - 1, int(fields[0]), int(fields[2])
+        if not 0 <= chan < PORTS or duration < 1:
+            raise bad
+        buttons, stick = set(), [0, 0]
+        for name in fields[1].split("+"):
+            amount = name[2:]
+            if name in BUTTONS:
+                buttons.add(name)
+            elif name[:2] in STICKS and (not amount or amount == "0" or FRAME.fullmatch(amount)):
+                axis, sign = STICKS[name[:2]]
+                stick[axis] = sign * (int(amount) if amount else FULL_PUSH)
+            else:
+                raise ValueError(f"{item!r}: no button {name}")
+        presses.append(Press(chan, at, duration, frozenset(buttons), (stick[0], stick[1])))
+    return presses

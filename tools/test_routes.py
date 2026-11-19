@@ -157,5 +157,30 @@ class RouteFileTest(unittest.TestCase):
         self.assertEqual(routes.route_file("title"), routes.ROOT / "tests" / "routes" / "title.txt")
 
 
+class RouteScriptTest(unittest.TestCase):
+    def test_an_item_gives_its_port_frame_duration_buttons_and_stick(self):
+        self.assertEqual(routes.parse_route("120:A:5, 2/900:START+SL+SU40:10,0:B:1"), [
+            routes.Press(0, 120, 5, frozenset({"A"})),
+            routes.Press(1, 900, 10, frozenset({"START"}), (-100, 40)),
+            routes.Press(0, 0, 1, frozenset({"B"}))])
+
+    def test_a_push_of_0_is_kept_as_0(self):
+        self.assertEqual(routes.parse_route("10:SR0:5")[0].stick, (0, 0))
+
+    def test_an_item_the_engine_would_skip_or_misread_is_refused(self):
+        for script in ("300:A", "300:Q:5", "300:A:0", "x:A:5", "5/300:A:5", "0/300:A:5",
+                       "300:SRx:5", "1:A:2:3", "-1:A:5", "300:a:5", "300:A:05"):
+            with self.subTest(script=script), self.assertRaises(ValueError):
+                routes.parse_route(script)
+
+    def test_every_route_file_reads(self):
+        for path in sorted(routes.ROUTES.glob("*.txt")):
+            with self.subTest(route=path.name):
+                self.assertTrue(routes.parse_route(routes.route_script(path.read_text())))
+
+    def test_a_route_file_drops_its_comments(self):
+        self.assertEqual(routes.route_script("# a\n120:A:5,\n# b\n300:A:5\n"), "120:A:5,300:A:5")
+
+
 if __name__ == "__main__":
     unittest.main()
