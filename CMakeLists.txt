@@ -16,6 +16,7 @@ set(DRAGOON_UNIT_SOURCES ${CMAKE_SOURCE_DIR}/src/json_read.cpp ${CMAKE_SOURCE_DI
                          ${CMAKE_SOURCE_DIR}/src/mods_page.cpp)
 set(DRAGOON_SOURCES ${CMAKE_SOURCE_DIR}/src/census.cpp ${CMAKE_SOURCE_DIR}/src/cameras.cpp
                     ${CMAKE_SOURCE_DIR}/src/draw_marks.cpp ${CMAKE_SOURCE_DIR}/src/hud_anchors.cpp
+                    ${CMAKE_SOURCE_DIR}/src/seed_pin.cpp
                     ${DRAGOON_UNIT_SOURCES} ${CMAKE_SOURCE_DIR}/src/mods_overlay.cpp)
 
 gcn_add_game(

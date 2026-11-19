@@ -1,5 +1,19 @@
 # addr  C statement replacing the original instruction at addr (one per line)
 # Hooks are declared here because the generated code is C and sees only recomp.h.
+# The test seed (src/seed_pin.cpp): five calls of OSGetTick or OSGetTime whose result seeds
+# HSD_Rand. With DRAGOON_SEED_PIN=1 each loads the constant Dolphin's game INI loads at the same
+# address with one lis (tools/dolphin_ref.py's SEED_PINS), and off it restates the call. main
+# stores this OSGetTick in HSD_RandDefaultSeed (0x805DCD30).
+80005A38 { int dragoon_seed_pinned(void); if (dragoon_seed_pinned()) c->r[3] = 0x00B90000u; else { c->lr = 0x80005A3Cu; fn_803DB530(c); } }
+# Top Ride's session keeps OSGetTime's low word at +0x1C, makes it the seed, and keeps the next
+# one's, doubled, at +0x20. fn_80286984 swaps in the first as the seed and fn_80286D7C the
+# second.
+802842D8 { int dragoon_seed_pinned(void); if (dragoon_seed_pinned()) c->r[4] = 0x40000000u; else { c->lr = 0x802842DCu; fn_803DB518(c); } }
+802842E0 { int dragoon_seed_pinned(void); if (dragoon_seed_pinned()) c->r[4] = 0x40000000u; else { c->lr = 0x802842E4u; fn_803DB518(c); } }
+# Two keep OSGetTime's low word at +0x70 of the object TopRide_GameSessionInit (0x8028C010) is
+# given, which it stores in the current seed at 0x8028C04C.
+8028B9EC { int dragoon_seed_pinned(void); if (dragoon_seed_pinned()) c->r[4] = 0x40000000u; else { c->lr = 0x8028B9F0u; fn_803DB518(c); } }
+8029CEA4 { int dragoon_seed_pinned(void); if (dragoon_seed_pinned()) c->r[4] = 0x40000000u; else { c->lr = 0x8029CEA8u; fn_803DB518(c); } }
 # HSD_CObjSetCurrent on entry, r3 the camera it makes current. The world cameras widened once
 # follow a change of output aspect (src/cameras.cpp), the HUD anchors take the camera's mark
 # (src/hud_anchors.cpp), then the camera census logs the camera

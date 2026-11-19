@@ -24,6 +24,10 @@ ROOT/build and builds TARGETS with Ninja, links the tree's Data/Sys where the bi
 and records the tree's commit and PATCH's sha256 in BUILT. boot writes CONFIG into
 ROOT/user/Config and plays ISO headless on Metal under `caffeinate -i` and `nice -n 19`, on a
 fresh console with a blank card in slot A. It reads the disc where it is and never copies it.
+boot also writes the test seed, game_ini(), as the game's INI in ROOT/user/GameSettings: a patch
+that loads SEED_PINS' constants where the game would seed its RNG from the clock, the same
+constants Dragoon loads under DRAGOON_SEED_PIN=1, so both sides draw the same random numbers.
+Dolphin is the reference for Dragoon's runs only, so every run has it.
 
 build and boot refuse a ROOT/src whose HEAD isn't PIN's commit, whose submodules at any depth
 aren't at the commits it pins, or whose `git diff` isn't PATCH byte for byte. `git status` may
@@ -228,6 +232,30 @@ CONFIG = {
     "DSUClient.ini": {"Server": {"Enabled": "False"}},
     "RetroAchievements.ini": {"Achievements": {"Enabled": "False"}},
 }
+# The test seed. The game seeds HSD_Rand from the clock at these five instructions, each a call of
+# OSGetTick or OSGetTime (docs/dev/status.md, "The seed"). The game INI GAME_INI names replaces
+# each with the lis here, which loads a constant into the register the call returned in, and
+# Dragoon's recomp/patches.txt loads the same constant there under DRAGOON_SEED_PIN=1. Dolphin
+# applies a game INI's OnFrame patches once the disc's DOL is loaded and again every field.
+SEED_PINS = {
+    0x80005A38: 0x3C6000B9,  # main's OSGetTick, HSD_RandDefaultSeed's: lis r3, 0x00B9
+    0x802842D8: 0x3C804000,  # Top Ride's session, its seed at +0x1C: lis r4, 0x4000
+    0x802842E0: 0x3C804000,  # and the one doubled at +0x20
+    0x8028B9EC: 0x3C804000,  # +0x70 of the object TopRide_GameSessionInit seeds from
+    0x8029CEA4: 0x3C804000,  # the same field, from fn_8029C650
+}
+SEED_PATCH = "Dragoon test seed"
+GAME_INI = Path("GameSettings") / "GKYE01.ini"
+
+
+def game_ini(pins: dict = SEED_PINS) -> str:
+    """The game INI that turns on SEED_PATCH, a patch writing each of PINS' words at its
+    address."""
+    words = [f"0x{address:08X}:dword:0x{word:08X}" for address, word in sorted(pins.items())]
+    return "\n".join(["[OnFrame]", f"${SEED_PATCH}", *words, "[OnFrame_Enabled]",
+                      f"${SEED_PATCH}"]) + "\n"
+
+
 DUMP_ON = ("Dolphin.Movie.DumpFrames=True",)
 # --disc: how fast Dolphin reads the disc, as Dragoon's --disc names its speeds. fast is
 # Dolphin's "Speed up disc transfer rate", which Dragoon's fast reads follow.
@@ -501,7 +529,8 @@ def build_command(root: Path, targets: Sequence[str] = TARGETS) -> list[str]:
                                            *targets])
 
 
-def write_config(user: Path, config: dict = CONFIG) -> None:
+def write_config(user: Path, config: dict = CONFIG, ini: str = game_ini()) -> None:
+    """CONFIG's files into USER/Config and INI, the test seed's, as USER's GAME_INI."""
     folder = user / "Config"
     folder.mkdir(parents=True, exist_ok=True)
     for name, sections in config.items():
@@ -510,6 +539,8 @@ def write_config(user: Path, config: dict = CONFIG) -> None:
             lines.append(f"[{section}]")
             lines.extend(f"{key} = {value}" for key, value in values.items())
         (folder / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (user / GAME_INI).parent.mkdir(parents=True, exist_ok=True)
+    (user / GAME_INI).write_text(ini, encoding="utf-8")
 
 
 def boot_command(root: Path, user: Path, iso: Path, dump: bool = False,

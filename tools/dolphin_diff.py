@@ -10,7 +10,9 @@ Usage: dolphin_diff.py run ROUTE --movie DTM [--iso ISO] [--out DIR]
 
 Both sides read the disc as a console's drive does: Dolphin plays ROUTE's converged movie (from
 dtm.py converge --disc console) through dolphin_ref.py boot with frame dumps and the memory
-watcher on, and Dragoon plays the route through state_goldens.play with --disc=console. run
+watcher on, and Dragoon plays the route through state_goldens.play with --disc=console. Both
+draw the same random numbers: dolphin_ref.py's game INI pins Dolphin's seeds, and SEED pins
+Dragoon's to the same constants (src/seed_pin.cpp). Nothing else turns SEED on. run
 does dolphin, then dragoon, then compare, one game process at a time. Everything goes in OUT,
 build/dolphin-diff/ROUTE/ by default: dolphin/ (dolphin_ref.py's ram.txt, frames.txt and
 dumps), dragoon/ (the checkpoint frames and state.json), sides/ (a side-by-side PNG a
@@ -30,8 +32,14 @@ top-ride-grass's movie converged on this count, each scene starts in Dolphin's r
 frame of where it starts in Dragoon's (1003, 1704, 2004, 2609 and 3235 against 1003, 1703, 2003,
 2608 and 3234), since the route's presses start most of them. Within a scene the two counts
 needn't keep step, and in a race the moment matters most, so a checkpoint in a race past its
-settled one is refused until race checkpoints are matched by the race timer. City Trial's city
-counts as a race.
+settled one is matched by PASSES instead, the main loop's passes since the scene started, which
+Dragoon reads at its frame. Its picture is the one up at the first field of the race whose
+passes are that, and its state is compared at the fields of that pass and the one either side.
+A scene's passes start at the first field from the scene's on with a count of 0 or 1
+(scene_passes), since the field or two before still hold the last scene's. Over Top Ride's race
+on top-ride-grass both sides hold the same RNG seeds at the same pass for as long as they draw
+alike, and Dolphin's game frame at each pass is Dragoon's frame plus 1. City Trial's city counts
+as a race.
 
 A Dolphin dump has no frame number: it writes one PNG for each new picture its VI shows.
 vi.next_buffer changes once for each picture the game puts up, so the pictures by a field are its
@@ -44,11 +52,11 @@ either side of the counted one and takes the one nearest Dragoon's frame, on a c
 over every COARSE-th pixel each way. How sure the match is goes in the report: "sure" when the
 best is clearly the nearest (its coarse error under MARGIN times the next different
 picture's), "still" when every dump in reach shows the same picture, so a frame either way
-makes no difference, and "unsure" otherwise. A checkpoint is refused when it's in a race past
-its settled one, when no field of Dolphin's run reaches its game frame, when Dolphin has put
-up no picture by then, when the dumps stop before it, when Dragoon has no frame there or when
-the two pictures aren't the same size. A route with --pads is refused whole, since the movie
-and Dragoon's bot play port 1 only.
+makes no difference, and "unsure" otherwise. A checkpoint is refused when it's in a race and
+Dragoon didn't read its pass at its frame, when no field of Dolphin's run
+reaches its game frame or its pass, when Dolphin has put up no picture by then, when the dumps
+stop before it, when Dragoon has no frame there or when the two pictures aren't the same size.
+A route with --pads is refused whole, since the movie and Dragoon's bot play port 1 only.
 
 Both sides dump the picture before any scaling to the window: Dolphin its raw XFB (GFX.ini's
 FrameDumpsResolutionType 2, InternalResolution 1) and Dragoon its EFB or XFB at --scale=1, so
@@ -67,11 +75,12 @@ there turns on STEP. A side-by-side is Dragoon on the left, Dolphin in the middl
 difference on the right: black under TOLERANCE, and over it white for a small error through
 red for a large one.
 
-The state compare reads every state_goldens.FIELDS value at each checkpoint on both sides
-through kar_ram.read, from guest RAM in Dragoon and from the watched words in Dolphin's
-ram.txt, pointers followed as kar_ram.json's paths say. Dolphin reads RAM at the end of a field,
-partway into the next frame's work, so a checkpoint's values are taken from the fields at its
-game frame and the one either side. "same" is a match at its frame, "same, a frame off" one
+The state compare reads every FIELDS value at each checkpoint on both sides, state_goldens.FIELDS
+and the RNG's seeds, rand.seed and top_ride.seed, through kar_ram.read, from guest RAM in
+Dragoon and from the watched words in Dolphin's ram.txt, pointers followed as kar_ram.json's
+paths say. Dolphin reads RAM at the end of a field, partway into the next frame's work, so a
+checkpoint's values are taken from the fields at its game frame, or its pass in a race, and the
+one either side. "same" is a match at its frame, "same, a frame off" one
 only next to it, and "differs" no match, with each value that differs listed apart from the
 picture's score for triage.
 
@@ -90,7 +99,10 @@ near (a frame off), differs or none (not compared). CLASS is one of CLASSES:
   unclear  not known yet
   within   under BUDGET with the state the same or a frame off
   refused  no match, the reason saying why
-# lines and blank lines are comments. parse_triage reads it.
+A bug whose state differs says which value differs first and the first Dragoon frame it does,
+as "FIELD first differs at frame N" with FIELD one of FIELDS, since with the seeds pinned a
+state that differs is Dragoon's to explain. # lines and blank lines are comments. parse_triage
+reads it.
 
 repeat compares two dolphin/ folders by their dumps' sha256 or two dragoon/ folders frame by
 frame, and prints the largest channel error. triage checks the file parses.
@@ -128,9 +140,11 @@ TRIAGE = ROOT / "tests" / "hashes" / "dolphin-triage.txt"
 DISC = "console"
 SETTLE = 10  # frames after a scene's first for its settled checkpoint
 BOOT = 60  # the first checkpoint: Dolphin's card prompt has its text from 58, Dragoon's from 4
-# The races, by scene.major and scene.minor. A checkpoint further in than its settled one waits
-# for the race timer. City Trial's city counts as one.
+# The races, by scene.major and scene.minor. A checkpoint further in than its settled one is
+# matched by PASSES, not by the game frame. City Trial's city counts as one.
 RACES = {(4, 18): "Air Ride's race", (5, 19): "Top Ride's race", (6, 18): "City Trial's city"}
+PASSES = "scene.passes"  # the main loop's passes since the scene started (kar_ram.json)
+SEED = "DRAGOON_SEED_PIN=1"  # Dragoon's test seed, the one dolphin_ref.py's game INI gives Dolphin
 DRIFT = 12  # the dumps either side of the counted one a match may take
 COARSE = 4  # the coarse error looks at every 4th pixel each way
 MARGIN = 0.8  # a match is sure when its coarse error is under this times the next picture's
@@ -143,7 +157,10 @@ STATES = {"same": "same", "same, a frame off": "near", "differs": "differs", "no
 TRIAGE_LINE = re.compile(r"(\S+) (\d+) share=(\d+(?:\.\d+)?)% max=(\d+) mean=(\d+(?:\.\d+)?) "
                          r"state=(\S+) (\S+) (\S.*)")
 TRIAGE_HEAD = re.compile(r"tolerance=(\d+) budget=(\d+(?:\.\d+)?)%")
-FIELDS = state_goldens.FIELDS
+DIFFERS_AT = re.compile(r"(\S+) first differs at frame \d+")
+# What the state compare reads: the goldens' values and the RNG's seeds, which change with every
+# random number the game draws, so any difference in what it did shows in them.
+FIELDS = (*state_goldens.FIELDS, "rand.seed", "top_ride.seed")
 TABLE = kar_ram.load()
 
 
@@ -169,7 +186,8 @@ class Bad(Exception):
 class Checkpoint:
     frame: int
     why: str
-    refuse: str = ""  # why the checkpoint isn't compared, when it isn't
+    race: str = ""  # the race it's in past its settled frame, where PASSES matches it
+    since: int = 0  # the Dolphin field its scene started at, from 1
 
 
 @dataclass
@@ -231,9 +249,10 @@ def state_watches(fields: Sequence[str] = FIELDS, table: dict = TABLE) -> list[s
 
 
 def watches(fields: Sequence[str] = FIELDS) -> list[str]:
-    """The scene word, the renew counts and the XFB word for the timeline, then FIELDS' words."""
+    """The scene word, the renew counts and the XFB word for the timeline, PASSES' word for the
+    races, then FIELDS' words."""
     head = [f"{dolphin_ref.word_of(n, TABLE):08X}"
-            for n in ("scene.major", "vi.renew_count", "vi.renew_last", "vi.next_buffer")]
+            for n in ("scene.major", "vi.renew_count", "vi.renew_last", "vi.next_buffer", PASSES)]
     return head + [w for w in state_watches(fields) if w not in head]
 
 
@@ -277,13 +296,14 @@ def state_of(words: dict[str, int], fields: Sequence[str] = FIELDS) -> dict[str,
 
 def checkpoints(route: Route, lines: Sequence[str]) -> list[Checkpoint]:
     """ROUTE's required frames, and each scene's first frame in Dolphin's run and SETTLE after,
-    none before BOOT. One in a race past its settled one is refused."""
+    none before BOOT. One in a race past its settled one is matched by the race's passes, and
+    each keeps the Dolphin field its scene started at."""
     out = {f: f"golden {f}" for f in route.required}
-    scenes: list[tuple[int, tuple[int, int]]] = []
-    for _, frame, major, minor in dtm.scene_steps(lines):
+    scenes: list[tuple[int, tuple[int, int], int]] = []
+    for field, frame, major, minor in dtm.scene_steps(lines):
         if scenes and (major, minor) == scenes[-1][1]:
             continue  # the scene word's middle bytes changed, not the scene
-        scenes.append((frame, (major, minor)))
+        scenes.append((frame, (major, minor), field))
         for f, why in ((frame, " starts"), (frame + SETTLE, f", {SETTLE} frames in")):
             if f < BOOT:
                 f, why = BOOT, "the blank card's prompt"
@@ -292,16 +312,29 @@ def checkpoints(route: Route, lines: Sequence[str]) -> list[Checkpoint]:
             out.setdefault(f, why)
     found = []
     for f, why in sorted(out.items()):
-        start, scene = 0, None
-        for s, k in scenes:
+        start, scene, since = 0, None, 0
+        for s, k, field in scenes:
             if s <= f:
-                start, scene = s, k
-        refuse = ""
-        if scene in RACES and f > start + SETTLE:
-            refuse = (f"{f - start} frames into {RACES[scene]}, where a game frame isn't matched "
-                      f"until the race timer is")
-        found.append(Checkpoint(f, why, refuse))
+                start, scene, since = s, k, field
+        race = RACES[scene] if scene in RACES and f > start + SETTLE else ""
+        found.append(Checkpoint(f, why, race, since))
     return found
+
+
+def passes(lines: Sequence[str]) -> list[int]:
+    """PASSES at the end of each field."""
+    col = dtm.column(lines[0].split(), dolphin_ref.word_of(PASSES, TABLE))
+    return [int(line.split()[col], 16) for line in lines[1:]]
+
+
+def scene_passes(counts: Sequence[int], since: int) -> list[Optional[int]]:
+    """COUNTS for the scene that started at field SINCE, None before its passes do. The main loop
+    sets the count back to 0 as a scene loads, a few fields after the scene word changes, and
+    raises it from there, so they start at the first field from SINCE on whose count is 0 or 1.
+    All None when none is."""
+    begin = next((n for n in range(max(since, 1), len(counts) + 1) if counts[n - 1] <= 1),
+                 len(counts) + 1)
+    return [c if n >= begin else None for n, c in enumerate(counts, 1)]
 
 
 def pictures(lines: Sequence[str]) -> list[int]:
@@ -317,8 +350,8 @@ def pictures(lines: Sequence[str]) -> list[int]:
     return out
 
 
-def first_field(frames: Sequence[int], frame: int) -> Optional[int]:
-    """The first field (from 1) whose game frame is FRAME, or None when none is."""
+def first_field(frames: Sequence[Optional[int]], frame: int) -> Optional[int]:
+    """The first field (from 1) whose game frame, or pass, is FRAME, or None when none is."""
     return next((n for n, f in enumerate(frames, 1) if f == frame), None)
 
 
@@ -372,11 +405,12 @@ def cmd_dolphin(route: Route, movie: Path, iso: Path, out: Path) -> int:
 
 
 class Keeper(state_goldens.Checkpoints):
-    """Checkpoints that also deletes each frame dump it won't need, LAG frames behind."""
+    """Checkpoints reading FIELDS and PASSES that also deletes each frame dump it won't need, LAG
+    frames behind."""
     LAG = 10
 
     def __init__(self, frames: Sequence[int], folder: Path) -> None:
-        super().__init__(frames, 1)
+        super().__init__(frames, 1, fields=(*FIELDS, PASSES), table=TABLE)
         self.keep = set(frames)
         self.folder = folder
         self.done = 0
@@ -391,7 +425,7 @@ class Keeper(state_goldens.Checkpoints):
 
 def cmd_dragoon(route: Route, out: Path) -> int:
     lines = dtm.read_lines(dolphin_dir(out) / "ram.txt")
-    frames = [c.frame for c in checkpoints(route, lines) if not c.refuse]
+    frames = [c.frame for c in checkpoints(route, lines)]
     name = f"dolphin-diff-{route.name}"
     run_dir = bot_link.run_directory(name)
     bot = Keeper(frames, run_dir)
@@ -399,7 +433,7 @@ def cmd_dragoon(route: Route, out: Path) -> int:
     print(f"{route.name}: Dragoon, {len(frames)} checkpoints to frame {max(frames)}")
     outcome, states = state_goldens.play(
         played, name, every=1, bot=bot,
-        settings=[f"--disc={DISC}", f"GCN_DUMP_RANGE={min(frames)}-{max(frames)}"])
+        settings=[f"--disc={DISC}", f"GCN_DUMP_RANGE={min(frames)}-{max(frames)}", SEED])
     try:
         if outcome.reason == bot_link.NEVER_LINKED:
             raise Bad(f"{route.name}: the game never connected: {outcome.detail}")
@@ -426,14 +460,17 @@ def cmd_dragoon(route: Route, out: Path) -> int:
 # The comparison.
 
 
-def compare_state(want: dict[str, str], read_at: int, frames: Sequence[int],
-                  rows: Sequence[dict[str, int]]) -> tuple[str, list[str]]:
-    """Dragoon's state WANT at READ_AT against Dolphin's at the fields of that game frame and the
-    one either side: ("same" | "same, a frame off" | "differs", what differs at READ_AT)."""
+def compare_state(want: dict[str, str], read_at: int, frames: Sequence[Optional[int]],
+                  rows: Sequence[dict[str, int]],
+                  what: str = "game frame") -> tuple[str, list[str]]:
+    """Dragoon's state WANT at READ_AT against Dolphin's at the fields whose FRAMES is READ_AT or
+    one either side: ("same" | "same, a frame off" | "differs", what differs at READ_AT). FRAMES
+    is each field's game frame, or for a race its pass, None where a field doesn't count, and
+    WHAT names which."""
     off = False
     first = None
     for n, frame in enumerate(frames):
-        if abs(frame - read_at) > 1:
+        if frame is None or abs(frame - read_at) > 1:
             continue
         got = state_of(rows[n], list(want))
         if frame == read_at and first is None:
@@ -445,20 +482,20 @@ def compare_state(want: dict[str, str], read_at: int, frames: Sequence[int],
     if off:
         return "same, a frame off", []
     if first is None:
-        return "differs", [f"Dolphin never reached game frame {read_at}"]
+        return "differs", [f"Dolphin never reached {what} {read_at}"]
     return "differs", [f"{k}: Dragoon {v}, Dolphin {first[k]}" for k, v in want.items()
                        if first[k] != v]
 
 
-def compare_picture(n: int, frames: Sequence[int], shown: Sequence[int], dumps: list[tuple],
-                    dragoon: dict[int, Path]):
-    """The checkpoint at game frame N's match, or a reason to refuse it."""
-    field = first_field(frames, n)
+def compare_picture(n: int, field: Optional[int], what: str, shown: Sequence[int],
+                    dumps: list[tuple], dragoon: dict[int, Path]):
+    """Dragoon's frame N against Dolphin's pictures at FIELD, the first field of WHAT, such as
+    "game frame N": its match, or a reason to refuse it."""
     if field is None:
-        return None, f"Dolphin's run never shows game frame {n}"
+        return None, f"Dolphin's run never shows {what}"
     counted = shown[field - 1]
     if not counted:
-        return None, f"Dolphin's run has put up no picture by game frame {n}"
+        return None, f"Dolphin's run has put up no picture by {what}"
     if counted > len(dumps):
         return None, f"Dolphin's dumps stop at {len(dumps)}, before picture {counted}"
     if n not in dragoon:
@@ -487,16 +524,27 @@ def compare(route: Route, out: Path) -> dict:
     ours = json.loads((dragoon_dir(out) / "state.json").read_text())
     states = {int(f): (at, s) for f, (at, s) in ours["states"].items()}
     dragoon = frame_files(dragoon_dir(out))
+    counts = passes(lines)
     sides = out / "sides"
     sides.mkdir(exist_ok=True)
     report = []
     for c in checkpoints(route, lines):
         entry: dict = {"frame": c.frame, "why": c.why}
-        if c.refuse:
-            entry.update(refused=c.refuse, state="not read", state_diff=[])
-            report.append(entry)
-            continue
-        found, refused = compare_picture(c.frame, frames, shown, dumps, dragoon)
+        read_at, state = states.get(c.frame, (None, None))
+        keys: Sequence[Optional[int]] = frames
+        at, what, label = c.frame, f"game frame {c.frame}", "game frame"
+        if c.race:
+            if read_at != c.frame or PASSES not in state:
+                why = (f"Dragoon read {c.race}'s pass at frame {read_at}, not at {c.frame}"
+                       if read_at is not None else f"Dragoon never read {c.race}'s pass")
+                entry.update(refused=why, state="not read", state_diff=[])
+                report.append(entry)
+                continue
+            at = int(state[PASSES])
+            keys, what, label = scene_passes(counts, c.since), f"pass {at} of {c.race}", "pass"
+            entry["pass"] = at
+        found, refused = compare_picture(c.frame, first_field(keys, at), what, shown, dumps,
+                                         dragoon)
         if refused:
             entry["refused"] = refused
         else:
@@ -506,12 +554,12 @@ def compare(route: Route, out: Path) -> dict:
             side.write_bytes(write_png(side_by_side(side_by_side(a, b), diff)))
             entry.update(dataclasses.asdict(match), share=s.share, max=s.max, mean=s.mean,
                          over=over_budget(s), side=str(side))
-        if c.frame in states:
-            read_at, want = states[c.frame]
-            result, what = compare_state(want, read_at, frames, rows)
-            entry.update(read_at=read_at, state=result, state_diff=what)
-        else:
+        if state is None:
             entry.update(state="not read", state_diff=["Dragoon never read this checkpoint"])
+        else:
+            want = {k: v for k, v in state.items() if k != PASSES}
+            result, diff_text = compare_state(want, at if c.race else read_at, keys, rows, label)
+            entry.update(read_at=read_at, state=result, state_diff=diff_text)
         report.append(entry)
     return {"route": route.name, "tolerance": TOLERANCE, "budget": BUDGET, "disc": DISC,
             "dragoon_end": ours["end"], "checkpoints": report}
@@ -522,7 +570,8 @@ def summary(report: dict) -> str:
              f"640x480 each, tolerance {report['tolerance']}, budget {report['budget']:.1%}",
              f"Dragoon's run ended on {report['dragoon_end']}", ""]
     for e in report["checkpoints"]:
-        head = f"frame {e['frame']} ({e['why']}):"
+        at = f", pass {e['pass']}" if "pass" in e else ""
+        head = f"frame {e['frame']} ({e['why']}{at}):"
         if "refused" in e:
             pic = f"refused, {e['refused']}"
         else:
@@ -611,6 +660,10 @@ def parse_triage(text: str, where: str = "triage") -> TriageFile:
                              f"{', '.join(STATES.values())}")
         if m[7] not in CLASSES:
             raise ValueError(f"{where}: line {n}: class {m[7]!r} isn't one of {', '.join(CLASSES)}")
+        if m[6] == STATES["differs"] and m[7] == "bug" and not any(
+                d[1] in FIELDS for d in DIFFERS_AT.finditer(m[8])):
+            raise ValueError(f"{where}: line {n}: a bug whose state differs says 'FIELD first "
+                             f"differs at frame N' with FIELD one of FIELDS: {line!r}")
         key = (m[1], int(m[2]))
         if key in seen:
             raise ValueError(f"{where}: line {n}: {m[1]} {m[2]} is triaged twice")

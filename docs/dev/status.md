@@ -1038,16 +1038,91 @@ in 7 runs, and `dtm.py presses` found all 11 presses on their route frames on ea
 top-ride-grass's scenes now start at Dolphin's frames 1003, 1704, 2004, 2609 and 3235, within a
 frame of Dragoon's.
 
-A checkpoint in a race past its first frame and 10 frames in is refused until race checkpoints
-are matched by the race timer, and City Trial's city counts as a race. That refuses
-top-ride-grass 3600, air-ride-race 4200 and 6000 and city-trial 3300. The two games' frame
-counts needn't keep step within a race, and there the moment matters most. The timer to try
-first is the global counter at 805361C0 (gm+0x7E8), which the main loop raises once a pass at
-80006B08. It isn't tested yet. Failing that, the race clock's own value once it's mapped.
-
 On the new count and movies, most menu checkpoints scored exactly as before. The state matched
 at every checkpoint compared before City Trial's city, 1003 and 1013 included. The card prompt
 at 60 is the same panel on both sides, its edges apart.
+
+#### The seed
+
+Both sides now draw the same random numbers in a diff. HSD_Rand's seed comes from the clock at
+five places, found by listing all 190 calls to OSGetTick and OSGetTime and following each result
+and every store through HSD_RandSeedPtr (805DCD38):
+
+| Site | Call | Where the result goes | Pinned to |
+|---|---|---|---|
+| 80005A38 | OSGetTick | `main` stores it in HSD_RandDefaultSeed (805DCD30) at 80005A40 | 00B90000 |
+| 802842D8 | OSGetTime | Top Ride's session +0x1C, made the seed at 802842F4 | low word 40000000 |
+| 802842E0 | OSGetTime | the session's +0x20, doubled, swapped in by fn_80286D7C | low word 40000000 |
+| 8028B9EC | OSGetTime | +0x70 of the object TopRide_GameSessionInit seeds from at 8028C04C | low word 40000000 |
+| 8029CEA4 | OSGetTime | the same field, from fn_8029C650 | low word 40000000 |
+
+The rest only time things or read the calendar. They're the card library's own generator and
+unlock, pad reads, HSD_Perf, alarms, DVD, SI, GX, audio, HVQM, the IP stack and the auto demo's
+calendar. The RTC
+isn't pinned. Dragoon's follows the wall clock in every session, yet its frame and state goldens
+repeat across days, so it reaches no compared state.
+
+Each site is one instruction, so each side replaces that one. Dolphin gets a `lis` in its place
+from a game INI patch, `user/GameSettings/GKYE01.ini`, which `dolphin_ref.py` writes with the
+config (`SEED_PINS`). Dolphin applies an enabled `[OnFrame]` patch after the DOL loads and again
+every field, cheats setting or not. Dragoon's `recomp/patches.txt` has the same five sites call
+`dragoon_seed_pinned()` (`src/seed_pin.cpp`), which loads the same register with the same value
+when `DRAGOON_SEED_PIN` is set and not 0, and otherwise makes the original call, returning to
+the next instruction. Only `dolphin_diff.py` sets it, and a test fails if another tool does.
+Without it `frame_hashes.py check` and `state_goldens.py check` matched on all 25 routes, four
+of them at `--slow=2` or `--slow=3` after running out of seconds with no frame changed.
+
+With both pinned on top-ride-grass, 805DCD30 reads 00B90000 at frame 1 and 967F48BF at the main
+menu (1003) on both sides, and Top Ride's session seed (805DD938, +0x1C) reads E8D2826B as the
+race starts, Dragoon's frame 3234 and Dolphin's game frame 3245. The grid, P1's place and the
+CPUs' colours at 3235 and 3245 are the same on both sides. Unpinned, Dragoon's 805DCD30 reads
+00B99CAE at boot as before.
+
+#### The race counter
+
+A checkpoint in a race past its first frame and 10 frames in, City Trial's city counted as a
+race, is matched by `scene.passes`, the main loop's passes since the scene loaded. It's 805361C0
+(gm+0x7E8), which the loop raises once a pass at 80006B08. Dragoon reads 1 at a scene's first
+frame. Dolphin reads the last scene's count for a few fields after the scene word changes, then
+0 while the scene loads, then 1 on. Dragoon reads the pass at its frame, and the diff finds
+Dolphin's first field of the race with that pass.
+
+It advances the same way on both sides. With the seeds pinned, `ram_peek.py` read it on every
+Dragoon frame and Dolphin's memory watcher on every field. At the same pass Dolphin's game frame
+is Dragoon's plus 1 at all 467 of Top Ride's passes. It's the same at 4869 of the 4875 passes
+both sides share of an Air Ride race on `air-ride-race`'s route, run to 16500 fields. City Trial
+has 766 of 767. The rest are at a scene's edges. The RNG seed matches at the same pass or the
+one either side until the two first draw differently. Top Ride's session seed matches to pass
+422, Air Ride's 805DCD30 to pass 416 and City Trial's to pass 360. Top Ride draws 9 times at
+pass 423 in Dragoon and 11 in Dolphin. The HUD clock doesn't keep step with the pass. At the
+same pass Air Ride's reads 00:14:41 in Dragoon and 00:14:35 in Dolphin, and City Trial's
+04:54:10 and 04:54:15. Top Ride's reads 00:03:62 on both at pass 367.
+
+#### The rerun
+
+All three movies were converged again in 7 runs each. `dtm.py presses` found all 11 presses on
+their route frames on each. top-ride-grass, air-ride-race and city-trial ran on AC power, one game at a
+time, with `log stream` watching the sandbox. Every menu checkpoint scored as before. The `setup`
+and `refused` lines are gone:
+
+| Route | Checkpoint | Before | Now |
+|---|---|---|---|
+| top-ride-grass | 3235 | setup, 2.864% | same grid, 2.019%, state same |
+| top-ride-grass | 3245 | setup, 21.012% | same grid, 20.273%, state same |
+| top-ride-grass | 3600, pass 367 | refused | 15.575%, state same |
+| air-ride-race | 4200, pass 1079 | refused | 82.259%, state differs |
+| air-ride-race | 6000, pass 2879 | refused | 93.188%, state differs |
+| city-trial | 2734 | timing, 28.770%, state differs | 1.753%, state same |
+| city-trial | 2744 | setup, 94.318%, state differs | 5.605%, state same |
+| city-trial | 3300, pass 568 | refused | 29.757%, state differs |
+
+With the seeds pinned a state that differs is Dragoon's bug, and the triage line names the first
+value to differ and the frame. `ram_peek.py` read every compared value on each Dragoon frame
+against Dolphin's at the same pass or one either side. In Air Ride's race player2.speed and
+player2.x first differ at frame 3336, pass 215, as the racers set off. Dragoon's CPU is at half
+Dolphin's speed. In City Trial player1.x and player1.y first differ at frame 2802, pass 70, in
+their last bit, as Kirby drops into the city. Neither cause is found yet. Top Ride matches to the
+end of its checkpoints, and its session seed first differs at frame 3656, pass 423.
 
 What the triage found:
 
@@ -1055,19 +1130,16 @@ What the triage found:
   Dolphin, which shows where edges aren't on whole pixels. A console samples a pixel at 7/12,
   and Dolphin applies a 1/12 correction for it (VertexShaderManager.cpp, lines 341 to 357).
   gcn-recomp has none. This change doesn't fix it.
-- The starts differ by the seed. `main` seeds HSD_RandDefaultSeed (805DCD30) from OSGetTick at
-  80005A38, and the two sides boot with seeds 198 ticks apart (Dolphin 0x00B99D74, Dragoon
-  0x00B99CAE). Dolphin's timebase counts cycles/12 from 0 at the movie's RTC, and Dragoon's
-  counts 2 a loop back-edge with the wall clock as its RTC. Top Ride seeds again from
-  OSGetTime's low word at race setup (802842D8), which likely sets the grid and the CPUs'
-  colours. City Trial's stage RNG (805DD700) uses the main seed. The seed isn't pinned here.
-- The card prompt, the SAVE icon and the city's first frame are timing. Dolphin's prompt has
-  its text from game frame 58 and Dragoon's from frame 4, so the first checkpoint is frame 60.
-  Dolphin shows course select without the SAVE icon, then 40 fields later the icon. It shows
-  City Trial's first city frame at field 3224 and stalls to field 3267 loading the players,
-  whose pointer at 8055AA2C comes after, while Dragoon's players exist from its first frame.
-  The four timing lines in the triage file share one open cause. Dragoon finishes a scene's
-  load before its first frame, and Dolphin after it.
+- The starts differed by the seed, which "The seed" above pins. Unpinned, the two sides boot
+  with seeds 198 ticks apart (Dolphin 0x00B99D74, Dragoon 0x00B99CAE). Dolphin's timebase
+  counts cycles/12 from 0 at the movie's RTC, and Dragoon's counts 2 a loop back-edge with the
+  wall clock as its RTC.
+- The card prompt and the SAVE icon are timing. Dolphin's prompt has its text from game frame
+  58 and Dragoon's from frame 4, so the first checkpoint is frame 60. Dolphin shows course
+  select without the SAVE icon, then 40 fields later the icon. The three timing lines in the
+  triage file share one open cause. Dragoon finishes a scene's load before its first frame, and
+  Dolphin after it. City Trial's first city frame was a fourth, and with the seeds pinned both
+  sides show the same frame there with their players loaded.
 - The main menu Kirby's state differed on the old count, where Dragoon's was 0 to 2 frames
   behind Dolphin's over frames 909 to 1001. On the new count it matches at 1003 and 1013 on
   all three routes.

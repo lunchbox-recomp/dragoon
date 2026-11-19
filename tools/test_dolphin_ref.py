@@ -4,6 +4,8 @@ import argparse
 import configparser
 import json
 import os
+import re
+import shutil
 import signal
 import socket
 import stat
@@ -628,6 +630,82 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(pad["GCPad1"]["Device"], "Pipe/0/pad1")
         self.assertEqual(pad["GCPad1"]["Buttons/Start"], "`Button START`")
         self.assertEqual(pad["GCPad1"]["D-Pad/Down"], "`Button D_DOWN`")
+
+    def test_config_writes_the_test_seed_as_the_game_s_ini(self):
+        user = temp_dir(self) / "user"
+        dolphin_ref.write_config(user)
+        lines = (user / "GameSettings" / "GKYE01.ini").read_text().splitlines()
+        self.assertEqual(lines[:2], ["[OnFrame]", "$Dragoon test seed"])
+        self.assertEqual(lines[2], "0x80005A38:dword:0x3C6000B9")
+        self.assertEqual(len(lines[2:-2]), len(dolphin_ref.SEED_PINS))
+        # Dolphin applies only the patches its OnFrame_Enabled section names.
+        self.assertEqual(lines[-2:], ["[OnFrame_Enabled]", "$Dragoon test seed"])
+
+
+class SeedPinTest(unittest.TestCase):
+    """Dolphin's game INI and Dragoon's recomp/patches.txt pin the same sites to the same values."""
+    ROOT = Path(dolphin_ref.__file__).resolve().parents[1]
+    PIN = (r"(?P<addr>[0-9A-F]{8}) \{ int dragoon_seed_pinned\(void\); "
+           r"if \(dragoon_seed_pinned\(\)\) c->r\[(?P<reg>\d+)\] = 0x(?P<value>[0-9A-F]{8})u; "
+           r"else \{ c->lr = 0x(?P<lr>[0-9A-F]{8})u; fn_(?P<call>[0-9A-F]{8})\(c\); \} \}")
+
+    def pins(self) -> dict:
+        text = (self.ROOT / "recomp" / "patches.txt").read_text()
+        lines = [line for line in text.splitlines() if "dragoon_seed_pinned" in line]
+        found = {}
+        for line in lines:
+            m = re.fullmatch(self.PIN, line)
+            self.assertIsNotNone(m, line)
+            found[int(m["addr"], 16)] = m
+        self.assertEqual(len(found), len(lines))
+        return found
+
+    def test_each_site_loads_what_dolphin_s_lis_loads_and_no_other_is_pinned(self):
+        found = self.pins()
+        self.assertEqual(sorted(found), sorted(dolphin_ref.SEED_PINS))
+        for address, word in dolphin_ref.SEED_PINS.items():
+            with self.subTest(address=f"{address:08X}"):
+                self.assertEqual(word >> 26, 15)  # addis
+                self.assertEqual((word >> 16) & 31, 0)  # from 0, so lis
+                m = found[address]
+                self.assertEqual(int(m["reg"]), (word >> 21) & 31)
+                self.assertEqual(int(m["value"], 16), (word & 0xFFFF) << 16)
+
+    @unittest.skipUnless(shutil.which("c++"), "no C++ compiler")
+    def test_the_switch_is_off_unless_dragoon_seed_pin_is_set_to_something_but_0(self):
+        folder = temp_dir(self)
+        driver = folder / "driver.cpp"
+        driver.write_text('#include <cstdio>\nextern "C" int dragoon_seed_pinned(void);\n'
+                          'int main() { printf("%d", dragoon_seed_pinned()); }\n')
+        exe = folder / "driver"
+        subprocess.run(["c++", "-std=c++17", "-o", str(exe), str(driver),
+                        str(self.ROOT / "src" / "seed_pin.cpp")], check=True)
+        env = {k: v for k, v in os.environ.items() if k != "DRAGOON_SEED_PIN"}
+        for value, want in ((None, "0"), ("", "0"), ("0", "0"), ("1", "1"), ("yes", "1")):
+            with self.subTest(value=value):
+                run_env = env if value is None else {**env, "DRAGOON_SEED_PIN": value}
+                got = subprocess.run([str(exe)], env=run_env, capture_output=True, text=True)
+                self.assertEqual(got.stdout, want)
+
+    def test_only_the_dolphin_diff_turns_it_on(self):
+        tools = Path(dolphin_ref.__file__).resolve().parent
+        users = sorted(p.name for p in tools.glob("*.py")
+                       if not p.name.startswith("test_") and '"DRAGOON_SEED_PIN=' in p.read_text())
+        self.assertEqual(users, ["dolphin_diff.py"])
+
+    def test_off_each_site_makes_the_clock_call_it_replaces(self):
+        names = {}
+        for line in (self.ROOT / "analysis" / "symbols.txt").read_text().splitlines():
+            name, _, rest = line.partition(" = .text:0x")
+            if rest:
+                names[int(rest[:8], 16)] = name
+        for address, m in self.pins().items():
+            with self.subTest(address=f"{address:08X}"):
+                self.assertEqual(int(m["lr"], 16), address + 4)
+                call = names[int(m["call"], 16)]
+                self.assertIn(call, ("OSGetTick", "OSGetTime"))
+                # OSGetTime returns its low word in r4, OSGetTick its tick in r3.
+                self.assertEqual(int(m["reg"]), 3 if call == "OSGetTick" else 4)
 
 
 class FreshConsoleTest(unittest.TestCase):

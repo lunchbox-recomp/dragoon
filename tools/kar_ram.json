@@ -391,5 +391,27 @@
     "means": "The SDK's NextBufAddr, the XFB the game last gave VISetNextFrameBuffer, which HSD_VIPreRetraceCB does once for each new picture. The game swaps two XFBs, 806783C0 and 8070E3C0, so it changes with every picture it shows, the one on the field vi.renew_count goes back to 0 included.",
     "route": "top-ride-grass.txt",
     "frames": [250, 300]
+  },
+  "scene.passes": {
+    "address": "805361C0",
+    "type": "u32",
+    "means": "The main loop's passes in this scene: gm+0x7E8, which the loop raises once a pass at 80006B08 and the scene's load sets back to 0. Dragoon reads 1 at a scene's first frame, since it loads before it. Dolphin reads the last scene's count for a few fields after the scene word changes, then 0 while the scene loads, then 1 on. With the seeds pinned, Dolphin's game frame at a pass is Dragoon's frame plus 1 at all 467 of Top Ride's passes, 4869 of an Air Ride race's 4875 and 766 of City Trial's 767 read, the rest at the scene's edges. Both sides hold the same RNG seed at the same pass, or a pass either side, until they draw differently: Top Ride's to pass 422 (docs/dev/status.md, the race counter).",
+    "route": "top-ride-grass.txt",
+    "frames": [3234, 3700]
+  },
+  "rand.seed": {
+    "address": "805DCD30",
+    "type": "u32",
+    "means": "HSD_RandDefaultSeed, HSD_Rand's seed unless HSD_RandSeedPtr (805DCD38) points at another. main stores OSGetTick in it at 80005A40, or 00B90000 with the test seed pinned, and each HSD_Rand draw makes it seed * 214013 + 2531011. With the seed pinned it reads 967F48BF at the main menu on both sides.",
+    "route": "top-ride-grass.txt",
+    "frames": [1, 1003]
+  },
+  "top_ride.seed": {
+    "address": "805DD938",
+    "path": ["1C"],
+    "type": "u32",
+    "means": "Top Ride's session seed, the one its races draw from. The session (made by fn_80286BE8, its pointer at 805DD938) keeps OSGetTime's low word there at 802842DC, or 40000000 with the test seed pinned. None outside Top Ride. With the seed pinned it reads E8D2826B as the race starts on both sides.",
+    "route": "top-ride-grass.txt",
+    "frames": [3234, 3700]
   }
 }

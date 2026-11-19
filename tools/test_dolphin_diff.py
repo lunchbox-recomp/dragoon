@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -70,7 +72,8 @@ class TimelineTest(unittest.TestCase):
         self.assertEqual(got[1].why, "scene 2/0 starts")
         self.assertEqual(got[4].why, "scene 18/38, 10 frames in")
         self.assertEqual(got[3].why, "golden 7")
-        self.assertEqual([c.refuse for c in got], [""] * 7)
+        self.assertEqual([c.race for c in got], [""] * 7)
+        self.assertEqual([c.since for c in got], [1, 4, 7, 7, 7, 7, 7])
 
     def test_checkpoints_before_boot_are_one_at_boot(self):
         with boot_at(11):
@@ -85,23 +88,35 @@ class TimelineTest(unittest.TestCase):
             got = dolphin_diff.checkpoints(Route("r", 30, 60, [3], []), ram(rows))
         self.assertEqual([c.frame for c in got], [0, 3, 10, 13])
 
-    def test_a_checkpoint_deep_in_a_race_is_refused(self):
-        # Top Ride's race starts at frame 1; its start and settled checkpoints are compared.
+    def test_a_checkpoint_deep_in_a_race_is_matched_by_its_pass(self):
+        # Top Ride's race starts at frame 1, field 2; its start and settled checkpoints are
+        # matched by the game frame, the ones past them by the race's passes.
         rows = [(0x05000018, 0, A), (0x05000013, 1, B), (0x05000013, 2, A), (0x05000013, 3, B)]
         with boot_at(0):
             got = dolphin_diff.checkpoints(Route("r", 30, 60, [12, 13], []), ram(rows))
-        self.assertEqual([(c.frame, bool(c.refuse)) for c in got],
-                         [(0, False), (1, False), (10, False), (11, False), (12, True),
-                          (13, True)])
-        self.assertEqual(got[4].refuse, "11 frames into Top Ride's race, where a game frame "
-                                        "isn't matched until the race timer is")
+        self.assertEqual([(c.frame, c.race, c.since) for c in got],
+                         [(0, "", 1), (1, "", 2), (10, "", 2), (11, "", 2),
+                          (12, "Top Ride's race", 2), (13, "Top Ride's race", 2)])
 
     def test_city_trial_s_city_counts_as_a_race(self):
         rows = [(0x06000012, 0, A), (0x06000012, 1, B)]
         with boot_at(0):
             got = dolphin_diff.checkpoints(Route("r", 30, 60, [11], []), ram(rows))
-        self.assertEqual([(c.frame, c.refuse[:30]) for c in got],
-                         [(0, ""), (10, ""), (11, "11 frames into City Trial's ci")])
+        self.assertEqual([(c.frame, c.race) for c in got],
+                         [(0, ""), (10, ""), (11, "City Trial's city")])
+
+    def test_a_scene_s_passes_start_where_its_count_is_0_or_1(self):
+        # The race's scene word changes at field 3, the count keeps the last scene's 40 and 41,
+        # goes to 0 while it loads and is 1 on the race's first frame.
+        counts = [39, 40, 41, 0, 0, 1, 2, 3]
+        self.assertEqual(dolphin_diff.scene_passes(counts, 3), [None] * 3 + [0, 0, 1, 2, 3])
+        self.assertEqual(dolphin_diff.scene_passes([5, 1, 2], 1), [None, 1, 2])
+        self.assertEqual(dolphin_diff.scene_passes([5, 6], 1), [None, None])
+        self.assertEqual(dolphin_diff.first_field(dolphin_diff.scene_passes(counts, 3), 2), 7)
+
+    def test_passes_are_read_from_their_column(self):
+        lines = ["frame 805361AC 805361C0", "1 05000013 00000272", "2 05000013 00000001"]
+        self.assertEqual(dolphin_diff.passes(lines), [0x272, 1])
 
 
 class PictureMatchTest(unittest.TestCase):
@@ -118,7 +133,22 @@ class PictureMatchTest(unittest.TestCase):
 
     def match(self, n, grey, size=(8, 8), shown=None):
         ours = {n: png(self.dir, f"frame_{n:05d}.png", flat(*size, (grey, grey, grey)))}
-        return dolphin_diff.compare_picture(n, self.frames, shown or self.shown, self.dumps, ours)
+        return dolphin_diff.compare_picture(n, dolphin_diff.first_field(self.frames, n),
+                                            f"game frame {n}", shown or self.shown, self.dumps,
+                                            ours)
+
+    def test_a_race_s_frame_is_matched_at_the_field_its_pass_is_first_up(self):
+        # Dragoon's frame 2 is the race's pass 4, which Dolphin's run reaches on field 5.
+        ours = {2: png(self.dir, "frame_00002.png", flat(8, 8, (40, 40, 40)))}
+        keys = dolphin_diff.scene_passes([7, 8, 0, 1, 4, 5], 2)
+        found, refused = dolphin_diff.compare_picture(2, dolphin_diff.first_field(keys, 4),
+                                                      "pass 4", self.shown, self.dumps, ours)
+        self.assertIsNone(refused)
+        self.assertEqual((found[0].field, found[0].counted, found[0].dump), (5, 5, 5))
+        _, refused = dolphin_diff.compare_picture(2, dolphin_diff.first_field(keys, 9),
+                                                  "pass 9 of Top Ride's race", self.shown,
+                                                  self.dumps, ours)
+        self.assertEqual(refused, "Dolphin's run never shows pass 9 of Top Ride's race")
 
     def test_the_counted_dump_is_taken_when_it_is_the_nearest(self):
         found, refused = self.match(2, 30)
@@ -153,7 +183,7 @@ class PictureMatchTest(unittest.TestCase):
         self.assertIn("dumps stop at 6, before picture 7", refused)
 
     def test_a_missing_dragoon_frame_is_refused(self):
-        _, refused = dolphin_diff.compare_picture(2, self.frames, self.shown, self.dumps, {})
+        _, refused = dolphin_diff.compare_picture(2, 3, "game frame 2", self.shown, self.dumps, {})
         self.assertIn("Dragoon has no frame 2", refused)
 
     def test_pictures_of_two_sizes_are_refused_not_scaled(self):
@@ -283,6 +313,99 @@ class StateTest(unittest.TestCase):
         self.assertEqual(dolphin_diff.compare_state({"scene.major": "0"}, 9, frames, rows),
                          ("differs", ["Dolphin never reached game frame 9"]))
 
+    def test_a_race_s_state_is_compared_at_its_pass_and_not_before_the_scene_s_passes(self):
+        # The last scene's count, 4, is still up on the first field and doesn't count.
+        _, rows = self.frames_rows([(0, 0x05000000), (0, 0x04000000), (0, 0x05000000)])
+        keys = [None, 3, 4]
+        self.assertEqual(dolphin_diff.compare_state({"scene.major": "5"}, 4, keys, rows, "pass"),
+                         ("same", []))
+        self.assertEqual(dolphin_diff.compare_state({"scene.major": "4"}, 4, keys, rows, "pass"),
+                         ("same, a frame off", []))
+        self.assertEqual(dolphin_diff.compare_state({"scene.major": "5"}, 9, keys, rows, "pass"),
+                         ("differs", ["Dolphin never reached pass 9"]))
+
+    def test_the_rng_seeds_are_compared_and_the_pass_is_not(self):
+        self.assertIn("rand.seed", dolphin_diff.FIELDS)
+        self.assertIn("top_ride.seed", dolphin_diff.FIELDS)
+        self.assertNotIn(dolphin_diff.PASSES, dolphin_diff.FIELDS)
+        self.assertEqual(dolphin_diff.watches()[4], "805361C0")
+
+
+class RaceCompareTest(unittest.TestCase):
+    """A run that's in Top Ride's race from field 1, a game frame a field. The count keeps the last
+    scene's 50 on field 1 and is 0 on field 2, so pass k is up on field k + 2. Game frame n is up
+    on field n, its picture the (n - 1)th."""
+
+    def setUp(self):
+        self.out = temp_dir(self)
+        head = ["805361AC", "805DE2CC", "80589C70", "8056E4C0", "805361C0"]
+        lines = ["frame " + " ".join(head)]
+        for n in range(1, 31):
+            count = 50 if n == 1 else n - 2
+            lines.append(f"{n} 05000013 {n:08X} 00000000 {(A, B)[n % 2]:08X} {count:08X}")
+        dolphin = self.out / "dolphin"
+        (dolphin / "frames").mkdir(parents=True)
+        write_file(dolphin, "ram.txt", "\n".join(lines) + "\n")
+        listed = []
+        for k in range(1, 31):
+            path = png(dolphin / "frames", f"framedump_{k}.png", flat(4, 4, (k * 8, 0, 0)))
+            listed.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+        write_file(dolphin, "frames.txt", "\n".join(listed) + "\n")
+        (self.out / "dragoon").mkdir()
+        # Dragoon's frame 20 is the race's pass 6, the picture Dolphin put up on field 8.
+        for frame, grey in ((1, 0), (11, 80), (20, 64)):
+            png(self.out / "dragoon", f"frame_{frame:05d}.png", flat(4, 4, (grey, 0, 0)))
+
+    def compare(self, read_20_at=20):
+        states = {"1": [1, {"scene.major": "5", "scene.passes": "50"}],
+                  "11": [11, {"scene.major": "5", "scene.passes": "8"}],
+                  "20": [read_20_at, {"scene.major": "5", "scene.passes": "6"}]}
+        write_file(self.out / "dragoon", "state.json",
+                   dolphin_diff.json.dumps({"end": "exit_after", "detail": "", "states": states}))
+        with boot_at(0):
+            report = dolphin_diff.compare(Route("r", 30, 60, [20], []), self.out)
+        return {e["frame"]: e for e in report["checkpoints"]}
+
+    def test_a_checkpoint_past_the_settled_one_is_matched_at_its_pass(self):
+        got = self.compare()
+        self.assertEqual((got[20]["pass"], got[20]["field"], got[20]["counted"]), (6, 8, 7))
+        self.assertEqual((got[20]["dump"], got[20]["share"], got[20]["state"]), (8, 0.0, "same"))
+        self.assertNotIn("pass", got[11])
+        self.assertEqual(got[11]["field"], 11)  # by its game frame, as before
+        self.assertIn("frame 20 (golden 20, pass 6):", dolphin_diff.summary(
+            {"route": "r", "disc": "console", "tolerance": 4, "budget": 0.001,
+             "dragoon_end": "exit_after", "checkpoints": list(got.values())}))
+
+    def test_a_pass_read_at_another_frame_is_refused(self):
+        got = self.compare(read_20_at=21)
+        self.assertEqual(got[20]["refused"],
+                         "Dragoon read Top Ride's race's pass at frame 21, not at 20")
+        self.assertEqual(got[20]["state"], "not read")
+
+
+class DragoonRunTest(unittest.TestCase):
+    def test_dragoon_plays_with_the_test_seed_and_reads_the_passes(self):
+        out = temp_dir(self)
+        (out / "dolphin").mkdir()
+        write_file(out / "dolphin", "ram.txt", "\n".join(
+            ["frame " + " ".join(HEAD), *(f"{n} 05000013 {n:08X} 00000000 {A:08X}"
+                                          for n in range(1, 4))]) + "\n")
+        calls = {}
+
+        def play(route, name, every, bot, settings):
+            calls.update(settings=settings, fields=bot.fields, required=route.required)
+            raise dolphin_diff.Bad("stop here")
+
+        with mock.patch.object(dolphin_diff.state_goldens, "play", side_effect=play), \
+                mock.patch.object(dolphin_diff.bot_link, "run_directory",
+                                  return_value=out / "run"), \
+                boot_at(0), self.assertRaises(dolphin_diff.Bad), \
+                contextlib.redirect_stdout(io.StringIO()):
+            dolphin_diff.cmd_dragoon(Route("r", 30, 60, [20], []), out)
+        self.assertIn("DRAGOON_SEED_PIN=1", calls["settings"])
+        self.assertEqual(calls["fields"][-1], dolphin_diff.PASSES)
+        self.assertEqual(calls["required"], [1, 11, 20])
+
 
 class TriageTest(unittest.TestCase):
     TEXT = ("# a comment\n\ntolerance=4 budget=0.1%\n"
@@ -317,6 +440,10 @@ class TriageTest(unittest.TestCase):
                           (head + "r x share=1% max=2 mean=0 state=same bug why\n", "not 'ROUTE"),
                           (head + "r 1 share=1% max=2 mean=0 state=same bug a\n"
                                   "r 1 share=1% max=2 mean=0 state=same bug b\n", "triaged twice"),
+                          (head + "r 1 share=1% max=2 mean=0 state=differs bug it moves\n",
+                           "says 'FIELD first differs at frame N'"),
+                          (head + "r 1 share=1% max=2 mean=0 state=differs bug lap first differs "
+                                  "at frame 9\n", "with FIELD one of FIELDS"),
                           ("r 1 share=1% max=2 mean=0 state=same bug why\n", "comes first"),
                           ("# nothing\n", "no 'tolerance=")):
             with self.subTest(text=text), self.assertRaisesRegex(ValueError, why):
@@ -333,6 +460,18 @@ class TriageTest(unittest.TestCase):
         got = dolphin_diff.parse_triage(dolphin_diff.TRIAGE.read_text())
         self.assertEqual((got.tolerance, got.budget), (dolphin_diff.TOLERANCE, dolphin_diff.BUDGET))
         self.assertTrue(got.lines)
+
+    def test_a_differing_bug_names_its_field_and_frame(self):
+        text = ("tolerance=4 budget=0.1%\nr 1 share=1% max=2 mean=0 state=differs bug Dragoon "
+                "drifts: player2.x first differs at frame 3336, by a few ulps\n"
+                "r 2 share=1% max=2 mean=0 state=differs timing a load, no field\n")
+        self.assertEqual([t.cls for t in dolphin_diff.parse_triage(text).lines], ["bug", "timing"])
+
+    def test_the_committed_file_has_no_unpinned_seed_or_unmatched_race_left(self):
+        # With the seeds pinned nothing is set up to differ, and a race's checkpoints have passes.
+        got = dolphin_diff.parse_triage(dolphin_diff.TRIAGE.read_text())
+        self.assertEqual([(t.route, t.frame) for t in got.lines if t.cls in ("setup", "refused")],
+                         [])
 
 
 class PadsTest(unittest.TestCase):
