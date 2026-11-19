@@ -19,3 +19,32 @@ top-ride-grass 2618 share=2.901% max=199 mean=0.36 dolphin the player entry scre
 top-ride-grass 3234 share=2.025% max=117 mean=0.36 unclear the starting grid differs: P1 is on another place and the CPUs have other colours, so the race's random draw came out differently; the rest is edges
 top-ride-grass 3244 share=19.489% max=188 mean=3.06 unclear the same starting grid difference as at 3234, with the course faded in
 top-ride-grass 3600 share=95.032% max=255 mean=37.47 unclear Dragoon's race clock reads 0:03.62 and Dolphin's 0:03.92: Dolphin's game shows 366 frames in the 471 fields since the race began, so a game frame is later in its race, and the grid differs as at 3234
+air-ride-race 0 share=0% max=0 mean=0 refused Dolphin's run has put up no picture by game frame 0, where both boot scenes start
+air-ride-race 10 share=9.493% max=254 mean=10.47 unclear the same memory card prompt as top-ride-grass 10, text in Dragoon and an empty panel in Dolphin
+air-ride-race 304 share=0.000% max=0 mean=0.00 within under the budget
+air-ride-race 314 share=3.444% max=24 mean=0.29 dolphin the logos' edges only, as top-ride-grass 314
+air-ride-race 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, as top-ride-grass 1003
+air-ride-race 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, as top-ride-grass 1013
+air-ride-race 1604 share=0.000% max=0 mean=0.00 within under the budget
+air-ride-race 1614 share=0.000% max=0 mean=0.00 within under the budget
+air-ride-race 1904 share=2.658% max=234 mean=1.24 unclear the SAVE icon is up in Dragoon and not yet in Dolphin, as top-ride-grass 2004; the rest is edges
+air-ride-race 1914 share=10.436% max=206 mean=1.29 dolphin edges, and the detail inside the course thumbnails, as top-ride-grass 2014
+air-ride-race 2209 share=0.491% max=36 mean=0.07 dolphin the title's and the tab's edges only
+air-ride-race 2219 share=2.736% max=189 mean=0.39 dolphin the player entry screen's edges and text outlines only
+air-ride-race 3122 share=2.637% max=75 mean=0.27 dolphin the course title's and the frame's edges only
+air-ride-race 3132 share=4.419% max=132 mean=0.69 dolphin edges and fine detail in the course behind the title; the state, players' places and speeds included, is the same
+air-ride-race 4200 share=90.078% max=255 mean=35.90 unclear the race has gone apart: Dragoon's clock reads 0:14.41 and Dolphin's 0:14.72, and the CPUs are elsewhere; Dolphin's game shows 1078 frames in the 1113 fields since 3122, so a game frame is later in its race, and every player's place and speed differs
+air-ride-race 6000 share=91.665% max=255 mean=32.48 unclear the same as at 4200, further apart: the clocks read 0:44.45 and 0:45.20 and the lap records 0:25.72 and 0:26.53
+city-trial 0 share=0% max=0 mean=0 refused Dolphin's run has put up no picture by game frame 0, where both boot scenes start
+city-trial 10 share=9.493% max=254 mean=10.47 unclear the same memory card prompt as top-ride-grass 10, text in Dragoon and an empty panel in Dolphin
+city-trial 304 share=0.000% max=0 mean=0.00 within under the budget
+city-trial 314 share=3.444% max=24 mean=0.29 dolphin the logos' edges only, as top-ride-grass 314
+city-trial 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, as top-ride-grass 1003
+city-trial 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, as top-ride-grass 1013
+city-trial 1804 share=0.000% max=0 mean=0.00 within under the budget
+city-trial 1814 share=3.159% max=14 mean=0.36 dolphin the three mode logos' edges only
+city-trial 2105 share=3.166% max=199 mean=1.30 unclear the SAVE icon is up in Dragoon and not yet in Dolphin, as top-ride-grass 2004; the rest is edges
+city-trial 2115 share=2.655% max=189 mean=0.42 dolphin the player entry screen's edges and text outlines only
+city-trial 2734 share=28.770% max=79 mean=1.85 unclear the city shows faintly behind the title card in Dragoon and not yet in Dolphin, and Dolphin's players don't exist yet at this frame while Dragoon's do; the city starts a little later in Dolphin's game frames
+city-trial 2744 share=94.318% max=145 mean=24.41 unclear every player starts somewhere else in the city, so the start draw came out differently, as Top Ride's grid did; the camera shows a building in Dragoon and the sky in Dolphin
+city-trial 3300 share=94.451% max=255 mean=31.00 unclear the players are elsewhere from the start at 2744; the clocks read 4:54.10 and 4:54.03, only 0.07 s apart, and the HUD matches
