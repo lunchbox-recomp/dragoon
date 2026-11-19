@@ -23,6 +23,11 @@ OFFSETS = {
     "DSPiromHash": (229, "<I"), "DSPcoefHash": (233, "<I"), "tickCount": (237, "<Q"),
     "reserved2": (245, "11s"),
 }
+# ControllerState's bitfield from Movie.h, from the lowest bit of its first byte.
+STATE_BITS = ("Start", "A", "B", "X", "Y", "Z", "DPadUp", "DPadDown", "DPadLeft", "DPadRight",
+              "L", "R", "disc", "reset", "is_connected", "get_origin")
+ROUTE_NAMES = {"Start": "START", "DPadUp": "UP", "DPadDown": "DOWN", "DPadLeft": "LEFT",
+               "DPadRight": "RIGHT"}
 
 
 def field_at(data: bytes, name: str):
@@ -31,19 +36,44 @@ def field_at(data: bytes, name: str):
 
 
 def controller(chunk: bytes) -> dict:
-    """One ControllerState read by hand: the bitfield's first byte holds Start, A, B, X, Y, Z,
-    DPadUp and DPadDown from its lowest bit, the second DPadLeft, DPadRight, L, R, disc, reset,
-    is_connected and get_origin, then TriggerL, TriggerR, the main stick and the C stick."""
-    lo, hi = chunk[0], chunk[1]
-    return {"Start": lo & 1, "A": lo >> 1 & 1, "B": lo >> 2 & 1, "Z": lo >> 5 & 1,
-            "DPadUp": lo >> 6 & 1, "DPadDown": lo >> 7 & 1, "DPadRight": hi >> 1 & 1,
-            "L": hi >> 2 & 1, "R": hi >> 3 & 1, "is_connected": hi >> 6 & 1,
-            "get_origin": hi >> 7 & 1, "TriggerL": chunk[2], "TriggerR": chunk[3],
-            "StickX": chunk[4], "StickY": chunk[5], "CStickX": chunk[6], "CStickY": chunk[7]}
+    """One ControllerState read by hand: the 16 bits, then TriggerL, TriggerR, the main stick
+    and the C stick, a byte each."""
+    bits = chunk[0] | chunk[1] << 8
+    state = {name: bits >> i & 1 for i, name in enumerate(STATE_BITS)}
+    state.update(zip(("TriggerL", "TriggerR", "StickX", "StickY", "CStickX", "CStickY"),
+                     chunk[2:8]))
+    return state
 
 
 def polls_of(data: bytes) -> list[bytes]:
     return [data[i:i + 8] for i in range(256, len(data), 8)]
+
+
+def down(data: bytes, key: str = "A") -> list[int]:
+    return [i for i, chunk in enumerate(polls_of(data)) if controller(chunk)[key]]
+
+
+def ram(rows: list[dict]) -> list[str]:
+    """A ram.txt watching dtm.WATCH, from 1, each row giving some words by address."""
+    lines = ["frame " + " ".join(f"{a:08X}" for a in dtm.WATCH)]
+    for n, row in enumerate(rows, 1):
+        lines.append(f"{n} " + " ".join(f"{row.get(a, 0):08X}" for a in dtm.WATCH))
+    return lines
+
+
+def queue_row(write: int, word: int, triggers: int = 0, renew: int = 0) -> dict:
+    """A row whose queue's latest entry, the one before WRITE, holds WORD and TRIGGERS."""
+    k = (write - 1) % dtm.QUEUE_LENGTH
+    return {dtm.PAD_STATE: dtm.QUEUE_LENGTH << 24 | write << 8, dtm.BUTTON_WORDS[k]: word,
+            dtm.TRIGGER_WORDS[k]: triggers, dtm.RENEW: renew}
+
+
+class AddressTest(unittest.TestCase):
+    def test_the_words_come_from_kar_ram_json(self):
+        self.assertEqual((dtm.SCENE_WORD, dtm.PAD_STATE, dtm.QUEUE, dtm.QUEUE_ENTRY, dtm.RENEW),
+                         (0x805361AC, 0x8058B080, 0x80535300, 0x34, 0x805DE2CC))
+        self.assertEqual(dtm.QUEUE_LENGTH, 5)
+        self.assertEqual(dtm.TRIGGER_WORDS[1], 0x80535338)
 
 
 class HeaderTest(unittest.TestCase):
@@ -91,21 +121,22 @@ class HeaderTest(unittest.TestCase):
 
 
 class PadTest(unittest.TestCase):
-    def test_each_button_sets_its_bit_and_the_pad_is_connected(self):
-        for name, key in (("START", "Start"), ("A", "A"), ("B", "B"), ("Z", "Z"),
-                          ("UP", "DPadUp"), ("DOWN", "DPadDown"), ("RIGHT", "DPadRight"),
-                          ("L", "L"), ("R", "R")):
-            state = controller(dtm.Pad({name}).pack())
-            with self.subTest(name=name):
-                self.assertEqual([k for k in ("Start", "A", "B", "Z", "DPadUp", "DPadDown",
-                                              "DPadRight", "L", "R") if state[k]], [key])
-                self.assertEqual((state["is_connected"], state["get_origin"]), (1, 0))
+    def test_each_button_sets_its_own_bit_and_no_other(self):
+        for i, name in enumerate(STATE_BITS[:12]):
+            button = ROUTE_NAMES.get(name, name)
+            state = controller(dtm.Pad({button}).pack())
+            with self.subTest(button=button):
+                self.assertEqual([k for k in STATE_BITS if state[k]], [name, "is_connected"])
+                self.assertEqual(dtm.Pad({button}).pack()[:2],
+                                 struct.pack("<H", 1 << i | 1 << 14))
 
-    def test_a_pad_at_rest_is_centred_with_its_triggers_up(self):
+    def test_a_pad_at_rest_is_centred_connected_with_its_triggers_up(self):
         state = controller(dtm.Pad().pack())
         self.assertEqual([state[k] for k in ("StickX", "StickY", "CStickX", "CStickY",
                                              "TriggerL", "TriggerR")],
                          [0x80, 0x80, 0x80, 0x80, 0, 0])
+        self.assertEqual([k for k in STATE_BITS if state[k]], ["is_connected"])
+        self.assertEqual(controller(dtm.Pad(connected=False).pack())["is_connected"], 0)
 
     def test_l_and_r_press_their_triggers_all_the_way(self):
         presses = dtm.parse_route("10:L+R:5")
@@ -119,6 +150,10 @@ class PadTest(unittest.TestCase):
         self.assertEqual((state["StickX"], state["StickY"], state["A"]), (0x80 + 100, 0x80 - 40, 1))
         self.assertEqual(dtm.pad_at(presses, 0, 15), dtm.Pad())
 
+    def test_a_push_of_0_leaves_an_earlier_push_as_the_engine_does(self):
+        presses = dtm.parse_route("10:SL:5,11:SR0:2")
+        self.assertEqual(dtm.pad_at(presses, 0, 11).stick_x, 0x80 - 100)
+
     def test_unpack_undoes_pack(self):
         pad = dtm.Pad({"A", "DOWN"}, 1, 2, 3, 4, 5, 6)
         self.assertEqual(dtm.unpack(pad.pack()), pad)
@@ -130,58 +165,49 @@ class RouteTest(unittest.TestCase):
         self.assertEqual([bool(dtm.pad_at(presses, 0, f).buttons) for f in range(299, 306)],
                          [False, True, True, True, True, True, False])
 
-    def test_bad_items_are_refused(self):
-        for script in ("300:A", "300:Q:5", "300:A:0", "x:A:5", "5/300:A:5", "300:SRx:5",
-                       "1:A:2:3"):
-            with self.subTest(script=script), self.assertRaises(dtm.Bad):
-                dtm.parse_route(script)
-
     def test_a_route_file_drops_its_comments(self):
         self.assertEqual(dtm.route_script("# a\n120:A:5,\n# b\n300:A:5\n"), "120:A:5,300:A:5")
-
-    def test_every_route_on_pad_1_reads(self):
-        for path in sorted(ROUTES.glob("*.txt")):
-            with self.subTest(route=path.name):
-                dtm.parse_route(dtm.route_script(path.read_text(encoding="utf-8")))
 
     def test_a_press_on_another_port_is_refused(self):
         with self.assertRaisesRegex(dtm.Bad, "pad 1 only"):
             dtm.make("2/100:A:5", 200)
 
-    def test_a_press_past_the_movies_end_is_refused(self):
-        with self.assertRaisesRegex(dtm.Bad, "after game frame 200"):
-            dtm.make("196:A:5", 200)
-        dtm.make("195:A:5", 200)
+    def test_a_bad_item_is_refused(self):
+        with self.assertRaisesRegex(dtm.Bad, "no button Q"):
+            dtm.make("100:Q:5", 200)
+
+    def test_a_press_past_the_last_read_is_refused(self):
+        with self.assertRaisesRegex(dtm.Bad, "after game frame 199"):
+            dtm.make("195:A:5", 200)
+        dtm.make("194:A:5", 200)
 
 
 class PollMappingTest(unittest.TestCase):
     def test_two_polls_a_field_with_the_boots_shift(self):
-        self.assertEqual([dtm.poll_field(i) for i in (0, 1, 2, 48, 49, 50)],
-                         [23, 23, 24, 47, 47, 48])
+        self.assertEqual([dtm.poll_field(i) for i in (0, 1, 2, 50, 51, 52)],
+                         [23, 23, 24, 48, 48, 49])
 
-    def test_without_a_timeline_a_field_is_a_frame(self):
+    def test_a_fields_last_poll_is_read_in_the_next_field(self):
+        self.assertEqual([dtm.read_field(i) for i in (50, 51, 52, 53)], [48, 49, 49, 50])
+
+    def test_without_a_timeline_a_read_gets_the_frame_of_the_field_before(self):
         data = dtm.make("100:A:2", 200)
-        down = [i for i, chunk in enumerate(polls_of(data)) if controller(chunk)["A"]]
-        self.assertEqual(down, [154, 155, 156, 157])
-        self.assertEqual({dtm.poll_field(i) for i in down}, {100, 101})
+        self.assertEqual(down(data), [155, 156, 157, 158])
+        self.assertEqual({dtm.read_field(i) - 1 for i in down(data)}, {100, 101})
 
-    def test_with_a_timeline_a_poll_gets_the_frame_its_field_reached(self):
+    def test_with_a_timeline_a_read_gets_the_frame_the_field_before_reached(self):
         timeline = [0] * 100 + list(range(1, 101))
-        self.assertEqual(dtm.frame_of(100, timeline), 0)
-        self.assertEqual(dtm.frame_of(150, timeline), 50)
-        self.assertEqual(dtm.frame_of(210, timeline), 110)
+        self.assertEqual([dtm.frame_of(f, timeline) for f in (0, 100, 150, 210)], [0, 0, 50, 110])
         data = dtm.make("50:A:1", 200, timeline)
-        down = [i for i, chunk in enumerate(polls_of(data)) if controller(chunk)["A"]]
-        self.assertEqual({dtm.poll_field(i) for i in down}, {150})
+        self.assertEqual({dtm.read_field(i) for i in down(data)}, {151})
 
     def test_counted_polls_put_the_number_in_the_triggers_under_padclamps_floor(self):
         chunks = polls_of(dtm.make("", 600, count_polls=True))
-        for i in (0, 29, 30, 899):
-            if i < len(chunks):
-                state = controller(chunks[i])
-                with self.subTest(poll=i):
-                    self.assertEqual((state["TriggerL"], state["TriggerR"]), (i // 30 % 30, i % 30))
-                    self.assertLessEqual(max(state["TriggerL"], state["TriggerR"]), 30)
+        for i in (0, 29, 30, 899, 900, 1000):
+            state = controller(chunks[i])
+            with self.subTest(poll=i):
+                self.assertEqual((state["TriggerL"], state["TriggerR"]), (i // 30 % 30, i % 30))
+                self.assertLessEqual(max(state["TriggerL"], state["TriggerR"]), 30)
 
     def test_game_frames_add_up_renew_across_its_resets(self):
         # Field 4 resets the count and shows a frame, field 5 another.
@@ -189,24 +215,99 @@ class PollMappingTest(unittest.TestCase):
                  "5 00000002"]
         self.assertEqual(dtm.game_frames(lines), [0, 1, 3, 4, 5])
 
-    def test_polls_reads_the_entry_the_game_wrote_last(self):
+    def test_latest_is_the_entry_before_the_write_place(self):
         state = 0x05020300  # length 5, read place 2, write place 3, none waiting
-        entries = [0, 0, dtm.COUNT_BASE * 2 + 7, 0, 0]
-        self.assertEqual(dtm.latest_poll(state, entries), 67)
-        self.assertIsNone(dtm.latest_poll(state, [0] * 5))
-        self.assertIsNone(dtm.latest_poll(0, entries))
+        self.assertEqual(dtm.latest(state, [1, 2, 3, 4, 5]), 3)
+        self.assertEqual(dtm.latest(0x05020000, [1, 2, 3, 4, 5]), 5)
+        self.assertIsNone(dtm.latest(state, [0] * 5))
+        self.assertIsNone(dtm.latest(0, [1, 2, 3, 4, 5]))
 
-    def test_poll_steps_count_the_polls_between_reads(self):
-        head = "frame " + " ".join(f"{a:08X}" for a in (dtm.SCENE_WORD, *dtm.COUNT_WATCH))
-        lines = [head]
-        for n in range(50, 56):
-            poll = 2 * n - dtm.POLL_SHIFT
-            write = (n % 5) + 1
-            entries = [0] * 5
-            entries[write - 1] = poll // 30 % 30 << 8 | poll % 30
-            words = [0x02000000, 0x05000000 | write << 8, *entries]
-            lines.append(f"{n} " + " ".join(f"{w:08X}" for w in words))
-        self.assertEqual(dtm.poll_steps(lines), [(51, 55, 0x02000000, 2, 0)])
+    def test_poll_steps_count_the_polls_between_reads_past_the_counts_wrap(self):
+        rows = [{} for _ in range(439)]
+        for n in range(440, 481):
+            write = n % 5 + 1
+            row = {dtm.PAD_STATE: 5 << 24 | write << 8, dtm.SCENE_WORD: 0x02000000}
+            for j in range(5):  # the queue holds the last five reads, the newest before WRITE
+                poll = 2 * (n - j) - dtm.POLL_SHIFT
+                row[dtm.TRIGGER_WORDS[(write - 1 - j) % 5]] = poll // 30 % 30 << 8 | poll % 30
+            rows.append(row)
+        lines = ram(rows)
+        self.assertEqual(dtm.reads(lines)[-1], (480, 914, 0x02000000))
+        self.assertEqual(dtm.poll_steps(lines), [(441, 480, 0x02000000, 2, 0)])
+
+
+class PressReadTest(unittest.TestCase):
+    """A fake run where the game shows one frame a field from field 11 and reads port 1 once a
+    field, the movie's input made from that timeline."""
+
+    def run_of(self, script: str, shift: int = 0) -> list[str]:
+        presses = dtm.parse_route(script)
+        rows = []
+        for n in range(1, 101):
+            given = max(0, n - 1 - 10)  # the frames shown by the field before
+            pad = dtm.pad_at(presses, 0, given + shift)
+            word = sum(dtm.PAD_BITS[b] for b in pad.buttons) << 16
+            rows.append(queue_row(n % 5 + 1, word, renew=max(0, n - 10)))
+        return ram(rows)
+
+    def test_each_press_is_read_on_its_frame(self):
+        lines = self.run_of("20:A:3,40:START+DOWN:2,60:A:1")
+        found = dtm.press_reads(dtm.parse_route("20:A:3,40:START+DOWN:2,60:A:1"), lines)
+        self.assertEqual([(p.at, field_, frame) for p, field_, frame in found],
+                         [(20, 31, 20), (40, 51, 40), (60, 71, 60)])
+
+    def test_a_press_read_a_frame_early_shows_as_off(self):
+        route = temp_dir(self) / "r.txt"
+        route.write_text("20:A:3\n")
+        path = temp_dir(self) / "ram.txt"
+        path.write_text("\n".join(self.run_of("20:A:3", shift=1)) + "\n")
+        code, out, err = run_main(dtm.main, "presses", str(route), str(path))
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "20:A: read at field 30, given at game frame 19, -1 frames off\n")
+
+    def test_a_press_never_read_is_named(self):
+        found = dtm.press_reads(dtm.parse_route("200:B:3"), self.run_of(""))
+        self.assertEqual([(p.at, f, g) for p, f, g in found], [(200, -1, -1)])
+
+
+class ConvergeTest(unittest.TestCase):
+    """converge against a fake Dolphin that shows no frame for the first SLOW fields."""
+
+    def play(self, slow):
+        def run(movie: Path, out: Path) -> int:
+            self.played.append(movie.name)
+            out.mkdir()
+            rows = [{dtm.RENEW: max(0, n - slow(len(self.played)))} for n in range(1, 301)]
+            (out / "ram.txt").write_text("\n".join(ram(rows)) + "\n")
+            return 0
+        return run
+
+    def setUp(self):
+        self.folder = temp_dir(self)
+        self.played: list[str] = []
+
+    def test_it_stops_at_the_movie_its_run_gives_back(self):
+        n, path = dtm.converge("150:A:5", 300, self.folder, self.play(lambda run: 40))
+        self.assertEqual((n, path.name), (2, "movie-2.dtm"))
+        self.assertEqual(self.played, ["movie-1.dtm", "movie-2.dtm"])
+        timeline = dtm.game_frames((self.folder / "run-2" / "ram.txt").read_text().splitlines())
+        self.assertEqual(path.read_bytes(), dtm.make("150:A:5", 300, timeline))
+
+    def test_it_gives_up_after_its_cap(self):
+        n, path = dtm.converge("150:A:5", 300, self.folder, self.play(lambda run: 30 + run),
+                               most=3)
+        self.assertEqual((n, path.name, len(self.played)), (None, "movie-3.dtm", 3))
+
+    def test_a_run_that_fails_stops_it(self):
+        with self.assertRaisesRegex(dtm.Bad, "didn't play all 300 fields"):
+            dtm.converge("150:A:5", 300, self.folder, lambda movie, out: 1)
+
+    def test_the_run_plays_the_movie_watching_the_queue(self):
+        cmd = dtm.boot_command(Path("/d.iso"), Path("/m.dtm"), 300, Path("/out"), "fast")
+        self.assertEqual(cmd[3:12], ["boot", "/d.iso", "--frames", "300", "--movie", "/m.dtm",
+                                     "--disc", "fast", "--watch"])
+        self.assertEqual(cmd[cmd.index("--out") + 1], "/out")
+        self.assertEqual(cmd[12:-2:2], [f"{a:08X}" for a in dtm.WATCH])
 
 
 class RoundTripTest(unittest.TestCase):
@@ -221,15 +322,15 @@ class RoundTripTest(unittest.TestCase):
         self.assertEqual(len(data), 256 + 8 * (201 * 2 - 46))
         code, out, err = run_main(dtm.main, "read", str(path))
         self.assertEqual(code, 0)
-        self.assertEqual(out.splitlines()[1:], ["poll 0: nothing", "poll 154: A",
-                                                "poll 160: nothing", "poll 234: START DOWN",
-                                                "poll 238: nothing"])
+        self.assertEqual(out.splitlines()[1:], ["poll 0: nothing", "poll 155: A",
+                                                "poll 161: nothing", "poll 235: START DOWN",
+                                                "poll 239: nothing"])
 
     def test_steps_prints_each_scene_change_with_its_field_and_frame(self):
-        ram = temp_dir(self) / "ram.txt"
-        ram.write_text("frame 805361AC 805DE2CC\n1 00000000 00000000\n2 12000000 00000001\n"
-                       "3 12000000 00000002\n4 05000013 00000003\n")
-        code, out, err = run_main(dtm.main, "steps", str(ram), "--at", "2", "--at", "9")
+        ram_txt = temp_dir(self) / "ram.txt"
+        ram_txt.write_text("frame 805361AC 805DE2CC\n1 00000000 00000000\n2 12000000 00000001\n"
+                           "3 12000000 00000002\n4 05000013 00000003\n")
+        code, out, err = run_main(dtm.main, "steps", str(ram_txt), "--at", "2", "--at", "9")
         self.assertEqual(code, 0)
         self.assertEqual(out.splitlines(), [
             "field 1 game frame 0: scene.major 0 scene.minor 0",

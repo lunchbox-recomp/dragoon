@@ -2,40 +2,45 @@
 """How does a route's input play in Dolphin? Turn a route into a Dolphin input movie (.dtm).
 
 Usage: dtm.py make ROUTE --out FILE --fields N [--timeline RAM_TXT] [--count-polls]
+       dtm.py converge ROUTE ISO --fields N --dir DIR [--max K] [--disc SPEED] [--count-polls]
        dtm.py read FILE
        dtm.py polls RAM_TXT
+       dtm.py presses ROUTE RAM_TXT
        dtm.py steps RAM_TXT [--at FRAME]...
 
-A route (tests/routes/, gcn-recomp's input_script.h syntax) says which buttons are down at which
-of the game's own frames: Dragoon applies it when the game reads the pad, by the frames it has
-submitted. A .dtm says what the pad reads at each of Dolphin's polls of it, one 8-byte
-ControllerState a poll, from power-on. Dolphin polls on its video clock, not on the game's
-frames, so make maps one onto the other in two steps.
+A route (tests/routes/, read by routes.parse_route) says which buttons are down at which of the
+game's own frames. Dragoon's input_script_apply puts them on the pad when the game reads it, by
+gx::g_frames_submitted, the frames the game had finished before that read. A .dtm says what the
+pad reads at each of Dolphin's polls of it, one 8-byte ControllerState a poll, from power-on.
+Dolphin polls on its video clock, not on the game's frames, so make maps one onto the other in
+two steps.
 
 Polls to fields: the game sets the serial interface to poll twice a field from field 48 on, and
 it does in every scene top-ride-grass passes through, from the title to the race. Poll i is made
 in field poll_field(i), POLLS a field with POLL_SHIFT for the slower polling before. That was
 counted, not read from the source: with --count-polls, make puts each poll's number in the
 analog triggers, too little for the game's PADClamp to let through, and polls reads a run that
-watches COUNT_WATCH, the game's queue of raw pad reads, and prints the polls between the game's
-reads in each run of fields. It shows 2 a field throughout, with the game reading either the
-field's first poll or the last one of the field before. A field that shows 1 or 3 is the read
-landing the other side of a poll, and one that shows 4 or 0 next to it is the same thing
-evened out.
+watches WATCH, which holds the game's queue of raw pad reads, and prints the polls between the
+game's reads in each run of fields. It shows 2 a field throughout, with the game reading either
+the field's first poll or the last one of the field before (read_field). A field that shows 1
+or 3 is the read landing the other side of a poll, and one that shows 4 or 0 next to it is the
+same thing evened out.
 
 Fields to game frames: the game draws fewer frames than fields while it loads, so a field isn't
 a game frame. --timeline takes the game frames each field reached in an earlier run of the
-movie (game_frames, from HSD_VIRenewCount) and gives each poll the route's input at the game
-frame its field had reached. The first movie has no timeline and maps field f to frame f; make
-it again from its own run until a run's movie comes out byte for byte the same as the one it
-played. top-ride-grass took four.
+movie (game_frames, from kar_ram.json's vi.renew_count). Each poll gets the route's input at the
+game frame the field before its read had reached, as the engine gives it. The first movie has no
+timeline and maps field f to frame f. converge plays a movie with dolphin_ref.py, makes the next
+from that run and stops when one comes out byte for byte the same as the one it played, or after
+--max runs. How many it takes depends on where it starts. presses shows where the game read each
+press, from the same queue, against the frame the route gives it.
 
 The header (HEADER, from Movie.h at Dolphin 2609a) is GKYE01's, pad 1 only, from power-on with no
 savestate, and the RTC at RTC, the dolphin-ref config's own CustomRTCValue. bSaveConfig is off,
-so the run's config, not the movie, picks the CPU core, the DSP, the disc speed and the cards
-(dolphin_ref.py's CONFIG). The disc's MD5 is zeros, which skips Dolphin's check. tickCount is
-twice the CPU ticks of the movie's fields, so playback ends when the input runs out, not on
-ticks.
+so the run's config, not the movie, picks the CPU core, the DSP and the cards (dolphin_ref.py's
+CONFIG) and its --disc the disc speed. The disc's MD5 is zeros, which skips Dolphin's check.
+tickCount is twice the CPU ticks of the movie's fields, so playback ends when the input runs
+out, not on ticks.
 
 read prints a .dtm's header and the polls where the pad changes. steps prints a run's scene
 word changes with the field and game frame each came at, and with --at the field a game frame
@@ -44,16 +49,23 @@ came at.
 A movie holds presses and nothing read from the disc, but movies stay out of git all the same:
 make writes them where --out says, a scratch or build folder.
 
-Exits 0 when the command ran, 1 when polls finds no counted polls, 2 on a bad argument or file.
+Exits 0 when the command ran, when converge found its fixed point and when presses found every
+press on its frame. Exits 1 when polls finds no counted polls, converge didn't settle and
+presses found one off its frame, and 2 on a bad argument or file.
 """
 from __future__ import annotations
 
 import argparse
 import struct
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Sequence
+
+import dolphin_ref
+import kar_ram
+from routes import Press, parse_route, route_script
 
 GAME_ID = b"GKYE01"
 SIGNATURE = b"DTM\x1a"
@@ -64,27 +76,27 @@ RTC = 946684800  # 2000-01-01 00:00:00 UTC, the dolphin-ref config's CustomRTCVa
 TICKS_PER_SECOND = 486_000_000
 TICKS_PER_FIELD = TICKS_PER_SECOND * 1001 // 60000
 POLLS = 2  # polls a field, as dtm.py polls measured on top-ride-grass (docs/dev/status.md)
-POLL_SHIFT = 46  # measured the same way: poll 48 is the first of field 47's two
-PORTS = 4
+POLL_SHIFT = 46  # measured the same way: poll 50 is the first of field 48's two
 STICK_CENTER = 0x80
-# The game reads the pads once a field, at the retrace, into a queue of raw PADStatus the
-# sysdolphin library keeps. HSD_PadState (analysis/symbols.txt) starts with the queue's length
-# and its read and write places, a byte each, then the queue's address, 0x80535300. Each of its
-# QUEUE_LENGTH entries is QUEUE_ENTRY bytes, port 1's PADStatus first, whose second word holds
-# the C stick and then the analog triggers, L then R, in its low half.
-PAD_STATE = 0x8058B080
-QUEUE = 0x80535300
-QUEUE_LENGTH = 5
-QUEUE_ENTRY = 0x34
-TRIGGERS = 4  # the offset of that word in an entry
-COUNT_WATCH = (PAD_STATE, *(QUEUE + QUEUE_ENTRY * k + TRIGGERS for k in range(QUEUE_LENGTH)))
-SCENE_WORD = 0x805361AC  # kar_ram.json's scene.major is its top byte, scene.minor its bottom
-# HSD_VIRenewCount (analysis/symbols.txt): the frames the game has shown since it last set it to
-# 0, which it does once every 60 fields along with HSD_VIRetraceCount.
-RENEW = 0x805DE2CC
+TABLE = kar_ram.load()
+SCENE_WORD = dolphin_ref.word_of("scene.major", TABLE)  # scene.minor is its bottom byte
+# The game reads the pads once a field into the sysdolphin library's queue of raw reads.
+# HSD_PadState's first word holds the queue's length, read place, write place and count, a byte
+# each. Each entry starts with port 1's PADStatus, whose first word holds the buttons and the
+# main stick and whose second the C stick and then the analog triggers, L then R.
+PAD_STATE = dolphin_ref.word_of("pad.queue_length", TABLE)
+(QUEUE_LENGTH,) = TABLE["pad.queue_length"].values
+QUEUE = TABLE["pad.queue"].address
+QUEUE_ENTRY = TABLE["pad.queue"].length
+TRIGGERS = 4  # the offset of the second word in an entry
+RENEW = dolphin_ref.word_of("vi.renew_count", TABLE)
+BUTTON_WORDS = tuple(QUEUE + QUEUE_ENTRY * k for k in range(QUEUE_LENGTH))
+TRIGGER_WORDS = tuple(a + TRIGGERS for a in BUTTON_WORDS)
+WATCH = (SCENE_WORD, RENEW, PAD_STATE, *BUTTON_WORDS, *TRIGGER_WORDS)
 # --count-polls puts poll i in the triggers as (i // COUNT_BASE % COUNT_BASE, i % COUNT_BASE).
 # The SDK's PADClamp makes a trigger at 30 or less 0, so the game never sees them.
 COUNT_BASE = 30
+CONVERGE_MAX = 10
 
 # Movie.h's DTMHeader, packed, in its order: (name, struct format).
 HEADER = (
@@ -105,26 +117,18 @@ HEADER = (
 HEADER_FORMAT = "<" + "".join(fmt for _, fmt in HEADER)
 assert struct.calcsize(HEADER_FORMAT) == HEADER_SIZE
 
-# ControllerState's first two bytes, one bit each from the lowest, as Movie.h lists them.
+# ControllerState's first two bytes, one bit each from the lowest, as Movie.h lists them, by
+# the routes' names for the buttons.
 BITS = ("START", "A", "B", "X", "Y", "Z", "UP", "DOWN", "LEFT", "RIGHT", "L", "R", "disc",
         "reset", "connected", "get_origin")
-BUTTONS = BITS[:12]  # the ones a route may press
-STICKS = {"SL": (0, -1), "SR": (0, 1), "SU": (1, 1), "SD": (1, -1)}  # axis (x 0, y 1), sign
+# The SDK's PADStatus button bits, which the game's queue holds, by the same names.
+PAD_BITS = {"LEFT": 0x0001, "RIGHT": 0x0002, "DOWN": 0x0004, "UP": 0x0008, "Z": 0x0010,
+            "R": 0x0020, "L": 0x0040, "A": 0x0100, "B": 0x0200, "X": 0x0400, "Y": 0x0800,
+            "START": 0x1000}
 
 
 class Bad(Exception):
     """A route, movie or run file the tool can't use."""
-
-
-@dataclass(frozen=True)
-class Press:
-    """One item of a route: BUTTONS down, and the main stick pushed STICK (x, y, -100 to 100,
-    None for an axis it leaves alone), on PORT (0 is port 1) for frames AT to AT + DURATION - 1."""
-    port: int
-    at: int
-    duration: int
-    buttons: frozenset[str]
-    stick: tuple[Optional[int], Optional[int]] = (None, None)
 
 
 @dataclass
@@ -148,53 +152,18 @@ class Pad:
                            self.stick_y, self.c_x, self.c_y)
 
 
-def route_script(text: str) -> str:
-    """A route file's script: every line that isn't a # comment, joined."""
-    return "".join(line.strip() for line in text.splitlines()
-                   if line.strip() and not line.strip().startswith("#"))
-
-
-def parse_route(script: str) -> list[Press]:
-    """SCRIPT's presses, in input_script.cpp's syntax. Unlike the engine, which skips an item it
-    can't read, this refuses one, since a movie that drops a press goes somewhere else."""
-    presses = []
-    for item in filter(None, (part.strip() for part in script.split(","))):
-        port, _, rest = item.rpartition("/")
-        fields = rest.split(":")
-        try:
-            chan = int(port) - 1 if port else 0
-            at, duration = int(fields[0]), int(fields[-1])
-        except ValueError:
-            raise Bad(f"{item!r}: not [port/]frame:BUTTON[+BUTTON]:duration") from None
-        if len(fields) != 3 or not 0 <= chan < PORTS or at < 0 or duration < 1:
-            raise Bad(f"{item!r}: not [port/]frame:BUTTON[+BUTTON]:duration")
-        buttons, stick = set(), [None, None]
-        for name in fields[1].split("+"):
-            if name in BUTTONS:
-                buttons.add(name)
-            elif name[:2] in STICKS:
-                axis, sign = STICKS[name[:2]]
-                try:
-                    stick[axis] = sign * (int(name[2:]) if name[2:] else 100)
-                except ValueError:
-                    raise Bad(f"{item!r}: no stick push {name}") from None
-            else:
-                raise Bad(f"{item!r}: no button {name}")
-        presses.append(Press(chan, at, duration, frozenset(buttons), (stick[0], stick[1])))
-    return presses
-
-
 def pad_at(presses: Sequence[Press], port: int, frame: int) -> Pad:
     """What PORT reads at FRAME, every press active then laid over a pad at rest, as
-    input_script_apply does: buttons add up, a stick push or a trigger is the last press's."""
+    input_script_apply does: buttons add up, a stick push or a trigger is the last press's, and
+    a push of 0 leaves its axis alone."""
     pad = Pad()
     for p in presses:
         if p.port != port or not p.at <= frame < p.at + p.duration:
             continue
         pad.buttons |= p.buttons
-        if p.stick[0] is not None:
+        if p.stick[0]:
             pad.stick_x = (STICK_CENTER + p.stick[0]) & 0xFF
-        if p.stick[1] is not None:
+        if p.stick[1]:
             pad.stick_y = (STICK_CENTER + p.stick[1]) & 0xFF
         if "L" in p.buttons:
             pad.trigger_l = 0xFF
@@ -211,22 +180,38 @@ def count(pad: Pad, poll: int) -> Pad:
 
 
 def frame_of(field_: int, timeline: Sequence[int]) -> int:
-    """The game's frames by the end of FIELD (from 1): TIMELINE's, game_frames from an earlier
-    run, and one a field past its end. With no timeline, the field itself."""
+    """The game's frames by the end of FIELD (from 1, 0 before field 1): TIMELINE's, game_frames
+    from an earlier run, and one a field past its end. With no timeline, the field itself."""
+    if field_ < 1:
+        return 0
     if not timeline:
         return field_
     if field_ <= len(timeline):
-        return timeline[field_ - 1] if field_ >= 1 else 0
+        return timeline[field_ - 1]
     return timeline[-1] + field_ - len(timeline)
+
+
+def poll_field(poll: int) -> int:
+    """The field Dolphin makes POLL in, POLLS a field, once the game has set its sampling rate at
+    field 48 (poll 50). Before that Dolphin polls once a field, so this puts polls 0 to 49 in
+    fields 23 to 47, later than they're made; no route presses anything that early."""
+    return (poll + POLL_SHIFT) // POLLS
+
+
+def read_field(poll: int) -> int:
+    """The field the game reads POLL in, if it reads it: the field it's made in for that field's
+    first poll and the next one for its last, as the queue showed with POLLS at 2."""
+    return poll_field(poll) + (poll + POLL_SHIFT) % POLLS
 
 
 def polls(presses: Sequence[Press], fields: int, timeline: Sequence[int] = (),
           count_polls: bool = False) -> list[bytes]:
     """Port 1's input for FIELDS fields: each poll reads what the route has down at the game
-    frame its field (poll_field) has reached, by TIMELINE."""
+    frame TIMELINE says the field before its read had reached, which is the frame count the
+    engine applies a route by."""
     out = []
     for poll in range((fields + 1) * POLLS - POLL_SHIFT):
-        pad = pad_at(presses, 0, frame_of(poll_field(poll), timeline))
+        pad = pad_at(presses, 0, frame_of(read_field(poll) - 1, timeline))
         out.append((count(pad, poll) if count_polls else pad).pack())
     return out
 
@@ -251,14 +236,17 @@ def ports_used(presses: Sequence[Press]) -> int:
 def make(script: str, fields: int, timeline: Sequence[int] = (),
          count_polls: bool = False) -> bytes:
     """A movie of FIELDS fields playing SCRIPT's presses on pad 1, by TIMELINE's game frames."""
-    presses = parse_route(script)
+    try:
+        presses = parse_route(script)
+    except ValueError as e:
+        raise Bad(str(e)) from None
     if ports_used(presses) != 1:
         raise Bad("a press on another port than 1: a movie here plays pad 1 only")
-    last = frame_of(fields, timeline)
+    last = frame_of(fields - 1, timeline)
     late = [p for p in presses if p.at + p.duration > last]
     if late:
-        raise Bad(f"{late[0].at}: a press that ends after game frame {last}, which field "
-                  f"{fields}, the movie's last, reaches")
+        raise Bad(f"{late[0].at}: a press that ends after game frame {last}, which the last "
+                  f"read of field {fields}, the movie's last, comes at")
     inputs = polls(presses, fields, timeline, count_polls)
     return header(fields, len(inputs)) + b"".join(inputs)
 
@@ -294,44 +282,44 @@ def counted(word: int) -> int:
     return (word >> 8 & 0xFF) * COUNT_BASE + (word & 0xFF)
 
 
-def latest_poll(state: int, entries: Sequence[int]) -> Optional[int]:
-    """The counted poll in the queue entry the game wrote last, from HSD_PadState's first word
-    STATE (length, read place, write place, entries not yet taken) and each entry's TRIGGERS
-    word. None before the game has read a pad. The game takes entries as it goes, so the last
-    byte says nothing about whether it read one."""
+def latest(state: int, entries: Sequence[int]) -> Optional[int]:
+    """The word of ENTRIES, one from each queue entry, in the entry the game wrote last, from
+    HSD_PadState's first word STATE (length, read place, write place, entries not yet taken).
+    None before the game has read a pad. The game takes entries as it goes, so the last byte
+    says nothing about whether it read one."""
     length, write = state >> 24, state >> 8 & 0xFF
     if length != QUEUE_LENGTH or not any(entries):
         return None
-    return counted(entries[(write - 1) % length])
+    return entries[(write - 1) % length]
+
+
+def column(head: Sequence[str], address: int) -> int:
+    try:
+        return list(head).index(f"{address:08X}")
+    except ValueError:
+        raise Bad(f"ram.txt doesn't watch {address:08X}") from None
 
 
 def reads(lines: Sequence[str]) -> list[tuple[int, int, int]]:
-    """From a ram.txt watching SCENE_WORD and COUNT_WATCH, each field the game read a counted
-    poll at: (field, the poll's number, scene word). The count wraps every COUNT_BASE**2 polls,
-    so each number is taken as the one nearest POLLS a field on from the last."""
+    """From a ram.txt watching WATCH, each field the game read a counted poll at: (field, the
+    poll's number, scene word). The count wraps every COUNT_BASE**2 polls, so each number is
+    taken as the one nearest POLLS a field on from the last."""
     head = lines[0].split()
-    scene = column(head, SCENE_WORD)
-    cols = [column(head, a) for a in COUNT_WATCH]
+    scene, state = column(head, SCENE_WORD), column(head, PAD_STATE)
+    cols = [column(head, a) for a in TRIGGER_WORDS]
     out: list[tuple[int, int, int]] = []
     wrap = COUNT_BASE ** 2
     for line in lines[1:]:
         words = line.split()
-        values = [int(words[c], 16) for c in cols]
-        poll = latest_poll(values[0], values[1:])
-        if poll is None:
+        word = latest(int(words[state], 16), [int(words[c], 16) for c in cols])
+        if word is None:
             continue
-        n = int(words[0])
+        poll, n = counted(word), int(words[0])
         if out:
             expect = out[-1][1] + POLLS * (n - out[-1][0])
             poll += (expect - poll + wrap // 2) // wrap * wrap
         out.append((n, poll, int(words[scene], 16)))
     return out
-
-
-def poll_field(poll: int) -> int:
-    """The field Dolphin makes POLL in, once the game has set its sampling rate: POLLS a field,
-    with POLL_SHIFT more polls before than that would give, from the boot's slower polling."""
-    return (poll + POLL_SHIFT) // POLLS
 
 
 def poll_steps(lines: Sequence[str]) -> list[tuple[int, int, int, int, int]]:
@@ -351,13 +339,6 @@ def poll_steps(lines: Sequence[str]) -> list[tuple[int, int, int, int, int]]:
                 runs.append([n, n, word, step, lag])
         last = poll
     return [tuple(r) for r in runs]  # type: ignore[misc]
-
-
-def column(head: Sequence[str], address: int) -> int:
-    try:
-        return list(head).index(f"{address:08X}")
-    except ValueError:
-        raise Bad(f"ram.txt doesn't watch {address:08X}") from None
 
 
 def game_frames(lines: Sequence[str]) -> list[int]:
@@ -389,6 +370,45 @@ def scene_steps(lines: Sequence[str]) -> list[tuple[int, int, int, int]]:
     return out
 
 
+def button_reads(lines: Sequence[str]) -> list[tuple[int, int, set[str]]]:
+    """From a ram.txt watching WATCH, each field the game read port 1 in: (field, the game's
+    frames by the field before, which is the count the engine applies a route by, the buttons
+    it read). A read is a field where the queue's write place moves."""
+    head = lines[0].split()
+    state = column(head, PAD_STATE)
+    cols = [column(head, a) for a in BUTTON_WORDS]
+    frames = game_frames(lines)
+    out, place = [], None
+    for i, line in enumerate(lines[1:]):
+        words = line.split()
+        value = int(words[state], 16)
+        length, write = value >> 24, value >> 8 & 0xFF
+        if length != QUEUE_LENGTH or write == place:
+            continue
+        place = write
+        word = int(words[cols[(write - 1) % length]], 16)
+        held = {name for name, bit in PAD_BITS.items() if word >> 16 & bit}
+        out.append((int(words[0]), frames[i - 1] if i else 0, held))
+    return out
+
+
+def press_reads(presses: Sequence[Press], lines: Sequence[str]) -> list[tuple[Press, int, int]]:
+    """Each port 1 press with the read it first showed in: (press, field, the game frame that
+    read was given by). A press shows in the first read after the last one matched that has all
+    its buttons down and didn't have them in the read before. -1, -1 when none does."""
+    found = button_reads(lines)
+    out, start = [], 0
+    for p in sorted((p for p in presses if p.port == 0 and p.buttons), key=lambda p: p.at):
+        hit = next((k for k in range(start, len(found)) if p.buttons <= found[k][2] and
+                    not (k and p.buttons <= found[k - 1][2])), None)
+        if hit is None:
+            out.append((p, -1, -1))
+            continue
+        out.append((p, found[hit][0], found[hit][1]))
+        start = hit + 1
+    return out
+
+
 def describe(pad: Pad) -> str:
     parts = sorted(pad.buttons, key=BITS.index)
     if (pad.stick_x, pad.stick_y) != (STICK_CENTER, STICK_CENTER):
@@ -400,14 +420,59 @@ def describe(pad: Pad) -> str:
     return " ".join(parts) or "nothing"
 
 
+def read_lines(path: Path) -> list[str]:
+    return path.read_text(encoding="utf-8").splitlines()
+
+
 def cmd_make(args: argparse.Namespace) -> int:
-    timeline = (game_frames(args.timeline.read_text(encoding="utf-8").splitlines())
-                if args.timeline else [])
+    timeline = game_frames(read_lines(args.timeline)) if args.timeline else []
     data = make(route_script(args.route.read_text(encoding="utf-8")), args.fields, timeline,
                 args.count_polls)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_bytes(data)
     print(f"{args.out}: {args.fields} fields, {(len(data) - HEADER_SIZE) // PAD_SIZE} polls")
+    return 0
+
+
+def boot_command(iso: Path, movie: Path, fields: int, out: Path, disc: str) -> list[str]:
+    """dolphin_ref.py playing MOVIE for FIELDS fields with WATCH watched, into OUT."""
+    watch = [w for a in WATCH for w in ("--watch", f"{a:08X}")]
+    return [sys.executable, "-B", str(Path(dolphin_ref.__file__).resolve()), "boot", str(iso),
+            "--frames", str(fields), "--movie", str(movie), "--disc", disc, *watch,
+            "--out", str(out)]
+
+
+def converge(script: str, fields: int, folder: Path, play, most: int = CONVERGE_MAX,
+             count_polls: bool = False) -> tuple[Optional[int], Path]:
+    """Play movie 1 (no timeline), make movie N + 1 from run N's ram.txt and stop when it's the
+    movie run N played: (N, its movie), or (None, the last movie) after MOST runs. PLAY(movie,
+    out) plays a movie into OUT and returns its exit code."""
+    movie = make(script, fields, (), count_polls)
+    for n in range(1, most + 1):
+        path = folder / f"movie-{n}.dtm"
+        path.write_bytes(movie)
+        out = folder / f"run-{n}"
+        if play(path, out):
+            raise Bad(f"{out}: the run didn't play all {fields} fields")
+        following = make(script, fields, game_frames(read_lines(out / "ram.txt")), count_polls)
+        if following == movie:
+            return n, path
+        movie = following
+    return None, path
+
+
+def cmd_converge(args: argparse.Namespace) -> int:
+    args.dir.mkdir(parents=True, exist_ok=True)
+
+    def play(movie: Path, out: Path) -> int:
+        return subprocess.run(boot_command(args.iso, movie, args.fields, out, args.disc)).returncode
+
+    n, path = converge(route_script(args.route.read_text(encoding="utf-8")), args.fields, args.dir,
+                       play, args.max, args.count_polls)
+    if n is None:
+        print(f"{path}: no fixed point in {args.max} runs")
+        return 1
+    print(f"{path}: the fixed point, after {n} runs")
     return 0
 
 
@@ -425,7 +490,7 @@ def cmd_read(path: Path) -> int:
 
 
 def cmd_steps(path: Path, at: Sequence[int] = ()) -> int:
-    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = read_lines(path)
     for field_, frame, major, minor in scene_steps(lines):
         print(f"field {field_} game frame {frame}: scene.major {major} scene.minor {minor}")
     frames = game_frames(lines)
@@ -437,11 +502,26 @@ def cmd_steps(path: Path, at: Sequence[int] = ()) -> int:
 
 
 def cmd_polls(path: Path) -> int:
-    steps = poll_steps(path.read_text(encoding="utf-8").splitlines())
+    steps = poll_steps(read_lines(path))
     for first, last, word, step, lag in steps:
         print(f"fields {first}-{last}: scene.major {word >> 24} scene.minor {word & 0xFF}, "
               f"{step} polls since the last read, lag {lag}")
     return 0 if steps else 1
+
+
+def cmd_presses(route: Path, ram: Path) -> int:
+    presses = parse_route(route_script(route.read_text(encoding="utf-8")))
+    off = 0
+    for p, field_, frame in press_reads(presses, read_lines(ram)):
+        names = "+".join(sorted(p.buttons))
+        if field_ < 0:
+            print(f"{p.at}:{names}: never read")
+            off += 1
+            continue
+        said = "on its frame" if frame == p.at else f"{frame - p.at:+d} frames off"
+        print(f"{p.at}:{names}: read at field {field_}, given at game frame {frame}, {said}")
+        off += frame != p.at
+    return 1 if off else 0
 
 
 def frame_count(text: str) -> int:
@@ -467,10 +547,24 @@ def main(argv: list[str]) -> int:
                     help="an earlier run's ram.txt, for the game frame each field reaches")
     mk.add_argument("--count-polls", action="store_true",
                     help="put each poll's number in the triggers, for polls to count")
+    cv = sub.add_parser("converge", help="remake a movie from its own runs until it settles")
+    cv.add_argument("route", type=Path, metavar="ROUTE")
+    cv.add_argument("iso", type=Path, metavar="ISO")
+    cv.add_argument("--fields", type=frame_count, required=True, metavar="N")
+    cv.add_argument("--dir", type=Path, required=True, metavar="DIR",
+                    help="where the movies and runs go, a scratch or build folder")
+    cv.add_argument("--max", type=frame_count, default=CONVERGE_MAX, metavar="K",
+                    help=f"the most runs (default {CONVERGE_MAX})")
+    cv.add_argument("--disc", choices=sorted(dolphin_ref.DISC), default=dolphin_ref.DEFAULT_DISC)
+    cv.add_argument("--count-polls", action="store_true",
+                    help="count the polls in every movie, for polls to read the last run")
     rd = sub.add_parser("read", help="print a .dtm's header and its presses")
     rd.add_argument("movie", type=Path, metavar="FILE")
     pl = sub.add_parser("polls", help="count the polls a field in a counted run's ram.txt")
     pl.add_argument("ram", type=Path, metavar="RAM_TXT")
+    pr = sub.add_parser("presses", help="where the game read each of a route's presses")
+    pr.add_argument("route", type=Path, metavar="ROUTE")
+    pr.add_argument("ram", type=Path, metavar="RAM_TXT")
     st = sub.add_parser("steps", help="print a run's scene steps by field and game frame")
     st.add_argument("ram", type=Path, metavar="RAM_TXT")
     st.add_argument("--at", type=frame_count, action="append", default=[], metavar="FRAME",
@@ -479,10 +573,14 @@ def main(argv: list[str]) -> int:
     try:
         if args.command == "make":
             return cmd_make(args)
+        if args.command == "converge":
+            return cmd_converge(args)
         if args.command == "read":
             return cmd_read(args.movie)
         if args.command == "steps":
             return cmd_steps(args.ram, args.at)
+        if args.command == "presses":
+            return cmd_presses(args.route, args.ram)
         return cmd_polls(args.ram)
     except (Bad, OSError, IndexError, ValueError) as e:
         print(e, file=sys.stderr)
