@@ -198,7 +198,10 @@ class PressTest(unittest.TestCase):
         path = temp_dir(self) / "pad1"
         path.write_text("")
         pipe = dolphin_ref.Pipe(path, {3: ["PRESS A", "PRESS B"], 5: ["RELEASE A"]})
-        for n in range(1, 7):
+        for n in range(1, 4):
+            pipe.frame(n)
+        self.assertEqual(path.read_text(), "PRESS A\nPRESS B\n")
+        for n in range(4, 7):
             pipe.frame(n)
         pipe.close()
         self.assertEqual(path.read_text(), "PRESS A\nPRESS B\nRELEASE A\n")
