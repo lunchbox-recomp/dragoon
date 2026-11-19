@@ -1039,11 +1039,11 @@ top-ride-grass's scenes now start at Dolphin's frames 1003, 1704, 2004, 2609 and
 frame of Dragoon's.
 
 A checkpoint in a race past its first frame and 10 frames in is refused until race checkpoints
-are matched by the race timer. That refuses top-ride-grass 3600 and air-ride-race 4200 and
-6000. The two games' frame counts needn't keep step within a race, and there the moment matters
-most. The timer to try first is the global counter at 805361C0 (gm+0x7E8), which the main loop
-raises once a pass at 80006B08. It isn't tested yet. Failing that, the race clock's own value
-once it's mapped.
+are matched by the race timer, and City Trial's city counts as a race. That refuses
+top-ride-grass 3600, air-ride-race 4200 and 6000 and city-trial 3300. The two games' frame
+counts needn't keep step within a race, and there the moment matters most. The timer to try
+first is the global counter at 805361C0 (gm+0x7E8), which the main loop raises once a pass at
+80006B08. It isn't tested yet. Failing that, the race clock's own value once it's mapped.
 
 On the new count and movies, most menu checkpoints scored exactly as before. The state matched
 at every checkpoint compared before City Trial's city, 1003 and 1013 included. The card prompt
@@ -1051,18 +1051,23 @@ at 60 is the same panel on both sides, its edges apart.
 
 What the triage found:
 
-- Edges are a Dragoon bug. Dragoon draws about 0.084 to 0.09 of a pixel right and down of
-  Dolphin. A console samples a pixel at 7/12, and Dolphin applies a 1/12 correction for it
-  (VertexShaderManager.cpp, lines 341 to 357). gcn-recomp has none. This change doesn't fix it.
+- Edges are a Dragoon bug. Dragoon draws about 0.085 to 0.097 of a pixel right and down of
+  Dolphin, which shows where edges aren't on whole pixels. A console samples a pixel at 7/12,
+  and Dolphin applies a 1/12 correction for it (VertexShaderManager.cpp, lines 341 to 357).
+  gcn-recomp has none. This change doesn't fix it.
 - The starts differ by the seed. `main` seeds HSD_RandDefaultSeed (805DCD30) from OSGetTick at
   80005A38, and the two sides boot with seeds 198 ticks apart (Dolphin 0x00B99D74, Dragoon
   0x00B99CAE). Dolphin's timebase counts cycles/12 from 0 at the movie's RTC, and Dragoon's
   counts 2 a loop back-edge with the wall clock as its RTC. Top Ride seeds again from
-  OSGetTime's low word at race setup (802842D8), and City Trial's stage RNG (805DD700) uses the
-  main seed. The seed isn't pinned here.
-- The card prompt and the SAVE icon are timing. Dolphin's prompt has its text from game frame
-  58 and Dragoon's from frame 4, so the first checkpoint is frame 60. Dolphin shows course
-  select without the SAVE icon, then 40 fields later the icon.
+  OSGetTime's low word at race setup (802842D8), which likely sets the grid and the CPUs'
+  colours. City Trial's stage RNG (805DD700) uses the main seed. The seed isn't pinned here.
+- The card prompt, the SAVE icon and the city's first frame are timing. Dolphin's prompt has
+  its text from game frame 58 and Dragoon's from frame 4, so the first checkpoint is frame 60.
+  Dolphin shows course select without the SAVE icon, then 40 fields later the icon. It shows
+  City Trial's first city frame at field 3224 and stalls to field 3267 loading the players,
+  whose pointer at 8055AA2C comes after, while Dragoon's players exist from its first frame.
+  The four timing lines in the triage file share one open cause. Dragoon finishes a scene's
+  load before its first frame, and Dolphin after it.
 - The main menu Kirby's state differed on the old count, where Dragoon's was 0 to 2 frames
   behind Dolphin's over frames 909 to 1001. On the new count it matches at 1003 and 1013 on
   all three routes.

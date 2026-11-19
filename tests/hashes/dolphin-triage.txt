@@ -18,7 +18,7 @@ top-ride-grass 2004 share=2.826% max=230 mean=1.29 state=same timing the SAVE ic
 top-ride-grass 2014 share=10.201% max=206 mean=1.22 state=same bug edges and the detail inside the sliding course thumbnails, likely the pixel centre and motion, an unsure match
 top-ride-grass 2609 share=0.554% max=147 mean=0.08 state=same bug the player entry tab's arc and the title's edges only, the pixel centre
 top-ride-grass 2619 share=2.879% max=199 mean=0.35 state=same bug the player entry screen's edges and text outlines only, the pixel centre
-top-ride-grass 3235 share=2.864% max=153 mean=0.55 state=same setup the starting grid differs, P1's place and the CPUs' colours, from the seed: Top Ride seeds again from OSGetTime's low word at race setup (802842D8); the rest is edges
+top-ride-grass 3235 share=2.864% max=153 mean=0.55 state=same setup the starting grid differs, P1's place and the CPUs' colours, likely from the seed: Top Ride seeds again from OSGetTime's low word at race setup (802842D8); the rest is edges
 top-ride-grass 3245 share=21.012% max=205 mean=3.08 state=same setup the same grid as at 3235 with the course faded in, and its fine texture detail off by the pixel centre
 top-ride-grass 3600 share=0% max=0 mean=0 state=none refused 365 frames into Top Ride's race, where a game frame isn't matched until the race timer is
 air-ride-race 60 share=2.677% max=46 mean=0.40 state=same bug the card prompt, as top-ride-grass 60
@@ -45,6 +45,6 @@ city-trial 1804 share=0.000% max=0 mean=0.00 state=same within under the budget 
 city-trial 1814 share=3.159% max=14 mean=0.36 state=same bug the three mode logos' edges only, the pixel centre
 city-trial 2105 share=3.166% max=199 mean=1.30 state=same timing the SAVE icon's load order, as top-ride-grass 2004; the rest is edges
 city-trial 2115 share=2.655% max=189 mean=0.42 state=same bug the player entry screen's edges and text outlines only, the pixel centre
-city-trial 2734 share=28.770% max=79 mean=1.85 state=differs unclear the city shows faintly behind the title card in Dragoon and not yet in Dolphin, and Dolphin's players don't exist yet while Dragoon's do
+city-trial 2734 share=28.770% max=79 mean=1.85 state=differs timing Dolphin shows the city's first frame at field 3224 and stalls to field 3267 loading the players, whose pointer at 8055AA2C comes after; Dragoon loads them before its first frame, so its city shows faintly behind the title card and its players exist
 city-trial 2744 share=94.318% max=145 mean=24.41 state=differs setup every player starts somewhere else in the city, from the seed: City Trial's stage RNG (805DD700) uses the main seed
-city-trial 3300 share=92.641% max=254 mean=29.15 state=differs setup the players are elsewhere from the start at 2744; the clocks read 4:54.10 and 4:54.16 and the HUD matches
+city-trial 3300 share=0% max=0 mean=0 state=none refused 566 frames into City Trial's city, where a game frame isn't matched until the race timer is
