@@ -18,7 +18,7 @@ top-ride-grass 2608 share=0.561% max=36 mean=0.08 dolphin the title's and the ta
 top-ride-grass 2618 share=2.901% max=199 mean=0.36 dolphin the player entry screen's edges and text outlines only
 top-ride-grass 3234 share=2.025% max=117 mean=0.36 unclear the starting grid differs: P1 is on another place and the CPUs have other colours, so the race's random draw came out differently; the rest is edges
 top-ride-grass 3244 share=19.489% max=188 mean=3.06 unclear the same starting grid difference as at 3234, with the course faded in
-top-ride-grass 3600 share=95.032% max=255 mean=37.47 unclear Dragoon's race clock reads 0:03.62 and Dolphin's 0:03.92: Dolphin's game shows 366 frames in the 471 fields since the race began, so a game frame is later in its race, and the grid differs as at 3234
+top-ride-grass 3600 share=95.032% max=255 mean=37.47 unclear Dragoon's race clock reads 0:03.62 and Dolphin's 0:03.92, so Dolphin's picture is a later moment; in the 471 fields since the race began the renew count gave 366 frames and vi.next_buffer 372 pictures, so Dolphin drops frames here and the count may lag too; the grid differs as at 3234
 air-ride-race 0 share=0% max=0 mean=0 refused Dolphin's run has put up no picture by game frame 0, where both boot scenes start
 air-ride-race 10 share=9.493% max=254 mean=10.47 unclear the same memory card prompt as top-ride-grass 10, text in Dragoon and an empty panel in Dolphin
 air-ride-race 304 share=0.000% max=0 mean=0.00 within under the budget
@@ -33,8 +33,8 @@ air-ride-race 2209 share=0.491% max=36 mean=0.07 dolphin the title's and the tab
 air-ride-race 2219 share=2.736% max=189 mean=0.39 dolphin the player entry screen's edges and text outlines only
 air-ride-race 3122 share=2.637% max=75 mean=0.27 dolphin the course title's and the frame's edges only
 air-ride-race 3132 share=4.419% max=132 mean=0.69 dolphin edges and fine detail in the course behind the title; the state, players' places and speeds included, is the same
-air-ride-race 4200 share=90.078% max=255 mean=35.90 unclear the race has gone apart: Dragoon's clock reads 0:14.41 and Dolphin's 0:14.72, and the CPUs are elsewhere; Dolphin's game shows 1078 frames in the 1113 fields since 3122, so a game frame is later in its race, and every player's place and speed differs
-air-ride-race 6000 share=91.665% max=255 mean=32.48 unclear the same as at 4200, further apart: the clocks read 0:44.45 and 0:45.20 and the lap records 0:25.72 and 0:26.53
+air-ride-race 4200 share=90.078% max=255 mean=35.90 unclear Dragoon's clock reads 0:14.41 and Dolphin's 0:14.72, 18.6 frames apart, and every player's place and speed differs; in the 1113 fields since 3122 the renew count gave 1078 frames and vi.next_buffer 1096 pictures, 18 more, so the match is likely 18 frames early in Dolphin's race and the state difference may be the match's, not Dragoon's
+air-ride-race 6000 share=91.665% max=255 mean=32.48 unclear as at 4200: the clocks read 0:44.45 and 0:45.20, 45 frames apart, and the renew count gave 48 fewer frames than vi.next_buffer's 2926 pictures since 3122; the lap records read 0:25.72 and 0:26.53
 city-trial 0 share=0% max=0 mean=0 refused Dolphin's run has put up no picture by game frame 0, where both boot scenes start
 city-trial 10 share=9.493% max=254 mean=10.47 unclear the same memory card prompt as top-ride-grass 10, text in Dragoon and an empty panel in Dolphin
 city-trial 304 share=0.000% max=0 mean=0.00 within under the budget

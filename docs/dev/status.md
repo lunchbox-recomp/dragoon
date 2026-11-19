@@ -1024,7 +1024,10 @@ of pixels off by more than 4 in any channel, then the largest and mean channel e
 0.1% goes to triage. Look at `sides/ROUTE-FRAME.png`, Dragoon, Dolphin and the difference, and
 record what it shows in `tests/hashes/dolphin-triage.txt`. Two runs of each side on top-ride-grass
 gave identical pictures and state, so any difference is between the two, not noise. That
-holds for those runs only. The triage file is one look, not a pass or fail.
+holds for those runs only. The triage file is one look, not a pass or fail. Deep in a race
+Dolphin's frame count falls behind its pictures, so a race checkpoint can show a later moment
+of Dolphin's than of Dragoon's. Check the race clock in both halves before reading anything
+into a race difference.
 
 ## gcn-recomp `95e1c6b`
 

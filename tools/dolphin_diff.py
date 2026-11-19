@@ -24,8 +24,12 @@ first frame of each scene Dolphin's run goes through, as dtm.scene_steps gives i
 frames after that, once the picture has settled. Dolphin's game frame is dtm.game_frames,
 counted from vi.renew_count, which is what dtm.py gives the route's presses by and what Dragoon's
 own frame count matched within a frame at every scene change (docs/dev/status.md, Dolphin
-reference). Dragoon's is its presented frame, the N of its frame_N.png and the frame the bot
-reads state at.
+reference). In a race the count falls behind: dtm.game_frames misses the frame the game shows
+on a field where vi.renew_count also goes back to 0. In the first 1113 fields of the Air Ride
+race it gave 18 frames fewer than vi.next_buffer's pictures, and the race clocks were 18.6
+frames apart, so deep in a race a checkpoint gets a later moment of Dolphin's. Counting by
+pictures instead is open, since in the menus they run ahead of the game's frames. Dragoon's
+is its presented frame, the N of its frame_N.png and the frame the bot reads state at.
 
 A Dolphin dump has no frame number: it writes one PNG for each new picture its VI shows.
 vi.next_buffer changes once for each picture the game puts up, so the pictures by a field are its
