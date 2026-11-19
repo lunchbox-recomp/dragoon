@@ -385,14 +385,14 @@ tools/audio_hashes.py menu title
 
 ## state_goldens.py
 
-Does a route still play the same? It plays each manifest route through bot_link.py with a bot that presses nothing and, at each of the route's required frames, reads the game's state from guest RAM by kar_ram.json's names. It compares that with `tests/hashes/state/<route>.txt`, or `state-16x9/` at 16:9, whose README says what a line holds and which values aren't mapped. A changed value means the route played differently, whatever its frames show.
+Does a route still play the same? It plays each manifest route through bot_link.py with a bot that presses nothing and, at each of the route's required frames, reads the game's state from guest RAM by kar_ram.json's names. It compares that with `tests/hashes/state/<route>.txt` at either aspect, whose README says what a line holds and which values aren't mapped. A changed value means the route played differently, whatever its frames show.
 
 ```
 tools/state_goldens.py check air-ride-race --aspect=16:9
 tools/state_goldens.py record
 ```
 
-`record` plays at 4:3 and `check` at either aspect against the same goldens. Each run is `build/probe/state-ROUTE/`, which starts from a blank memory card and is deleted after. A run gets twice its manifest seconds and quits one dump interval past its last checkpoint. It exits 0, 1 or 2 as frame_hashes.py does.
+`record` plays at 4:3 and refuses `--aspect=16:9`, and `check` plays at either aspect against the same goldens. A route that differs at 16:9 is a bug, listed in `tests/hashes/known-issues.txt`. Each run is `build/probe/state-ROUTE/`, which starts from a blank memory card and is deleted after. A run gets twice its manifest seconds and quits one dump interval past its last checkpoint. It exits 0, 1 or 2 as frame_hashes.py does.
 
 ## route_compiles.py
 
@@ -419,21 +419,36 @@ tools/nightly.py install-agent
 
 | Step | What it plays | The bar |
 |---|---|---|
-| `frames` | Every route at 4:3 and 16:9, one bot run each, dumping frames | Every frame hashes as its golden, and every checkpoint's state matches `tests/hashes/state/` or `state-16x9/` |
+| `frames` | Every route at 4:3 and 16:9, one bot run each, dumping frames | Every frame hashes as its golden, and every checkpoint's state matches `tests/hashes/state/`, the same golden at both aspects |
 | `audio` | Every route as `audio_hashes.py check` plays it | Every row matches |
 | `shaders` | A fresh warm-up one pass at a time into a scratch cache, then every route at both aspects from it | 0 compiles on each, and each reaches its frame |
-| `timed` | timed_bars.py's runs from the same cache | Four players' `[rt]` p99 8 ms or less, 0 compiles and a boot of 1,000 ms or less. The race's results frame the same at 16:9 as at 4:3. The menu's held redraw p99 17 ms or less and its CPU time p99 1.5 ms or less |
+| `timed` | timed_bars.py's runs from the same cache | Four players' `[rt]` p99 8 ms or less, 0 compiles and a boot of 1,000 ms or less. The race's results at frame 13,062 exactly, at both aspects. The menu's held redraw p99 17 ms or less and its CPU time p99 1.5 ms or less |
 | `soak` | bot_soak.py for 30 minutes each in Air Ride, Top Ride and City Trial with one player and City Trial with four | No stop |
 
 Each step but `timed` is a child process at `nice -n 19`. The run holds `caffeinate -i`, and before every game process it asks `pmset -g batt` for AC power. On battery it writes the report so far with the step marked skipped-battery and the rest not-run, then exits 2. The timed numbers carry the 1-minute load as their run began and ended.
 
-The report is `build/nightly/YYYY-MM-DD-HHMM/`. The regressions come first in `summary.txt`. They're the checks that flipped since the last report or fail for the first time, and the timed numbers more than 10% off the last report or the number status.md gave. Each names the route, the frame or field and the file to look at. After them come the failures that were there last time, then a line a step for the passes and last what was skipped. `report.json` holds every check.
+The report is `build/nightly/YYYY-MM-DD-HHMM/`. The regressions come first in `summary.txt`. They're the checks that flipped since the last report or fail for the first time, and the timed numbers in ms more than 10% and more than 0.25 ms slower than the last report or the number status.md gave. The 0.25 ms is 1.5% of a 60 Hz frame, under which no number here costs a player a frame. Each names the route, the frame or field and the file to look at, with a changed frame's full hash. After them come the failures that were there last time and then the known issues. Those are the checks `tests/hashes/known-issues.txt` lists (known_issues.py) that fail first at the checkpoint it names. They fail nothing. One that passes says its line can go, and one that fails elsewhere fails as any check does. Then come the numbers as far under status.md's as a regression would be over, under Improved, which fail nothing and say to update status.md. Last come a line a step for the passes and what was skipped. `report.json` holds every check.
 
-A frame that drew differently keeps its dump in `dumps/`. `build/nightly/golden-build/` keeps a copy of the game from the last frames step where everything matched. When it draws that frame's golden hash again, the dump is a side-by-side PNG with the golden on the left (frame_pair.py). Otherwise the new frame stands alone beside the hash in the summary. The logs of failed shader, audio and timed checks are kept. Every other dump and run is deleted, and it never writes `tests/` or `docs/`.
+A frame that drew differently keeps its dump in `dumps/`. `build/nightly/golden-build/` keeps a copy of the game from the last frames step where everything but the known issues matched, with the commits it was built from in `commit.txt`. When it draws that frame's golden hash again, the dump is a side-by-side PNG with the golden on the left (frame_pair.py). Otherwise the new frame stands alone beside the hash in the summary. The logs of failed shader, audio and timed checks are kept. Every other dump and run is deleted, and it never writes `tests/` or `docs/`.
 
-`--last` names the report to compare with, by default the newest earlier one. `--build DIR` plays the game in DIR through probe.sh's `--bin`, for a scratch worktree with no build of its own. `install-agent` writes `~/Library/LaunchAgents/org.lunchbox-recomp.dragoon.nightly.plist` and prints it. The job runs `nightly.py run` at 01:30 every day. Nothing loads it but `launchctl bootstrap` or the next login, and `uninstall-agent` removes it.
+`--last` names the report to compare with, by default the newest earlier one. One that doesn't read as a report is said so in the summary's head before anything plays, and nothing is compared. `--build DIR` plays the game in DIR through probe.sh's `--bin`, for a scratch worktree with no build of its own. The head names the engine commit the game says it was built from, out of a run's `session.json`.
 
-nightly_steps.py holds what each step plays and nightly_report.py the comparison and the summary. nightly_agent.py holds the launchd job, power.py the AC check and frame_pair.py the side-by-side PNG. None has a command line. The tests play the frames step on testengine.py's fake game.
+A run holds `build/nightly/run.lock`, so a second one in the same tree refuses instead of deleting the first one's runs in `build/probe/`. No run starts while a `dragoon` or `dragoon_bench` process runs either, since that would be a second game.
+
+`install-agent` writes `~/Library/LaunchAgents/org.lunchbox-recomp.dragoon.nightly.plist` and prints it, and `--print` only prints it. The job runs `/usr/bin/python3 CLONE/tools/nightly.py run --scheduled` at 01:30 every day, its output going to `~/Library/Logs/dragoon-nightly.log`. CLONE is `--clone`, by default `dragoon-nightly` beside this clone, a clone of its own so the job never plays a branch or an edit left in a working one. Nothing loads the job but `launchctl bootstrap` or the next login, and `uninstall-agent` removes it.
+
+A `--scheduled` run that starts outside 01:00 to 06:00, as one does when the Mac slept through 01:30 and woke at noon, logs a line and plays nothing. Otherwise it fast-forwards its clone to `origin/main` with the submodule, builds `dragoon` and `dragoon_bench` by name with the cmake the build was configured with and runs again as the new code. It refuses a clone with changes, off `main` or not at `origin/main`. Set the clone up once:
+
+```
+git clone https://github.com/lunchbox-recomp/dragoon.git dragoon-nightly
+git -C dragoon-nightly submodule update --init
+ln -s DISC dragoon-nightly/rom/game.iso
+cmake -S dragoon-nightly -B dragoon-nightly/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+```
+
+with the same `-DFETCHCONTENT_SOURCE_DIR_*` settings as a working clone's build, if it has any.
+
+nightly_steps.py holds what each step plays and nightly_report.py the comparison and the summary. nightly_start.py holds the lock, the game and hour checks and the clone's update, and known_issues.py reads the known issues. nightly_agent.py holds the launchd job, power.py the AC check and frame_pair.py the side-by-side PNG. None has a command line. The tests play the frames step on testengine.py's fake game and the other steps with their runs faked (test_nightly_steps.py).
 
 ## interp_bisect.py
 

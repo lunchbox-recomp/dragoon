@@ -666,7 +666,7 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `b4f8ddb` on Dragoon `ae7ebd1`, in one pass of 15 min at `nice -n 19` and loads of 4.8 to 6.1. At `236e1f4` it took three passes, where a busier Mac cut runs short (under gcn-recomp `b4f8ddb`). With `city-trial-2p` added, all twenty-five routes' 1,964 frames matched on a build of Dragoon `c147cec` in 15 min at `nice -n 19` and loads of 3.4 to 5.3 | Pass |
 | World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `45c52c5` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
 | Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `45c52c5` at loads of 2.7 to 6.3) | Pass |
-| Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1). On a build of Dragoon `c147cec` at gcn-recomp `b4f8ddb`, the race left alone finished first in 1:14.68 at both aspects, with the CPUs on 1:15.40, 1:15.57 and 1:16.36, read from each run's frame 25,800. Since the results screen now keeps its 4:3 frame between bars, the two frames no longer hash the same. Each was `tools/probe.sh NAME 150 tests/routes/air-ride-race.txt 300 --exit-after=26700`, plus `--aspect=16:9`, at `nice -n 19` and loads of 2.9 to 4.1 | Pass |
+| Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1). On a build of Dragoon `c147cec` at gcn-recomp `b4f8ddb`, the race left alone finished first in 1:14.68 at both aspects, with the CPUs on 1:15.40, 1:15.57 and 1:16.36, read from each run's frame 25,800. Since the results screen now keeps its 4:3 frame between bars, the two frames no longer hash the same. Each was `tools/probe.sh NAME 150 tests/routes/air-ride-race.txt 300 --exit-after=26700`, plus `--aspect=16:9`, at `nice -n 19` and loads of 2.9 to 4.1. Another route plays differently at 16:9. On `air-ride-courses-2` the state at 15,600 matches 4:3, and by 19,400 on Beanstalk Park every rider's speed and position is off by up to about 1.1 units, the same on every run. It's listed in `tests/hashes/known-issues.txt` until it's fixed | Pass on the race, fails on `air-ride-courses-2` |
 | HUD at 16:9 | Every HUD draw keeps its 4:3 width, height and distance to its anchored edge within 1 display pixel at 480 high, in the race, 1P City Trial, 2P and 4P | `drawlog.py hud` passed every anchored draw, 41 in the race (also with `GCN_GX_SYNC=1`), 33 in City Trial, 54 in 2P and 76 in 4P, on Dragoon `e52dce1` at loads of 1.5 to 3.1. It passed with the same counts under the stricter tool on Dragoon `1ff85c8` at gcn-recomp `b11ebc6`, where all twenty-four routes' frames and audio matched. Top Ride's 38 HUD draws still stretch, and so do the bars between split views, since they span the screen (`widescreen.md`) | Pass |
 | Split views | Every HUD box stays inside its own view at 16:9 | No HUD box in 2P or 4P sticks out of its view by more than 1 pixel more than at 4:3. The 4P clock sits on the bars and anchors to the screen's left edge (Dragoon `e52dce1` at loads of 1.5 to 3.1) | Pass |
 | Frames at 16:9 | Every route recorded twice at 16:9, and the two passes match | `tools/frame_hashes.py record --aspect=16:9` wrote all twenty-five routes' 1,964 frames in 17 min, and `check --aspect=16:9` straight after matched all 1,964 in 15 min, at `nice -n 19` and loads of 3.2 to 5.1 (a build of Dragoon `c147cec`, gcn-recomp `b4f8ddb`). A third pass, the check after the tools suite, matched all 1,964 again in 16 min at loads of 5.0 to 5.3. Every frame differs from its 4:3 golden, from frame 60 on, since the game's 640x480 dump holds the picture before the window stretches it | Pass |
@@ -922,15 +922,23 @@ tools/nightly.py install-agent
 ```
 
 Read `build/nightly/YYYY-MM-DD-HHMM/summary.txt` first. Its regressions section lists each check
-that flipped since the last report, each new failure and each timed number more than 10% off the
-last report or this file's number, with the route, the frame or field and the dump or log to
-open. "Drew differently" is a frame whose hash changed, and "played differently" a checkpoint
-whose state from guest RAM changed. A side-by-side PNG puts the golden frame on the left when
-`build/nightly/golden-build/` can draw it again. `report.json` holds every check, and the run
-exits 2 with the step marked skipped-battery when the Mac was on battery.
+that flipped since the last report, each new failure and each timed number more than 10% and
+0.25 ms slower than the last report or this file's number, with the route, the frame or field
+and the dump or log to open. "Drew differently" is a frame whose hash changed, and "played
+differently" a checkpoint whose state from guest RAM changed. The checks in
+`tests/hashes/known-issues.txt` come under Known issues and fail nothing, and a number that far
+faster than this file's comes under Improved, as a cue to measure the row again. A side-by-side
+PNG puts the golden frame on the left when `build/nightly/golden-build/` can draw it again.
+`report.json` holds every check, and the run exits 2 with the step marked skipped-battery when
+the Mac was on battery.
 
 `install-agent` writes the launchd job for 01:30 and prints it, and nothing loads it until
-`launchctl bootstrap gui/UID FILE` does or the next login.
+`launchctl bootstrap gui/UID FILE` does or the next login. The job runs in a clone of its own,
+`dragoon-nightly` beside this one, with its own `build/` configured once as this one's is and
+`rom/game.iso` linked to the disc. Each night it fast-forwards that clone to `origin/main`,
+builds `dragoon` and `dragoon_bench` and refuses a clone with changes or off `origin/main`. It
+skips a night it starts outside 01:00 to 06:00, and no run starts while another does or while a
+`dragoon` or `dragoon_bench` process runs.
 
 ## gcn-recomp `95e1c6b`
 
