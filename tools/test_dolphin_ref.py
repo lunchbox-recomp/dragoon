@@ -9,7 +9,6 @@ import socket
 import stat
 import subprocess
 import sys
-import threading
 import time
 import unittest
 from pathlib import Path
@@ -25,8 +24,10 @@ MDNS = "/var/run/mDNSResponder"
 
 
 class FakeDolphin:
-    """Stands in for a Dolphin process: once started it sends MESSAGES to the memory watcher's
-    socket, one datagram each."""
+    """Stands in for a Dolphin process: popen sends MESSAGES to the memory watcher's socket, one
+    datagram each, before it returns. play binds the socket before it starts the process, so
+    they're all waiting when it first reads, however slow the machine, and a short timeout
+    can't run out before the first comes."""
 
     pid = 4242
 
@@ -40,19 +41,14 @@ class FakeDolphin:
     def popen(self, cmd: list[str], **kwargs) -> "FakeDolphin":
         self.cmd = cmd
         self.kwargs = kwargs
-        self.thread = threading.Thread(target=self.send)
-        self.thread.start()
-        return self
-
-    def send(self) -> None:
         out = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         for message in self.messages:
             out.sendto(message, str(self.sock_path))
         out.close()
+        return self
 
     def poll(self):
         """Exits once it has sent everything, as Dolphin does on SIGINT."""
-        self.thread.join()
         self.returncode = 0
         return self.returncode
 
@@ -676,7 +672,6 @@ class PlayTest(unittest.TestCase):
         seen = []
         run = dolphin_ref.play(["dolphin"], self.sock, 5, 5.0, ["805361AC"], seen.append,
                                popen=fake.popen, killpg=group)
-        fake.thread.join()
         self.assertEqual(run.frames, 5)
         self.assertEqual(seen, [1, 2, 3, 4, 5])
         self.assertEqual([w["805361AC"] for w in run.ram],
@@ -690,9 +685,8 @@ class PlayTest(unittest.TestCase):
         began = time.monotonic()
         run = dolphin_ref.play(["dolphin"], self.sock, 10, 0.3, ["805361AC"], popen=fake.popen,
                                killpg=group)
-        fake.thread.join()
         self.assertEqual(run.frames, 2)
-        self.assertLess(time.monotonic() - began, 5)
+        self.assertLess(time.monotonic() - began, 5)  # the 0.3 s wait, with room for a slow run
         self.assertEqual(group.calls[0], (4242, signal.SIGINT))
 
     def test_a_group_still_there_after_the_grace_gets_sigkill(self):
