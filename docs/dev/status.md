@@ -961,6 +961,35 @@ tools/dolphin_ref.py boot rom/game.iso --frames 2000 --dump --out DIR
 
 `audit-notes` lists what the audit of the tree found and what each finding became.
 
+Dolphin now plays our routes as input movies. The tag's headless frontend took `-m` and never
+played it, so `tools/dolphin-ref/headless-movie.patch` has it call `PlayInput` before boot, as
+the Qt frontend does, and opt out of relaunch at login. It changes `MainNoGUI.cpp` and nothing
+else, and `build` and `boot` refuse a tree whose `git diff` isn't that patch. `tools/dtm.py`
+turns a route into a `.dtm`. The game polls the pad twice a field from field 48 on, counted
+with the triggers on top-ride-grass from the title to the race. Each poll gets the route's
+input at the game frame its field reached in the movie's own last run, so the movie is made
+again from its run until it comes out the same.
+
+top-ride-grass on 2026-11-19: the field and game frame each scene started at in Dolphin, and
+the Dragoon frame `kar_ram.json` saw that scene at on the same route:
+
+| scene.major/minor | Dolphin field | Dolphin game frames | Dragoon saw it at |
+|---|---|---|---|
+| 18/0, then 18/38, booting | 169, 223 | 0 | frame 2 (city-trial-stadium) |
+| 2/0, the opening and title | 551 | 303 to 1002 | |
+| 3/2, the main menu | 1342 | 1003 to 1703 | |
+| 5/24, Top Ride's movie | 2148 | 1704 to 2003 | 1750 |
+| 5/7, course select | 2476 | 2004 to 2607 | 2050 |
+| 5/9, machine select | 3128 | 2608 to 3232 | 2650 |
+| 5/19, the race | 3792 | 3233 on | 3250 |
+
+Each Dragoon frame falls inside the game frames Dolphin had that scene for. Frame numbers don't
+line up while booting: Dolphin's game shows no frame until field 244, so its boot scenes all
+come at game frame 0. The state golden's one checkpoint, frame 3600, has scene 5/19, and Dolphin
+reached game frame 3600 at field 4264 in 5/19.
+Two runs of that movie gave the same watched words on every field and the same frame dumps,
+3657 shared; one run stopped a dump later than the other. Comparing the pictures is Q4c.
+
 ## gcn-recomp `95e1c6b`
 
 The pin moved from `782d7fa` to `95e1c6b`, 57 commits. Empty string switches now read as unset.
