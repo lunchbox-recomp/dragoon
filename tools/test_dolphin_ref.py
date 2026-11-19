@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import configparser
 import json
 import os
@@ -198,6 +199,18 @@ class UserFolderTest(unittest.TestCase):
 class CommandTest(unittest.TestCase):
     def setUp(self):
         self.root = temp_dir(self).resolve()
+        patch = mock.patch.object(dolphin_ref, "user_dirs", lambda: ("/folders/T", "/folders/C"))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_each_profile_writes_its_own_folder_and_the_users_temp_and_cache(self):
+        writes = ('(allow file-write* (subpath "{}") (subpath "/folders/T") '
+                  '(subpath "/folders/C") (literal "/dev/null"))')
+        denies = ('(deny network* (with message "dolphin-ref"))'
+                  '(deny file-write* (with message "dolphin-ref"))')
+        for profile, own in ((dolphin_ref.build_profile(self.root), "build"),
+                             (dolphin_ref.run_profile(self.root), "user")):
+            self.assertIn(denies + writes.format(self.root / own), profile)
 
     def test_boot_runs_dolphin_awake_niced_and_sandboxed_with_its_user_folder(self):
         user = self.root / "user"
@@ -255,13 +268,14 @@ class ProfileTest(unittest.TestCase):
     def setUp(self):
         self.base = temp_dir(self, prefix="sb").resolve()
         self.root = self.base / "root"
-        (self.root / "user").mkdir(parents=True)
+        for name in ("user", "build", "src"):
+            (self.root / name).mkdir(parents=True)
         self.scratch = self.base / "scratch"
         self.scratch.mkdir()
         self.other = self.base / "other"
         self.other.mkdir()
-        self.build = dolphin_ref.build_profile(self.root, str(self.scratch))
-        self.run_ = dolphin_ref.run_profile(self.root, str(self.scratch))
+        self.build = dolphin_ref.build_profile(self.root, [str(self.scratch)])
+        self.run_ = dolphin_ref.run_profile(self.root, [str(self.scratch)])
 
     def sandboxed(self, profile: str, *cmd: str) -> int:
         return subprocess.run(dolphin_ref.sandboxed(profile, cmd), capture_output=True,
@@ -270,15 +284,26 @@ class ProfileTest(unittest.TestCase):
     def python(self, profile: str, code: str, *args: str) -> int:
         return self.sandboxed(profile, sys.executable, "-I", "-c", code, *args)
 
-    def test_writes_go_only_to_the_root_scratch_and_dev_null(self):
-        for profile in (self.build, self.run_):
-            with self.subTest(profile=profile):
-                self.assertEqual(self.sandboxed(profile, "/usr/bin/touch", str(self.root / "a"),
-                                                str(self.scratch / "b")), 0)
+    def test_each_profile_writes_only_its_folder_the_scratch_and_dev_null(self):
+        for profile, own, others in ((self.build, "build", ("user", "src", "")),
+                                     (self.run_, "user", ("build", "src", ""))):
+            with self.subTest(own=own):
+                self.assertEqual(self.sandboxed(profile, "/usr/bin/touch",
+                                                str(self.root / own / "a"),
+                                                str(self.scratch / own)), 0)
                 self.assertEqual(self.python(profile, "open('/dev/null', 'w').write('x')"), 0)
-                self.assertNotEqual(self.sandboxed(profile, "/usr/bin/touch",
-                                                   str(self.other / "c")), 0)
-                self.assertFalse((self.other / "c").exists())
+                for path in (*(self.root / name / "b" for name in others), self.other / "c"):
+                    self.assertNotEqual(self.sandboxed(profile, "/usr/bin/touch", str(path)), 0,
+                                        path)
+                    self.assertFalse(path.exists(), path)
+
+    def test_the_scratch_folders_are_this_users_temp_and_cache_alone(self):
+        temp, cache = dolphin_ref.user_dirs()
+        self.assertEqual((Path(temp).name, Path(cache).name), ("T", "C"))
+        self.assertEqual(Path(temp).parent, Path(cache).parent)
+        for path in (temp, cache):
+            self.assertEqual(path, os.path.realpath(path))
+            self.assertTrue(path.startswith("/private/var/folders/"), path)
 
     def test_no_tcp_even_to_this_machine(self):
         server = socket.socket()
@@ -403,9 +428,8 @@ class WatchTest(unittest.TestCase):
     def test_a_word_outside_main_ram_or_unaligned_is_refused(self):
         for text in ("7FFFFFFC", "81800000", "817FFFFE", "805361AD", "805361AE",
                      "805361AF", "zz"):
-            with self.subTest(text=text), self.assertRaises(Exception) as caught:
+            with self.subTest(text=text), self.assertRaises(argparse.ArgumentTypeError):
                 dolphin_ref.watch_address(text)
-            self.assertEqual(type(caught.exception).__name__, "ArgumentTypeError")
 
     def test_a_datagram_names_the_words_that_changed(self):
         self.assertEqual(dolphin_ref.parse_watch(b"805361ac\n2000000\n80536000\n0\n\0"),
@@ -487,9 +511,11 @@ class MainTest(unittest.TestCase):
         commit(self.root / "src", {"README.md": "not the pin"})
         self.iso = self.root / "game.iso"
         self.iso.write_bytes(b"GKYE01")
-        patch = mock.patch.object(dolphin_ref, "default_root", lambda: self.root)
-        patch.start()
-        self.addCleanup(patch.stop)
+        for name, value in (("default_root", lambda: self.root),
+                            ("user_dirs", lambda: ("/folders/T", "/folders/C"))):
+            patch = mock.patch.object(dolphin_ref, name, value)
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def boot(self, *extra: str) -> tuple[int, str, str]:
         with mock.patch.object(dolphin_ref, "play", side_effect=AssertionError("ran")):

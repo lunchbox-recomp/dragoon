@@ -25,10 +25,15 @@ aren't at the commits it pins, or that `git status` finds changed or untracked f
 also refuses a build that BUILT doesn't say came from that commit.
 
 cmake and ninja run under `sandbox-exec` with build_profile, and Dolphin with run_profile. Both
-deny all network, so a DNS lookup fails too, and every file write outside ROOT, the per-user
-temp and cache folders under /private/var/folders, where TMPDIR points, and /dev/null.
-Dolphin's profile allows one more thing, sending to a Unix socket inside ROOT/user, which is
-the memory watcher's.
+deny all network, so a DNS lookup fails too. build_profile lets cmake and ninja write only
+ROOT/build, and run_profile lets Dolphin write only ROOT/user, so neither can change src/ and
+Dolphin can't change build/. Both may also write this user's temp and cache folders (USER_DIRS)
+and /dev/null. Dolphin's profile allows one more thing, sending to a Unix socket inside
+ROOT/user, which is the memory watcher's. --out needs no allowance, since boot itself moves the
+dumps there once Dolphin has stopped. Every denial goes into the unified log with DENIED, so
+  log show --last 10m --predicate 'eventMessage CONTAINS "dolphin-ref"'
+lists what a run was refused. Each process's write to /dev/dtracehelper is among them, which
+only stops it offering DTrace probes.
 
 boot counts frames by Dolphin's memory watcher, which sends one datagram over that socket at
 the end of every video field. Each datagram lists the watched words that changed, so --watch
@@ -114,8 +119,13 @@ SYS_LINK = Path("Binaries") / "Contents" / "Resources" / "Sys"
 BUILT = "dolphin-ref-built.json"
 
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
-# The per-user temp and cache folders, where TMPDIR points.
-SCRATCH = "/private/var/folders"
+GETCONF = "/usr/bin/getconf"
+# This user's temp folder, where TMPDIR points, and cache folder, the T and C under
+# /private/var/folders. Nothing else of that user's folder there.
+USER_DIRS = ("DARWIN_USER_TEMP_DIR", "DARWIN_USER_CACHE_DIR")
+# What each denial the profiles make carries into the unified log. A deny rule without a message
+# logs nothing.
+DENIED = "dolphin-ref"
 CAFFEINATE = ("/usr/bin/caffeinate", "-i")
 NICE = ("/usr/bin/nice", "-n", "19")
 BUILD_NICE = ("/usr/bin/nice", "-n", "10")
@@ -234,17 +244,38 @@ def profile_path(path: Path) -> str:
     return text
 
 
-def build_profile(root: Path, scratch: str = SCRATCH) -> str:
-    """No network at all, and no file writes outside ROOT, SCRATCH and /dev/null."""
-    return ("(version 1)(allow default)(deny network*)(deny file-write*)"
-            f'(allow file-write* (subpath "{profile_path(root)}") (subpath "{scratch}")'
-            ' (literal "/dev/null"))')
+def user_dirs() -> tuple[str, ...]:
+    """This user's own temp and cache folders, as the sandbox sees them."""
+    dirs = []
+    for name in USER_DIRS:
+        out = subprocess.run([GETCONF, name], capture_output=True, text=True)
+        text = out.stdout.strip()
+        if out.returncode or not text:
+            raise Refused(f"getconf {name} gave no folder")
+        dirs.append(profile_path(Path(text)))
+    return tuple(dirs)
 
 
-def run_profile(root: Path, scratch: str = SCRATCH) -> str:
-    """build_profile, and sending to a Unix socket inside ROOT/user, the memory watcher's."""
+def profile(writable: Sequence[str], scratch: Optional[Sequence[str]]) -> str:
+    """No network at all, and no file writes outside WRITABLE, SCRATCH (user_dirs by default)
+    and /dev/null."""
+    subpaths = " ".join(f'(subpath "{path}")'
+                        for path in (*writable, *(user_dirs() if scratch is None else scratch)))
+    return (f'(version 1)(allow default)(deny network* (with message "{DENIED}"))'
+            f'(deny file-write* (with message "{DENIED}"))'
+            f'(allow file-write* {subpaths} (literal "/dev/null"))')
+
+
+def build_profile(root: Path, scratch: Optional[Sequence[str]] = None) -> str:
+    """cmake's and ninja's: writes go to ROOT/build only, besides the scratch folders."""
+    return profile([profile_path(root / "build")], scratch)
+
+
+def run_profile(root: Path, scratch: Optional[Sequence[str]] = None) -> str:
+    """Dolphin's: writes go to ROOT/user only, besides the scratch folders, and it may send to a
+    Unix socket there, the memory watcher's."""
     user = profile_path(root / "user")
-    return (build_profile(root, scratch)
+    return (profile([user], scratch)
             + f'(allow network-outbound (remote unix-socket (subpath "{user}")))')
 
 
