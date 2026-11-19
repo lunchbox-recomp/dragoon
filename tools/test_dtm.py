@@ -184,9 +184,10 @@ class PollMappingTest(unittest.TestCase):
                     self.assertLessEqual(max(state["TriggerL"], state["TriggerR"]), 30)
 
     def test_game_frames_add_up_renew_across_its_resets(self):
-        lines = ["frame 805DE2CC", "1 00000000", "2 00000001", "3 00000003", "4 00000000",
+        # Field 4 resets the count and shows a frame, field 5 another.
+        lines = ["frame 805DE2CC", "1 00000000", "2 00000001", "3 00000003", "4 00000001",
                  "5 00000002"]
-        self.assertEqual(dtm.game_frames(lines), [0, 1, 3, 3, 5])
+        self.assertEqual(dtm.game_frames(lines), [0, 1, 3, 4, 5])
 
     def test_polls_reads_the_entry_the_game_wrote_last(self):
         state = 0x05020300  # length 5, read place 2, write place 3, none waiting
