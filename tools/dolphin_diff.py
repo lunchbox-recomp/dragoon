@@ -87,7 +87,7 @@ near (a frame off), differs or none (not compared). CLASS is one of CLASSES:
   setup    the test makes the two sides differ, not Dragoon, such as an unpinned seed
   timing   the same pictures in another order or a few frames apart, such as load order
   unclear  not known yet
-  within   under BUDGET with the state the same
+  within   under BUDGET with the state the same or a frame off
   refused  no match, the reason saying why
 # lines and blank lines are comments. parse_triage reads it.
 
@@ -112,9 +112,9 @@ from typing import Optional, Sequence
 import bot_link
 import dolphin_ref
 import dtm
+import framediff
 import kar_ram
 import state_goldens
-import framediff
 from framediff import Image, read_png
 from frame_dumps import frame_files
 from frame_pair import side_by_side, write_png
