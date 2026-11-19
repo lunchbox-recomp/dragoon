@@ -59,7 +59,10 @@ YES after a -- didn't: loginwindow still listed the run.
 boot counts frames by Dolphin's memory watcher, which sends one datagram over that socket at
 the end of every video field. Each datagram lists the watched words that changed, so --watch
 reads guest RAM every frame, a 32-bit word at an aligned hex address or the word holding a
-kar_ram.json name at a fixed address. By default it's the word holding scene.major. Once N
+kar_ram.json name at a fixed address. An address can go on with offsets joined by CHAIN, such
+as 8055AA2C+2C+300, for the watcher to follow pointers the way kar_ram.json's paths do: it
+reads the pointer at the address, adds the next offset and reads there, and so on, and gives
+the pointer itself when one leads outside RAM. By default it's the word holding scene.major. Once N
 frames have ended it sends SIGINT to the run's process group, which Dolphin takes as a request
 to shut down, and SIGKILL to whatever is left 30 s later.
 
@@ -234,6 +237,9 @@ DEFAULT_DISC = "console"
 GAME_ID = 6  # the bytes of the game ID at the start of a disc and at 4 in a .dtm
 MOVIE_GAME_ID = 4
 WORD = 4  # the memory watcher reads 32-bit words
+# Joins a watch's address and the offsets it follows, where Locations.txt and the datagrams put
+# a space, so ram.txt keeps one column a watch.
+CHAIN = "+"
 SUN_PATH_MAX = 103  # sockaddr_un's 104 bytes on macOS, less the NUL
 WATCHER = Path("MemoryWatcher")
 PIPE = Path("Pipes") / "pad1"
@@ -572,15 +578,26 @@ def word_of(name: str, table: Optional[dict] = None) -> int:
     return entry.address & ~(WORD - 1)
 
 
+def chain(address: int, offsets: Sequence[int]) -> str:
+    """The watch for the word OFFSETS lead to from ADDRESS, as kar_ram.json's paths do: the
+    address and each offset in hex, joined by CHAIN."""
+    return CHAIN.join([f"{address:08X}", *(f"{o:X}" for o in offsets)])
+
+
 def watch_address(text: str) -> str:
-    """TEXT's word to watch: a name in kar_ram.json, for the aligned word holding it, or a hex
-    address."""
+    """TEXT's word to watch: a name in kar_ram.json, for the aligned word holding it, a hex
+    address, or a hex address with offsets to follow joined by CHAIN (8055AA2C+2C+300)."""
     table = kar_ram.load()
     if text in table:
         try:
             return f"{word_of(text, table):08X}"
         except KeyError:
             raise argparse.ArgumentTypeError(f"{text!r} is behind a pointer") from None
+    head, *offsets = text.split(CHAIN)
+    if offsets:
+        if not all(kar_ram.OFFSET.fullmatch(o.upper()) for o in offsets):
+            raise argparse.ArgumentTypeError(f"{text!r}: an offset isn't 1 to 4 hex digits")
+        return chain(int(watch_address(head), 16), [int(o, 16) for o in offsets])
     try:
         value = int(text, 16)
     except ValueError:
@@ -598,14 +615,16 @@ def parse_watch(message: bytes) -> dict[str, int]:
     turn, ended by a NUL."""
     lines = message.rstrip(b"\0").decode("ascii").split("\n")
     pairs = [line for line in lines if line]
-    return {pairs[i].upper(): int(pairs[i + 1], 16) for i in range(0, len(pairs) - 1, 2)}
+    return {pairs[i].upper().replace(" ", CHAIN): int(pairs[i + 1], 16)
+            for i in range(0, len(pairs) - 1, 2)}
 
 
 def fresh_console(user: Path, watched: Sequence[str]) -> Path:
     """Delete FRESH's card and SRAM and the old pipe under USER, write the watcher's addresses
     and make a new pipe. Returns the pipe's path."""
     (user / WATCHER).mkdir(parents=True, exist_ok=True)
-    (user / WATCHER / "Locations.txt").write_text("\n".join(watched) + "\n")
+    (user / WATCHER / "Locations.txt").write_text(
+        "\n".join(w.replace(CHAIN, " ") for w in watched) + "\n")
     pipe = user / PIPE
     pipe.parent.mkdir(parents=True, exist_ok=True)
     for path in (pipe, *(user / p for p in FRESH)):
@@ -854,8 +873,9 @@ def main(argv: list[str]) -> int:
                       help=f"how fast the disc reads (default {DEFAULT_DISC})")
     boot.add_argument("--dump", action="store_true", help="dump every frame as a PNG")
     boot.add_argument("--watch", type=watch_address, action="append", metavar="ADDR",
-                      help="a word of guest RAM to read every frame, by hex address or "
-                           "kar_ram.json name (default: the word holding scene.major)")
+                      help="a word of guest RAM to read every frame, by hex address, hex "
+                           "address and offsets (8055AA2C+2C+300) or kar_ram.json name "
+                           "(default: the word holding scene.major)")
     boot.add_argument("--out", type=Path, metavar="DIR")
     boot.add_argument("--timeout", type=float, default=60.0, metavar="SECONDS",
                       help="stop when no frame ends for this long (default 60)")

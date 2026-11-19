@@ -1,0 +1,21 @@
+# Dragoon against Dolphin 2609a at matched game frames, both reading the disc at console speed,
+# triaged by eye once from tools/dolphin_diff.py's side-by-sides. One line a route and checkpoint:
+#   ROUTE FRAME share=S% max=M mean=E CLASS REASON
+# S is the share of pixels off by more than the tolerance (4), M and E the largest and mean
+# channel error. CLASS is bug (a Dragoon bug), dolphin (Dolphin differs and it isn't our bug),
+# unclear, within (under the 0.1% budget) or refused (no match). Format: dolphin_diff.py --help.
+top-ride-grass 0 share=0% max=0 mean=0 refused Dolphin's run has put up no picture by game frame 0, where both boot scenes start
+top-ride-grass 10 share=9.493% max=254 mean=10.47 unclear the memory card prompt has its text and Yes and No in Dragoon and an empty panel in Dolphin, and every Dolphin dump in reach is that empty panel; Dolphin's card check takes console time before the game counts frames
+top-ride-grass 304 share=0.000% max=0 mean=0.00 within under the budget
+top-ride-grass 314 share=3.444% max=24 mean=0.29 dolphin the logos' edges only, a texel's difference in where they're sampled
+top-ride-grass 1003 share=0.421% max=88 mean=0.10 dolphin the gears' edges only, a texel's difference in where they're sampled
+top-ride-grass 1013 share=3.896% max=139 mean=0.43 dolphin the mode select's edges and text outlines only, a texel's difference in where they're sampled
+top-ride-grass 1704 share=0.000% max=0 mean=0.00 within under the budget
+top-ride-grass 1714 share=0.000% max=0 mean=0.00 within under the budget
+top-ride-grass 2004 share=2.826% max=230 mean=1.29 unclear the SAVE icon is up in Dragoon and not yet in Dolphin, where the sliding thumbnails line up; the rest is edges
+top-ride-grass 2014 share=10.201% max=206 mean=1.22 dolphin edges, and the detail inside the course thumbnails, which are shrunk pictures filtered differently
+top-ride-grass 2608 share=0.561% max=36 mean=0.08 dolphin the title's and the tab's edges only
+top-ride-grass 2618 share=2.901% max=199 mean=0.36 dolphin the player entry screen's edges and text outlines only
+top-ride-grass 3234 share=2.025% max=117 mean=0.36 unclear the starting grid differs: P1 is on another place and the CPUs have other colours, so the race's random draw came out differently; the rest is edges
+top-ride-grass 3244 share=19.489% max=188 mean=3.06 unclear the same starting grid difference as at 3234, with the course faded in
+top-ride-grass 3600 share=95.032% max=255 mean=37.47 unclear Dragoon's race clock reads 0:03.62 and Dolphin's 0:03.92: Dolphin's game shows 366 frames in the 471 fields since the race began, so a game frame is later in its race, and the grid differs as at 3234

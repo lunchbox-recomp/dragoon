@@ -109,14 +109,17 @@ def run_settings(route: Route, aspect: str) -> list[str]:
 
 
 def play(route: Route, name: str, *, aspect: str = "4:3", every: Optional[int] = None,
-         probe: Optional[Path] = None, settings: Sequence[str] = ()):
+         probe: Optional[Path] = None, settings: Sequence[str] = (),
+         bot: Optional[Checkpoints] = None):
     """Play ROUTE as NAME from a blank memory card and read its checkpoints. EVERY is the dump
-    interval, None for no dumps, and the run's directory stays for the caller. Returns the
-    bot_link Outcome and the Checkpoints' states."""
+    interval, None for no dumps, and the run's directory stays for the caller. BOT reads them,
+    Checkpoints at ROUTE's required frames by default. Returns the bot_link Outcome and the
+    bot's states."""
     out = bot_link.run_directory(name, probe)
     if out.exists():
         remove_run(out)
-    bot = Checkpoints(route.required, route_pads(route))
+    if bot is None:
+        bot = Checkpoints(route.required, route_pads(route))
     outcome = bot_link.run(name, route.seconds * SLOW, bot, pads=bot.ports,
                            script=str(route_file(route.name)), every=every,
                            settings=[*run_settings(route, aspect), *settings], probe=probe)

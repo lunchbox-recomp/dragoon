@@ -434,12 +434,16 @@ def cmd_make(args: argparse.Namespace) -> int:
     return 0
 
 
-def boot_command(iso: Path, movie: Path, fields: int, out: Path, disc: str) -> list[str]:
-    """dolphin_ref.py playing MOVIE for FIELDS fields with WATCH watched, into OUT."""
-    watch = [w for a in WATCH for w in ("--watch", f"{a:08X}")]
+def boot_command(iso: Path, movie: Path, fields: int, out: Path, disc: str,
+                 watched: Optional[Sequence[str]] = None, dump: bool = False) -> list[str]:
+    """dolphin_ref.py playing MOVIE for FIELDS fields into OUT, with WATCHED watched (WATCH's
+    words by default) and with DUMP its frames dumped."""
+    if watched is None:
+        watched = [f"{a:08X}" for a in WATCH]
+    watch = [w for a in watched for w in ("--watch", a)]
     return [sys.executable, "-B", str(Path(dolphin_ref.__file__).resolve()), "boot", str(iso),
             "--frames", str(fields), "--movie", str(movie), "--disc", disc, *watch,
-            "--out", str(out)]
+            *(["--dump"] if dump else []), "--out", str(out)]
 
 
 def converge(script: str, fields: int, folder: Path, play, most: int = CONVERGE_MAX,

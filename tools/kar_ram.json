@@ -377,5 +377,12 @@
     "means": "HSD_VIRenewCount: the frames the game has shown since it last set it to 0, which it does once every 60 fields along with HSD_VIRetraceCount.",
     "route": "top-ride-grass.txt",
     "frames": [2, 3600]
+  },
+  "vi.next_buffer": {
+    "address": "8056E4C0",
+    "type": "u32",
+    "means": "The SDK's NextBufAddr, the XFB the game last gave VISetNextFrameBuffer, which HSD_VIPreRetraceCB does once for each new picture. The game swaps two XFBs, 806783C0 and 8070E3C0, so it changes with every picture it shows, the one on the field vi.renew_count goes back to 0 included.",
+    "route": "top-ride-grass.txt",
+    "frames": [250, 300]
   }
 }
