@@ -265,6 +265,11 @@ class PressReadTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(out, "20:A: read at field 30, given at game frame 19, -1 frames off\n")
 
+    def test_a_press_shows_only_where_its_buttons_go_down(self):
+        # A held from 20 to 29 is one press read at 20, not the second press at 25 too.
+        found = dtm.press_reads(dtm.parse_route("20:A:3,25:A:3"), self.run_of("20:A:10"))
+        self.assertEqual([(p.at, f, g) for p, f, g in found], [(20, 31, 20), (25, -1, -1)])
+
     def test_a_press_never_read_is_named(self):
         found = dtm.press_reads(dtm.parse_route("200:B:3"), self.run_of(""))
         self.assertEqual([(p.at, f, g) for p, f, g in found], [(200, -1, -1)])
