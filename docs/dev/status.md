@@ -1059,8 +1059,8 @@ and 36 to __OSGetSystemTime, and following each result and every store through H
 
 The rest only time things or read the calendar. They're the card library's own generator and
 unlock, pad reads, HSD_Perf, alarms, DVD, SI, GX, audio, HVQM, the IP stack and the auto demo's
-calendar. The RTC isn't pinned. Dragoon's follows the wall clock in every session, yet its frame and state goldens
-repeat across days, so it reaches no compared state.
+calendar. The RTC isn't pinned. Dragoon's follows the wall clock in every session, yet its frame
+and state goldens repeat across days, so it reaches no compared state.
 
 Each site is one instruction, so each side replaces that one. Dolphin gets a `lis` in its place
 from a game INI patch, `user/GameSettings/GKYE01.ini`, which `dolphin_ref.py` writes with the
@@ -1104,9 +1104,8 @@ rounding below.
 
 All three movies were converged again in 7 runs each. `dtm.py presses` found all 11 presses on
 their route frames on each. top-ride-grass, air-ride-race and city-trial ran on AC power, one
-game at a
-time, with `log stream` watching the sandbox. Every menu checkpoint scored as before. The `setup`
-and `refused` lines are gone:
+game at a time, with `log stream` watching the sandbox. Every menu checkpoint scored as before.
+The `setup` and `refused` lines are gone:
 
 | Route | Checkpoint | Before | Now |
 |---|---|---|---|
@@ -1122,7 +1121,9 @@ and `refused` lines are gone:
 With the seeds pinned a state that differs is Dragoon's bug, and the triage line names the first
 value to differ and the frame. `ram_peek.py` read every compared value on each Dragoon frame
 against Dolphin's at the same pass or one either side, and the review of #118 checked each at
-the matching row. Everything before is bit-equal on both routes:
+the matching row. Every word read raw is bit-equal before the first difference. In Air Ride's
+race that's all four players' speed, x, y and z and the seed over frames 3330 to 3335, and in
+City Trial passes 1 to 69:
 
 - In Air Ride's race player2.x is 1 ulp off at frame 3336, pass 215 (c15a1723 against
   c15a1724) as the racers set off. player2.speed is 23 ulp off with it. From there it grows
