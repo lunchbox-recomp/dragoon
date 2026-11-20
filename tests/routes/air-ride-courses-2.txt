@@ -5,8 +5,9 @@
 # earned, then the course select. 13900 LEFT, 13940 LEFT, 13980 LEFT, 14020 DOWN: Machine
 # Passage. 14100 A to 15000 START as in air-ride-race.txt. 17000 START: pause, then End Game by
 # 17200 A and Start Game by 17600 A. 17700 LEFT: Beanstalk Park, raced from 18800 START.
-# Magma Flows' race ends at about 13050 since gcn-recomp rounds frC as Gekko does; it ended
-# before 12700 when this route was first timed, and everything after it moved 500 frames.
+# Magma Flows' race ends after 12700 and before 13200 since gcn-recomp models Gekko's single-
+# precision floats; it ended before 12700 when this route was first timed, and everything after
+# it moved 500 frames.
 120:A:5,300:A:5,900:A:5,
 1000:START:5,
 1300:A:5,1600:A:5,1900:A:5,
