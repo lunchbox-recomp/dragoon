@@ -405,7 +405,7 @@ class DragoonRunTest(unittest.TestCase):
                                           for n in range(1, 4))]) + "\n")
         calls = {}
 
-        def play(route, name, every, bot, settings):
+        def play(route, name, every, bot, settings, probe):
             calls.update(settings=settings, fields=bot.fields, required=route.required)
             raise dolphin_diff.Bad("stop here")
 
@@ -418,6 +418,52 @@ class DragoonRunTest(unittest.TestCase):
         self.assertIn("DRAGOON_SEED_PIN=1", calls["settings"])
         self.assertEqual(calls["fields"][-1], dolphin_diff.PASSES)
         self.assertEqual(calls["required"], [1, 11, 20])
+
+    def test_a_race_is_read_every_frame_to_where_dolphin_s_run_ends(self):
+        # Dolphin's run is at the main menu for 5 fields, then in Top Ride's race to game frame 30.
+        root = temp_dir(self)
+        dolphin = root / "cache"
+        dolphin.mkdir()
+        rows = [f"{n} {0x03000002 if n <= 5 else 0x05000013:08X} {n:08X} 00000000 {A:08X}"
+                for n in range(1, 31)]
+        write_file(dolphin, "ram.txt", "\n".join(["frame " + " ".join(HEAD), *rows]) + "\n")
+        probe = root / "tools" / "probe.sh"
+        calls = {}
+
+        def play(route, name, every, bot, settings, probe):
+            calls.update(settings=settings, probe=probe, seconds=route.seconds, required=route.required)
+            run_dir = dolphin_diff.bot_link.run_directory(name, probe)
+            run_dir.mkdir(parents=True)
+            link = type("Link", (), {"frame": 0, "read": lambda self, a, n: bytes(n)})()
+            for frame in range(1, 32):
+                write_file(run_dir, f"frame_{frame:05d}.png", b"")
+                link.frame = frame
+                bot(link)
+            return dolphin_diff.bot_link.Outcome(31, 31, "exit_after", "", run_dir), bot.states
+
+        with mock.patch.object(dolphin_diff.state_goldens, "play", side_effect=play), \
+                contextlib.redirect_stdout(io.StringIO()):
+            bad = dolphin_diff.play_dragoon(Route("r", 30, 60, [20], []), root / "out", dolphin,
+                                            [10, 12], probe, ["--bin=/b/dragoon"])
+        self.assertIsNone(bad)
+        self.assertEqual((calls["probe"], calls["settings"][-1]), (probe, "--bin=/b/dragoon"))
+        self.assertEqual(calls["required"], [10, 12, 30])  # on to Dolphin's last game frame
+        self.assertEqual(calls["seconds"], 30 * dolphin_diff.SLOW * 30 // 12)  # 30 frames, not 12
+        saved = dolphin_diff.json.loads((root / "out" / "dragoon" / "state.json").read_text())
+        self.assertEqual(sorted(saved["states"]), ["10", "12"])
+        self.assertEqual(sorted(map(int, saved["trace"])), list(range(4, 32)))  # from 2 early
+        self.assertEqual(sorted(p.name for p in (root / "out" / "dragoon").glob("*.png")),
+                         ["frame_00010.png", "frame_00012.png"])
+        self.assertFalse(dolphin_diff.bot_link.run_directory("dolphin-diff-r", probe).exists())
+
+    def test_the_triage_s_frames_are_the_checkpoints_and_keep_their_race(self):
+        route = Route("r", 30, 60, [20], [])
+        rows = [(0x05000013, 0, A), (0x05000013, 1, B)] + [(0x05000013, n % 60, (A, B)[n % 2])
+                                                           for n in range(2, 40)]
+        with boot_at(0):
+            got = dolphin_diff.checkpoints(route, ram(rows), [3, 25])
+        self.assertEqual([(c.frame, c.why) for c in got], [(3, "triaged"), (25, "triaged")])
+        self.assertEqual([c.race for c in got], ["", "Top Ride's race"])
 
 
 class TriageTest(unittest.TestCase):

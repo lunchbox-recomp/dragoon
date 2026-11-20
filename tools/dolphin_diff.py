@@ -83,7 +83,10 @@ paths say. Dolphin reads RAM at the end of a field, partway into the next frame'
 checkpoint's values are taken from the fields at its game frame, or its pass in a race, and the
 one either side. "same" is a match at its frame, "same, a frame off" one
 only next to it, and "differs" no match, with each value that differs listed apart from the
-picture's score for triage.
+picture's score for triage. When Dolphin's run has a race, Dragoon's also reads FIELDS and
+PASSES at every frame from TRACE_EARLY frames before the race starts in Dolphin's run to the
+last game frame Dolphin's run reaches, and plays on to that frame. They go in state.json's
+trace, which race_trace.py compares pass by pass for the race's first difference.
 
 The triage file, tests/hashes/dolphin-triage.txt, starts with the tolerance and the budget its
 scores were taken at, then has one line a route and checkpoint:
@@ -117,6 +120,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import math
 import re
 import subprocess
 import sys
@@ -141,6 +145,8 @@ ISO = ROOT / "rom" / "game.iso"
 TRIAGE = ROOT / "tests" / "hashes" / "dolphin-triage.txt"
 DISC = "console"
 SETTLE = 10  # frames after a scene's first for its settled checkpoint
+TRACE_EARLY = 2  # Dragoon frames before Dolphin's race starts that the trace reads, a scene
+# starting within a frame of Dolphin's on both sides
 BOOT = 60  # the first checkpoint: Dolphin's card prompt has its text from 58, Dragoon's from 4
 # The races, by scene.major and scene.minor. A checkpoint further in than its settled one is
 # matched by PASSES, not by the game frame. City Trial's city counts as one.
@@ -297,26 +303,38 @@ def state_of(words: dict[str, int], fields: Sequence[str] = FIELDS) -> dict[str,
 # Checkpoints and the picture match.
 
 
-def checkpoints(route: Route, lines: Sequence[str]) -> list[Checkpoint]:
-    """ROUTE's required frames, and each scene's first frame in Dolphin's run and SETTLE after,
-    none before BOOT. One in a race past its settled one is matched by the race's passes, and
-    each keeps the Dolphin fields its scene started at and the next one starts at."""
-    out = {f: f"golden {f}" for f in route.required}
-    scenes: list[tuple[int, tuple[int, int], int]] = []
+def scenes(lines: Sequence[str]) -> list[tuple[int, tuple[int, int], int]]:
+    """Each scene Dolphin's run goes through: (its first game frame, (scene.major, scene.minor),
+    its first field)."""
+    out: list[tuple[int, tuple[int, int], int]] = []
     for field, frame, major, minor in dtm.scene_steps(lines):
-        if scenes and (major, minor) == scenes[-1][1]:
+        if out and (major, minor) == out[-1][1]:
             continue  # the scene word's middle bytes changed, not the scene
-        scenes.append((frame, (major, minor), field))
+        out.append((frame, (major, minor), field))
+    return out
+
+
+def checkpoints(route: Route, lines: Sequence[str],
+                frames: Optional[Sequence[int]] = None) -> list[Checkpoint]:
+    """ROUTE's required frames, and each scene's first frame in Dolphin's run and SETTLE after,
+    none before BOOT, or FRAMES alone when given, such as the triage file's. One in a race past
+    its settled one is matched by the race's passes, and each keeps the Dolphin fields its scene
+    started at and the next one starts at."""
+    out = {f: f"golden {f}" for f in route.required}
+    scenes_found = scenes(lines)
+    for frame, (major, minor), _ in scenes_found:
         for f, why in ((frame, " starts"), (frame + SETTLE, f", {SETTLE} frames in")):
             if f < BOOT:
                 f, why = BOOT, "the blank card's prompt"
             else:
                 why = f"scene {major}/{minor}{why}"
             out.setdefault(f, why)
+    if frames is not None:
+        out = {f: out.get(f, "triaged") for f in frames}
     found = []
     for f, why in sorted(out.items()):
         start, scene, since, until = 0, None, 0, 0
-        for s, k, field in scenes:
+        for s, k, field in scenes_found:
             if s <= f:
                 start, scene, since, until = s, k, field, 0
             elif not until:
@@ -411,34 +429,60 @@ def cmd_dolphin(route: Route, movie: Path, iso: Path, out: Path) -> int:
 
 class Keeper(state_goldens.Checkpoints):
     """Checkpoints reading FIELDS and PASSES that also deletes each frame dump it won't need, LAG
-    frames behind."""
+    frames behind, and from frame TRACE on reads them at every frame into `trace`."""
     LAG = 10
 
-    def __init__(self, frames: Sequence[int], folder: Path) -> None:
+    def __init__(self, frames: Sequence[int], folder: Path, trace: Optional[int] = None) -> None:
         super().__init__(frames, 1, fields=(*FIELDS, PASSES), table=TABLE)
         self.keep = set(frames)
         self.folder = folder
         self.done = 0
+        self.trace_from = trace
+        self.trace: dict[int, state_goldens.State] = {}
 
     def __call__(self, link):
         for n in range(self.done + 1, link.frame - self.LAG):
             if n not in self.keep:
                 (self.folder / f"frame_{n:05d}.png").unlink(missing_ok=True)
         self.done = max(self.done, link.frame - self.LAG - 1)
+        if self.trace_from is not None and link.frame >= self.trace_from:
+            self.trace[link.frame] = {f: state_goldens.value_text(kar_ram.read(link, f, self.table))
+                                      for f in self.fields}
         return super().__call__(link)
 
 
-def cmd_dragoon(route: Route, out: Path) -> int:
-    lines = dtm.read_lines(dolphin_dir(out) / "ram.txt")
-    frames = [c.frame for c in checkpoints(route, lines)]
+def trace_span(lines: Sequence[str]) -> Optional[tuple[int, int]]:
+    """The Dragoon frames to read every frame of: from TRACE_EARLY before the first race in
+    Dolphin's run to the last game frame Dolphin's run reaches, None when it has no race."""
+    starts = [frame for frame, scene, _ in scenes(lines) if scene in RACES]
+    if not starts:
+        return None
+    return max(1, starts[0] - TRACE_EARLY), dtm.game_frames(lines)[-1]
+
+
+def play_dragoon(route: Route, out: Path, dolphin: Path, frames: Optional[Sequence[int]] = None,
+                 probe: Optional[Path] = None, settings: Sequence[str] = ()) -> Optional[str]:
+    """Play ROUTE in Dragoon to the checkpoints DOLPHIN's run (a dolphin/ folder) gives, or to
+    FRAMES, keeping those frames' dumps and state.json in OUT's dragoon/. A race's frames go in
+    state.json's trace, each frame from trace_span's first to its last, and the run goes on to
+    its last. PROBE and SETTINGS are probe.sh's and the game's, such as the nightly's --bin.
+    Returns why the run ended badly, None when it ended at its --exit-after."""
+    lines = dtm.read_lines(dolphin / "ram.txt")
+    frames = [c.frame for c in checkpoints(route, lines, frames)]
+    span = trace_span(lines)
+    last = max(frames + ([span[1]] if span else []))
     name = f"dolphin-diff-{route.name}"
-    run_dir = bot_link.run_directory(name)
-    bot = Keeper(frames, run_dir)
-    played = dataclasses.replace(route, required=frames, dump_every=1, seconds=route.seconds * SLOW)
-    print(f"{route.name}: Dragoon, {len(frames)} checkpoints to frame {max(frames)}")
+    run_dir = bot_link.run_directory(name, probe)
+    bot = Keeper(frames, run_dir, span[0] if span else None)
+    seconds = math.ceil(route.seconds * SLOW * max(1.0, last / max(frames)))
+    played = dataclasses.replace(route, required=sorted({*frames, last}), dump_every=1,
+                                 seconds=seconds)
+    print(f"{route.name}: Dragoon, {len(frames)} checkpoints to frame {max(frames)}"
+          + (f", every frame from {span[0]} to {last}" if span else ""), flush=True)
     outcome, states = state_goldens.play(
-        played, name, every=1, bot=bot,
-        settings=[f"--disc={DISC}", f"GCN_DUMP_RANGE={min(frames)}-{max(frames)}", SEED])
+        played, name, every=1, bot=bot, probe=probe,
+        settings=[f"--disc={DISC}", f"GCN_DUMP_RANGE={min(frames)}-{max(frames)}", SEED,
+                  *settings])
     try:
         if outcome.reason == bot_link.NEVER_LINKED:
             raise Bad(f"{route.name}: the game never connected: {outcome.detail}")
@@ -452,11 +496,16 @@ def cmd_dragoon(route: Route, out: Path) -> int:
                 dumps[n].rename(folder / dumps[n].name)
         (folder / "state.json").write_text(json.dumps({
             "end": outcome.reason, "detail": outcome.detail,
-            "states": {str(f): [at, s] for f, (at, s) in sorted(states.items())},
+            "states": {str(f): [at, s] for f, (at, s) in sorted(states.items()) if f in frames},
+            "trace": {str(f): s for f, s in sorted(bot.trace.items())},
         }, indent=1) + "\n")
     finally:
         remove_run(outcome.run_dir)
-    bad = state_goldens.ended_badly(outcome)
+    return state_goldens.ended_badly(outcome)
+
+
+def cmd_dragoon(route: Route, out: Path) -> int:
+    bad = play_dragoon(route, out, dolphin_dir(out))
     if bad:
         print(f"{route.name}: {bad}")
     return 1 if bad else 0
@@ -520,11 +569,15 @@ def compare_picture(n: int, field: Optional[int], what: str, shown: Sequence[int
     return (Match(field, counted, k, sure), ours, images[dumps[k - 1][0]]), None
 
 
-def compare(route: Route, out: Path) -> dict:
-    lines = dtm.read_lines(dolphin_dir(out) / "ram.txt")
+def compare(route: Route, out: Path, at_frames: Optional[Sequence[int]] = None,
+            dolphin: Optional[Path] = None) -> dict:
+    """ROUTE's checkpoints, or AT_FRAMES, between DOLPHIN's run (OUT's dolphin/ by default) and
+    OUT's dragoon/, with a side-by-side for each in OUT's sides/."""
+    dolphin = dolphin or dolphin_dir(out)
+    lines = dtm.read_lines(dolphin / "ram.txt")
     frames, shown, rows = dtm.game_frames(lines), pictures(lines), ram_rows(lines)
-    listed = [line.split() for line in (dolphin_dir(out) / "frames.txt").read_text().splitlines()]
-    dumps = sorted(((sha, dolphin_dir(out) / "frames" / name) for sha, name in listed),
+    listed = [line.split() for line in (dolphin / "frames.txt").read_text().splitlines()]
+    dumps = sorted(((sha, dolphin / "frames" / name) for sha, name in listed),
                    key=lambda d: dolphin_ref.dump_index(d[1]))
     ours = json.loads((dragoon_dir(out) / "state.json").read_text())
     states = {int(f): (at, s) for f, (at, s) in ours["states"].items()}
@@ -533,7 +586,7 @@ def compare(route: Route, out: Path) -> dict:
     sides = out / "sides"
     sides.mkdir(exist_ok=True)
     report = []
-    for c in checkpoints(route, lines):
+    for c in checkpoints(route, lines, at_frames):
         entry: dict = {"frame": c.frame, "why": c.why}
         read_at, state = states.get(c.frame, (None, None))
         keys: Sequence[Optional[int]] = frames
