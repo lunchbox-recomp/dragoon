@@ -152,7 +152,9 @@ class SandboxLog:
         self.path.write_text("".join(self.lines))
 
     def denied(self) -> list[str]:
-        return [line.strip() for line in self.lines if "deny(" in line and HARMLESS not in line]
+        """Every denial log stream gave, but HARMLESS's, after its first line, which repeats the
+        predicate."""
+        return [line.strip() for line in self.lines[1:] if "deny(" in line and HARMLESS not in line]
 
 
 @dataclass

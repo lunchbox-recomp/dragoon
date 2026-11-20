@@ -170,7 +170,7 @@ class PlayTest(CacheCase):
 
 class SandboxLogTest(CacheCase):
     def test_denials_but_dtracehelper_s_come_back_and_the_log_is_kept(self) -> None:
-        command = fake_log(self, "Filtering the log data using x",
+        command = fake_log(self, 'Filtering the log data using "composedMessage CONTAINS "deny(""',
                            "Sandbox: dolphin-emu-nogui(1) deny(1) file-write-data /dev/dtracehelper dolphin-ref",
                            "Sandbox: dolphin-emu-nogui(1) deny(1) network-outbound 1.2.3.4:443 dolphin-ref")
         with mock.patch.object(dolphin_cache, "LOG_STREAM", command):
