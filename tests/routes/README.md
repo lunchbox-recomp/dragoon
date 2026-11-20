@@ -20,7 +20,7 @@ to be plugged in with `--pads=N`.
 | `air-ride-machine-passage.txt` | An Air Ride race on Machine Passage, past the countdown | 4200 |
 | `air-ride-checker-knights.txt` | An Air Ride race on Checker Knights, past the countdown | 4200 |
 | `air-ride-courses-1.txt` | Air Ride races on Sky Sands, Fantasy Meadows and Celestial Valley in turn, each past its countdown | 22900 |
-| `air-ride-courses-2.txt` | The same on Magma Flows, Machine Passage and Beanstalk Park | 19400 |
+| `air-ride-courses-2.txt` | The same on Magma Flows, Machine Passage and Beanstalk Park | 19900 |
 | `city-trial.txt` | City Trial, one player, the clock running | 3300 |
 | `city-trial-4p.txt` | City Trial, four players on ports 1 to 4, each steering its own way | 3480 |
 | `city-trial-2p.txt` | City Trial, two players on ports 1 and 2, in two views | 3480 |

@@ -166,9 +166,7 @@ class KnownIssueTest(unittest.TestCase):
                          (PASS, "the screen is 5"))
 
     def test_the_repos_known_issues_read(self) -> None:
-        issues = known_issues.read(nightly.ROOT / "tests" / "hashes")
-        c2 = issues["state 16:9 air-ride-courses-2"]
-        self.assertEqual((c2.checkpoint, len(c2.values), c2.values["player1.speed"]), (19400, 16, "26.0290222"))
+        self.assertEqual(known_issues.read(nightly.ROOT / "tests" / "hashes"), {})
 
     def test_a_bad_line_is_refused(self) -> None:
         for bad in ("state title 4:3 120 a bug with no values\n", "frames title 4:3 120 scene.minor=5 bug\n"):

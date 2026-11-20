@@ -136,7 +136,7 @@ and the discovery and CTest steps were read from CMake's files, not run.
 
 CI's macOS job runs `ninja unit` (`tools/ci.py:111`), which builds the engine's own unit tests
 and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
-(`gcn-recomp/CMakeLists.txt:1444-1447`). It builds `dragoon_tests` too and runs it once to list
+(`gcn-recomp/CMakeLists.txt:1450-1453`). It builds `dragoon_tests` too and runs it once to list
 its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's
 `Modules/GoogleTestAddTests.cmake:63-67`). So CI runs code compiled from this archive.
 
@@ -204,8 +204,8 @@ need `--pads=4`, and the two-player route `--pads=2`.
 | Checker Knights | `air-ride-checker-knights.txt` | 4200 | Lap 1 of 2, 0:14, fourth, beside the sea with checkered blocks overhead |
 | Fantasy Meadows after Sky Sands | `air-ride-courses-1.txt` | 17300 | Lap 1 of 3, 0:14, first, at a tunnel mouth in a burst of light with a spiked enemy overhead |
 | Celestial Valley after Fantasy Meadows | `air-ride-courses-1.txt` | 22900 | Lap 1 of 2, 0:14, third, on a grass ledge over the night clouds with two CPUs ahead |
-| Machine Passage after Magma Flows | `air-ride-courses-2.txt` | 15600 | Lap 1 of 2, 0:14, fourth, stopped against a dark metal wall |
-| Beanstalk Park after Machine Passage | `air-ride-courses-2.txt` | 19400 | Lap 1 of 2, 0:14, third, on a grass slope with CPUs ahead |
+| Machine Passage after Magma Flows | `air-ride-courses-2.txt` | 16100 | Lap 1 of 2, 0:14, fourth, stopped against a dark metal wall |
+| Beanstalk Park after Machine Passage | `air-ride-courses-2.txt` | 19900 | Lap 1 of 2, 0:14, third, on a grass slope with CPUs ahead |
 | City Trial | `city-trial.txt` | 3300 | The city, 4:54 left |
 | Four-player entry | `city-trial-4p.txt` | 2700 | P1 OK to P4 OK under READY?, each player joined from its own port |
 | Four-player City Trial | `city-trial-4p.txt` | 3480 | Four views, 4:51 left, ports 1 and 3 steering left and 2 and 4 right |
@@ -666,7 +666,7 @@ Dragoon `e52dce1` in this table landed rebased as `fe88e8a`.
 | Frames | `tools/frame_hashes.py check` passes | All twenty-four routes' 1,906 frames match the goldens recorded at gcn-recomp `b5ec329`, at the pin `b4f8ddb` on Dragoon `ae7ebd1`, in one pass of 15 min at `nice -n 19` and loads of 4.8 to 6.1. At `236e1f4` it took three passes, where a busier Mac cut runs short (under gcn-recomp `b4f8ddb`). With `city-trial-2p` added, all twenty-five routes' 1,964 frames matched on a build of Dragoon `c147cec` in 15 min at `nice -n 19` and loads of 3.4 to 5.3 | Pass |
 | World at 16:9 | Every world camera's projection aspect is its 4:3 value times 4/3, to three figures, in one player, 2P and 4P. No HUD or menu camera changes | 1.67383 from 1.25538 in the race before and after its finish and in City Trial, 2.97524 from 2.23143 in 2P, 1.85892 from 1.39419 in 4P and 1.57333 from 1.18 in Top Ride, each steady over 600 frames or more. Every HUD 3D, minimap and menu camera kept its 4:3 aspect (Dragoon `45c52c5` at loads of 2.7 to 6.3, `widescreen.md`) | Pass |
 | Edges | At every checkpoint the world makes at least as many draws at 16:9 as at 4:3, and no dump shows an object cut off at a side edge | 217 draws against 204 in the race, 124 and 124 after its finish, 376 against 371 in City Trial, 317 against 314 in 2P, 823 against 807 in 4P and 198 and 198 in Top Ride. No output dump at 16:9 shows an object cut off at a side edge. The test that culls the world wasn't found, so pop-in while moving needs a person to watch (Dragoon `45c52c5` at loads of 2.7 to 6.3) | Pass |
-| Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1). On a build of Dragoon `c147cec` at gcn-recomp `b4f8ddb`, the race left alone finished first in 1:14.68 at both aspects, with the CPUs on 1:15.40, 1:15.57 and 1:16.36, read from each run's frame 25,800. Since the results screen now keeps its 4:3 frame between bars, the two frames no longer hash the same. Each was `tools/probe.sh NAME 150 tests/routes/air-ride-race.txt 300 --exit-after=26700`, plus `--aspect=16:9`, at `nice -n 19` and loads of 2.9 to 4.1. Another route plays differently at 16:9. On `air-ride-courses-2` the state at 15,600 matches 4:3, and by 19,400 on Beanstalk Park every rider's speed and position is off by up to about 1.1 units, the same on every run. It's listed in `tests/hashes/known-issues.txt` until it's fixed | Pass on the race, fails on `air-ride-courses-2` |
+| Simulation | Left alone, the race finishes at 16:9 in its 4:3 time, 1:14.68 at `5e49451` | The results frame at 25,800 is the same at 16:9 as at 4:3 (Dragoon `45c52c5` at loads of 4.5 to 6.1). On a build of Dragoon `c147cec` at gcn-recomp `b4f8ddb`, the race left alone finished first in 1:14.68 at both aspects, with the CPUs on 1:15.40, 1:15.57 and 1:16.36, read from each run's frame 25,800. Since the results screen now keeps its 4:3 frame between bars, the two frames no longer hash the same. Each was `tools/probe.sh NAME 150 tests/routes/air-ride-race.txt 300 --exit-after=26700`, plus `--aspect=16:9`, at `nice -n 19` and loads of 2.9 to 4.1. Until gcn-recomp rounded frC as Gekko does, `air-ride-courses-2` played differently at 16:9: by 19,400 on Beanstalk Park every rider's speed and position was off by up to about 1.1 units. That bump moved the route's races and checkpoints, and since then every route's state matches 4:3 at every checkpoint (`state_goldens.py check --aspect=16:9`). Whether the aspect no longer changes the game, or only no longer does by a checkpoint, isn't known | Pass |
 | HUD at 16:9 | Every HUD draw keeps its 4:3 width, height and distance to its anchored edge within 1 display pixel at 480 high, in the race, 1P City Trial, 2P and 4P | `drawlog.py hud` passed every anchored draw, 41 in the race (also with `GCN_GX_SYNC=1`), 33 in City Trial, 54 in 2P and 76 in 4P, on Dragoon `e52dce1` at loads of 1.5 to 3.1. It passed with the same counts under the stricter tool on Dragoon `1ff85c8` at gcn-recomp `b11ebc6`, where all twenty-four routes' frames and audio matched. Top Ride's 38 HUD draws still stretch, and so do the bars between split views, since they span the screen (`widescreen.md`) | Pass |
 | Split views | Every HUD box stays inside its own view at 16:9 | No HUD box in 2P or 4P sticks out of its view by more than 1 pixel more than at 4:3. The 4P clock sits on the bars and anchors to the screen's left edge (Dragoon `e52dce1` at loads of 1.5 to 3.1) | Pass |
 | Frames at 16:9 | Every route recorded twice at 16:9, and the two passes match | `tools/frame_hashes.py record --aspect=16:9` wrote all twenty-five routes' 1,964 frames in 17 min, and `check --aspect=16:9` straight after matched all 1,964 in 15 min, at `nice -n 19` and loads of 3.2 to 5.1 (a build of Dragoon `c147cec`, gcn-recomp `b4f8ddb`). A third pass, the check after the tools suite, matched all 1,964 again in 16 min at loads of 5.0 to 5.3. Every frame differs from its 4:3 golden, from frame 60 on, since the game's 640x480 dump holds the picture before the window stretches it | Pass |
@@ -753,7 +753,7 @@ past their routes' last required frames, six of the eight Air Ride courses compi
 of 10 distinct keys. Sky Sands drew 8 of the 10, between frames 9,333 and 14,186, among them
 every key Fantasy Meadows, Celestial Valley and Beanstalk Park drew late, and Magma Flows and
 Frozen Hillside each drew one no other course did. So the `-courses` routes race Sky Sands to
-frame 14,400 and Magma Flows to 12,700, and Frozen Hillside's pass plays to 6,000
+frame 14,400 and Magma Flows to 13,200, and Frozen Hillside's pass plays to 6,000
 (`tests/hashes/manifest.txt:15-16`, `:33`).
 
 The runs were
@@ -773,7 +773,7 @@ another route's pass plays has no pass of its own, through the manifest's `warm-
 | `air-ride-frozen-hillside` | 6,000 | Frozen Hillside |
 | `air-ride-checker-knights` | 8,600 | Checker Knights, played on for a program of `air-ride-race`'s |
 | `air-ride-courses-1` | 23,800 | Sky Sands to frame 14,400, then Fantasy Meadows (`air-ride-race`) and Celestial Valley |
-| `air-ride-courses-2` | 20,300 | Magma Flows to 12,700, then Machine Passage and Beanstalk Park |
+| `air-ride-courses-2` | 20,800 | Magma Flows to 13,200, then Machine Passage and Beanstalk Park |
 | `top-ride-courses` | 20,050 | The seven Top Ride courses, Fire played on for a program of four Top Ride routes' |
 | `city-trial-stadium` | 21,300 | City Trial and the stadium, for `menu` and `city-trial` too |
 | `city-trial-stadium-4p` | 21,900 | The same with four players, for `city-trial-4p` too |
@@ -1137,6 +1137,58 @@ The likely shared cause, not proven, is Gekko's single-precision arithmetic, whi
 models and gcn-recomp doesn't. Gekko rounds frC to 25 bits in fmuls, fmadds, ps_mul and
 ps_madd, and fres and frsqrte give its estimate tables' values, where gcn-recomp computes them
 exactly. The fix belongs in gcn-recomp, in a step of its own.
+
+#### Gekko's single-precision rounding
+
+That cause is now proven, and gcn-recomp models half of it. A test build of gcn-recomp put each quirk
+behind a switch, the estimates from a table kept in scratch and never committed, and
+`ram_peek.py` read every compared word on each Dragoon frame against Dolphin's:
+
+| Switches | City Trial, first difference | Air Ride race | Top Ride seed |
+|---|---|---|---|
+| none | pass 70 | pass 215 | pass 423 |
+| frC rounding | pass 70 | pass 215 | pass 325 |
+| estimates | pass 218 | pass 224 | not run |
+| estimates and frC rounding | pass 273 | pass 763 | matches to pass 467, the last read |
+
+Narrowed by address, City Trial's pass 70 is the frsqrte in the SDK's PSVECMag (803D217C).
+Its exact 1/sqrt isn't the hardware's estimate, and PSVECMag's one Newton step keeps the
+difference. frC rounding is the second cause once the estimates are in. Dolphin's single
+rounding in fmadds moved nothing in City Trial.
+
+gcn-recomp's `ROUND_FRC` (gcn-recomp `c781a86`) rounds frC to 25 bits in every
+single-precision multiply. The estimates aren't in, since the only source of their tables
+found is Dolphin's GPL code and gcn-recomp is MIT. So on this pin City Trial and Air Ride
+first differ where they did, and Top Ride's seed first differs earlier.
+
+- In City Trial player1.x and player1.y first differ at frame 2802, pass 70, as before.
+- In Air Ride's race player2.x first differs at frame 3336, pass 215, c15a1723 against
+  c15a1724, as before.
+- In Top Ride top_ride.seed first differs at frame 3558, pass 325, where it was frame 3656,
+  pass 423. Its checkpoint at 3600, pass 367, now differs (90.731%, the camera a few pixels
+  off).
+
+The movies, made from the last runs' Dolphin timelines, are fixed points. Played again they
+give the same movies, and `dtm.py presses` found all 11 presses on their route frames on each.
+Dolphin's RAM logs came out byte for byte as before. The three routes ran on AC power, one
+game at a time with `log stream` watching the sandbox. Dolphin was denied only writes to
+`/dev/dtracehelper`. Every menu checkpoint scored as before:
+
+| Route | Checkpoint | Before | Now |
+|---|---|---|---|
+| top-ride-grass | 3600, pass 367 | 15.575%, state same | 90.731%, state differs |
+| air-ride-race | 4200, pass 1079 | 82.259%, state differs | 76.116%, state differs |
+| air-ride-race | 6000, pass 2879 | 93.188%, state differs | 81.226%, state differs |
+| city-trial | 3300, pass 568 | 29.757%, state differs | 29.820%, state differs |
+
+The bump moved every race on every route. Frame goldens first change at frames 2880 to 4800,
+each in a race or the city, Top Ride's at 3420 or 3480, about 190 frames into the race. The
+title's and the menu's frames and state are unchanged, and so is Top Ride's state. The title's
+audio changes from its attract demo, an Air Ride race the title plays by frame 1800.
+`air-ride-courses-2`'s Magma Flows race now ends at about frame 13050, after the route's
+12700 START. That START paused the race, and the route then raced Magma Flows again instead
+of Machine Passage and Beanstalk Park. Its presses from 12700 on, its checkpoints and its
+warm-up pass moved 500 frames later, so it races all three again, each checkpoint 0:14 in.
 
 What the triage found:
 

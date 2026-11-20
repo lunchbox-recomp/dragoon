@@ -1,18 +1,20 @@
 # Blank memory card through Air Ride races on Magma Flows, Machine Passage and Beanstalk Park in
 # turn, one player and three CPUs.
-# air-ride-magma-flows.txt to frame 12700, where the replay plays, then as in
-# air-ride-courses-1.txt. 12700 START: the results. 13000 START: a checklist box the race
-# earned, then the course select. 13400 LEFT, 13440 LEFT, 13480 LEFT, 13520 DOWN: Machine
-# Passage. 13600 A to 14500 START as in air-ride-race.txt. 16500 START: pause, then End Game by
-# 16700 A and Start Game by 17100 A. 17200 LEFT: Beanstalk Park, raced from 18300 START.
+# air-ride-magma-flows.txt to frame 13200, where the replay plays, then as in
+# air-ride-courses-1.txt. 13200 START: the results. 13500 START: a checklist box the race
+# earned, then the course select. 13900 LEFT, 13940 LEFT, 13980 LEFT, 14020 DOWN: Machine
+# Passage. 14100 A to 15000 START as in air-ride-race.txt. 17000 START: pause, then End Game by
+# 17200 A and Start Game by 17600 A. 17700 LEFT: Beanstalk Park, raced from 18800 START.
+# Magma Flows' race ends at about 13050 since gcn-recomp rounds frC as Gekko does; it ended
+# before 12700 when this route was first timed, and everything after it moved 500 frames.
 120:A:5,300:A:5,900:A:5,
 1000:START:5,
 1300:A:5,1600:A:5,1900:A:5,
 2000:RIGHT:5,2040:RIGHT:5,2080:RIGHT:5,2120:RIGHT:5,
 2200:A:5,2500:A:5,2800:A:5,3100:START:5,
-12700:START:5,13000:START:5,
-13400:LEFT:5,13440:LEFT:5,13480:LEFT:5,13520:DOWN:5,
-13600:A:5,13900:A:5,14200:A:5,14500:START:5,
-16500:START:5,16600:DOWN:5,16650:DOWN:5,16700:A:5,17100:A:5,
-17200:LEFT:5,
-17400:A:5,17700:A:5,18000:A:5,18300:START:5
+13200:START:5,13500:START:5,
+13900:LEFT:5,13940:LEFT:5,13980:LEFT:5,14020:DOWN:5,
+14100:A:5,14400:A:5,14700:A:5,15000:START:5,
+17000:START:5,17100:DOWN:5,17150:DOWN:5,17200:A:5,17600:A:5,
+17700:LEFT:5,
+17900:A:5,18200:A:5,18500:A:5,18800:START:5

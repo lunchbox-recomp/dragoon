@@ -13,7 +13,7 @@
 # pass played it. A race that follows another starts from another state of the game, and there
 # Sky Sands, Magma Flows, Frozen Hillside and Checker Knights each missed programs their own
 # passes built late. So Sky Sands and Magma Flows open the two air-ride-courses routes as their
-# own routes race them, to frames 14,400 and 12,700, while the other two keep passes of their own.
+# own routes race them, to frames 14,400 and 13,200, while the other two keep passes of their own.
 #
 # city-trial-2p checks the entry screen with both players OK at 2700 and the two views at 3480,
 # 80 frames into the steering, as city-trial-4p does. It has a pass of its own, since played from
@@ -49,7 +49,7 @@ air-ride-beanstalk-park    25 60 4200 warm-from=air-ride-courses-2
 air-ride-machine-passage   25 60 4200 warm-from=air-ride-courses-2
 air-ride-checker-knights   25 60 4200 warm=8600
 air-ride-courses-1         80 100 4200,17300,19100,22900 warm=23800
-air-ride-courses-2         70 100 4200,15600,19400 warm=20300
+air-ride-courses-2         72 100 4200,16100,19900 warm=20800
 top-ride-grass 30 60 3600 warm-from=top-ride-courses
 top-ride-sand  30 60 3600 warm-from=top-ride-courses
 top-ride-sky   30 60 3600 warm-from=top-ride-courses

@@ -3,4 +3,3 @@
 # the value the bug gives it, then what's wrong. The run lists the check under Known issues and doesn't
 # fail for it only when the state matches the golden everywhere else and these fields hold these values.
 # Anything else fails as any check does, and one that passes is listed as passing, so its line can go.
-state air-ride-courses-2 16:9 19400 player1.speed=26.0290222 player2.speed=20.9760857 player3.speed=27.1925526 player4.speed=25.0597496 player1.x=551.393066 player1.y=53.9582787 player1.z=-113.972923 player2.x=539.442932 player2.y=43.6441994 player2.z=-135.976379 player3.x=583.069946 player3.y=64.3313522 player3.z=-107.846283 player4.x=603.950867 player4.y=70.061882 player4.z=-113.439713 Beanstalk Park plays differently at 16:9. Every rider's speed and position is off by up to about 1.1 units at 19400, while 15600 matches.
