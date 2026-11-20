@@ -39,11 +39,16 @@ import Testing
 /// the watch and the flow's hide are the app's own code. Each run prints its times and none is
 /// held to a bar here, since a loaded runner can take many times as long; status.md's hand-off
 /// rows are what these lines printed.
+///
+/// The fake also links its window line's file as `window.txt`, since the launcher removes the
+/// ready file when the game ends. A loaded runner can hand the test its watch's window marks only
+/// after that, so the line's time is read from the link once the game is over.
 @Suite(.timeLimit(.minutes(1))) struct LaunchTimingTests {
     static let fakeGame = """
         sleep 0.3
         printf 'window 300\\n' > "$GCN_READY_FILE.tmp"
         mv "$GCN_READY_FILE.tmp" "$GCN_READY_FILE"
+        ln "$GCN_READY_FILE" window.txt
         sleep 0.4
         printf 'window 300\\nframe 700\\n' > "$GCN_READY_FILE.tmp"
         mv "$GCN_READY_FILE.tmp" "$GCN_READY_FILE"
@@ -79,17 +84,19 @@ import Testing
         let session = fixture.play(disc: disc) { pid = $0 }
         let gameStart = try #require(LiveProcess.startTime(of: pid))
         var hidden: UInt64?
-        var written: Int64?
         var last = ReadyMarks()
         for await marks in ReadyWatcher.watch(fixture.readyFile) {
             if run.send(.gameReady(launch: launch, marks: marks)) == [.hideWindow(timedOut: false)] {
                 hidden = LaunchTimes.microseconds(Date())
-                written = GamePanic.lastWritten(at: fixture.readyFile)
             }
             last = marks
         }
         _ = await results(of: session)
-        let hiddenAt = try #require(hidden), writtenAt = try #require(written)
+        let hiddenAt = try #require(hidden)
+        let writtenAt = try #require(GamePanic.lastWritten(at: fixture.data + "/window.txt"))
+        // The window line hides the window, so its file was written before the hide. A link to a
+        // later line's file would give a time after it.
+        #expect(Double(writtenAt) / 1000 <= Double(hiddenAt))
         return Run(
             toStart: (Double(gameStart) - Double(play)) / 1000,
             toSee: (Double(hiddenAt) - Double(writtenAt) / 1000) / 1000,
