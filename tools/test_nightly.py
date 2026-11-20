@@ -33,6 +33,17 @@ class PowerTest(unittest.TestCase):
         with self.assertRaisesRegex(power.OnBattery, "Battery Power"):
             power.require_ac(pmset.command())
 
+    def test_a_pmset_that_exits_1_is_a_value_error(self) -> None:
+        pmset = FakePmset(self)
+        pmset.now(AC, 1)
+        with self.assertRaisesRegex(ValueError, "exit status 1"):
+            power.require_ac(pmset.command())
+
+    def test_a_pmset_that_isnt_there_is_a_value_error(self) -> None:
+        missing = temp_dir(self) / "pmset"
+        with self.assertRaisesRegex(ValueError, "No such file"):
+            power.require_ac([str(missing), "-g", "batt"])
+
 
 class FramesStepTest(unittest.TestCase):
     def test_matching_frames_and_state_pass_and_leave_no_dump(self) -> None:
@@ -262,6 +273,22 @@ class BatteryTest(unittest.TestCase):
                                                lambda step: self.fail("a step ran with no power source"))
         self.assertEqual([(c.id, c.status) for c in checks], [("frames", SKIPPED_BATTERY), ("audio", NOT_RUN)])
         self.assertIn("no power source", stopped or "")
+
+    def test_a_pmset_that_fails_stops_the_run_and_still_writes_the_report(self) -> None:
+        tree = FakeTree(self)
+        pmset = FakePmset(self)
+        pmset.now(AC, 1)
+        checks, steps, stopped = nightly.run_steps(["frames", "audio"], tree.report,
+                                                   lambda: power.require_ac(pmset.command()),
+                                                   lambda step: self.fail("a step ran with pmset failing"))
+        self.assertEqual([(c.id, c.status) for c in checks], [("frames", SKIPPED_BATTERY), ("audio", NOT_RUN)])
+        self.assertIn("exit status 1", stopped or "")
+        code = nightly.finish(tree.report, checks, steps, stopped, 0.0, [1.0, 1.0], None, tree.root, lambda text: None)
+        self.assertEqual(code, 2)
+        summary = (tree.report / "summary.txt").read_text()
+        self.assertIn("frames: skipped-battery", summary)
+        self.assertIn("audio: not-run", summary)
+        self.assertEqual(json.loads((tree.report / "report.json").read_text())["result"], "stopped on battery")
 
 
 def check(id_: str, status: str = PASS, **kw) -> Check:
