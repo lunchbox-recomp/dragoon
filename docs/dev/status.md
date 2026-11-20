@@ -136,7 +136,7 @@ and the discovery and CTest steps were read from CMake's files, not run.
 
 CI's macOS job runs `ninja unit` (`tools/ci.py:111`), which builds the engine's own unit tests
 and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
-(`gcn-recomp/CMakeLists.txt:1457-1460`). It builds `dragoon_tests` too and runs it once to list
+(`gcn-recomp/CMakeLists.txt:1463-1466`). It builds `dragoon_tests` too and runs it once to list
 its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's
 `Modules/GoogleTestAddTests.cmake:63-67`). So CI runs code compiled from this archive.
 
@@ -1206,10 +1206,10 @@ courses in turn, read by `ram_peek.py` every 100 frames, so their presses stay w
 
 What the triage found:
 
-- Edges are a Dragoon bug. Dragoon draws about 0.085 to 0.097 of a pixel right and down of
-  Dolphin, which shows where edges aren't on whole pixels. A console samples a pixel at 7/12,
+- Edges were a Dragoon bug. Dragoon drew about 0.085 to 0.097 of a pixel right and down of
+  Dolphin, which showed where edges weren't on whole pixels. A console samples a pixel at 7/12,
   and Dolphin applies a 1/12 correction for it (VertexShaderManager.cpp, lines 341 to 357).
-  gcn-recomp has none. This change doesn't fix it.
+  gcn-recomp had none. "The pixel centre" below fixes it.
 - The starts differed by the seed, which "The seed" above pins. Unpinned, the two sides boot
   with seeds 198 ticks apart (Dolphin 0x00B99D74, Dragoon 0x00B99CAE). Dolphin's timebase
   counts cycles/12 from 0 at the movie's RTC, and Dragoon's counts 2 a loop back-edge with the
@@ -1223,6 +1223,70 @@ What the triage found:
 - The main menu Kirby's state differed on the old count, where Dragoon's was 0 to 2 frames
   behind Dolphin's over frames 909 to 1001. On the new count it matches at 1003 and 1013 on
   all three routes.
+
+#### The pixel centre
+
+gcn-recomp `6586763` draws every vertex 1/12 of a pixel left and up of where GX's viewport puts
+it, so GL's sample at a pixel's middle covers what the console's at 7/12 does. It's 1/12 of a
+sample at any internal scale, as in Dolphin. It comes after a 16:9 anchor's squeeze. The
+fork's `docs/graphics.md` ("The pixel centre") has the rest. EFB copies and the XFB take no
+correction, as in Dolphin.
+
+Every frame golden changed at both aspects, from each route's first dump. That's 60, or 100 for
+the routes dumped every 100 frames and 300 for the stadium routes. Dumped every frame on `title`,
+frame 1 is one flat colour and the same on both builds, and frame 2, the first one drawn, the
+card's panel, differs in 6,378 pixels. Each golden was rewritten by `frame_hashes.py record`.
+The state goldens matched at both aspects and the audio goldens on every route, unchanged.
+
+The three movies were converged again in 7 runs each to fixed points, since the last runs'
+were gone. `dtm.py presses` found all 11 presses on their route frames on each. The three
+routes ran on AC power, one game at a time, with Dolphin sandboxed and `log stream` watching.
+Dolphin was denied only writes to `/dev/dtracehelper`.
+
+| Checkpoint | Before | Now |
+|---|---|---|
+| 60 on all three routes, the card prompt | 2.677%, max 46 | 0.000%, max 3 |
+| 314 on all three, the title's logos | 3.444%, max 24 | 0.001%, max 5 |
+| 1003 on all three, the main menu's gears | 0.421%, max 88 | 0.000%, max 2 |
+| 1013 on all three, mode select | 3.896%, max 139 | 0.000%, max 3 |
+| top-ride-grass 2004, course select | 2.826% | 1.342%, the SAVE icon |
+| top-ride-grass 2014 | 10.201% | 0.770%, max 10 |
+| top-ride-grass 2609 | 0.554% | 0.000% |
+| top-ride-grass 2619 | 2.879% | 0.000% |
+| top-ride-grass 3235 | 2.021% | 0.011% |
+| top-ride-grass 3245 | 20.275% | 0.173% |
+| top-ride-grass 3600, pass 367 | 14.614% | 0.467% |
+| air-ride-race 1904, course select | 2.658% | 1.322%, the SAVE icon |
+| air-ride-race 1914 | 10.436% | 0.620%, max 10 |
+| air-ride-race 2209 | 0.491% | 0.000% |
+| air-ride-race 2219 | 2.736% | 0.008% |
+| air-ride-race 3123 | 2.674% | 0.001% |
+| air-ride-race 3133 | 4.787% | 0.036% |
+| air-ride-race 4200, pass 1079 | 82.486% | 81.192%, state differs |
+| air-ride-race 6000, pass 2879 | 93.241% | 91.443%, state differs |
+| city-trial 1814 | 3.159% | 0.004% |
+| city-trial 2105, course select | 3.166% | 1.206%, the SAVE icon |
+| city-trial 2115 | 2.655% | 0.000% |
+| city-trial 2734 | 1.753% | 0.000% |
+| city-trial 2744 | 5.605% | 1.944%, max 11 |
+| city-trial 3300, pass 568 | 26.346% | 24.476%, state differs |
+
+30 of the 41 checkpoints are now within the budget, where 8 were. 30 were bugs, 27 of them by
+their edges and 3 by the races' state. 22 of the 27 are within now. The other five show no
+edges. Inside the course thumbnails at 2014 and 1914, and along the buildings' window texture
+at city-trial 2744, the detail is off by 10 or 11 levels at most. At 3245 and 3600 lone pixels
+are scattered over the course's fine texture. Those five are `unclear` in the triage file. The
+races' three stay bugs, since a drawing change doesn't move their state.
+
+A bot run read every compared value on each Dragoon frame of the three races, as
+`dolphin_diff.py` reads a checkpoint's, against Dolphin's at the same pass or one either side,
+on this pin.
+
+- City Trial first differs at frame 3005, pass 273, player2.speed at 41B34B42, as before.
+- Air Ride's race first differs at frame 3884, pass 763, player4.speed at 4271F994 against
+  4271EE03, as before.
+- Top Ride matches every compared value through pass 564, frame 3797, the last pass Dolphin's
+  run reaches, as before.
 
 ## gcn-recomp `95e1c6b`
 
