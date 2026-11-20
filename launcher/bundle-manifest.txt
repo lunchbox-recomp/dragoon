@@ -35,7 +35,9 @@ file Contents/Resources/kit/kit.mk
 file Contents/Resources/kit/Makefile
 file Contents/Resources/kit/include/recomp.h
 file Contents/Resources/kit/include/compat.h
+file Contents/Resources/kit/include/gekko_estimate.h
 file Contents/Resources/kit/licenses/gcn-recomp.txt
+file Contents/Resources/kit/licenses/gekko_estimate.txt
 file Contents/Resources/kit/licenses/SDL3.txt
 file Contents/Resources/kit/licenses/hidapi.txt
 file Contents/Resources/kit/licenses/imgui.txt

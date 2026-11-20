@@ -1088,7 +1088,8 @@ class RealTreeTest(unittest.TestCase):
             write_file(kit, "Makefile", (ROOT / "launcher" / "kit" / "Makefile").read_text())
             write_file(kit, "kit.mk", "MACOSX_MIN := 14.0\nGAME_CFLAGS := -O2 -g\n"
                                       "LINK_FLAGS := -O2\nGAME_LIBS := -framework Metal\n")
-            for name in ("engine.o", "libSDL3.a", "include/recomp.h", "include/compat.h"):
+            for name in ("engine.o", "libSDL3.a", "include/recomp.h", "include/compat.h",
+                         "include/gekko_estimate.h"):
                 write_file(kit, name, "")
             args = launcher_build.parse_args([
                 "--source", tmp, "--kit", str(kit), "--disc", tmp, "--data", tmp, "--cache", tmp,

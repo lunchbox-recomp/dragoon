@@ -37,7 +37,7 @@ obj/%.o: gen/%.c | obj
 
 # A new kit's flags or headers rebuild every object. This is a rule of its own, since make
 # 3.81 doesn't read an escaped space in a pattern rule's prerequisites.
-$(OBJS): $(KITQ)/kit.mk $(KITQ)/include/recomp.h $(KITQ)/include/compat.h
+$(OBJS): $(KITQ)/kit.mk $(KITQ)/include/recomp.h $(KITQ)/include/compat.h $(KITQ)/include/gekko_estimate.h
 
 obj:
 	mkdir -p $@

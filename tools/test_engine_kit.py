@@ -65,8 +65,10 @@ def fake_build(root: Path, disc: str = "", target: str = "14.0") -> Path:
     if not (dragoon / ".git").exists():
         commit(dragoon, {"src/hooks.cpp": "int hook(void);\n"})
     for path, text in {engine / "LICENSE": "MIT gcn-recomp\n",
+                       engine / "LICENSE.MPL-2.0": "MPL-2.0 gekko_estimate.h\n",
                        engine / "runtime" / "recomp.h": "/* recomp */\n",
                        engine / "runtime" / "compat.h": "/* compat */\n",
+                       engine / "runtime" / "gekko_estimate.h": "/* estimates */\n",
                        sdl / "LICENSE.txt": "zlib SDL\n",
                        sdl / "src" / "hidapi" / "LICENSE-bsd.txt": "BSD hidapi\n",
                        build / "_deps" / "imgui-src" / "LICENSE.txt": "MIT Dear ImGui\n"}.items():
@@ -131,7 +133,9 @@ class EngineKitTest(unittest.TestCase):
                   "Makefile": engine_kit.MAKEFILE,
                   "include/recomp.h": self.root / "gcn-recomp/runtime/recomp.h",
                   "include/compat.h": self.root / "gcn-recomp/runtime/compat.h",
+                  "include/gekko_estimate.h": self.root / "gcn-recomp/runtime/gekko_estimate.h",
                   "licenses/gcn-recomp.txt": self.root / "gcn-recomp/LICENSE",
+                  "licenses/gekko_estimate.txt": self.root / "gcn-recomp/LICENSE.MPL-2.0",
                   "licenses/SDL3.txt": self.root / "sdl/LICENSE.txt",
                   "licenses/hidapi.txt": self.root / "sdl/src/hidapi/LICENSE-bsd.txt",
                   "licenses/imgui.txt": build / "_deps/imgui-src/LICENSE.txt"}

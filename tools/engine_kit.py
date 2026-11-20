@@ -11,7 +11,8 @@ build the game besides Apple's Command Line Tools and the recompiler's inputs. O
               main.o and the static initializers included. runtime_check has to compile
               main.cpp with GCN_OVERLAY, which the overlay's menu needs
   libSDL3.a   SDL3-static as built
-  include/    recomp.h and compat.h, the only runtime headers the generated C includes
+  include/    recomp.h, compat.h and gekko_estimate.h, the only runtime headers the generated
+              C includes
   kit.mk      what gcn-recomp's configure wrote to <build>: GAME_CFLAGS from
               game_cflags.txt, LINK_FLAGS from game_ldflags.txt and GAME_LIBS, the
               frameworks and libraries, from game_libs.txt; MACOSX_MIN, the build's
@@ -24,7 +25,8 @@ build the game besides Apple's Command Line Tools and the recompiler's inputs. O
               from PATH), and so is one with a file newer than runtime_check's objects of
               src/
   Makefile    launcher/kit/Makefile, which compiles gen/*.c and links the game
-  licenses/   gcn-recomp's, SDL's, that of the hidapi inside SDL and Dear ImGui's
+  licenses/   gcn-recomp's, SDL's, that of the hidapi inside SDL and Dear ImGui's, and the
+              MPL-2.0 that gcn-recomp's gekko_estimate.h, from Cemu, is under
 `ld -r` turns the objects' DWARF into a debug map naming the build's own .o files, which a
 player doesn't have. --strip-debug drops that map and libSDL3.a's DWARF too.
 
@@ -51,7 +53,7 @@ import export_source
 
 ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE = ROOT / "launcher" / "kit" / "Makefile"
-HEADERS = ("recomp.h", "compat.h")
+HEADERS = ("recomp.h", "compat.h", "gekko_estimate.h")
 # A target's objects in build.ninja, each with the source it's compiled from, after the rule's
 # name. Ninja writes a space, a colon or a dollar sign in a path with a dollar sign before it.
 OBJECT_LINE = r"^build (CMakeFiles/{}\.dir/\S+\.o): \S+ ((?:\$.|\S)+)"
@@ -236,6 +238,7 @@ def assemble(build: Path, out: Path, ld: Path, strip: Path, strip_debug: bool) -
         raise KitError(f"{build / 'CMakeCache.txt'} has no {e.args[0]}") from None
     copies = {sdl_lib: "libSDL3.a", MAKEFILE: "Makefile",
               engine_src / "LICENSE": "licenses/gcn-recomp.txt",
+              engine_src / "LICENSE.MPL-2.0": "licenses/gekko_estimate.txt",
               sdl_src / "LICENSE.txt": "licenses/SDL3.txt",
               sdl_src / "src" / "hidapi" / "LICENSE-bsd.txt": "licenses/hidapi.txt",
               imgui_license(build, ninja): "licenses/imgui.txt"}
