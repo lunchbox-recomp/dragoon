@@ -8,7 +8,7 @@ import Foundation
 /// launch with a game built opens on Library. Before each build the flow checks the space, then
 /// the disc behind its bookmark, then the tools. Before each launch it checks the disc.
 public enum Flow {
-    /// The free space a build needs, which `volumeAvailableCapacityForImportantUsage` is held to.
+    /// The free space a build needs, which `Volume.freeSpace` is held to.
     public static let neededSpace: Int64 = 2_000_000_000
     /// Seconds between tools checks while the tools are missing.
     public static let toolsCheckInterval: TimeInterval = 5
