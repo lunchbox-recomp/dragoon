@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 from pathlib import Path
+from typing import Callable
 from unittest import mock
 
 import dolphin_cache
@@ -37,9 +38,11 @@ class FakeDolphin:
         self.script = script
         self.lag, self.pad_lag, self.exit = 3, 0, 0
         self.runs: list[bytes] = []
+        self.beside: list[list[str]] = []  # the other runs on disk as each run starts
 
     def __call__(self, iso: Path, movie: Path, fields: int, out: Path) -> int:
         self.runs.append(movie.read_bytes())
+        self.beside.append(sorted(p.name for p in out.parent.glob("run-*")))
         cols = dolphin_cache.watched()
         at = {w: i for i, w in enumerate(cols)}
         presses = parse_route(self.script)
@@ -58,9 +61,11 @@ class FakeDolphin:
             lines.append(f"{n} " + " ".join(f"{w:08X}" for w in words))
         (out / "frames").mkdir(parents=True)
         write_file(out, "ram.txt", "\n".join(lines) + "\n")
+        listed = ""
         for k in (1, 2):
-            write_file(out / "frames", f"framedump_{k}.png", b"png")
-        write_file(out, "frames.txt", "aa  framedump_1.png\nbb  framedump_2.png\n")
+            png = write_file(out / "frames", f"framedump_{k}.png", f"png {k}".encode())
+            listed += f"{dolphin_ref.sha256(png)}  {png.name}\n"
+        write_file(out, "frames.txt", listed)
         return self.exit
 
 
@@ -74,6 +79,7 @@ class CacheCase(unittest.TestCase):
         write_file(build, dolphin_ref.BUILT, '{"src": "409881c", "patch": "6c45"}\n')
         self.cache = temp_dir(self) / "top-ride-grass"
         self.log = self.cache.parent / "sandbox.log"
+        self.iso = write_file(temp_dir(self), "game.iso", b"GKYE01 disc")
         self.dolphin = FakeDolphin()
         self.befores = 0
         for name, value in (("play", self.dolphin), ("LOG_STREAM", fake_log(self, "Filtering the log data using x"))):
@@ -85,7 +91,7 @@ class CacheCase(unittest.TestCase):
         self.befores += 1
 
     def ready(self, script: str = SCRIPT, head: str = HEAD) -> dolphin_cache.Side:
-        return dolphin_cache.ready(self.cache, script, FIELDS, Path("/disc.iso"), head, self.log,
+        return dolphin_cache.ready(self.cache, script, FIELDS, self.iso, head, self.log,
                                    self.before, self.root)
 
 
@@ -94,6 +100,7 @@ class ReuseTest(CacheCase):
         side = self.ready()
         self.assertEqual((side.runs, side.why, side.off, side.denied), (2, "no saved run", [], []))
         self.assertEqual(self.befores, 2)  # once before each Dolphin run
+        self.assertEqual(self.dolphin.beside, [[], []])  # one run's dumps on disk at a time
         movie = (self.cache / "movie.dtm").read_bytes()
         self.assertEqual(movie, self.dolphin.runs[-1])
         self.assertNotEqual(movie, self.dolphin.runs[0])
@@ -113,12 +120,33 @@ class ReuseTest(CacheCase):
         def dump() -> None:
             (self.cache / "dolphin" / "frames" / "framedump_2.png").unlink()
 
+        def disc() -> None:
+            self.iso.write_bytes(b"GKYE01 another disc")
+
+        def listing() -> None:
+            (self.cache / "dolphin" / "frames.txt").unlink()
+
+        def empty() -> None:
+            (self.cache / "dolphin" / "frames.txt").write_text("")
+
+        def changed_dump() -> None:
+            (self.cache / "dolphin" / "frames" / "framedump_1.png").write_bytes(b"png 3")
+
+        def key(text: str) -> Callable[[], None]:
+            return lambda: (self.cache / "key.json").write_text(text)
+
         for change, why, kw in ((binary, "its dolphin changed", {}),
                                 (movie, "its movie changed", {}),
+                                (disc, "its iso changed", {}),
                                 (lambda: None, "its triage changed", {"head": "tolerance=5 budget=0.1%"}),
                                 (lambda: None, "the movie isn't the route's fixed point now",
                                  {"script": "100:A:5,150:B:5"}),
-                                (dump, "a dump it lists is gone", {})):
+                                (dump, "a dump it lists is gone", {}),
+                                (listing, "its frames.txt is gone", {}),
+                                (empty, "its frames.txt lists no dumps", {}),
+                                (changed_dump, "framedump_1.png isn't the dump it lists", {}),
+                                (key('{"movie": '), "no saved run", {}),
+                                (key("[1, 2]\n"), "no saved run", {})):
             with self.subTest(why=why):
                 self.ready()
                 change()
@@ -133,17 +161,19 @@ class ReuseTest(CacheCase):
     def test_the_key_says_what_the_run_depends_on(self) -> None:
         self.ready()
         key = json.loads((self.cache / "key.json").read_text())
-        self.assertEqual(sorted(key), ["built", "config", "disc", "dolphin", "fields", "macos", "movie",
-                                       "triage", "watches"])
+        self.assertEqual(sorted(key), ["built", "config", "disc", "dolphin", "fields", "iso", "macos",
+                                       "movie", "triage", "watches"])
         self.assertEqual((key["triage"], key["fields"], key["disc"]), (HEAD, FIELDS, "console"))
+        self.assertEqual(key["iso"], dolphin_ref.sha256(self.iso))
         self.assertIn(f"{dtm.PAD_STATE:08X}", key["watches"])
+        self.assertEqual(sorted(p.name for p in self.cache.iterdir()), ["dolphin", "key.json", "movie.dtm"])
 
 
 class PlayTest(CacheCase):
     def test_a_run_that_stops_short_fails_and_leaves_no_key(self) -> None:
         self.ready()
         self.dolphin.exit = 1
-        with self.assertRaisesRegex(dolphin_cache.Bad, "Dolphin's run 1 exited 1"):
+        with self.assertRaisesRegex(dtm.Bad, "run-1: the run didn't play all 200 fields"):
             self.ready(head="tolerance=5 budget=0.1%")
         self.assertFalse((self.cache / "key.json").exists())
         self.dolphin.exit = 0
@@ -159,7 +189,7 @@ class PlayTest(CacheCase):
 
     def test_a_press_off_its_frame_is_named(self) -> None:
         self.dolphin.pad_lag = 1
-        self.assertEqual(self.ready().off, ["100:A read at game frame 101"])
+        self.assertEqual(self.ready().off, ["100:A: read at field 105, given at game frame 101, +1 frames off"])
 
     def test_missing_and_refused_set_ups(self) -> None:
         self.assertIsNone(dolphin_cache.missing(self.root))

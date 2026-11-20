@@ -279,6 +279,11 @@ class PressReadTest(unittest.TestCase):
         found = dtm.press_reads(dtm.parse_route("200:B:3"), self.run_of(""))
         self.assertEqual([(p.at, f, g) for p, f, g in found], [(200, -1, -1)])
 
+    def test_the_report_marks_each_press_off_its_frame(self):
+        got = dtm.press_report("20:A:3,200:B:3", self.run_of("20:A:3"))
+        self.assertEqual(got, [("20:A: read at field 31, given at game frame 20, on its frame", False),
+                               ("200:B: never read", True)])
+
 
 class ConvergeTest(unittest.TestCase):
     """converge against a fake Dolphin that shows no frame for the first SLOW fields."""
@@ -308,6 +313,13 @@ class ConvergeTest(unittest.TestCase):
         n, path = dtm.converge("150:A:5", 300, self.folder, self.play(lambda run: 30 + run),
                                most=3)
         self.assertEqual((n, path.name, len(self.played)), (None, "movie-3.dtm", 3))
+
+    def test_a_timeline_starts_it_at_that_movie(self):
+        dtm.converge("150:A:5", 300, self.folder, self.play(lambda run: 40))
+        timeline = dtm.game_frames((self.folder / "run-2" / "ram.txt").read_text().splitlines())
+        again = temp_dir(self)
+        n, path = dtm.converge("150:A:5", 300, again, self.play(lambda run: 40), timeline=timeline)
+        self.assertEqual((n, path.read_bytes()), (1, dtm.make("150:A:5", 300, timeline)))
 
     def test_a_run_that_fails_stops_it(self):
         with self.assertRaisesRegex(dtm.Bad, "didn't play all 300 fields"):

@@ -20,8 +20,8 @@ LINES = dolphin_diff.parse_triage(HEAD + "\n".join([
 
 
 def entry(frame: int, share: float, state: str = "same", **kw) -> dict:
-    return {"frame": frame, "share": share, "max": 9, "mean": 0.1, "state": state,
-            "state_diff": [], "side": f"/work/sides/r-{frame:05d}.png", **kw}
+    return {"frame": frame, "share": share, "max": 9, "mean": 0.1, "over": share > BUDGET,
+            "state": state, "state_diff": [], "side": f"/work/sides/r-{frame:05d}.png", **kw}
 
 
 def tonight(**changed: dict) -> dict:
@@ -67,6 +67,7 @@ class CheckpointTest(MovesCase):
 
     def test_a_class_change_fails(self):
         for frame, now in (("60", entry(60, 0.0, "differs")),
+                           ("60", entry(60, 0.0, "not read")),
                            ("2004", {"frame": 2004, "refused": "Dragoon has no frame 2004", "state": "not read",
                                      "state_diff": []}),
                            ("2004", entry(2004, 0.01342, "differs"))):
@@ -116,9 +117,27 @@ class RaceTest(MovesCase):
                 self.assertEqual(c.status, PASS)
                 self.assertTrue(c.better.endswith("update tests/hashes/dolphin-triage.txt"))
 
+    def test_no_difference_in_a_race_left_early_or_never_entered_fails(self):
+        for found in (race(None, 400), Race("City Trial's city", 600)):
+            with self.subTest(through=found.through):
+                c = self.checks(tonight(), [found])["race"]
+                self.assertEqual(c.status, FAIL)
+                self.assertIn("compared short of pass 600, Dolphin's last, where the first difference "
+                              "was at pass 273", c.problems[0].what)
+        self.assertEqual(self.checks(tonight(), [Race("City Trial's city", None)])["race"].status, FAIL)
+
     def test_the_same_first_difference_passes(self):
         c = self.checks(tonight())["race"]
         self.assertEqual((c.status, c.better), (PASS, None))
+
+    def test_the_earliest_of_two_first_passes_is_the_mark(self):
+        lines = LINES + dolphin_diff.parse_triage(
+            HEAD + "r 4200 share=81.192% max=255 mean=23.90 state=differs bug player4.speed first differs "
+            "at frame 3100, pass 300\n").lines
+        report = tonight(**{"4200": entry(4200, 0.81192, "differs")})
+        self.assertEqual(dolphin_moves.marks(lines), (273, None))
+        self.assertEqual(self.checks(report, [race(273)], lines)["race"].better, None)
+        self.assertIn("comes after pass 273", self.checks(report, [race(290, 289)], lines)["race"].better or "")
 
     def test_matches_through_fails_on_a_difference_at_or_before_its_pass_or_a_shorter_compare(self):
         lines = dolphin_diff.parse_triage(HEAD + "r 3600 share=0.467% max=124 mean=0.61 state=same unclear "

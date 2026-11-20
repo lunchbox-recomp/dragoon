@@ -1,7 +1,8 @@
 # Dragoon against Dolphin 2609a at matched game frames, both reading the disc at console speed,
 # triaged by eye from tools/dolphin_diff.py's side-by-sides. Format: dolphin_diff.py --help.
-# The next line is the tolerance and budget the scores were taken at, then one line a route and
-# checkpoint: ROUTE FRAME share=S% max=M mean=E state=STATE CLASS REASON.
+# The next line is the tolerance and budget the scores were taken at, then a line a route for
+# the fields its converged movie played, ROUTE fields=N, and one line a route and checkpoint:
+# ROUTE FRAME share=S% max=M mean=E state=STATE CLASS REASON.
 # Scored on gcn-recomp 6586763, which draws every vertex 1/12 of a pixel left and up for the
 # console's 7/12 pixel centre, as Dolphin corrects for it. Before it every menu edge was about
 # 0.09 px right of and below Dolphin's (docs/dev/status.md, "The pixel centre"). Both sides pin
@@ -11,6 +12,10 @@
 # the first compared value to differ and the first Dragoon frame it does, from runs reading
 # every compared value each frame against Dolphin's at the same pass or one either side.
 tolerance=4 budget=0.1%
+# Top Ride's race matches through pass 564, the last its 4400 fields reach.
+top-ride-grass fields=4400
+air-ride-race fields=7600
+city-trial fields=4300
 top-ride-grass 60 share=0.000% max=3 mean=0.01 state=same within under the budget and the state matching
 top-ride-grass 304 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 top-ride-grass 314 share=0.001% max=5 mean=0.02 state=same within under the budget and the state matching

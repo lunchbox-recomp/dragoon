@@ -89,9 +89,11 @@ last game frame Dolphin's run reaches, and plays on to that frame. They go in st
 trace, which race_trace.py compares pass by pass for the race's first difference.
 
 The triage file, tests/hashes/dolphin-triage.txt, starts with the tolerance and the budget its
-scores were taken at, then has one line a route and checkpoint:
+scores were taken at, then has a line a route for the fields its converged movie played and one
+line a route and checkpoint:
 
   tolerance=T budget=B%
+  ROUTE fields=N
   ROUTE FRAME share=S% max=M mean=E state=STATE CLASS REASON
 
 S, M and E are the checkpoint's score when it was triaged. STATE is the state compare's: same,
@@ -165,6 +167,7 @@ STATES = {"same": "same", "same, a frame off": "near", "differs": "differs", "no
 TRIAGE_LINE = re.compile(r"(\S+) (\d+) share=(\d+(?:\.\d+)?)% max=(\d+) mean=(\d+(?:\.\d+)?) "
                          r"state=(\S+) (\S+) (\S.*)")
 TRIAGE_HEAD = re.compile(r"tolerance=(\d+) budget=(\d+(?:\.\d+)?)%")
+TRIAGE_FIELDS = re.compile(r"(\S+) fields=([1-9]\d*)")
 DIFFERS_AT = re.compile(r"(\S+) first differs at frame \d+")
 # What the state compare reads: the goldens' values and the RNG's seeds, which change with every
 # random number the game draws, so any difference in what it did shows in them.
@@ -233,6 +236,7 @@ class TriageFile:
     tolerance: int
     budget: float
     lines: list
+    fields: dict = dataclasses.field(default_factory=dict)  # a route's movie fields, by route
 
 
 # Watches.
@@ -642,15 +646,24 @@ def summary(report: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+MATCHING = ("same", "near")  # the triage file's states for a match at its frame or a frame off
+
+
+def within(e: dict) -> bool:
+    """Whether report entry E, not refused, is within: under BUDGET with its state the same or a
+    frame off. A state Dragoon never read isn't, since nothing says it matches."""
+    return not e["over"] and STATES[e["state"]] in MATCHING
+
+
 def triage_line(route: str, e: dict) -> str:
     """A draft triage line for report entry E: within or refused, or unclear to be triaged."""
     state = STATES[e["state"]]
     if "refused" in e:
         return f"{route} {e['frame']} share=0% max=0 mean=0 state={state} refused {e['refused']}"
-    if e["over"] or e["state"] == "differs":
-        cls, why = "unclear", "not triaged yet"
-    else:
+    if within(e):
         cls, why = "within", "under the budget and the state matching"
+    else:
+        cls, why = "unclear", "not triaged yet"
     return (f"{route} {e['frame']} share={100 * e['share']:.3f}% max={e['max']} "
             f"mean={e['mean']:.2f} state={state} {cls} {why}")
 
@@ -699,8 +712,8 @@ def triage_head(tolerance: int = TOLERANCE, budget: float = BUDGET) -> str:
 def parse_triage(text: str, where: str = "triage") -> TriageFile:
     """TEXT's tolerance and budget and its triage lines, as the module docstring gives them. A
     ValueError names a missing head line, a malformed line, an unknown state or class or a
-    route's checkpoint listed twice."""
-    head, out, seen = None, [], set()
+    route's checkpoint or fields listed twice."""
+    head, out, seen, fields = None, [], set(), {}
     for n, line in enumerate(text.splitlines(), 1):
         if not line.strip() or line.startswith("#"):
             continue
@@ -709,6 +722,12 @@ def parse_triage(text: str, where: str = "triage") -> TriageFile:
             if not head:
                 raise ValueError(f"{where}: line {n}: not '{triage_head()}' or the like, which "
                                  f"comes first: {line!r}")
+            continue
+        f = TRIAGE_FIELDS.fullmatch(line)
+        if f:
+            if f[1] in fields:
+                raise ValueError(f"{where}: line {n}: {f[1]}'s fields are given twice")
+            fields[f[1]] = int(f[2])
             continue
         m = TRIAGE_LINE.fullmatch(line)
         if not m:
@@ -732,7 +751,7 @@ def parse_triage(text: str, where: str = "triage") -> TriageFile:
                           m[8]))
     if head is None:
         raise ValueError(f"{where}: no '{triage_head()}' line")
-    return TriageFile(int(head[1]), float(head[2]) / 100, out)
+    return TriageFile(int(head[1]), float(head[2]) / 100, out, fields)
 
 
 def main(argv: list[str]) -> int:

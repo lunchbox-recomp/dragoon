@@ -1,9 +1,9 @@
 """Has a triaged checkpoint moved? Tonight's Dolphin diff of a route against its lines in
 tests/hashes/dolphin-triage.txt, as the nightly's checks.
 
-A checkpoint's class tonight is refused when the diff refused it, within when its share is at
-most the triage file's budget with the state the same or a frame off, and over otherwise, for a
-person to triage. Against its triage line it fails when:
+A checkpoint's class tonight is refused when the diff refused it, within as dolphin_diff.within
+says (at most the budget, with the state the same or a frame off, so a state never read isn't),
+and over otherwise, for a person to triage. Against its triage line it fails when:
   - a within line is over or refused
   - any other line is refused, unless it was
   - an over line's share is more than the budget above the line's, the score taken at the
@@ -16,8 +16,10 @@ A route's race is held to what its lines say. "FIELD first differs at frame N, p
 race's first difference at pass P, the earliest a route's lines name, and "matches through
 pass P" says no compared value differs through pass P. Tonight's first difference
 (race_trace.py) fails at an earlier pass than P, or at P or before for "matches through". It
-improves at a later one, or none. "Matches through" also fails when the race is compared to an
-earlier pass than P and no further.
+improves at a later one, or none, but none only when the race was compared to the last pass
+Dolphin's run shows; a Dragoon run that never enters the race or leaves it early fails as
+compared short. "Matches through" also fails when the race is compared to an earlier pass than
+P and no further.
 
 An improvement fails nothing and says to update the triage file. It has no command line.
 """
@@ -34,7 +36,7 @@ from race_trace import Race
 STEP = "dolphin"
 FIRST_PASS = re.compile(r"first differs at frame \d+, pass (\d+)")
 THROUGH = re.compile(r"matches through pass (\d+)")
-MATCHING = ("same", "near")  # the triage file's states for a match at its frame or a frame off
+MATCHING = dolphin_diff.MATCHING
 UPDATE = "update tests/hashes/dolphin-triage.txt"
 SHOWN = 2  # the values that differ a check names before "and N more"
 
@@ -43,10 +45,12 @@ def state_of(entry: dict) -> str:
     return dolphin_diff.STATES[entry["state"]]
 
 
-def class_now(entry: dict, budget: float) -> str:
+def class_now(entry: dict) -> str:
+    """Refused, within as dolphin_diff.within says, or over. The step plays only a triage file
+    scored at the diff's own budget, so the entry's over is the triage file's."""
     if "refused" in entry:
         return "refused"
-    return "within" if entry["share"] <= budget and state_of(entry) in MATCHING else "over"
+    return "within" if dolphin_diff.within(entry) else "over"
 
 
 def was(t: Triage) -> str:
@@ -55,10 +59,10 @@ def was(t: Triage) -> str:
     return f"{t.cls} at share {100 * t.share:.3f}% max {t.max}, state {t.state}"
 
 
-def now(entry: dict, budget: float) -> str:
+def now(entry: dict) -> str:
     if "refused" in entry:
         return f"refused, {entry['refused']}"
-    text = (f"{class_now(entry, budget)} at share {100 * entry['share']:.3f}% max {entry['max']}, "
+    text = (f"{class_now(entry)} at share {100 * entry['share']:.3f}% max {entry['max']}, "
             f"state {state_of(entry)}")
     differs = entry.get("state_diff") or []
     more = f"; and {len(differs) - SHOWN} more" if len(differs) > SHOWN else ""
@@ -67,7 +71,7 @@ def now(entry: dict, budget: float) -> str:
 
 def moves(t: Triage, entry: dict, budget: float) -> tuple[list[str], list[str]]:
     """How ENTRY, tonight's report entry, moved from T: what fails and what improved."""
-    cls = class_now(entry, budget)
+    cls = class_now(entry)
     if t.cls == "within":
         return ([] if cls == "within" else ["left within"]), []
     if t.cls == "refused":
@@ -113,7 +117,7 @@ def checkpoint_check(route: str, t: Triage, entry: Optional[dict], budget: float
         return Check(check_id, STEP, FAIL, kind="not compared", route=route,
                      detail=f"frame {t.frame} isn't in tonight's diff")
     fails, better = moves(t, entry, budget)
-    detail = f"{was(t)} in the triage file, {now(entry, budget)} tonight"
+    detail = f"{was(t)} in the triage file, {now(entry)} tonight"
     return check(check_id, route, "moved", f"frame {t.frame}", detail, fails, better,
                  lambda: keep(entry))
 
@@ -129,6 +133,9 @@ def marks(lines: Sequence[Triage]) -> tuple[Optional[int], Optional[int]]:
 def race_moves(first: Optional[int], through: Optional[int], race: Race) -> tuple[list[str], list[str]]:
     if first is not None:
         if race.at is None:
+            if race.reach is None or race.through is None or race.through < race.reach:
+                return [f"compared short of pass {race.reach}, Dolphin's last, where the first "
+                        f"difference was at pass {first}"], []
             return [], [f"no difference now where the first was at pass {first}"]
         if race.at < first:
             return [f"the first difference comes before pass {first}"], []

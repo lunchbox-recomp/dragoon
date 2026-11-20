@@ -1,9 +1,9 @@
 """The nightly's dolphin step for one route: the Dolphin diff of every checkpoint
 tests/hashes/dolphin-triage.txt triages on it, each held to its line (dolphin_moves.py).
 
-The triage file is the only list of checkpoints: its routes are the ones played, and each
-route's lines are the frames compared, nothing more. Dolphin's side comes from
-dolphin_cache.ready, reused or played again. Dragoon's is dolphin_diff.play_dragoon with the
+The triage file is the only list of checkpoints: its routes are the ones played, each for the
+fields its `ROUTE fields=N` line gives, and each route's lines are the frames compared, nothing
+more. Dolphin's side comes from dolphin_cache.ready, reused or played again. Dragoon's is dolphin_diff.play_dragoon with the
 test seed, which only dolphin_diff sets, through the nightly's probe.sh and --bin. Before
 Dragoon plays, the movie's presses have to read on their route frames in Dolphin's run, as dtm.py
 presses checks them; a press that doesn't fails the route without playing it. Each side runs
@@ -34,9 +34,6 @@ from routes import Route, route_script
 
 STEP = dolphin_moves.STEP
 TRIAGE = "dolphin-triage.txt"
-# The fields each triaged route's movie plays, as the triage file's runs played them. Top Ride's
-# race "matches through pass 564", the last Dolphin's 4400 fields reach.
-FIELDS = {"top-ride-grass": 4400, "air-ride-race": 7600, "city-trial": 4300}
 
 
 @dataclass
@@ -72,6 +69,10 @@ def plan(ctx) -> tuple[Optional[Plan], Optional[Check]]:
     except dolphin_ref.Refused as e:
         return None, Check(STEP, STEP, FAIL, kind="couldn't run", detail=f"Dolphin refused: {e}")
     names = {t.route for t in triage.lines}
+    unplayed = sorted(names - triage.fields.keys())
+    if unplayed:
+        return None, Check(STEP, STEP, FAIL, kind="couldn't run",
+                           detail=f"{path.name} gives no 'ROUTE fields=N' line for {unplayed}")
     manifest = ctx.manifest()
     unknown = names - {r.name for r in manifest}
     if unknown:
@@ -96,8 +97,7 @@ def keeper(ctx):
 
 def route_checks(ctx, route: Route, p: Plan) -> list[Check]:
     lines = p.lines(route.name)
-    if route.name not in FIELDS:
-        raise ValueError(f"{route.name}: no movie length in nightly_dolphin.FIELDS")
+    fields = p.triage.fields[route.name]
     script = route_script((ctx.root / "tests" / "routes" / f"{route.name}.txt").read_text())
     iso = ctx.root / "rom" / "game.iso"
     if not iso.is_file():
@@ -105,7 +105,7 @@ def route_checks(ctx, route: Route, p: Plan) -> list[Check]:
     log = ctx.report / "logs" / f"{STEP}-{route.name}-sandbox.log"
     cache = ctx.root / "build" / "nightly" / dolphin_cache.CACHE / route.name
     try:
-        side = dolphin_cache.ready(cache, script, FIELDS[route.name], iso, p.head, log, ctx.before, p.root)
+        side = dolphin_cache.ready(cache, script, fields, iso, p.head, log, ctx.before, p.root)
     except (dolphin_cache.Bad, dtm.Bad, dolphin_ref.Refused) as e:
         raise ValueError(f"Dolphin's side: {e}") from None
     ctx.say(f"{route.name}: {side.text()}")

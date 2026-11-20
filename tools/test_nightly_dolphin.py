@@ -18,7 +18,7 @@ from test_dolphin_cache import FakeDolphin, fake_log
 from test_nightly_steps import StepCase
 from testutil import write_file
 
-TRIAGE = ("tolerance=4 budget=0.1%\n"
+TRIAGE = ("tolerance=4 budget=0.1%\ntitle fields=200\n"
           "title 60 share=0.000% max=3 mean=0.01 state=same within under the budget and the state matching\n"
           "title 120 share=1.342% max=230 mean=1.11 state=same timing the SAVE icon's load order\n")
 
@@ -39,7 +39,6 @@ class DolphinStepTest(StepCase):
         self.dolphin = FakeDolphin("100:A:5")
         self.shares = {60: 0.0, 120: 0.01342}
         self.played: list[tuple] = []
-        self.patch(nightly_dolphin, "FIELDS", {"title": 200})
         self.patch(dolphin_cache, "dolphin_root", lambda: self.dolphin_root)
         self.patch(dolphin_cache, "checked", lambda root: None)
         self.patch(dolphin_cache, "play", self.counted)
@@ -62,7 +61,7 @@ class DolphinStepTest(StepCase):
         for f in frames:
             side = write_file(out / "sides", f"{route.name}-{f:05d}.png", b"side")
             entries.append({"frame": f, "share": self.shares[f], "max": 9, "mean": 0.1, "state": "same",
-                            "state_diff": [], "side": str(side)})
+                            "over": self.shares[f] > 0.001, "state_diff": [], "side": str(side)})
         return {"checkpoints": entries}
 
     def test_a_checkpoint_that_moved_fails_and_keeps_only_its_picture(self) -> None:
@@ -117,8 +116,16 @@ class DolphinStepTest(StepCase):
     def test_a_press_dolphin_read_off_its_frame_fails_the_route_before_dragoon_plays(self) -> None:
         self.dolphin.pad_lag = 1
         c = self.play("dolphin")["dolphin title movie"]
-        self.assertEqual((c.status, c.kind, c.problems[0].what), (FAIL, "presses off", "100:A read at game frame 101"))
+        self.assertEqual((c.status, c.kind, c.problems[0].what),
+                         (FAIL, "presses off", "100:A: read at field 105, given at game frame 101, +1 frames off"))
         self.assertEqual(self.played, [])
+
+    def test_a_triaged_route_with_no_fields_line_plays_nothing(self) -> None:
+        write_file(self.tree.hashes, "dolphin-triage.txt", TRIAGE.replace("title fields=200\n", ""))
+        c = self.play("dolphin")["dolphin"]
+        self.assertEqual((c.status, c.kind), (FAIL, "couldn't run"))
+        self.assertIn("no 'ROUTE fields=N' line for ['title']", c.detail)
+        self.assertEqual(self.tree.games, 0)
 
     def test_routes_narrows_the_triaged_routes_and_dolphin_runs_after_frames(self) -> None:
         self.assertEqual(self.play("dolphin", routes=["menu"]), {})

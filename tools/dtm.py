@@ -453,11 +453,11 @@ def boot_command(iso: Path, movie: Path, fields: int, out: Path, disc: str,
 
 
 def converge(script: str, fields: int, folder: Path, play, most: int = CONVERGE_MAX,
-             count_polls: bool = False) -> tuple[Optional[int], Path]:
-    """Play movie 1 (no timeline), make movie N + 1 from run N's ram.txt and stop when it's the
-    movie run N played: (N, its movie), or (None, the last movie) after MOST runs. PLAY(movie,
-    out) plays a movie into OUT and returns its exit code."""
-    movie = make(script, fields, (), count_polls)
+             count_polls: bool = False, timeline: Sequence[int] = ()) -> tuple[Optional[int], Path]:
+    """Play movie 1 (from TIMELINE, none by default), make movie N + 1 from run N's ram.txt and
+    stop when it's the movie run N played: (N, its movie), or (None, the last movie) after MOST
+    runs. PLAY(movie, out) plays a movie into OUT and returns its exit code."""
+    movie = make(script, fields, timeline, count_polls)
     for n in range(1, most + 1):
         path = folder / f"movie-{n}.dtm"
         path.write_bytes(movie)
@@ -519,19 +519,26 @@ def cmd_polls(path: Path) -> int:
     return 0 if steps else 1
 
 
-def cmd_presses(route: Path, ram: Path) -> int:
-    presses = parse_route(route_script(route.read_text(encoding="utf-8")))
-    off = 0
-    for p, field_, frame in press_reads(presses, read_lines(ram)):
+def press_report(script: str, lines: Sequence[str]) -> list[tuple[str, bool]]:
+    """Each of SCRIPT's port 1 presses as `presses` prints it, and whether it's off its frame
+    (or never read) in the run whose ram.txt is LINES."""
+    out = []
+    for p, field_, frame in press_reads(parse_route(script), lines):
         names = "+".join(sorted(p.buttons))
         if field_ < 0:
-            print(f"{p.at}:{names}: never read")
-            off += 1
+            out.append((f"{p.at}:{names}: never read", True))
             continue
         said = "on its frame" if frame == p.at else f"{frame - p.at:+d} frames off"
-        print(f"{p.at}:{names}: read at field {field_}, given at game frame {frame}, {said}")
-        off += frame != p.at
-    return 1 if off else 0
+        out.append((f"{p.at}:{names}: read at field {field_}, given at game frame {frame}, {said}",
+                    frame != p.at))
+    return out
+
+
+def cmd_presses(route: Path, ram: Path) -> int:
+    report = press_report(route_script(route.read_text(encoding="utf-8")), read_lines(ram))
+    for text, _ in report:
+        print(text)
+    return 1 if any(off for _, off in report) else 0
 
 
 def frame_count(text: str) -> int:

@@ -252,6 +252,9 @@ class ThresholdTest(unittest.TestCase):
                          "r 5 share=0.200% max=9 mean=0.50 state=near unclear not triaged yet")
         e.update(share=0.0, over=False, state="differs")
         self.assertIn(" state=differs unclear ", dolphin_diff.triage_line("r", e))
+        e.update(state="not read")  # a state never read isn't a match
+        self.assertIn(" state=none unclear ", dolphin_diff.triage_line("r", e))
+        self.assertFalse(dolphin_diff.within(e))
 
     def test_a_refused_checkpoint_has_no_score(self):
         e = {"frame": 5, "refused": "why not", "state": "not read"}
@@ -480,6 +483,12 @@ class TriageTest(unittest.TestCase):
         self.assertAlmostEqual(t.share, 0.0125)
         self.assertAlmostEqual(t.mean, 2.1)
         self.assertEqual([t.cls for t in got.lines], ["bug", "refused"])
+        self.assertEqual(got.fields, {})
+
+    def test_a_route_s_fields_read_back(self):
+        got = dolphin_diff.parse_triage("tolerance=4 budget=0.1%\nr fields=4400\n"
+                                        "r 1 share=1% max=2 mean=0 state=same timing why\n")
+        self.assertEqual((got.fields, len(got.lines)), ({"r": 4400}, 1))
 
     def test_a_draft_parses(self):
         e = {"frame": 5, "share": 0.5, "max": 9, "mean": 0.5, "over": True, "state": "same"}
@@ -506,6 +515,8 @@ class TriageTest(unittest.TestCase):
                           (head + "r 1 share=1% max=2 mean=0 state=differs bug lap first differs "
                                   "at frame 9\n", "with FIELD one of FIELDS"),
                           ("r 1 share=1% max=2 mean=0 state=same bug why\n", "comes first"),
+                          (head + "r fields=10\nr fields=20\n", "r's fields are given twice"),
+                          (head + "r fields=0\n", "not 'ROUTE"),
                           ("# nothing\n", "no 'tolerance=")):
             with self.subTest(text=text), self.assertRaisesRegex(ValueError, why):
                 dolphin_diff.parse_triage(text)
@@ -521,6 +532,8 @@ class TriageTest(unittest.TestCase):
         got = dolphin_diff.parse_triage(dolphin_diff.TRIAGE.read_text())
         self.assertEqual((got.tolerance, got.budget), (dolphin_diff.TOLERANCE, dolphin_diff.BUDGET))
         self.assertTrue(got.lines)
+        self.assertEqual(got.fields, {"top-ride-grass": 4400, "air-ride-race": 7600, "city-trial": 4300})
+        self.assertEqual(got.fields.keys(), {t.route for t in got.lines})
 
     def test_a_differing_bug_names_its_field_and_frame(self):
         text = ("tolerance=4 budget=0.1%\nr 1 share=1% max=2 mean=0 state=differs bug Dragoon "
