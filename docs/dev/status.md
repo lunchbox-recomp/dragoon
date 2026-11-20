@@ -910,16 +910,42 @@ matched all 1,906 frames in 18 min at loads of 3.2 to 4.5.
 
 ## Nightly
 
-`tools/nightly.py run` reruns the frame, state and audio goldens, the shader compiles from a
-fresh warm-up, the timed rows above and four bot soaks on the real game, one game at a time and
-only on AC power. The rows it reruns stay as measured here, and it never edits this file. Its
-table of steps and bars is in `tools/README.md`.
+`tools/nightly.py run` reruns the frame, state and audio goldens, the Dolphin diff, the shader
+compiles from a fresh warm-up, the timed rows above and four bot soaks on the real game, one
+game at a time and only on AC power. The rows it reruns stay as measured here, and it never
+edits this file. Its table of steps and bars is in `tools/README.md`.
 
 ```
 tools/nightly.py run
 tools/nightly.py run --only shaders timed
+tools/nightly.py run --only dolphin
 tools/nightly.py install-agent
 ```
+
+The `dolphin` step runs after the goldens. It plays every route `tests/hashes/dolphin-triage.txt`
+triages, Dragoon pinned against Dolphin, and compares each triaged checkpoint with its line. A
+checkpoint fails the night when:
+
+- its class changes: a `within` line is over the budget or refused, or another line is refused
+- its share moves more than the budget, 0.1%, above its line's, at the line's tolerance of 4
+- its state differs where its line's was the same
+- its race's first difference comes at an earlier pass than its lines say: City Trial pass 273,
+  Air Ride pass 763, and Top Ride matching through pass 564
+
+A checkpoint that gets better, a later first difference, a bug now within or a share more than
+the budget lower, comes under Improved and fails nothing. It says to update the triage file.
+Each failure names the checkpoint, its line's class and score and tonight's, and the
+side-by-side kept in the report's `dolphin/`. Dolphin's run of a route is reused from
+`build/nightly/dolphin-cache/` while its movie, Dolphin's binary and build record, its config,
+the triage file's head line and the macOS version are as they were. With no Dolphin in
+`dolphin-ref/` beside the clone the step is skipped and fails nothing.
+
+On 2026-11-20 the step took 36 min with no saved runs, converging each movie in 7 Dolphin runs,
+and 4 min 41 s reusing them. Its three Dragoon runs found the races' first differences where
+the triage file has them: City Trial at frame 3005, pass 273, Air Ride at frame 3884, pass 763,
+and Top Ride matching through pass 564. With gcn-recomp `6586763` reverted, 36 of its 47
+checks failed. The menu checkpoints came back at their scores from before the pixel centre, such
+as 2.677% at 60, 3.444% at 314 and 3.896% at 1013. On the unchanged build all 47 passed.
 
 Read `build/nightly/YYYY-MM-DD-HHMM/summary.txt` first. Its regressions section lists each check
 that flipped since the last report, each new failure and each timed number more than 10% and
