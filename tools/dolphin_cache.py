@@ -17,8 +17,9 @@ Playing again is dtm.converge, starting from the saved run's timeline when there
 route that changed a little takes a run or two, not seven. Every run plays through dolphin_ref.py
 boot, sandboxed with no network, with frame dumps and dolphin_diff's watches on, and with the pad
 queue's words too so dtm's press check reads the same run. Each run first calls BEFORE, as each
-game process does in the nightly, and removes the run before it. `log stream` runs over the whole
-of it, filtered as dolphin_ref.py says, into the run's log, and every denial but
+game process does in the nightly, and removes the run before it. A run that exits badly fails
+with the last lines dolphin_ref.py printed, from the run's boot log. `log stream` runs over the
+whole of it, filtered as dolphin_ref.py says, into the run's log, and every denial but
 /dev/dtracehelper's is given back. The fixed point's run replaces the saved one and key.json is
 written last, through a rename, so a stopped rerun leaves nothing that looks current.
 
@@ -50,6 +51,7 @@ LOG_STREAM = ("/usr/bin/log", "stream", "--style", "compact", "--predicate",
 LOG_READY = "Filtering the log data"  # log stream's first line, once it's listening
 HARMLESS = "/dev/dtracehelper"  # each process's DTrace probe offer, which the sandbox refuses
 CONVERGE_MAX = dtm.CONVERGE_MAX
+TAIL = 4  # the lines of dolphin_ref.py's output a failed run's error gives
 
 
 class Bad(ValueError):
@@ -145,10 +147,19 @@ def stale(cache: Path, root: Path, script: str, iso: Path, fields: int,
     return dumps_stale(saved)
 
 
-def play(iso: Path, movie: Path, fields: int, out: Path) -> int:
-    """Dolphin playing MOVIE for FIELDS fields into OUT, through dolphin_ref.py boot."""
-    return subprocess.run(dtm.boot_command(iso, movie, fields, out, dolphin_diff.DISC, watched(),
-                                           dump=True)).returncode
+def play(iso: Path, movie: Path, fields: int, out: Path, log: Path) -> int:
+    """Dolphin playing MOVIE for FIELDS fields into OUT, through dolphin_ref.py boot, with what
+    it prints in LOG."""
+    with open(log, "w") as f:
+        return subprocess.run(dtm.boot_command(iso, movie, fields, out, dolphin_diff.DISC,
+                                               watched(), dump=True),
+                              stdout=f, stderr=subprocess.STDOUT).returncode
+
+
+def last_lines(log: Path) -> str:
+    """LOG's last TAIL lines on one line, or that there's none."""
+    lines = log.read_text(errors="replace").splitlines() if log.is_file() else []
+    return " | ".join(line.strip() for line in lines[-TAIL:] if line.strip()) or "no output"
 
 
 class SandboxLog:
@@ -231,7 +242,11 @@ def ready(cache: Path, script: str, fields: int, iso: Path, triage_head: str, lo
         for earlier in work.glob("run-*"):  # converge has read it; one run's dumps on disk at a time
             shutil.rmtree(earlier)
         before()
-        return play(iso, movie, fields, out)
+        log = work / f"boot-{out.name}.log"
+        code = play(iso, movie, fields, out, log)
+        if code:
+            raise Bad(f"Dolphin's {out.name} exited {code}: {last_lines(log)}")
+        return code
 
     with SandboxLog(log) as sandbox:
         n, movie_path = dtm.converge(script, fields, work, run, CONVERGE_MAX, timeline=timeline)

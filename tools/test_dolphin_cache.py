@@ -40,7 +40,7 @@ class FakeDolphin:
         self.runs: list[bytes] = []
         self.beside: list[list[str]] = []  # the other runs on disk as each run starts
 
-    def __call__(self, iso: Path, movie: Path, fields: int, out: Path) -> int:
+    def __call__(self, iso: Path, movie: Path, fields: int, out: Path, log: Path) -> int:
         self.runs.append(movie.read_bytes())
         self.beside.append(sorted(p.name for p in out.parent.glob("run-*")))
         cols = dolphin_cache.watched()
@@ -66,6 +66,8 @@ class FakeDolphin:
             png = write_file(out / "frames", f"framedump_{k}.png", f"png {k}".encode())
             listed += f"{dolphin_ref.sha256(png)}  {png.name}\n"
         write_file(out, "frames.txt", listed)
+        failed = "Traceback (most recent call last):\nValueError: a bad datagram\n" if self.exit else ""
+        log.write_text("frames done\n" + failed)
         return self.exit
 
 
@@ -173,16 +175,18 @@ class PlayTest(CacheCase):
     def test_a_run_that_stops_short_fails_and_leaves_no_key(self) -> None:
         self.ready()
         self.dolphin.exit = 1
-        with self.assertRaisesRegex(dtm.Bad, "run-1: the run didn't play all 200 fields"):
+        with self.assertRaises(dolphin_cache.Bad) as e:
             self.ready(head="tolerance=5 budget=0.1%")
+        self.assertEqual(str(e.exception), "Dolphin's run-1 exited 1: frames done | Traceback (most recent "
+                                           "call last): | ValueError: a bad datagram")
         self.assertFalse((self.cache / "key.json").exists())
         self.dolphin.exit = 0
         self.assertEqual(self.ready().why, "no saved run")
 
     def test_no_fixed_point_fails(self) -> None:
-        def drifting(iso: Path, movie: Path, fields: int, out: Path) -> int:
+        def drifting(iso: Path, movie: Path, fields: int, out: Path, log: Path) -> int:
             self.dolphin.lag += 1
-            return FakeDolphin.__call__(self.dolphin, iso, movie, fields, out)
+            return FakeDolphin.__call__(self.dolphin, iso, movie, fields, out, log)
         with mock.patch.object(dolphin_cache, "play", drifting), \
                 self.assertRaisesRegex(dolphin_cache.Bad, "no fixed point in 10 runs"):
             self.ready()
