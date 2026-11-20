@@ -11,7 +11,10 @@ with the same check in the last report:
   same       it fails now as it did last time
 
 A timed number that far below status.md's is improved, which fails nothing but says status.md
-can be updated. A check that's a known issue (known_issues.py) is neither.
+can be updated, and so is a passing check whose `better` says how it beat the file it's held to,
+such as a Dolphin checkpoint that's now within (dolphin_moves.py). A check that's a known issue
+(known_issues.py) is neither. A skipped check, a step with nothing to play on such as no Dolphin,
+fails nothing and is listed with why.
 
 summary.txt fits on one screen. The regressions come first, the flipped, new and slower checks,
 each with the route, the frame or field, and the dump or log to look at. Then the checks that
@@ -28,6 +31,7 @@ from typing import Optional
 
 PASS, FAIL = "pass", "fail"
 SKIPPED_BATTERY, NOT_RUN = "skipped-battery", "not-run"
+SKIPPED = "skipped"  # a step with nothing to play it on, such as no Dolphin, its detail saying so
 MOVE = 0.10  # how far a timed number may rise above its last value or status.md's
 # And by more than this many ms. It's 1.5% of a 60 Hz frame's 16.67 ms, under which no number
 # here costs a player a frame, and it keeps a 0.72 ms number from failing on a 0.08 ms wobble.
@@ -61,6 +65,7 @@ class Check:
     load: Optional[list[float]] = None  # the 1-minute load as the run began and ended
     dump: Optional[str] = None  # the file to look at for the whole check
     known: Optional[str] = None  # the bug, for a known issue failing where it's known to or passing now
+    better: Optional[str] = None  # how a passing check got better than the file it's held to says
 
 
 def to_json(checks: list[Check]) -> list[dict]:
@@ -86,8 +91,10 @@ def past(value: Optional[float], against: Optional[float]) -> Optional[float]:
 
 
 def improved(c: Check) -> Optional[str]:
-    """Why a timed number that passed should be written in status.md, None when it shouldn't:
-    it's as far below status.md's number as a regression would be above it."""
+    """Why a check that passed should be written down again, None when it shouldn't: its own
+    `better`, or a timed number as far below status.md's number as a regression would be above."""
+    if c.status == PASS and c.better:
+        return c.better
     if not c.timed or c.status != PASS or c.value is None or c.status_value is None:
         return None
     share = past(c.status_value, c.value)
@@ -192,6 +199,8 @@ def summary(head: list[str], checks: list[Check], last: Optional[list[Check]]) -
     for c in checks:
         if c.status in (SKIPPED_BATTERY, NOT_RUN):
             skipped.setdefault(f"{c.step}: {c.status}", []).append(c.id)
+        elif c.status == SKIPPED:
+            skipped.setdefault(f"{c.step}: skipped: {c.detail}", []).append(c.id)
     out = list(head)
     budget = LINES
     for title, group in (("Regressions", regressions), ("Failing as last time", same)):
@@ -210,7 +219,7 @@ def summary(head: list[str], checks: list[Check], last: Optional[list[Check]]) -
                 for c in known]
     if better:
         out.append(f"Improved ({len(better)})")
-        out += [line(c, [improved(c) or ""], dumps=False) for c in better]
+        out += [line(c, [improved(c) or ""], dumps=c.better is not None) for c in better]
     passed = pass_lines([c for c in checks if c.value is None or (c not in regressions and c not in better)])
     if passed:
         out.append("Passes")

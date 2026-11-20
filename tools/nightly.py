@@ -7,8 +7,9 @@ Usage: nightly.py run [--only STEP ...] [--routes ROUTE ...] [--build DIR] [--la
        nightly.py uninstall-agent [--dir DIR]
 
 run plays the steps in order, or the --only ones (nightly_steps.py says what each plays and
-checks): frames, audio, shaders, timed and soak. Each step runs as a child process of its own,
-`nightly.py step NAME`, at nice 19 but timed, which runs at the default priority. The whole run
+checks): frames, dolphin, audio, shaders, timed and soak. Each step runs as a child process of
+its own, `nightly.py step NAME`, at nice 19 but timed, which runs at the default priority. The
+whole run
 holds `caffeinate -i`, so the Mac doesn't sleep while it plays. Before every game process the
 step asks `pmset -g batt` for AC power. On battery the step stops, the report is written with it
 marked skipped-battery and the steps after it not-run, and run exits 2.
@@ -17,16 +18,19 @@ The report goes in build/nightly/YYYY-MM-DD-HHMM/: summary.txt, one screen, and 
 same for tools (nightly_report.py says what's in them). A check is compared with the same check
 in --last, a report.json or its directory, which defaults to the newest earlier report in
 build/nightly/. One that doesn't read as a report is said so in the summary's head and nothing
-is compared. Dumps are kept only for checks that failed, under dumps/, audio/, shaders/ and
-logs/. Nothing in tests/ or docs/ is written.
+is compared. Dumps are kept only for checks that failed, under dumps/, dolphin/, audio/,
+shaders/ and logs/, and dolphin/ also keeps an improved checkpoint's. The dolphin step keeps
+Dolphin's runs in build/nightly/dolphin-cache/ between nights. Nothing in tests/ or docs/ is
+written.
 
 A run holds build/nightly/run.lock and doesn't start while another holds it or a dragoon or
 dragoon_bench process runs (nightly_start.py). --scheduled is launchd's run: it's skipped
 outside 01:00 to 06:00, and otherwise fast-forwards this clone to origin/main, builds dragoon
 and dragoon_bench and runs again as that code, refusing a tree with changes or off origin/main.
 
---routes plays only those manifest routes in frames, audio and shaders. --build DIR plays the game
-in DIR (DIR/dragoon, and DIR/dragoon_bench for audio) through probe.sh's --bin, for a tree with no
+--routes plays only those manifest routes in frames, dolphin, audio and shaders. --build DIR
+plays the game in DIR (DIR/dragoon, and DIR/dragoon_bench for audio) through probe.sh's --bin,
+for a tree with no
 build of its own. --soak-minutes sets each of the four soaks' wall time (30 by default),
 --menu-runs the menu's opens (21 by default), and --seed the soaks' seed (by default the run's
 date and time, so a night's soaks differ from the last's and the report names the seed).

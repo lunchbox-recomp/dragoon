@@ -6,6 +6,11 @@ step at a time and turns what it returns into the report.
            and the game's state at each checkpoint against tests/hashes/state/, the same at
            both aspects ("played differently"), from one game process a route and aspect. A
            check tests/hashes/known-issues.txt lists is marked known (known_issues.py)
+  dolphin  every checkpoint tests/hashes/dolphin-triage.txt triages, Dragoon pinned against
+           Dolphin's run of the route's movie, reused while nothing it depends on changed
+           (dolphin_cache.py). A checkpoint whose class or score moves past its line, or a race
+           whose first difference comes earlier, fails; one that gets better is improved
+           (dolphin_moves.py, nightly_dolphin.py). No Dolphin beside the clone skips it
   audio    every route's AX hashes against tests/hashes/audio/, as audio_hashes.py check runs them
   shaders  a fresh warm-up, one pass at a time, into a scratch cache, then every route at both
            aspects from that cache, as route_compiles.py plays them. Bar 0 compiles a run
@@ -42,6 +47,7 @@ import bot_record
 import bot_soak
 import frame_hashes
 import known_issues
+import nightly_dolphin
 import route_compiles
 import state_goldens
 import timed_bars
@@ -385,6 +391,18 @@ def soak(ctx: Context, done: Callable[[Check], None]) -> None:
                    problems=[Problem(f"seed {ctx.seed}", stop, record)], dump=record))
 
 
+def dolphin(ctx: Context, done: Callable[[Check], None]) -> None:
+    plan, why_not = nightly_dolphin.plan(ctx)
+    if plan is None:
+        assert why_not is not None
+        done(why_not)
+        return
+    for route in plan.routes:
+        guarded(done, f"dolphin {route.name}", "dolphin", route.name,
+                lambda: nightly_dolphin.route_checks(ctx, route, plan))
+
+
 STEPS: dict[str, Callable[[Context, Callable[[Check], None]], None]] = {
-    "frames": frames, "audio": audio, "shaders": shaders, "timed": timed, "soak": soak}
+    "frames": frames, "dolphin": dolphin, "audio": audio, "shaders": shaders, "timed": timed,
+    "soak": soak}
 TIMED = ("timed",)  # the steps that run at the default priority, not at nice 19
