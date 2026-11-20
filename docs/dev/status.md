@@ -136,7 +136,7 @@ and the discovery and CTest steps were read from CMake's files, not run.
 
 CI's macOS job runs `ninja unit` (`tools/ci.py:111`), which builds the engine's own unit tests
 and runs them under CTest with `--no-tests=error --timeout 300 --output-on-failure`
-(`gcn-recomp/CMakeLists.txt:1450-1453`). It builds `dragoon_tests` too and runs it once to list
+(`gcn-recomp/CMakeLists.txt:1457-1460`). It builds `dragoon_tests` too and runs it once to list
 its tests and once per test (Dragoon's `CMakeLists.txt:60-61`, CMake 4.4.4's
 `Modules/GoogleTestAddTests.cmake:63-67`). So CI runs code compiled from this archive.
 
@@ -1140,9 +1140,9 @@ exactly. The fix belongs in gcn-recomp, in a step of its own.
 
 #### Gekko's single-precision rounding
 
-That cause is now proven, and gcn-recomp models half of it. A test build of gcn-recomp put each quirk
-behind a switch, the estimates from a table kept in scratch and never committed, and
-`ram_peek.py` read every compared word on each Dragoon frame against Dolphin's:
+That cause is now proven, and gcn-recomp models both halves of it. A test build of gcn-recomp
+put each quirk behind a switch, and `ram_peek.py` read every compared word on each Dragoon
+frame against Dolphin's:
 
 | Switches | City Trial, first difference | Air Ride race | Top Ride seed |
 |---|---|---|---|
@@ -1156,39 +1156,49 @@ Its exact 1/sqrt isn't the hardware's estimate, and PSVECMag's one Newton step k
 difference. frC rounding is the second cause once the estimates are in. Dolphin's single
 rounding in fmadds moved nothing in City Trial.
 
-gcn-recomp's `ROUND_FRC` (gcn-recomp `c781a86`) rounds frC to 25 bits in every
-single-precision multiply. The estimates aren't in, since the only source of their tables
-found is Dolphin's GPL code and gcn-recomp is MIT. So on this pin City Trial and Air Ride
-first differ where they did, and Top Ride's seed first differs earlier.
+gcn-recomp `c781a86` rounds frC to 25 bits in every single-precision multiply (`ROUND_FRC`).
+gcn-recomp `bfce46f` gives fres, frsqrte, ps_res and ps_rsqrte the 750's estimates
+(`GEKKO_FRES` and `GEKKO_FRSQRTE`). Their tables and arithmetic are in
+`gcn-recomp/runtime/gekko_estimate.h`, which is MPL-2.0 and taken from Cemu. The special
+values come from the IBM 750CL manual. On this pin the Dolphin diff now matches the test
+build's last row:
 
-- In City Trial player1.x and player1.y first differ at frame 2802, pass 70, as before.
-- In Air Ride's race player2.x first differs at frame 3336, pass 215, c15a1723 against
-  c15a1724, as before.
-- In Top Ride top_ride.seed first differs at frame 3558, pass 325, where it was frame 3656,
-  pass 423. Its checkpoint at 3600, pass 367, now differs (90.731%, the camera a few pixels
-  off).
+- In City Trial player2.speed first differs at frame 3005, pass 273 (41B34B42 against
+  41B31EA5), with player2.x, y and z. It was frame 2802, pass 70. That jump is about 11,000 ulp.
+- In Air Ride's race player4.speed first differs at frame 3884, pass 763 (4271F994 against
+  4271EE03), with player4.x, y and z. It was frame 3336, pass 215. That's about 3,000 ulp in
+  one pass, so a smaller difference in a value not compared likely comes first. It isn't
+  chased here.
+- In Top Ride the seeds match to pass 564, frame 3797, the last pass Dolphin's 4,400 fields
+  reach. On frC rounding alone it was pass 325 (frame 3558). Before either it was pass 423. Its
+  checkpoint at 3600, pass 367, has its state the same again, every racer where Dolphin has
+  it and only edges off (14.614%).
 
-The movies, made from the last runs' Dolphin timelines, are fixed points. Played again they
-give the same movies, and `dtm.py presses` found all 11 presses on their route frames on each.
-Dolphin's RAM logs came out byte for byte as before. The three routes ran on AC power, one
-game at a time with `log stream` watching the sandbox. Dolphin was denied only writes to
-`/dev/dtracehelper`. Every menu checkpoint scored as before:
+The movies were converged again from scratch, since the last runs' timelines were gone, in 7
+runs each to fixed points. `dtm.py presses` found all 11 presses on their route frames on
+each. The three routes ran on AC power, one game at a time with `log stream` watching the
+sandbox. Dolphin was denied only writes to `/dev/dtracehelper`. Every menu checkpoint scored
+as before, and Top Ride's title card moved by two thousandths of a percent:
 
-| Route | Checkpoint | Before | Now |
+| Route | Checkpoint | frC rounding only | Both quirks |
 |---|---|---|---|
-| top-ride-grass | 3600, pass 367 | 15.575%, state same | 90.731%, state differs |
-| air-ride-race | 4200, pass 1079 | 82.259%, state differs | 76.116%, state differs |
-| air-ride-race | 6000, pass 2879 | 93.188%, state differs | 81.226%, state differs |
-| city-trial | 3300, pass 568 | 29.757%, state differs | 29.820%, state differs |
+| top-ride-grass | 3235 | 2.019%, state same | 2.021%, state same |
+| top-ride-grass | 3245 | 20.273%, state same | 20.275%, state same |
+| top-ride-grass | 3600, pass 367 | 90.731%, state differs | 14.614%, state same |
+| air-ride-race | 4200, pass 1079 | 76.116%, state differs | 82.486%, state differs |
+| air-ride-race | 6000, pass 2879 | 81.226%, state differs | 93.241%, state differs |
+| city-trial | 3300, pass 568 | 29.820%, state differs | 26.346%, state differs |
 
-The bump moved every race on every route. Frame goldens first change at frames 2880 to 4800,
-each in a race or the city, Top Ride's at 3420 or 3480, about 190 frames into the race. The
-title's and the menu's frames and state are unchanged, and so is Top Ride's state. The title's
-audio changes from its attract demo, an Air Ride race the title plays by frame 1800.
-`air-ride-courses-2`'s Magma Flows race now ends at about frame 13050, after the route's
-12700 START. That START paused the race, and the route then raced Magma Flows again instead
-of Machine Passage and Beanstalk Park. Its presses from 12700 on, its checkpoints and its
-warm-up pass moved 500 frames later, so it races all three again, each checkpoint 0:14 in.
+The bump to `bfce46f` changed every route's frame goldens, recorded once over both quirks. At
+4:3 each first changes at its first dump after frame 120. That's 180, or 200 for the routes
+dumped every 100 frames and 300 for the stadium routes. Frame 180 is the notice that the data
+file was made, a still screen. Against `c781a86`, 74 of its 307,200 pixels change, by 2
+levels at most, all inside the notice's text, likely placed through an estimate. At
+16:9 the first change is the card prompt at 60, or 100, with its picture stretched. The state
+goldens change at every Air Ride, City Trial and stadium checkpoint, all in play. The title's,
+the menu's and Top Ride's states are unchanged. The audio goldens change on every route but
+`menu`. `air-ride-courses-1` and `air-ride-courses-2` still race their three courses in
+turn, read by `ram_peek.py` every 100 frames, so their presses stay where they were.
 
 What the triage found:
 
