@@ -18,18 +18,28 @@ public enum Volume {
     /// The free space on the volume holding `path`, or the nearest folder above it that exists.
     /// macOS works out the space for important use with what it could purge, and at times
     /// answers that with nothing or 0. The bytes statfs(2) calls free are free whatever it says,
-    /// so the larger of the two counts. A volume that won't say either counts as having none free.
+    /// so the larger of the two counts, and so do they alone when macOS throws instead. A volume
+    /// that won't say either counts as having none free.
     public static func freeSpace(at path: String) -> FreeSpace {
+        freeSpace(at: path) { url in
+            try? url.resourceValues(forKeys: [
+                .volumeAvailableCapacityForImportantUsageKey, .volumeLocalizedNameKey,
+            ])
+        }
+    }
+
+    /// `freeSpace(at:)` with macOS's figure for important use and the volume's name from
+    /// `values`, which gets the folder that exists and gives nil where macOS throws.
+    static func freeSpace(at path: String, values: (URL) -> URLResourceValues?) -> FreeSpace {
         var url = URL(fileURLWithPath: path)
         while !FileManager.default.fileExists(atPath: url.path), url.path != "/" {
             url.deleteLastPathComponent()
         }
-        let values = try? url.resourceValues(forKeys: [
-            .volumeAvailableCapacityForImportantUsageKey, .volumeLocalizedNameKey,
-        ])
+        let values = values(url)
         return FreeSpace(
             available: usable(
-                important: values?.volumeAvailableCapacityForImportantUsage, free: free(url.path)),
+                important: values?.volumeAvailableCapacityForImportantUsage,
+                free: freeBytes(url.path)),
             volume: values?.volumeLocalizedName ?? url.path)
     }
 
@@ -41,7 +51,7 @@ public enum Volume {
 
     /// The bytes statfs(2) says are free to a process that isn't root on the volume holding
     /// `path`, or nil when it can't say.
-    static func free(_ path: String) -> Int64? {
+    static func freeBytes(_ path: String) -> Int64? {
         var info = statfs()
         guard statfs(path, &info) == 0 else { return nil }
         return Int64(info.f_bavail) * Int64(info.f_bsize)

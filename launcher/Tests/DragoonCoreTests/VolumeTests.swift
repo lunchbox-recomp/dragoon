@@ -24,8 +24,23 @@ import Testing
     @Test func theFreeBytesComeFromTheVolumeOrNotAtAll() throws {
         let scratch = try ScratchDirectory()
         defer { scratch.remove() }
-        #expect((Volume.free(scratch.path) ?? 0) > 0)
-        #expect(Volume.free(scratch.data) == nil)
+        #expect((Volume.freeBytes(scratch.path) ?? 0) > 0)
+        #expect(Volume.freeBytes(scratch.data) == nil)
+    }
+
+    /// When macOS throws instead of giving its figures, the free bytes of the folder that exists
+    /// still count, and the folder names the volume.
+    @Test func aThrownAskStillCountsTheFreeBytes() throws {
+        let scratch = try ScratchDirectory()
+        defer { scratch.remove() }
+        var asked: [String] = []
+        let space = Volume.freeSpace(at: scratch.data) { url in
+            asked.append(url.path)
+            return nil
+        }
+        #expect(asked == [scratch.path])
+        #expect(space.available > 0)
+        #expect(space.volume == scratch.path)
     }
 
     @Test func theSystemVolumeIsReadOnlyAndTheTemporaryDirectoryIsnt() throws {
