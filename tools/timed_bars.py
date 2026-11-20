@@ -35,8 +35,6 @@ from probe_dirs import remove_run, run_probe
 from routes import route_file
 from warm_shaders import BOOT_LINE, CACHE
 
-ROOT = Path(__file__).resolve().parents[1]
-PROBE = ROOT / "tools" / "probe.sh"
 FOUR_FROM = 3400  # where status.md's four-player numbers start
 RACE_FRAMES = 26700
 RACE_SECONDS = 150
@@ -75,10 +73,6 @@ BARS = {
 }
 
 
-def nothing() -> None:
-    pass
-
-
 def _fresh(name: str, cache: Optional[Path], root: Path) -> Path:
     out = root / "build" / "probe" / name
     if out.exists():
@@ -95,8 +89,8 @@ def _keep(log: Path, keep: Optional[Path]) -> None:
         shutil.copyfile(log, keep)
 
 
-def four_player(cache: Path, *, root: Path = ROOT, probe: Path = PROBE, settings: tuple[str, ...] = (),
-                keep: Optional[Path] = None, before: Callable[[], None] = nothing) -> dict[str, Optional[float]]:
+def four_player(cache: Path, *, root: Path, probe: Path, settings: tuple[str, ...],
+                keep: Optional[Path], before: Callable[[], None]) -> dict[str, Optional[float]]:
     name = "nightly-4p"
     out = _fresh(name, cache, root)
     before()
@@ -132,8 +126,8 @@ class ResultsWatch:
         return {1: Pad()}
 
 
-def race_finish(aspect: str, *, probe: Optional[Path] = None, settings: tuple[str, ...] = (),
-                before: Callable[[], None] = nothing) -> Optional[int]:
+def race_finish(aspect: str, *, probe: Optional[Path], settings: tuple[str, ...],
+                before: Callable[[], None]) -> Optional[int]:
     """The frame the race's results first show at ASPECT, None when they never did."""
     name = f"nightly-race-{aspect.replace(':', 'x')}"
     out = bot_link.run_directory(name, probe)
@@ -150,9 +144,9 @@ def race_finish(aspect: str, *, probe: Optional[Path] = None, settings: tuple[st
     return watch.frame
 
 
-def menu_redraw(cache: Path, runs: int = MENU_RUNS, *, root: Path = ROOT, probe: Path = PROBE,
-                settings: tuple[str, ...] = (), keep: Optional[Path] = None,
-                before: Callable[[], None] = nothing) -> dict[str, float]:
+def menu_redraw(cache: Path, runs: int, *, root: Path, probe: Path,
+                settings: tuple[str, ...], keep: Optional[Path],
+                before: Callable[[], None]) -> dict[str, float]:
     logs: dict[str, list[frametime.MenuFrame]] = {}
     kept = []
     for i in range(runs):
