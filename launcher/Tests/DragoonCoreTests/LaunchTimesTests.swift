@@ -94,6 +94,9 @@ import Testing
         _ = await results(of: session)
         let hiddenAt = try #require(hidden)
         let writtenAt = try #require(GamePanic.lastWritten(at: fixture.data + "/window.txt"))
+        // The window line hides the window, so its file was written before the hide. A link to a
+        // later line's file would give a time after it.
+        #expect(Double(writtenAt) / 1000 <= Double(hiddenAt))
         return Run(
             toStart: (Double(gameStart) - Double(play)) / 1000,
             toSee: (Double(hiddenAt) - Double(writtenAt) / 1000) / 1000,
