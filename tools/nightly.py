@@ -9,10 +9,9 @@ Usage: nightly.py run [--only STEP ...] [--routes ROUTE ...] [--build DIR] [--la
 run plays the steps in order, or the --only ones (nightly_steps.py says what each plays and
 checks): frames, dolphin, audio, shaders, timed and soak. Each step runs as a child process of
 its own, `nightly.py step NAME`, at nice 19 but timed, which runs at the default priority. The
-whole run
-holds `caffeinate -i`, so the Mac doesn't sleep while it plays. Before every game process the
-step asks `pmset -g batt` for AC power. On battery the step stops, the report is written with it
-marked skipped-battery and the steps after it not-run, and run exits 2.
+whole run holds `caffeinate -i`, so the Mac doesn't sleep while it plays. Before every game
+process the step asks `pmset -g batt` for AC power. On battery the step stops, the report is
+written with it marked skipped-battery and the steps after it not-run, and run exits 2.
 
 The report goes in build/nightly/YYYY-MM-DD-HHMM/: summary.txt, one screen, and report.json, the
 same for tools (nightly_report.py says what's in them). A check is compared with the same check
@@ -30,10 +29,10 @@ and dragoon_bench and runs again as that code, refusing a tree with changes or o
 
 --routes plays only those manifest routes in frames, dolphin, audio and shaders. --build DIR
 plays the game in DIR (DIR/dragoon, and DIR/dragoon_bench for audio) through probe.sh's --bin,
-for a tree with no
-build of its own. --soak-minutes sets each of the four soaks' wall time (30 by default),
---menu-runs the menu's opens (21 by default), and --seed the soaks' seed (by default the run's
-date and time, so a night's soaks differ from the last's and the report names the seed).
+for a tree with no build of its own. --soak-minutes sets each of the four soaks' wall time (30
+by default), --menu-runs the menu's opens (21 by default), and --seed the soaks' seed (by
+default the run's date and time, so a night's soaks differ from the last's and the report names
+the seed).
 
 install-agent writes the launchd job that runs CLONE's `nightly.py run --scheduled` at 01:30
 daily into DIR, ~/Library/LaunchAgents by default, and prints it. CLONE is the dragoon-nightly

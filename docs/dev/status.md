@@ -926,19 +926,25 @@ The `dolphin` step runs after the goldens. It plays every route `tests/hashes/do
 triages, Dragoon pinned against Dolphin, and compares each triaged checkpoint with its line. A
 checkpoint fails the night when:
 
-- its class changes: a `within` line is over the budget or refused, or another line is refused
+- its class changes: a `within` line is over the budget, has a state that isn't the same or a
+  frame off, or is refused, or another line is refused
 - its share moves more than the budget, 0.1%, above its line's, at the line's tolerance of 4
-- its state differs where its line's was the same
+- its state differs or isn't read where its line's was the same or a frame off
 - its race's first difference comes at an earlier pass than its lines say: City Trial pass 273,
   Air Ride pass 763, and Top Ride matching through pass 564
+- its race shows no difference but Dragoon's run never reached Dolphin's last pass of it
 
-A checkpoint that gets better, a later first difference, a bug now within or a share more than
-the budget lower, comes under Improved and fails nothing. It says to update the triage file.
-Each failure names the checkpoint, its line's class and score and tonight's, and the
-side-by-side kept in the report's `dolphin/`. Dolphin's run of a route is reused from
-`build/nightly/dolphin-cache/` while its movie, Dolphin's binary and build record, its config,
-the triage file's head line and the macOS version are as they were. With no Dolphin in
-`dolphin-ref/` beside the clone the step is skipped and fails nothing.
+A checkpoint that gets better comes under Improved and fails nothing. That's a later first
+difference or none through Dolphin's last pass, a line now within, a share more than the budget
+lower, a refused line now matched or a state that matches again. It says to update the triage
+file. Each failure names the checkpoint, its line's class and score and tonight's, and the
+side-by-side kept in the report's `dolphin/`. Each route plays the fields its `ROUTE fields=N`
+line in the triage file gives. Dolphin's run of a route is reused from
+`build/nightly/dolphin-cache/` while its `key.json` matches. The key holds the movie's and the
+disc's sha256, Dolphin's binary and build record, its config and game INI, its watches, the disc
+speed and fields, the triage file's head line and the macOS version. The movie also has to be
+the route's fixed point still, and every dump has to match the sha256 `frames.txt` lists for
+it. With no Dolphin in `dolphin-ref/` beside the clone the step is skipped and fails nothing.
 
 On 2026-11-20 the step took 36 min with no saved runs, converging each movie in 7 Dolphin runs,
 and 4 min 41 s reusing them. Its three Dragoon runs found the races' first differences where
