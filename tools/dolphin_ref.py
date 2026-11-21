@@ -35,7 +35,9 @@ list PATCH's files as changed in the work tree and nothing else, so an untracked
 file, a staged change or an edit anywhere else, submodules included, is refused. git runs
 without the user's and the system's config, and a tree is refused when it could hide a change
 from git all the same: an assume-unchanged or skip-worktree file, a non-empty info/attributes,
-or a filter or attributes file in its local config. boot also refuses a build that BUILT
+or a filter or attributes file in its local config. The tree and each submodule are also read
+against an index made fresh from HEAD, so git hashes every file again instead of trusting a stat
+an earlier git status cached. boot also refuses a build that BUILT
 doesn't say came from that commit with that PATCH.
 
 cmake and ninja run under `sandbox-exec` with build_profile, and Dolphin with run_profile. Both
@@ -102,6 +104,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -388,10 +391,12 @@ def git_env() -> dict[str, str]:
     return {**os.environ, **GIT_ISOLATION}
 
 
-def git(src: Path, *args: str, timeout: float = GIT_TIMEOUT) -> str:
+def git(src: Path, *args: str, timeout: float = GIT_TIMEOUT, index: Optional[Path] = None) -> str:
+    """git ARGS in SRC under git_env, reading INDEX in place of SRC's own index when given."""
+    env = git_env() if index is None else {**git_env(), "GIT_INDEX_FILE": str(index)}
     try:
         out = subprocess.run(["git", "-C", str(src), *args], capture_output=True, text=True,
-                             env=git_env(), timeout=timeout)
+                             env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise Refused(f"{src}: git {' '.join(args)} took over {timeout:g} s") from None
     if out.returncode:
@@ -452,7 +457,9 @@ def check_tree(src: Path, sha: str = PIN.sha, patch: Optional[str] = None) -> st
     has to be clean. git runs without the user's and the system's config, and check_unhidden and
     ls-files -v refuse what could still hide a change from it: an assume-unchanged or
     skip-worktree file, info/attributes, a local config key off the allowlist (a filter, an
-    fsmonitor hook, an include) or a work tree moved by core.worktree."""
+    fsmonitor hook, an include) or a work tree moved by core.worktree. git status and git diff
+    also run against an index read fresh from HEAD, in the tree and in each submodule, so a stat
+    an earlier git status cached can't pass an edited file as clean."""
     if patch is None:
         patch = PATCH.read_text(encoding="utf-8")
     if not (src / ".git").exists():
@@ -465,24 +472,38 @@ def check_tree(src: Path, sha: str = PIN.sha, patch: Optional[str] = None) -> st
     drift = submodule_drift(modules)
     if drift:
         raise Refused(f"{src}: submodules off their pins: {'; '.join(drift)}")
-    for line in modules.splitlines():
-        if line:
-            check_unhidden(src / line.split()[1])
+    submodules = [src / line.split()[1] for line in modules.splitlines() if line]
+    for submodule in submodules:
+        check_unhidden(submodule)
     hidden = [line for line in git(src, "ls-files", "-v", "--recurse-submodules").splitlines()
               if not line.startswith("H ")]
     if hidden:
         raise Refused(f"{src}: files git status doesn't look at (assume-unchanged or "
                       f"skip-worktree): {'; '.join(hidden[:3])}")
     allowed = {f" M {path}" for path in patch_paths(patch)}
-    changed = git(src, *STATUS).splitlines()
-    other = [line for line in changed if line not in allowed]
+    # The tree's own index is the one that holds a staged change.
+    refuse_changes(src, git(src, *STATUS), allowed)
+    # git trusts a file whose stat matches what its index cached, and a git status run under a
+    # user's clean filter can cache an edited file as clean. An index read fresh from HEAD has
+    # no stats, so every file is hashed again. git doesn't pass GIT_INDEX_FILE on to
+    # submodules, so each gets its own.
+    for repo, want, text in ((src, allowed, patch), *((s, set(), "") for s in submodules)):
+        with tempfile.TemporaryDirectory(prefix="check_tree-") as tmp:
+            index = Path(tmp) / "index"
+            git(repo, "read-tree", "HEAD", index=index)
+            refuse_changes(repo, git(repo, *STATUS, index=index), want)
+            if git(repo, *DIFF, index=index) != text:
+                raise Refused(f"{repo}: git diff isn't {PATCH.name}" if text else
+                              f"{repo}: git diff isn't empty")
+    return head
+
+
+def refuse_changes(repo: Path, status: str, allowed: set[str]) -> None:
+    """Refuse REPO when STATUS, its git status, has a line outside ALLOWED."""
+    other = [line for line in status.splitlines() if line not in allowed]
     if other:
         more = f" and {len(other) - 3} more" if len(other) > 3 else ""
-        raise Refused(f"{src}: changed or untracked: {'; '.join(other[:3])}{more}")
-    if git(src, *DIFF) != patch:
-        raise Refused(f"{src}: git diff isn't {PATCH.name}" if patch else
-                      f"{src}: git diff isn't empty")
-    return head
+        raise Refused(f"{repo}: changed or untracked: {'; '.join(other[:3])}{more}")
 
 
 def patch_sha(patch: Optional[str] = None) -> str:

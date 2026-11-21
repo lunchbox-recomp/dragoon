@@ -181,6 +181,26 @@ class NestedSubmoduleTest(unittest.TestCase):
         with self.assertRaisesRegex(dolphin_ref.Refused, "changed or untracked:  M mid"):
             dolphin_ref.check_tree(self.top, sha=self.head, patch="")
 
+    def test_the_users_git_config_cant_hide_an_edit_in_a_nested_submodule(self):
+        base = temp_dir(self)
+        (base / "attributes").write_text("*.txt filter=hide\n")
+        (base / "config").write_text(f"[core]\n\tattributesFile = {base / 'attributes'}\n"
+                                     "[filter \"hide\"]\n\tclean = tr 2 1\n")
+        (self.leaf / "leaf.txt").write_text("2")
+        then = time.time() - 5
+        os.utime(self.leaf / "leaf.txt", (then, then))
+        env = {**os.environ, "GIT_CONFIG_GLOBAL": str(base / "config")}
+        with mock.patch.dict(os.environ, env):
+            # With that config git itself no longer sees the edit, from the top or in the leaf.
+            for repo in (self.top, self.leaf):
+                seen = subprocess.run(["git", "-C", str(repo), "status", "--porcelain",
+                                       "--ignore-submodules=none"],
+                                      capture_output=True, text=True, env=env, check=True).stdout
+                self.assertEqual(seen, "")
+            with self.assertRaisesRegex(dolphin_ref.Refused, "mid/leaf: changed or untracked:  "
+                                                             "M leaf.txt"):
+                dolphin_ref.check_tree(self.top, sha=self.head, patch="")
+
 
 FRONTEND = "Source/Core/DolphinNoGUI/MainNoGUI.cpp"
 CORE = "Source/Core/Core/Movie.cpp"
@@ -326,6 +346,10 @@ class PatchTreeTest(unittest.TestCase):
                                      "[filter \"hide\"]\n\tclean = sed -e s/MOVIE/movie/\n")
         (self.src / FRONTEND).write_text(PLAYED)
         (self.src / CORE).write_text("MOVIE\n")
+        # An edit older than the index git status writes isn't racily clean, so git trusts the
+        # stat that status caches for it, as it would for an edit made before any status.
+        then = time.time() - 5
+        os.utime(self.src / CORE, (then, then))
         env = {**os.environ, "GIT_CONFIG_GLOBAL": str(base / "config")}
         with mock.patch.dict(os.environ, env):
             # With that config git itself no longer sees the edit to CORE.
