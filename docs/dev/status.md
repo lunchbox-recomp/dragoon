@@ -1441,9 +1441,46 @@ left at 6000, and thin lines along the road's paving at 3300, by 15 levels at mo
   same, where the game draws more than once in a pass and each side reads a different draw.
   And at passes 1864 (frame 4985) and 3863 (frame 6984) all 17 values differ, each for that
   pass alone, at none of Dolphin's fields six passes either side, and match again from the
-  next pass. Runs on `f61bc9c` and on `9358d34` both show the two. Neither is traced. So the
-  race's values first differ at pass 1864. The mark was pass 763, a real difference.
+  next pass. Runs on `f61bc9c` and on `9358d34` both show the two. Neither is a difference.
+  Each is Dragoon reading another point of the same game steps (Air Ride's lone passes,
+  below). So the race's values match through pass 3939. The mark was pass 763, a real
+  difference.
 - Top Ride matches through pass 564, as before.
+
+#### Air Ride's lone passes
+
+At passes 1864 and 3863 the game's state is the same on both sides. Each side reads at its own
+point of the game's steps, and there the two read states the other never shows. Dragoon ran
+at `a59ea96` (gcn-recomp `9358d34`) against the cached Dolphin run.
+
+- The seed. HSD_Rand makes 121 draws from pass 1863's seed to pass 1865's, the same on both
+  sides. Dragoon's seed at 1864 is 58 draws along them, and Dolphin's 113. From pass 3861's
+  seed Dolphin's fields at 3863 and 3864 are 114 and 236 draws on, and Dragoon's frame at
+  3863 is 178, between them. A seed the game's own draws never reach would be a different
+  game.
+- The positions. Dragoon's pass 3863 holds every racer halfway between Dolphin's 3863 and
+  3864, player1.x 275.2223 between 275.9582 and 274.4875. A pass moves player1 about 0.72.
+  Dolphin's field at 3864 moved it 1.47, two steps. Dragoon's frame at 3862 moved it 1.44,
+  its two steps a pass sooner. At 1864 Dolphin's field took two steps and Dragoon's next
+  frame did.
+- Every other Dragoon state in the race is a Dolphin field's, positions bit for bit, at the
+  same pass or one either side. Dolphin has 23 fields Dragoon never shows, all where one side's
+  read moves across a step.
+- HSD's pad queue, `pad.queue_length` (8058B080, the bytes qnum, qread, qwrite and qcount),
+  shows Dolphin's read moving. Through pass 1863 its field finds one pad read waiting, and
+  from 1864 none, with two taken in that pass. The same happens at 3864. At 2864 it happens
+  too, but Dragoon's two-step pass is the same pass, so nothing differs. Dragoon's frames there find the queue
+  empty, one read taken each pass. Its two-step passes come in short runs about every 500
+  passes, at 830, 1336, 1839, 2332, 2838, 3301 to 3373 and 3841.
+- `vi.renew_count` goes up one a pass on both sides, so neither dropped a picture.
+
+Where in the main loop each side's read lands isn't traced further. It's sampling, not one of
+the Dolphin differences gcn-recomp's PR holds, and there's nothing to fix in gcn-recomp.
+`race_words.py diff` doesn't count such a pass. Dolphin's `rand.seed` at the pass before and
+the pass after must both lead through Dragoon's, and the word must differ at that pass alone.
+On air-ride-race it now lists passes 1864 and 3863 as not counted, with 54 passes where only the
+seed differs, and 37 of the 38 words match through pass 3939. The one left is
+`pad.queue_length`, from pass 367, which is frame pacing (below).
 
 Two words `race_words.py` reads differ without the race differing:
 
