@@ -233,7 +233,7 @@ class CompareTest(unittest.TestCase):
                 d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[0]},
                                 {SPEED: lambda p: 500 if p == 9 else p,
                                  RAND: lambda p: seed if p == 9 else DRAWS[0]}))
-                self.assertEqual([w.at for w in d.differing()][0], 9)
+                self.assertIn((SPEED, 9), [(w.watch, w.at) for w in d.differing()])
                 self.assertEqual(d.elsewhere, {})
 
     def test_a_lone_pass_counts_when_a_frame_s_seed_is_in_step(self):
