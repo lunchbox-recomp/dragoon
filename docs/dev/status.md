@@ -954,9 +954,10 @@ checks failed. The menu checkpoints came back at their scores from before the pi
 as 2.677% at 60, 3.444% at 314 and 3.896% at 1013. On the unchanged build all 47 passed.
 
 Read `build/nightly/YYYY-MM-DD-HHMM/summary.txt` first. Its regressions section lists each check
-that flipped since the last report, each new failure and each timed number more than 10% and
-0.25 ms slower than the last report or this file's number, with the route, the frame or field
-and the dump or log to open. "Drew differently" is a frame whose hash changed, and "played
+that passed in the last report and fails now, each new failure and each timed number more than
+10% and 0.25 ms slower than the last report or this file's number, with the route, the frame or
+field and the dump or log to open. A check that failed in the last report and passes now comes
+under Improved and fails nothing. "Drew differently" is a frame whose hash changed, and "played
 differently" a checkpoint whose state from guest RAM changed. A state check that differs from
 its golden only by the values `tests/hashes/known-issues.txt` lists for it comes under Known
 issues and fails nothing, and a number that far

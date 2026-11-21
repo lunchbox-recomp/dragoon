@@ -85,7 +85,7 @@ class CheckpointTest(MovesCase):
         c = self.checks(tonight(**{"3300": entry(3300, 0.0005)}))["3300"]
         self.assertEqual((c.status, c.dump), (PASS, "dolphin/r-03300.png"))
         self.assertEqual(c.better, "within where it was bug, update tests/hashes/dolphin-triage.txt")
-        self.assertEqual(improved(c), c.better)
+        self.assertEqual(improved(c, None), c.better)
 
     def test_a_share_that_falls_past_the_budget_or_a_state_that_matches_improves(self):
         self.assertIn("its share fell", self.checks(tonight(**{"2004": entry(2004, 0.005)}))["2004"].better)
