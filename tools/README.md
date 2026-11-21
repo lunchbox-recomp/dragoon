@@ -496,6 +496,17 @@ tools/dolphin_diff.py triage
 
 `run` is `dolphin`, `dragoon` and `compare` in turn, one game at a time, into `build/dolphin-diff/ROUTE/`. The checkpoints are the route's required frames and each scene's first frame in Dolphin's run and 10 frames after it, none before frame 60, when both sides show the blank card's prompt. A race's checkpoints past those two wait for the race timer to match them and are refused for now. A route with `--pads` is refused whole. Dolphin's game frame comes from `vi.renew_count` and `vi.renew_last`, and Dragoon's is its own frame count. A Dolphin dump has no frame number, so the dump for a frame is counted from `vi.next_buffer`'s changes and then taken from the 12 dumps either side by the nearest picture, since Dolphin's own count drifts from the game's by a few. `summary.txt` gives each checkpoint's dump and how sure the match is. Then come the share of pixels off by more than the tolerance and the largest and mean channel error. Last comes the state, which is the same as Dolphin's at that frame, a frame off or different. Both sides dump 640x480 at 4:3 before any scaling, and pictures of two sizes are refused, never scaled. `sides/` holds a side-by-side a checkpoint, Dragoon, Dolphin and the difference. `run` deletes both sides' frame dumps at the end. `repeat` gives the largest channel error between two runs of one side, which sets the tolerance. `tests/hashes/dolphin-triage.txt` holds a line a checkpoint with its class, and `--help` gives its format and the rest. When Dolphin's run has a race, Dragoon's run also reads every compared value at every frame of it, on to the last game frame Dolphin reaches, into `state.json`'s trace. `race_trace.py` compares that pass by pass with Dolphin's for the race's first difference, which the nightly's `dolphin` step holds to the triage file. The tests fake both sides' runs, so they need neither Dolphin nor the disc.
 
+## quality_page.py
+
+How well is each feature checked today? It writes `docs/dev/quality.md` with a row for each feature in status.md's table. The rows come from `tests/hashes/dolphin-triage.txt`, the goldens in `gl/`, `gl-16x9/`, `state/` and `audio/`, `known-issues.txt`, the manifest and the gcn-recomp pin in git's index. A row is Dolphin when a triaged checkpoint falls in the feature and Goldens when only our hashes cover it. Otherwise it's Unchecked. Its `COVERS` table names the routes each feature's goldens come from, and `SCENES` and `MODES` say which feature a checkpoint's frame falls in. A feature added to status.md or gone from it stops the tool until `COVERS` follows.
+
+```
+tools/quality_page.py
+tools/quality_page.py --check
+```
+
+Run it after any of those files changes. `--check` writes nothing and exits 1 when the page isn't what it would write. It reads only files and git's index, so it runs in CI's tools job in well under a second.
+
 ## interp_bisect.py
 
 Which functions change a route when the interpreter runs them? It reads every function start from `analysis/symbols.txt` and checks ROUTE with frame_hashes.py, or with audio_hashes.py under `--audio`. Each check sets `GCN_INTERPRET` to a list of starts, a file in `build/bisect/` with one hex address a line, named by absolute path.

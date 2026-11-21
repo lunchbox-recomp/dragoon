@@ -63,9 +63,11 @@ class Jobs(unittest.TestCase):
 
     def test_each_job_runs_the_steps_the_workflow_ran(self):
         tests = ["-m", "unittest", "discover", "-s", "tools", "-p", "test_*.py"]
+        page = ["tools/quality_page.py", "--check"]
         self.assertEqual(self.commands("tools"), [
-            ["python3", "tools/check_no_game_data.py"], ["python3", *tests],
-            ["/usr/bin/python3", "tools/check_no_game_data.py"], ["/usr/bin/python3", *tests]])
+            ["python3", "tools/check_no_game_data.py"], ["python3", *page], ["python3", *tests],
+            ["/usr/bin/python3", "tools/check_no_game_data.py"], ["/usr/bin/python3", *page],
+            ["/usr/bin/python3", *tests]])
         self.assertEqual(self.commands("macos"), [
             ["cmake", "-S", ".", "-B", "build-nodisc", "-G", "Ninja", "-DDRAGOON_TESTS=ON", "-DGAME_ISO="],
             ["ninja", "-C", "build-nodisc", "runtime_check"],

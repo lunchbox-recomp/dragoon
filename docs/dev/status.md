@@ -6,6 +6,9 @@ frames and audio match the goldens recorded at `b5ec329` (under gcn-recomp `b4f8
 goldens of the twenty-fifth route (`city-trial-2p`) and the 16:9 frames of every route were
 recorded at the pin (under Goldens).
 
+[quality.md](quality.md) says whether each feature below is checked against Dolphin, against
+our own goldens or not at all. `tools/quality_page.py` writes it from the files that check them.
+
 | Feature | Status | Note |
 |---|---|---|
 | Boot and memory card | Works | A blank card gets the game's prompt by frame 60, and the save file is made. The game writes the card after each title screen and when its Sound screen closes, and in one pair of runs the Sound screen's Mono and balance came back on the next launch. Mono is in the console's SRAM, which gcn-recomp keeps in `saves/sram.raw` (table under Memory card) |

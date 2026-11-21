@@ -117,6 +117,7 @@ def launcher_steps() -> list[Step]:
 JOBS: dict[str, Callable[[], list[Step]]] = {
     "tools": lambda: [step for py in PYTHONS for step in (
         (f"No game data in the tree ({py})", [py, "tools/check_no_game_data.py"]),
+        (f"The quality page is current ({py})", [py, "tools/quality_page.py", "--check"]),
         (f"Tool tests ({py})", [py, "-m", "unittest", "discover", "-s", "tools", "-p", "test_*.py"]),
     )],
     "macos": lambda: [
