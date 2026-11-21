@@ -301,13 +301,12 @@ def timed(id_: str, value: float, status_value=None, status: str = PASS) -> Chec
 
 
 class ChangesTest(unittest.TestCase):
-    def test_flips_both_ways_new_failures_and_old_ones(self) -> None:
+    def test_a_flip_new_failures_and_old_ones(self) -> None:
         last = [check("frames a"), check("frames b", FAIL), check("frames c", FAIL), check("frames d")]
         now = [check("frames a", FAIL), check("frames b"), check("frames c", FAIL), check("frames d"),
                check("frames e", FAIL), check("frames f")]
         self.assertEqual(nightly_report.changes(now, last), {
-            "frames a": ["flipped, pass last time"], "frames b": ["flipped, fail last time"],
-            "frames c": ["same"], "frames e": ["new"]})
+            "frames a": ["flipped, pass last time"], "frames c": ["same"], "frames e": ["new"]})
 
     def test_with_no_last_report_every_failure_is_new(self) -> None:
         self.assertEqual(nightly_report.changes([check("frames a", FAIL), check("frames b")], None),
@@ -435,6 +434,30 @@ class FinishTest(unittest.TestCase):
         last = self.last([timed("timed a", 4.0), timed("timed b", 4.0)])
         self.assertEqual(nightly.finish(report, checks, {}, None, 0.0, [1.0, 1.0], last, report, lambda text: None), 1)
         self.assertEqual(sorted(p.name for p in (report / "logs").iterdir()), ["4p.log"])
+
+    def test_a_check_that_passed_last_time_and_fails_now_fails_the_night(self) -> None:
+        report = self.report()
+        last = self.last([check("frames a")])
+        code = nightly.finish(report, [check("frames a", FAIL)], {}, None, 0.0, [1.0, 1.0], last, report,
+                              lambda text: None)
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads((report / nightly_report.REPORT).read_text())["regressions"], ["frames a"])
+        self.assertIn("  frames a: fail [flipped, pass last time]", (report / nightly_report.SUMMARY).read_text())
+
+    def test_a_check_that_failed_last_time_and_passes_now_is_improved(self) -> None:
+        report = self.report()
+        last = self.last([check("frames a", FAIL), check("frames b")])
+        code = nightly.finish(report, [check("frames a"), check("frames b")], {}, None, 0.0, [1.0, 1.0], last,
+                              report, lambda text: None)
+        self.assertEqual(code, 0)
+        data = json.loads((report / nightly_report.REPORT).read_text())
+        self.assertEqual((data["result"], data["regressions"]), ("pass", []))
+        lines = (report / nightly_report.SUMMARY).read_text().splitlines()
+        self.assertEqual(lines[3:], [
+            "Improved (1)",
+            "  frames a: pass [passes now, failed last time]",
+            "Passes",
+            "  frames: 2 of 2 checks pass (2 frames)"])
 
     def test_a_faster_number_and_a_known_issue_fail_nothing(self) -> None:
         report = self.report()

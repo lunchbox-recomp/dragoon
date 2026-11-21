@@ -4,21 +4,21 @@ summary.txt and report.json in the run's directory under build/nightly/.
 A check is one route at one aspect for one step, or one timed number. `changes` compares each
 with the same check in the last report:
 
-  flipped    it passed last time and fails now, or failed and passes now
+  flipped    it passed last time and fails now
   new        it fails now and the last report has no such check, or there is no last report
   slower     a timed number more than 10% and more than FLOOR ms above its value in the last
              report, or above the number status.md gave, whether or not it's inside its bar
   same       it fails now as it did last time
 
-A timed number that far below status.md's is improved, which fails nothing but says status.md
-can be updated, and so is a passing check whose `better` says how it beat the file it's held to,
-such as a Dolphin checkpoint that's now within (dolphin_moves.py). A check that's a known issue
-(known_issues.py) is neither. A skipped check, a step with nothing to play on such as no Dolphin,
+A check that failed last time and passes now is improved, and fails nothing. So is a timed
+number that far below status.md's, which says status.md can be updated, and a passing check
+whose `better` says how it beat the file it's held to, such as a Dolphin checkpoint that's now
+within (dolphin_moves.py). A check that's a known issue (known_issues.py) is none of these. A skipped check, a step with nothing to play on such as no Dolphin,
 fails nothing and is listed with why.
 
 summary.txt fits on one screen. The regressions come first, the flipped, new and slower checks,
 each with the route, the frame or field, and the dump or log to look at. Then the checks that
-fail as they did last time, the known issues, the improved numbers, one line per step for what
+fail as they did last time, the known issues, the improved checks, one line per step for what
 passed and last what was skipped. report.json holds every check in full, for tools. It has no
 command line.
 """
@@ -90,17 +90,22 @@ def past(value: Optional[float], against: Optional[float]) -> Optional[float]:
     return None
 
 
-def improved(c: Check) -> Optional[str]:
-    """Why a check that passed should be written down again, None when it shouldn't: its own
-    `better`, or a timed number as far below status.md's number as a regression would be above."""
-    if c.status == PASS and c.better:
-        return c.better
-    if not c.timed or c.status != PASS or c.value is None or c.status_value is None:
+def improved(c: Check, prior: Optional[Check] = None) -> Optional[str]:
+    """Why a check that passed should be written down again, None when it shouldn't: that PRIOR,
+    its check in the last report, failed, its own `better`, or a timed number as far below
+    status.md's number as a regression would be above."""
+    if c.status != PASS:
         return None
-    share = past(c.status_value, c.value)
-    if share is None:
-        return None
-    return f"{(c.status_value - c.value) / c.status_value:.0%} under status.md's {c.status_value:g}, update status.md"
+    reasons = []
+    if prior is not None and prior.status == FAIL and c.known is None:
+        reasons.append("passes now, failed last time")
+    if c.better:
+        reasons.append(c.better)
+    elif c.timed and c.value is not None and c.status_value is not None \
+            and past(c.status_value, c.value) is not None:
+        reasons.append(f"{(c.status_value - c.value) / c.status_value:.0%} under status.md's "
+                       f"{c.status_value:g}, update status.md")
+    return "; ".join(reasons) or None
 
 
 def changes(checks: list[Check], last: Optional[list[Check]]) -> dict[str, list[str]]:
@@ -113,8 +118,8 @@ def changes(checks: list[Check], last: Optional[list[Check]]) -> dict[str, list[
             continue
         reasons = []
         prior = before.get(c.id)
-        if prior is not None and prior.status in (PASS, FAIL) and prior.status != c.status:
-            reasons.append(f"flipped, {prior.status} last time")
+        if prior is not None and prior.status == PASS and c.status == FAIL:
+            reasons.append("flipped, pass last time")
         elif c.status == FAIL and prior is None:
             reasons.append("new")
         if c.timed:
@@ -194,7 +199,9 @@ def summary(head: list[str], checks: list[Check], last: Optional[list[Check]]) -
     regressions = [c for c in checks if c.id in found and found[c.id] != ["same"]]
     same = [c for c in checks if found.get(c.id) == ["same"]]
     known = [c for c in checks if c.known is not None and c.status in (PASS, FAIL)]
-    better = [c for c in checks if improved(c) is not None and c not in regressions]
+    before = {c.id: c for c in last or []}
+    why = {c.id: improved(c, before.get(c.id)) for c in checks}
+    better = [c for c in checks if why[c.id] is not None and c not in regressions]
     skipped: dict[str, list[str]] = {}
     for c in checks:
         if c.status in (SKIPPED_BATTERY, NOT_RUN):
@@ -219,7 +226,7 @@ def summary(head: list[str], checks: list[Check], last: Optional[list[Check]]) -
                 for c in known]
     if better:
         out.append(f"Improved ({len(better)})")
-        out += [line(c, [improved(c) or ""], dumps=c.better is not None) for c in better]
+        out += [line(c, [why[c.id] or ""], dumps=c.better is not None) for c in better]
     passed = pass_lines([c for c in checks if c.value is None or (c not in regressions and c not in better)])
     if passed:
         out.append("Passes")
