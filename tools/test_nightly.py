@@ -333,9 +333,17 @@ class SlowerTest(unittest.TestCase):
         now = [timed("timed a", 2.25, status_value=4.2), timed("timed b", 0.6, status_value=0.722),
                timed("timed c", 3.8, status_value=4.2)]
         self.assertEqual(nightly_report.changes(now, [timed("timed a", 4.0)]), {})
-        self.assertEqual([nightly_report.improved(c) for c in now],
+        self.assertEqual([nightly_report.improved(c, None) for c in now],
                          ["46% under status.md's 4.2, update status.md", None, "10% under status.md's 4.2, update status.md"])
-        self.assertIsNone(nightly_report.improved(timed("timed d", 3.83, status_value=4.2)))
+        self.assertIsNone(nightly_report.improved(timed("timed d", 3.83, status_value=4.2), None))
+
+    def test_a_pass_after_a_failure_is_improved_unless_it_is_known_or_was_skipped(self) -> None:
+        self.assertIsNone(nightly_report.improved(check("state 16:9 r", known="bug 1"),
+                                                  check("state 16:9 r", FAIL, known="bug 1")))
+        self.assertIsNone(nightly_report.improved(check("frames a"), check("frames a", SKIPPED_BATTERY)))
+        self.assertEqual(nightly_report.improved(check("dolphin r", better="now within, update the triage file"),
+                                                 check("dolphin r", FAIL)),
+                         "passes now, failed last time; now within, update the triage file")
 
     def test_a_count_isnt_held_to_ten_percent(self) -> None:
         now = [check("timed n", value=3.0)]

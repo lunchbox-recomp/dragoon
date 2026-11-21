@@ -13,8 +13,9 @@ with the same check in the last report:
 A check that failed last time and passes now is improved, and fails nothing. So is a timed
 number that far below status.md's, which says status.md can be updated, and a passing check
 whose `better` says how it beat the file it's held to, such as a Dolphin checkpoint that's now
-within (dolphin_moves.py). A check that's a known issue (known_issues.py) is none of these. A skipped check, a step with nothing to play on such as no Dolphin,
-fails nothing and is listed with why.
+within (dolphin_moves.py). A check that's a known issue (known_issues.py) is none of these. A
+skipped check, a step with nothing to play on such as no Dolphin, fails nothing and is listed
+with why.
 
 summary.txt fits on one screen. The regressions come first, the flipped, new and slower checks,
 each with the route, the frame or field, and the dump or log to look at. Then the checks that
@@ -90,7 +91,7 @@ def past(value: Optional[float], against: Optional[float]) -> Optional[float]:
     return None
 
 
-def improved(c: Check, prior: Optional[Check] = None) -> Optional[str]:
+def improved(c: Check, prior: Optional[Check]) -> Optional[str]:
     """Why a check that passed should be written down again, None when it shouldn't: that PRIOR,
     its check in the last report, failed, its own `better`, or a timed number as far below
     status.md's number as a regression would be above."""
