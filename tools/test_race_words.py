@@ -15,6 +15,10 @@ TIMELINE = ["805361AC", "805DE2CC", "80589C70", "8056E4C0", "805361C0"]
 MENU, RACE = 0x03000002, 0x05000013  # the main menu, then Top Ride's race (5/19)
 SPEED, X = "80536280", "8055B338+2C+300"
 ONE = 0x3F800000  # 1.0
+RAND = "805DCD30"  # rand.seed
+DRAWS = [0x00B90000]  # HSD_Rand's seeds from the pinned one, a draw apart
+while len(DRAWS) < 400:
+    DRAWS.append((DRAWS[-1] * 214013 + 2531011) % 2 ** 32)
 
 
 def write(path: Path, text: str) -> None:
@@ -169,6 +173,45 @@ class CompareTest(unittest.TestCase):
         d = diff(folder(self, {SPEED: lambda p: p}, {SPEED: lambda p: 500 if p == 9 else p},
                         again=(9, {SPEED: 77})))
         self.assertEqual([(w.at, w.ours, w.theirs) for w in d.differing()], [(9, 500, 9)])
+
+    def test_a_lone_pass_read_at_another_point_of_the_same_draws_isn_t_counted(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p == 9 else p,
+                         RAND: lambda p: DRAWS[95] if p == 9 else DRAWS[10 * p]}))
+        self.assertEqual((d.differing(), d.elsewhere), ([], {9: [SPEED, RAND]}))
+        self.assertEqual(d.lines()[1:], [
+            "Not counted, since Dragoon read them at another point of the same draws: pass 9 (2 words)",
+            "2 words match through pass 18"])
+
+    def test_a_lone_pass_whose_seed_isn_t_on_the_draws_still_counts(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p == 9 else p,
+                         RAND: lambda p: DRAWS[105] if p == 9 else DRAWS[10 * p]}))
+        self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, 9), (RAND, 9)])
+        self.assertEqual(d.elsewhere, {})
+
+    def test_a_word_that_differs_two_passes_running_still_counts(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p in (9, 10) else p,
+                         RAND: lambda p: DRAWS[10 * p + 5] if p in (9, 10) else DRAWS[10 * p]}))
+        self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, 9)])
+        self.assertEqual(d.elsewhere, {9: [RAND], 10: [RAND]})
+        self.assertIn("2 passes where only 805DCD30, rand.seed, differs", d.lines()[2])
+
+    def test_a_lone_pass_at_the_last_pass_compared_still_counts(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p == 18 else p,
+                         RAND: lambda p: DRAWS[175] if p == 18 else DRAWS[10 * p]}))
+        self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, 18), (RAND, 18)])
+
+    def test_between_follows_hsd_rand_s_draws(self):
+        self.assertEqual(race_words.draw(0x00B90000), (0x00B90000 * 214013 + 2531011) % 2 ** 32)
+        self.assertTrue(race_words.between(DRAWS[0], DRAWS[3], DRAWS[7]))
+        self.assertTrue(race_words.between(DRAWS[0], DRAWS[0], DRAWS[7]))
+        self.assertTrue(race_words.between(DRAWS[0], DRAWS[7], DRAWS[7]))
+        self.assertFalse(race_words.between(DRAWS[0], DRAWS[8], DRAWS[7]))
+        self.assertFalse(race_words.between(DRAWS[0], DRAWS[3], DRAWS[7], most=6))
+        self.assertTrue(race_words.between(DRAWS[0], DRAWS[3], DRAWS[7], most=7))
 
     def test_a_run_that_lost_a_field_is_refused(self):
         out = folder(self, {SPEED: lambda p: p}, {SPEED: lambda p: p})

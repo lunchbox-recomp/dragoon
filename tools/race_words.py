@@ -41,10 +41,18 @@ diff compares the two at the first race in Dolphin's run (dolphin_diff.RACES), w
 Dragoon's frames at a pass past the last one Dolphin's run shows are left out.
 Each Dragoon frame in the race whose pass Dolphin's run shows is compared with Dolphin's fields
 at that pass and the one either side, as race_trace.py compares, since Dolphin reads RAM partway
-into a pass. A word differs at the first frame whose value none of those fields holds. diff
-prints each word that differs, the earliest pass first, with Dragoon's value and Dolphin's at
-the pass's first field, as f32 too with how many ulp apart, then how many words match through
-which pass. A word the game holds a value in for only part of a pass can show a difference
+into a pass. A word differs at the first frame whose value none of those fields holds, but for
+a pass Dragoon read at another point of the same game steps. That's a pass whose rand.seed
+(RAND, when it's watched) Dolphin's fields of the pass before and the pass after both lead
+through: HSD_Rand's draws from one of the first come to Dragoon's seed on the way to one of
+the second, within DRAWS_MAX. A word that differs at such a pass alone, matching at the
+passes either side, isn't counted there, and nor is the seed itself. Each side reads at its
+own point of the game's steps, so where one side's pass holds two steps and the other's holds
+them a pass apart, the two read states no field of the other shows. On air-ride-race that's
+passes 1864 and 3863, with every word the same again a pass later (docs/dev/status.md,
+"Non-IEEE mode"). diff prints each word that differs, the earliest pass first, with Dragoon's
+value and Dolphin's at the pass's first field, as f32 too with how many ulp apart. Then it
+lists the passes it didn't count and says how many words match through which pass. A word the game holds a value in for only part of a pass can show a difference
 that isn't one, since each side reads at its own point of the pass, so `show` prints a word's
 values on both sides pass by pass for a look. None of it goes in git.
 
@@ -79,6 +87,8 @@ WORDS = "words.txt"
 SPAN = ":"
 UNCACHED = 0x40000000  # main RAM's uncached mirror, at C0000000, less its cached address
 RENEW = f"{dtm.RENEW:08X}"  # vi.renew_count's watch
+RAND = f"{dolphin_ref.word_of('rand.seed', TABLE):08X}"  # HSD_Rand's seed's watch
+DRAWS_MAX = 1000  # the most HSD_Rand draws looked through from one pass to the pass after next
 Row = dict[str, int]  # a watch's text to its word
 
 
@@ -298,6 +308,22 @@ def values_text(ours: int, theirs: int) -> str:
     return text
 
 
+def draw(seed: int) -> int:
+    """HSD_Rand's next seed (kar_ram.json's rand.seed)."""
+    return (seed * 214013 + 2531011) & 0xFFFFFFFF
+
+
+def between(start: int, mid: int, end: int, most: int = DRAWS_MAX) -> bool:
+    """Whether HSD_Rand's draws from seed START come to MID on the way to END, within MOST."""
+    seen = False
+    for _ in range(most + 1):
+        seen = seen or start == mid
+        if start == end:
+            return seen
+        start = draw(start)
+    return False
+
+
 @dataclass
 class Word:
     watch: str
@@ -317,9 +343,19 @@ class Diff:
     words: list[Word] = field(default_factory=list)
     frames: tuple[int, int] = (0, 0)  # the Dragoon frames compared, first and last
     through: Optional[int] = None  # the last pass compared
+    elsewhere: dict[int, list[str]] = field(default_factory=dict)  # lone passes read elsewhere
 
     def differing(self) -> list[Word]:
         return sorted((w for w in self.words if w.frame is not None), key=lambda w: (w.at, w.frame))
+
+    def elsewhere_text(self) -> str:
+        passes = [f"pass {p} ({len(w)} words)" if len(w) > 1 else f"pass {p} ({w[0]})"
+                  for p, w in sorted(self.elsewhere.items()) if w != [RAND]]
+        alone = sum(w == [RAND] for w in self.elsewhere.values())
+        if alone:
+            passes.append(f"{alone} passes where only {RAND}, rand.seed, differs")
+        listed = ", ".join(passes[:-1]) + " and " + passes[-1] if len(passes) > 1 else passes[0]
+        return (f"Not counted, since Dragoon read them at another point of the same draws: {listed}")
 
     def lines(self) -> list[str]:
         if self.through is None:
@@ -327,6 +363,8 @@ class Diff:
         out = [f"{self.race}: {len(self.words)} words, Dragoon frames {self.frames[0]} to "
                f"{self.frames[1]}, through pass {self.through}"]
         out += [w.text() for w in self.differing()]
+        if self.elsewhere:
+            out.append(self.elsewhere_text())
         same = len(self.words) - len(self.differing())
         out.append(f"{same} words match through pass {self.through}")
         return out
@@ -362,19 +400,39 @@ def compare(ram: Path, words: Path) -> Diff:
     timeline = set(dolphin_diff.watches(()))
     diff = Diff(name, [Word(w) for w in head if w not in timeline])
     rows = [r for _, r in dolphin]
-    left = {w.watch: w for w in diff.words}
+    misses: dict[str, dict[int, tuple[int, int, int]]] = {w.watch: {} for w in diff.words}
+    ours: dict[int, list[Row]] = {}
     for frame, row in dragoon:
         got_scene, at = scene_and_pass(row)
         if got_scene != scene or at not in by_pass:
             continue
         near = [rows[n] for p in (at - 1, at, at + 1) for n in by_pass.get(p, ())]
         first = rows[by_pass[at][0]]
-        for watch in list(left):
-            if all(r[watch] != row[watch] for r in near):
-                w = left.pop(watch)
-                w.frame, w.at, w.ours, w.theirs = frame, at, row[watch], first[watch]
+        for watch, missed in misses.items():
+            if at not in missed and all(r[watch] != row[watch] for r in near):
+                missed[at] = (frame, row[watch], first[watch])
+        ours.setdefault(at, []).append(row)
         diff.frames = (diff.frames[0] or frame, frame)
         diff.through = at
+
+    def read_elsewhere(p: int) -> bool:
+        """Whether Dragoon's seed at pass P is on Dolphin's draws from pass P-1 to pass P+1."""
+        if RAND not in head or p - 1 not in ours or p + 1 not in ours or p + 1 not in by_pass:
+            return False
+        starts = {rows[n][RAND] for n in by_pass.get(p - 1, ())}
+        ends = {rows[n][RAND] for n in by_pass[p + 1]}
+        return all(any(between(a, row[RAND], b) for a in starts for b in ends) for row in ours[p])
+
+    for w in diff.words:
+        missed = misses[w.watch]
+        for p in sorted(missed):
+            alone = w.watch == RAND or (p - 1 not in missed and p + 1 not in missed)
+            if alone and read_elsewhere(p):
+                diff.elsewhere.setdefault(p, []).append(w.watch)
+                continue
+            w.frame, w.ours, w.theirs = missed[p]
+            w.at = p
+            break
     return diff
 
 
