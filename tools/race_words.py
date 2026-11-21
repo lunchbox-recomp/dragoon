@@ -28,9 +28,17 @@ to TO, by default from dolphin_diff.TRACE_EARLY frames before Dolphin's first ra
 game frame Dolphin's run reaches, into DIR/dragoon/words.txt: the same
 head, then a line a frame, the frame and each word in hex. A pointer path is followed the way
 Dolphin's watcher follows one: when a pointer on the way leads outside main RAM, the word is
-that pointer.
+that pointer. A pointer into main RAM's uncached mirror at C0000000 leads into main RAM, as
+the console's BATs map it.
+
+diff and show refuse a Dolphin run that lost a field. The watcher's datagrams queue in the
+receiving socket, which holds only a few of the largest, so a long enough stall loses one, and
+every field after it moves. vi.renew_count (kar_ram.json), which the timeline watches, either
+stays, goes up by one or goes back to 0 from one field to the next, so any other step means a
+field was lost. A lost field with no new picture in it doesn't show.
 
 diff compares the two at the first race in Dolphin's run (dolphin_diff.RACES), word by word.
+Dragoon's frames at a pass past the last one Dolphin's run shows are left out.
 Each Dragoon frame in the race whose pass Dolphin's run shows is compared with Dolphin's fields
 at that pass and the one either side, as race_trace.py compares, since Dolphin reads RAM partway
 into a pass. A word differs at the first frame whose value none of those fields holds. diff
@@ -69,6 +77,8 @@ DATAGRAM = 2048  # macOS's net.local.dgram.maxdgram, the most a local datagram m
 HEX_MAX = 8  # a word's value in the datagram, in hex with no leading zeros
 WORDS = "words.txt"
 SPAN = ":"
+UNCACHED = 0x40000000  # main RAM's uncached mirror, at C0000000, less its cached address
+RENEW = f"{dtm.RENEW:08X}"  # vi.renew_count's watch
 Row = dict[str, int]  # a watch's text to its word
 
 
@@ -127,7 +137,37 @@ def parse(path: Path) -> tuple[list[str], list[tuple[int, Row]]]:
     return head, rows
 
 
+def lost_field(rows: Sequence[tuple[int, Row]]) -> Optional[str]:
+    """Where ROWS, a Dolphin run's, show a lost field: vi.renew_count stepping other than by
+    staying, going up by one or going back to 0. None when they show none."""
+    for (_, was), (n, now) in zip(rows, rows[1:]):
+        if now[RENEW] not in (was[RENEW], was[RENEW] + 1, 0):
+            return f"vi.renew_count goes from {was[RENEW]} to {now[RENEW]} at line {n}"
+    return None
+
+
+def read_dolphin(ram: Path) -> tuple[list[str], list[tuple[int, Row]]]:
+    """RAM, a Dolphin run's ram.txt, as parse gives it, refused when it has no field or lost one."""
+    head, rows = parse(ram)
+    if not rows:
+        raise Bad(f"{ram}: no field")
+    lost = lost_field(rows)
+    if lost:
+        raise Bad(f"{ram}: {lost}, so a field was lost and every field after it moved; "
+                  "run dolphin again, watching fewer words")
+    return head, rows
+
+
 # Dragoon's side.
+
+
+def ram_address(pointer: int) -> Optional[int]:
+    """Where POINTER leads in main RAM as the link reads it: itself, or the cached address of one
+    into the uncached mirror. None outside both."""
+    for address in (pointer, pointer - UNCACHED):
+        if kar_ram.in_ram(address, 1):
+            return address
+    return None
 
 
 def read_words(link, watched: Sequence[str]) -> list[int]:
@@ -149,7 +189,8 @@ def read_words(link, watched: Sequence[str]) -> list[int]:
                     chased[path] = (False, base)
                     return chased[path]
                 value = word(base + path[-1])
-            chased[path] = (kar_ram.in_ram(value, 1), value)
+            address = ram_address(value)
+            chased[path] = (True, address) if address is not None else (False, value)
         return chased[path]
 
     where: list[tuple[bool, int]] = []
@@ -313,7 +354,7 @@ def scene_and_pass(row: Row) -> tuple[tuple[int, int], int]:
 
 
 def compare(ram: Path, words: Path) -> Diff:
-    head, dolphin = parse(ram)
+    head, dolphin = read_dolphin(ram)
     ours_head, dragoon = parse(words)
     if ours_head != head:
         raise Bad(f"{words} doesn't watch what {ram} does")
@@ -340,9 +381,9 @@ def compare(ram: Path, words: Path) -> Diff:
 def show(ram: Path, words: Path, watch: str, passes: range) -> list[str]:
     """WATCH's value on both sides at each pass of PASSES: Dragoon's at each of its frames there,
     then Dolphin's at each of its fields."""
-    _, dolphin = parse(ram)
+    head, dolphin = read_dolphin(ram)
     _, dragoon = parse(words)
-    if watch not in dolphin[0][1]:
+    if watch not in head:
         raise Bad(f"{ram} doesn't watch {watch}")
     _, scene, by_pass = race_fields(dtm.read_lines(ram))
     ours: dict[int, list[str]] = {}
