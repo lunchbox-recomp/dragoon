@@ -19,7 +19,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import dolphin_ref
-from testutil import commit, git, run_main, temp_dir
+from testutil import commit, git, run_main, temp_dir, temp_files_in
 
 ISO = "/discs/game.iso"
 HAS_SANDBOX = sys.platform == "darwin" and os.path.exists(dolphin_ref.SANDBOX_EXEC)
@@ -180,6 +180,46 @@ class NestedSubmoduleTest(unittest.TestCase):
         (self.leaf / "leaf.txt").write_text("edited")
         with self.assertRaisesRegex(dolphin_ref.Refused, "changed or untracked:  M mid"):
             dolphin_ref.check_tree(self.top, sha=self.head, patch="")
+
+    def test_an_ignored_file_inside_a_nested_submodule_is_refused(self):
+        # The top's git status doesn't list a submodule's ignored files, so only the leaf's own
+        # status shows this one.
+        (self.leaf / ".git" / "info").mkdir(exist_ok=True)
+        (self.leaf / ".git" / "info" / "exclude").write_text("*.log\n")
+        (self.leaf / "build.log").write_text("ignored\n")
+        with self.assertRaisesRegex(dolphin_ref.Refused, "mid/leaf: changed or untracked: !! build.log"):
+            dolphin_ref.check_tree(self.top, sha=self.head, patch="")
+
+    def test_check_tree_leaves_each_repos_own_index_alone(self):
+        then = time.time() - 5
+        for name in ("top.txt", ".gitmodules", "mid/mid.txt", "mid/.gitmodules", "mid/leaf/leaf.txt"):
+            os.utime(self.top / name, (then, then))
+        repos = (self.top, self.mid, self.leaf)
+        # With every file older than the index, a second status leaves git nothing to refresh, so
+        # a clean tree's status doesn't write its index again.
+        for repo in repos + repos:
+            dolphin_ref.git(repo, *dolphin_ref.STATUS)
+        indexes = [repo / ".git" / "index" for repo in repos]
+
+        def seen() -> list:
+            return [(i.stat().st_ino, i.stat().st_mtime_ns, i.read_bytes()) for i in indexes]
+
+        before = seen()
+        self.assertEqual(dolphin_ref.check_tree(self.top, sha=self.head, patch=""), self.head)
+        self.assertEqual(seen(), before)
+
+    def test_check_tree_leaves_no_temp_folder_when_it_passes_or_refuses(self):
+        tmp = temp_dir(self)
+        temp_files_in(self, tmp)
+        dolphin_ref.check_tree(self.top, sha=self.head, patch="")
+        self.assertEqual(list(tmp.iterdir()), [])
+        (self.leaf / ".git" / "info").mkdir(exist_ok=True)
+        (self.leaf / ".git" / "info" / "exclude").write_text("*.log\n")
+        (self.leaf / "build.log").write_text("ignored\n")
+        # Refused at the leaf, the last repo, once the top and mid have had their indexes.
+        with self.assertRaisesRegex(dolphin_ref.Refused, "mid/leaf: changed or untracked"):
+            dolphin_ref.check_tree(self.top, sha=self.head, patch="")
+        self.assertEqual(list(tmp.iterdir()), [])
 
     def test_the_users_git_config_cant_hide_an_edit_in_a_nested_submodule(self):
         base = temp_dir(self)

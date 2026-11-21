@@ -36,9 +36,9 @@ file, a staged change or an edit anywhere else, submodules included, is refused.
 without the user's and the system's config, and a tree is refused when it could hide a change
 from git all the same: an assume-unchanged or skip-worktree file, a non-empty info/attributes,
 or a filter or attributes file in its local config. The tree and each submodule are also read
-against an index made fresh from HEAD, so git hashes every file again instead of trusting a stat
-an earlier git status cached. boot also refuses a build that BUILT
-doesn't say came from that commit with that PATCH.
+against an index made fresh from HEAD, so git hashes every file again instead of trusting a
+stat an earlier git status cached. boot also refuses a build that BUILT doesn't say came from
+that commit with that PATCH.
 
 cmake and ninja run under `sandbox-exec` with build_profile, and Dolphin with run_profile. Both
 deny all network, so a DNS lookup fails too. build_profile lets cmake and ninja write only
