@@ -237,14 +237,23 @@ class CompareTest(unittest.TestCase):
                 self.assertEqual(d.elsewhere, {})
 
     def test_a_lone_pass_counts_when_a_frame_s_seed_is_in_step(self):
-        out = folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
-                     {SPEED: lambda p: 500 if p == 9 else p, RAND: lambda p: DRAWS[10 * p]})
-        words = out / "dragoon" / race_words.WORDS
-        lines = words.read_text().splitlines()
-        lines.insert(10, f"110 {RACE:08X} 00000000 00000000 00000000 00000009 00000009 {DRAWS[95]:08X}")
-        lines[11:] = [f"{int(line.split()[0]) + 1} {line.split(' ', 1)[1]}" for line in lines[11:]]
-        words.write_text("\n".join(lines) + "\n")
-        self.assertEqual([(w.watch, w.at) for w in diff(out).differing()], [(SPEED, 9), (RAND, 9)])
+        for seed in (DRAWS[80], DRAWS[90], DRAWS[100]):  # Dolphin's at passes 8, 9 and 10
+            with self.subTest(seed=seed):
+                out = folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                             {SPEED: lambda p: 500 if p == 9 else p,
+                              RAND: lambda p: seed if p == 9 else DRAWS[10 * p]})
+                words = out / "dragoon" / race_words.WORDS
+                lines = words.read_text().splitlines()
+                lines.insert(10, f"110 {RACE:08X} 00000000 00000000 00000000 00000009 00000009 {DRAWS[95]:08X}")
+                lines[11:] = [f"{int(line.split()[0]) + 1} {line.split(' ', 1)[1]}" for line in lines[11:]]
+                words.write_text("\n".join(lines) + "\n")
+                self.assertEqual([(w.watch, w.at) for w in diff(out).differing()], [(SPEED, 9), (RAND, 9)])
+
+    def test_a_lone_pass_at_the_first_pass_compared_still_counts(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p == 1 else p,
+                         RAND: lambda p: DRAWS[15] if p == 1 else DRAWS[10 * p]}))
+        self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, 1), (RAND, 1)])
 
     def test_a_seed_a_draw_off_for_good_counts_from_its_first_pass(self):
         d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
@@ -266,10 +275,13 @@ class CompareTest(unittest.TestCase):
                                        "draws: 1 pass where only 805DCD30, rand.seed, differs")
 
     def test_a_lone_pass_at_the_last_pass_compared_still_counts(self):
-        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
-                        {SPEED: lambda p: 500 if p == 18 else p,
-                         RAND: lambda p: DRAWS[175] if p == 18 else DRAWS[10 * p]}))
-        self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, 18), (RAND, 18)])
+        for last in (18, 17):  # Dolphin's last pass, then one Dolphin shows past Dragoon's last
+            with self.subTest(last=last):
+                d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                                {SPEED: lambda p: 500 if p == last else p,
+                                 RAND: lambda p: DRAWS[10 * p - 5] if p == last else DRAWS[10 * p]},
+                                passes=range(1, last + 1)))
+                self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, last), (RAND, last)])
 
     def test_between_follows_hsd_rand_s_draws(self):
         self.assertEqual(race_words.draw(0x00B90000), (0x00B90000 * 214013 + 2531011) % 2 ** 32)
