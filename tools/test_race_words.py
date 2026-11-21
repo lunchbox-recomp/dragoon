@@ -190,6 +190,17 @@ class CompareTest(unittest.TestCase):
         self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, 9), (RAND, 9)])
         self.assertEqual(d.elsewhere, {})
 
+    def test_a_lone_pass_counts_unless_every_frame_s_seed_is_on_the_draws(self):
+        out = folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                     {SPEED: lambda p: 500 if p == 9 else p,
+                      RAND: lambda p: DRAWS[95] if p == 9 else DRAWS[10 * p]})
+        words = out / "dragoon" / race_words.WORDS
+        lines = words.read_text().splitlines()
+        lines.insert(10, f"110 {RACE:08X} 00000000 00000000 00000000 00000009 000001F4 {DRAWS[105]:08X}")
+        lines[11:] = [f"{int(line.split()[0]) + 1} {line.split(' ', 1)[1]}" for line in lines[11:]]
+        words.write_text("\n".join(lines) + "\n")
+        self.assertEqual([(w.watch, w.at) for w in diff(out).differing()], [(SPEED, 9), (RAND, 9)])
+
     def test_a_word_that_differs_two_passes_running_still_counts(self):
         d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
                         {SPEED: lambda p: 500 if p in (9, 10) else p,
