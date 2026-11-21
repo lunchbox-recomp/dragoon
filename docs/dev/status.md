@@ -5,9 +5,9 @@ commits they were measured at. The pin is gcn-recomp `9358d34`, which models Gek
 non-IEEE mode (under Non-IEEE mode). Every route's frame goldens were recorded at `6586763` at
 both aspects (under The pixel centre), and the state and audio goldens at `bfce46f` (under
 Gekko's single-precision rounding). The routes the mode moved were recorded again at
-`f61bc9c`. At the pin every golden matched but one 16:9 frame, recorded again, and
-city-trial-stadium-4p's audio, not yet recorded (both under Non-IEEE mode). Goldens has
-their first record, at `b5ec329`.
+`f61bc9c`, and city-trial-stadium-4p's audio at the pin. At the pin every other golden
+matched but one 16:9 frame, recorded again (both under Non-IEEE mode). Goldens has their
+first record, at `b5ec329`.
 
 [quality.md](quality.md) says whether each feature below is checked against Dolphin, against
 our own goldens or not at all. `tools/quality_page.py` writes it from the files that check them.
@@ -1364,8 +1364,8 @@ saved FPU state takes the NI bit of the thread that loaded it, as the SDK's OSLo
 leaves the live FPSCR in place for such a context. On air-ride-race all seven threads the
 game starts are such threads. Each new host thread also starts out of flush mode, since a Linux
 thread takes its creator's. Every golden check ran again on `9358d34` and matched the goldens
-recorded at `f61bc9c` but one frame and city-trial-stadium-4p's audio, not yet recorded
-(below), so neither change moved any route. That frame is
+recorded at `f61bc9c` but one frame and city-trial-stadium-4p's audio, recorded on
+`9358d34` (below), so neither change moved any route. That frame is
 air-ride-celestial-valley's 480 at 16:9, and it's open run-to-run nondeterminism. The record
 at `f61bc9c` wrote `9e9cb8ac` there. Every other run gave `30be4472`, `6586763`'s hash, which
 every Air Ride route's 16:9 golden holds at 480. That's the check on `f61bc9c` before the
@@ -1408,14 +1408,13 @@ ends sooner. Its results scene (6/13) has started by 20300, where before it star
 20400. The route presses nothing after 16500, so it still reaches its frames. Its 20400
 checkpoint now reads the results, with no positions. The checkpoint table's "What's on
 screen" for it above wasn't looked at again. Each moved golden was rewritten by its tool's
-`record`, and the rest left alone. One isn't yet. `audio_hashes.py record
+`record`, and the rest left alone. On `f61bc9c` `audio_hashes.py record
 city-trial-stadium-4p` never reached list 68000 in the route's 70 seconds, since the Mac
-was loaded and the bench ran at about half its usual rate. Its two rows still hold the old
-pin's hashes, so its audio check fails until it's recorded again. On `9358d34` its check
-with `--slow=2` reached list 276000 and still differed at both rows, and every other route's
-audio matched. The record waits for a 1-minute load average under 4 with nothing else
-running. When it was due, on 2026-11-21, other programs held the load at 8 to 15. Three more tries
-that morning found it at 14.1, 6.9 and 4.5.
+was loaded and the bench ran at about half its usual rate. On `9358d34` its check with
+`--slow=2` reached list 276000 and differed at both rows, and every other route's audio
+matched. It was recorded on `9358d34` on 2026-11-21 at a 1-minute load average of 3.65,
+with nothing else of ours running, and reached list 193200. Its rows are the hashes that
+check gave, and the check after the record matched at `--slow=2`.
 
 The Dolphin diff ran again on the cached Dolphin runs, `build/nightly/dolphin-cache`, read
 only. Every checkpoint outside the races scored as before. The races' last checkpoints:
