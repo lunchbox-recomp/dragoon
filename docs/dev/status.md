@@ -1104,7 +1104,8 @@ config (`SEED_PINS`). Dolphin applies an enabled `[OnFrame]` patch after the DOL
 every field, cheats setting or not. Dragoon's `recomp/patches.txt` has the same five sites call
 `dragoon_seed_pinned()` (`src/seed_pin.cpp`), which loads the same register with the same value
 when `DRAGOON_SEED_PIN` is 1, and otherwise makes the original call, returning to
-the next instruction. Only `dolphin_diff.py` sets it, and a test fails if another tool does.
+the next instruction. Only `dolphin_diff.py` holds the setting, `race_words.py` takes it from
+there, and a test fails if another tool writes it.
 Without it `frame_hashes.py check` and `state_goldens.py check` matched on all 25 routes, four
 of them at `--slow=2` or `--slow=3` after running out of seconds with no frame changed.
 
