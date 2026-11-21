@@ -209,6 +209,62 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(d.elsewhere, {9: [RAND], 10: [RAND]})
         self.assertIn("2 passes where only 805DCD30, rand.seed, differs", d.lines()[2])
 
+    def test_a_lone_pass_with_dragoon_s_seed_behind_dolphin_s_isn_t_counted(self):
+        # Air Ride's pass 1864: Dolphin's field took two steps, Dragoon's frame one.
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[97] if p == 9 else DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p == 9 else p,
+                         RAND: lambda p: DRAWS[85] if p == 9 else DRAWS[10 * p]}))
+        self.assertEqual((d.differing(), d.elsewhere), ([], {9: [SPEED, RAND]}))
+
+    def test_a_lone_pass_with_the_seed_in_step_still_counts(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p == 9 else p, RAND: lambda p: DRAWS[10 * p]}))
+        self.assertEqual(([(w.watch, w.at) for w in d.differing()], d.elsewhere), ([(SPEED, 9)], {}))
+
+    def test_a_word_that_differs_every_other_pass_still_counts(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p in (9, 11) else p, RAND: lambda p: DRAWS[10 * p]}))
+        self.assertEqual(([(w.watch, w.at) for w in d.differing()], d.elsewhere), ([(SPEED, 9)], {}))
+
+    def test_a_lone_pass_with_a_seed_dolphin_holds_still_still_counts(self):
+        # Top Ride's seed never moves.
+        for seed in (DRAWS[0], DRAWS[1]):
+            with self.subTest(seed=seed):
+                d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[0]},
+                                {SPEED: lambda p: 500 if p == 9 else p,
+                                 RAND: lambda p: seed if p == 9 else DRAWS[0]}))
+                self.assertEqual([w.at for w in d.differing()][0], 9)
+                self.assertEqual(d.elsewhere, {})
+
+    def test_a_lone_pass_counts_when_a_frame_s_seed_is_in_step(self):
+        out = folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                     {SPEED: lambda p: 500 if p == 9 else p, RAND: lambda p: DRAWS[10 * p]})
+        words = out / "dragoon" / race_words.WORDS
+        lines = words.read_text().splitlines()
+        lines.insert(10, f"110 {RACE:08X} 00000000 00000000 00000000 00000009 00000009 {DRAWS[95]:08X}")
+        lines[11:] = [f"{int(line.split()[0]) + 1} {line.split(' ', 1)[1]}" for line in lines[11:]]
+        words.write_text("\n".join(lines) + "\n")
+        self.assertEqual([(w.watch, w.at) for w in diff(out).differing()], [(SPEED, 9), (RAND, 9)])
+
+    def test_a_seed_a_draw_off_for_good_counts_from_its_first_pass(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p == 9 else p,
+                         RAND: lambda p: DRAWS[10 * p + (p >= 5)]}))
+        self.assertEqual([(w.watch, w.at) for w in d.differing()], [(RAND, 5), (SPEED, 9)])
+        self.assertEqual(d.elsewhere, {})
+
+    def test_a_seed_s_run_counts_when_one_pass_of_it_isn_t_between(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: p,
+                         RAND: lambda p: {9: DRAWS[95], 10: DRAWS[115]}.get(p, DRAWS[10 * p])}))
+        self.assertEqual(([(w.watch, w.at) for w in d.differing()], d.elsewhere), ([(RAND, 9)], {}))
+
+    def test_one_pass_where_only_the_seed_differs(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: p, RAND: lambda p: DRAWS[95] if p == 9 else DRAWS[10 * p]}))
+        self.assertEqual(d.lines()[1], "Not counted, since Dragoon read them at another point of the same "
+                                       "draws: 1 pass where only 805DCD30, rand.seed, differs")
+
     def test_a_lone_pass_at_the_last_pass_compared_still_counts(self):
         d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
                         {SPEED: lambda p: 500 if p == 18 else p,

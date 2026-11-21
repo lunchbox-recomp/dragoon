@@ -1476,11 +1476,15 @@ at `a59ea96` (gcn-recomp `9358d34`) against the cached Dolphin run.
 
 Where in the main loop each side's read lands isn't traced further. It's sampling, not one of
 the Dolphin differences gcn-recomp's PR holds, and there's nothing to fix in gcn-recomp.
-`race_words.py diff` doesn't count such a pass. Dolphin's `rand.seed` at the pass before and
-the pass after must both lead through Dragoon's, and the word must differ at that pass alone.
-On air-ride-race it now lists passes 1864 and 3863 as not counted, with 54 passes where only the
-seed differs, and 37 of the 38 words match through pass 3939. The one left is
-`pad.queue_length`, from pass 367, which is frame pacing (below).
+`race_words.py diff` doesn't count such a pass. Dragoon's `rand.seed` there must be at none of
+Dolphin's fields of the pass or one either side, and strictly between Dolphin's draws from the
+pass before to the pass after. The word must differ at that pass alone. So a seed in step, as
+on Top Ride, where it never moves, never excuses a word. A value between Dolphin's either side
+can't be asked for too. At 1864 player3.x turns, and Dragoon's -43.8845 is past Dolphin's
+-43.8939, -43.8958 and -43.9275 at 1863 to 1865. On air-ride-race it now lists passes 1864
+and 3863 as not counted, with 54 passes where only the seed differs, and 37 of the 38 words
+match through pass 3939. The one left is `pad.queue_length`, from pass 367, which is frame
+pacing (below).
 
 Two words `race_words.py` reads differ without the race differing:
 
