@@ -1366,9 +1366,14 @@ game starts are such threads. Each new host thread also starts out of flush mode
 thread takes its creator's. Every golden check ran again on `9358d34` and matched the goldens
 recorded at `f61bc9c` but one frame and city-trial-stadium-4p's audio, not yet recorded
 (below), so neither change moved any route. That frame is
-air-ride-celestial-valley's 480 at 16:9. The record at `f61bc9c` wrote a hash there that the
-check before it hadn't seen, and two checks on `9358d34` gave `6586763`'s hash again, so it's
-back to that one. The route's first frame the mode moved is 4020.
+air-ride-celestial-valley's 480 at 16:9, and it's open run-to-run nondeterminism. The record
+at `f61bc9c` wrote `9e9cb8ac` there. Every other run gave `30be4472`, `6586763`'s hash, which
+every Air Ride route's 16:9 golden holds at 480. That's the check on `f61bc9c` before the
+record, and on `9358d34` two checks, the record that put `30be4472` back and five more checks,
+at 16:9 with `--slow=3`. Three checks of air-ride-sky-sands the same way gave it too. So
+`9e9cb8ac` came once in 13 runs, ten of them of this route. The `f61bc9c` record ran with
+the Mac's load average at 3 to 6, and the runs on `9358d34` at 4 to 14. No code or record
+explains it yet. The route's first frame the mode moved is 4020.
 
 Every golden check ran on the bump to `f61bc9c`, at both aspects, one game at a time on AC
 power. What moved:
@@ -1409,7 +1414,8 @@ was loaded and the bench ran at about half its usual rate. Its two rows still ho
 pin's hashes, so its audio check fails until it's recorded again. On `9358d34` its check
 with `--slow=2` reached list 276000 and still differed at both rows, and every other route's
 audio matched. The record waits for a 1-minute load average under 4 with nothing else
-running. When it was due, on 2026-11-21, other programs held the load at 8 to 15.
+running. When it was due, on 2026-11-21, other programs held the load at 8 to 15. Three more tries
+that morning found it at 14.1, 6.9 and 4.5.
 
 The Dolphin diff ran again on the cached Dolphin runs, `build/nightly/dolphin-cache`, read
 only. Every checkpoint outside the races scored as before. The races' last checkpoints:
