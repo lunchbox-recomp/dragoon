@@ -3,17 +3,17 @@
 # The next line is the tolerance and budget the scores were taken at, then a line a route for
 # the fields its converged movie played, ROUTE fields=N, and one line a route and checkpoint:
 # ROUTE FRAME share=S% max=M mean=E state=STATE CLASS REASON.
-# Scored on gcn-recomp 6586763, which draws every vertex 1/12 of a pixel left and up for the
-# console's 7/12 pixel centre, as Dolphin corrects for it. Before it every menu edge was about
-# 0.09 px right of and below Dolphin's (docs/dev/status.md, "The pixel centre"). Both sides pin
-# the RNG's seeds (dolphin_ref.py's game INI, Dragoon's DRAGOON_SEED_PIN), and a race's or the
-# city's checkpoints past its first two are matched by the main loop's pass, scene.passes.
+# Scored on gcn-recomp 9358d34, which models Gekko's non-IEEE mode. Next to 6586763's scores,
+# on the same Dolphin runs, only air-ride-race 4200 and 6000 and city-trial 3300 moved
+# (docs/dev/status.md, "Non-IEEE mode"). 6586763 draws every vertex 1/12 of a pixel left and
+# up for the console's 7/12 pixel centre, as Dolphin corrects for it. Before it every menu
+# edge was about 0.09 px right of and below Dolphin's (docs/dev/status.md, "The pixel centre").
+# Both sides pin the RNG's seeds (dolphin_ref.py's game INI, Dragoon's DRAGOON_SEED_PIN), and
+# a race's or the city's checkpoints past its first two are matched by the main loop's pass,
+# scene.passes.
 # Every route's movie was converged on the count from vi.renew_last. A differing bug names
 # the first compared value to differ and the first Dragoon frame it does, from runs reading
 # every compared value each frame against Dolphin's at the same pass or one either side.
-# Rescored on gcn-recomp f61bc9c, which also models Gekko's non-IEEE mode, against the same
-# Dolphin runs. Only air-ride-race 4200 and 6000 and city-trial 3300 moved (docs/dev/status.md,
-# "Non-IEEE mode").
 tolerance=4 budget=0.1%
 # Top Ride's race matches through pass 564, the last its 4400 fields reach.
 top-ride-grass fields=4400
@@ -47,7 +47,7 @@ air-ride-race 2219 share=0.008% max=6 mean=0.01 state=same within under the budg
 air-ride-race 3123 share=0.001% max=8 mean=0.03 state=same within under the budget and the state matching
 air-ride-race 3133 share=0.036% max=70 mean=0.24 state=same within under the budget and the state matching
 air-ride-race 4200 share=0.025% max=59 mean=0.38 state=same within under the budget and the state matching
-air-ride-race 6000 share=0.323% max=164 mean=0.53 state=same unclear pass 2879, lap 2 on both sides, every racer where Dolphin has it and the clock on 0:44:45; lone pixels along the course's fine texture, not edges, and the cause isn't known. player1.speed first differs at frame 3928, pass 807, where Dolphin's field holds the racers' speeds from its pass 806 field and their positions from its pass 807 field, each value bit for bit, so the read splits a pass. Taken one by one, every compared value is at Dolphin's fields of its pass or one either side to pass 3939, the last Dolphin's run reaches, but for the seed's single passes and pass 1864 (frame 4985), where all 17 differ for that pass alone. It differed at pass 763 before gcn-recomp modelled Gekko's non-IEEE mode
+air-ride-race 6000 share=0.323% max=164 mean=0.53 state=same unclear pass 2879, lap 2 on both sides, every racer where Dolphin has it and the clock on 0:44:45; lone pixels along the course's fine texture, not edges, and the cause isn't known. player1.speed first differs at frame 3928, pass 807, where Dolphin's field holds the racers' speeds from its pass 806 field and their positions from its pass 807 field, each value bit for bit, so the read splits a pass and the race doesn't differ there. Taken one by one, every compared value is at Dolphin's fields of its pass or one either side to pass 3939, the last Dolphin's run reaches, but for the seed's single passes and passes 1864 (frame 4985) and 3863 (frame 6984), where all 17 differ for that pass alone, neither traced. Pass 1864 is the race's first real difference. It differed at pass 763 before gcn-recomp modelled Gekko's non-IEEE mode
 city-trial 60 share=0.000% max=3 mean=0.01 state=same within under the budget and the state matching
 city-trial 304 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 city-trial 314 share=0.001% max=5 mean=0.02 state=same within under the budget and the state matching
