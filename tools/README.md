@@ -498,14 +498,14 @@ tools/dolphin_diff.py triage
 
 ## quality_page.py
 
-How well is each feature checked today? It writes `docs/dev/quality.md` with a row for each feature in status.md's table. The rows come from `tests/hashes/dolphin-triage.txt`, the goldens in `gl/`, `gl-16x9/`, `state/` and `audio/`, `known-issues.txt`, the manifest and the gcn-recomp pin in git's index. A row is Dolphin when a triaged checkpoint falls in the feature and Goldens when only our hashes cover it. Otherwise it's Unchecked. Its `COVERS` table names the routes each feature's goldens come from, and `SCENES` and `MODES` say which feature a checkpoint's frame falls in. A feature added to status.md or gone from it stops the tool until `COVERS` follows.
+How well is each feature checked today? It writes `docs/dev/quality.md` with a row for each feature in status.md's table. The rows come from `tests/hashes/dolphin-triage.txt`, the goldens in `gl/`, `gl-16x9/`, `state/` and `audio/`, `known-issues.txt`, the manifest and the gcn-recomp pin in git's index. A row is Dolphin when a triaged checkpoint falls in the feature and Goldens when only our hashes cover it. Otherwise it's Unchecked. Its `COVERS` table names the routes each feature's goldens come from. A checkpoint's feature comes from its route's presses in `tests/routes/`, which start with `menu.txt`'s. Before 300 A it's the boot, then the opening movie until 900 A, the title screen until 1000 START and the mode select until the route's next A, which goes into its mode. The mode's checkpoints count for the feature whose `COVERS` prefix the route's name starts with, split at the route's last START, where its race or city starts. A feature added to status.md or gone from it stops the tool until `COVERS` follows.
 
 ```
 tools/quality_page.py
 tools/quality_page.py --check
 ```
 
-Run it after any of those files changes. `--check` writes nothing and exits 1 when the page isn't what it would write. It reads only files and git's index, so it runs in CI's tools job in well under a second.
+Run it after any of those files or the route files change. `--check` writes nothing and exits 1 when the page isn't what it would write. It reads only files and git's index, so it runs in CI's tools job in well under a second.
 
 ## interp_bisect.py
 
