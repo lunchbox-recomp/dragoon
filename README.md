@@ -20,7 +20,7 @@ Tested on one Mac, an M4 Max on macOS 26.
 | Picture | 4:3 by default. `--aspect=16:9` or the in-game menu's Display page widens the world in the race, City Trial and Top Ride routes it was measured on. Air Ride's and City Trial's HUD keeps its 4:3 shape, while Top Ride's HUD and the menus stretch |
 | Other platforms | Not tested |
 
-Full numbers are in [docs/dev/status.md](docs/dev/status.md).
+Full numbers are in [docs/dev/status.md](docs/dev/status.md). [docs/dev/quality.md](docs/dev/quality.md) says whether each feature is checked against Dolphin, against our own goldens or not at all.
 
 ## Building
 
