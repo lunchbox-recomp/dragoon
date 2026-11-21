@@ -1325,6 +1325,109 @@ on this pin.
 - Top Ride matches every compared value through pass 564, frame 3797, the last pass Dolphin's
   run reaches, as before.
 
+#### Non-IEEE mode
+
+The two races' first differences had one cause, Gekko's non-IEEE mode. The SDK's OSInit sets
+FPSCR[NI] (PPCSetFpNonIEEEMode, `mtfsb1 29` at 803C3428), so the game runs with it. In that
+mode the 750 zeroes a denormalized operand and returns zero for a denormalized result (the
+IBM 750GX/GL manual's Tables 2-5 and 2-6, the 750CL's 2-24 and 2-25). gcn-recomp didn't model
+it, so Dragoon kept denormals the console drops.
+
+`tools/race_words.py` read 51 of player2's words on both sides. All differ first at City
+Trial's pass 273, together. Then a test build set the host's flush mode where the guest sets
+NI, and every word matched through pass 433, the end of that Dolphin run. So did a build that
+flushed inside one function alone, `kar_lbvector_lerp_float_table_sample` (80062C4C). The
+same function run with no flush still differed at frame 3005. It lerps a curve table, and
+fn_80190948, a stick or response curve, calls it at 801909B0. At pass 272 the `lfsx` at
+80062C7C loads a table entry of 2^-147, a single denormal. The next entry is 0. Then
+`fsubs` (80062C8C) and `fmadds` (80062C98) give a denormal where the console gives 0. That's
+the stick value of player2, a CPU racer. By pass 273 it shows in every word read. In Air
+Ride's race the only flushes in passes 755 to 763 are the same lerp, from the same call, at
+pass 763, where player4.speed first differed.
+
+gcn-recomp `f61bc9c` (`67fe055` and a test change) models the mode. `gcn_fp_follow` sets the
+host's flush mode from FPSCR[NI] (FPCR.FZ on AArch64, MXCSR's FTZ and DAZ on x86-64) in
+`hle_set_fpscr` and wherever a host thread takes up a guest context. lfs of a single
+denormal stays exact, and stfs under the least normal single denormalizes as the PowerPC PEM
+says, dropping the bits shifted out, since loads and stores aren't arithmetic and the host's
+conversions would flush them. fres and frsqrte give a denormal operand's estimate as a zero's
+in non-IEEE mode.
+
+Every golden check ran on the bump, at both aspects, one game at a time on AC power. What
+moved:
+
+| Goldens | Routes | First change |
+|---|---|---|
+| Frames, 4:3 and 16:9 alike | air-ride-race, city-trial, air-ride-celestial-valley, air-ride-sky-sands, air-ride-frozen-hillside, air-ride-beanstalk-park, air-ride-machine-passage, air-ride-courses-1, air-ride-courses-2, city-trial-stadium | In play with CPU racers, at 3900, 3120, 4020, 3480, 3660, 4020, 3720, 3500, 4500 and 4800 |
+| State, the same values at both aspects | The same ten | Speeds and positions at their checkpoints in play |
+| Audio | Those ten, title, city-trial-4p, air-ride-magma-flows, air-ride-checker-knights and city-trial-stadium-4p | See below |
+
+Every frame before those matched, and both aspects first change at the same frame, so the
+game played differently and drew the same. The title, the menu, all eight Top Ride routes,
+city-trial-2p and city-trial-4p, magma-flows, checker-knights and city-trial-stadium-4p kept
+their frames and state. The audio routes past the ten:
+
+- title's first row, list 7200, is in the attract demo, an Air Ride race with CPUs from about
+  frame 1500. The title's frames stop at 960. A run with the flush logged shows the demo's
+  first flushes before list 6800, the lerp among them.
+- magma-flows' and checker-knights' 16000 rows come after their last checked frame, 4200,
+  while their races with CPUs go on. Their 12000 rows match.
+- city-trial-4p and city-trial-stadium-4p have four people and no CPUs. Their frames and
+  state match at every checkpoint. Run on both builds, their audio first differs in the
+  block to list 15200 on city-trial-4p, the city's pass 1599, past its last checked frame,
+  and to list 33200 on the stadium route, in the city between its checkpoints. In that
+  block of city-trial-4p the flush log shows denormal results zeroed in PSMTXConcat,
+  HSD_MtxSRT, PSVECMag, PSVECCrossProduct, PSMTXInverse, fn_800C05AC and fn_801EC254, with
+  the hash the same through list 14800. Which of them reaches the sound isn't narrowed.
+
+`air-ride-courses-1` and `air-ride-courses-2` still race their three courses in turn, read by
+`ram_peek.py` every 100 frames, so their presses stay. Drag Race 3 on `city-trial-stadium`
+ends sooner. Its results scene (6/13) has started by 20300, where before it started after
+20400. The route presses nothing after 16500, so it still reaches its frames. Its 20400
+checkpoint now reads the results, with no positions. The checkpoint table's "What's on
+screen" for it above wasn't looked at again. Each moved golden was rewritten by its tool's
+`record`, and the rest left alone. One isn't yet. `audio_hashes.py record
+city-trial-stadium-4p` never reached list 68000 in the route's 70 seconds, since the Mac
+was loaded and the bench ran at about half its usual rate. Its two rows still hold the old
+pin's hashes, so its audio check fails until it's recorded again.
+
+The Dolphin diff ran again on the cached Dolphin runs, `build/nightly/dolphin-cache`, read
+only. Every checkpoint outside the races scored as before. The races' last checkpoints:
+
+| Checkpoint | Before | Now |
+|---|---|---|
+| air-ride-race 4200, pass 1079 | 81.192%, state differs | 0.025%, state same |
+| air-ride-race 6000, pass 2879 | 91.443%, state differs | 0.323%, state same |
+| city-trial 3300, pass 568 | 24.476%, state differs | 0.420%, state a frame off |
+| top-ride-grass 3600, pass 367 | 0.467%, state same | 0.467%, state same |
+
+At 6000 every racer is where Dolphin has it on lap 2, with the clock on 0:44:45 on both. At
+3300 Kirby is on the same street at 4:54:10. Lone pixels along the course's fine texture are
+left at 6000, and thin lines along the road's paving at 3300, by 15 levels at most. Both are
+`unclear`, so the triage file now has 31 `within`, 3 `timing`, 7 `unclear` and no `bug`.
+
+- City Trial matches every compared value through pass 1033, the last pass Dolphin's run
+  reaches. It was pass 273.
+- Air Ride's race first differs in `race_trace.py` at frame 3928, pass 807. There Dolphin's
+  field holds the racers' speeds of its pass 806 field and their positions of its pass 807
+  field, each bit for bit, so the read splits a pass. Value by value, every compared word is
+  at Dolphin's fields of its pass or one either side to pass 3939, the last the run reaches,
+  but for two things. The seed differs at single passes, with the passes either side the
+  same, where the game draws more than once in a pass and each side reads a different draw.
+  And at pass 1864 (frame 4985) all 17 values differ, for that pass alone, at none of
+  Dolphin's fields six passes either side, and match again from 1865. That one isn't traced.
+  It was pass 763.
+- Top Ride matches through pass 564, as before.
+
+Two words `race_words.py` reads differ without the race differing:
+
+- rider+0x2F8 in City Trial and +0x2EC in Air Ride read -1 in Dragoon and 0 in Dolphin at the
+  race's first pass only, a word each side reads at its own point of the pass.
+- `pad.queue_length` (8058B080) runs one read ahead in Dolphin from City Trial's pass 265 and
+  Air Ride's pass 367. Its low byte shows one entry not yet read, a field where Dolphin read
+  the pads and the game didn't finish a pass. That's frame pacing, and the race state matches
+  through it.
+
 ## gcn-recomp `95e1c6b`
 
 The pin moved from `782d7fa` to `95e1c6b`, 57 commits. Empty string switches now read as unset.

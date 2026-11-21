@@ -11,6 +11,9 @@
 # Every route's movie was converged on the count from vi.renew_last. A differing bug names
 # the first compared value to differ and the first Dragoon frame it does, from runs reading
 # every compared value each frame against Dolphin's at the same pass or one either side.
+# Rescored on gcn-recomp f61bc9c, which also models Gekko's non-IEEE mode, against the same
+# Dolphin runs. Only air-ride-race 4200 and 6000 and city-trial 3300 moved (docs/dev/status.md,
+# "Non-IEEE mode").
 tolerance=4 budget=0.1%
 # Top Ride's race matches through pass 564, the last its 4400 fields reach.
 top-ride-grass fields=4400
@@ -43,8 +46,8 @@ air-ride-race 2209 share=0.000% max=2 mean=0.00 state=same within under the budg
 air-ride-race 2219 share=0.008% max=6 mean=0.01 state=same within under the budget and the state matching
 air-ride-race 3123 share=0.001% max=8 mean=0.03 state=same within under the budget and the state matching
 air-ride-race 3133 share=0.036% max=70 mean=0.24 state=same within under the budget and the state matching
-air-ride-race 4200 share=81.192% max=255 mean=23.90 state=differs bug pass 1079 of the race, every racer somewhere else and the match unsure; player4.speed first differs at frame 3884, pass 763 (4271F994 against 4271EE03), with player4.x, y and z, a jump of about 3,000 ulp in one pass, so a smaller difference in a value not compared likely comes first. It differed at pass 215 before gcn-recomp modelled Gekko's frsqrte and fres estimates
-air-ride-race 6000 share=91.443% max=255 mean=35.29 state=differs bug pass 2879, the drift from 4200 grown, on lap 2 on both sides; player4.speed first differs at frame 3884, pass 763, as at 4200
+air-ride-race 4200 share=0.025% max=59 mean=0.38 state=same within under the budget and the state matching
+air-ride-race 6000 share=0.323% max=164 mean=0.53 state=same unclear pass 2879, lap 2 on both sides, every racer where Dolphin has it and the clock on 0:44:45; lone pixels along the course's fine texture, not edges, and the cause isn't known. player1.speed first differs at frame 3928, pass 807, where Dolphin's field holds the racers' speeds from its pass 806 field and their positions from its pass 807 field, each value bit for bit, so the read splits a pass. Taken one by one, every compared value is at Dolphin's fields of its pass or one either side to pass 3939, the last Dolphin's run reaches, but for the seed's single passes and pass 1864 (frame 4985), where all 17 differ for that pass alone. It differed at pass 763 before gcn-recomp modelled Gekko's non-IEEE mode
 city-trial 60 share=0.000% max=3 mean=0.01 state=same within under the budget and the state matching
 city-trial 304 share=0.000% max=0 mean=0.00 state=same within under the budget and the state matching
 city-trial 314 share=0.001% max=5 mean=0.02 state=same within under the budget and the state matching
@@ -56,4 +59,4 @@ city-trial 2105 share=1.206% max=193 mean=0.99 state=same timing the SAVE icon's
 city-trial 2115 share=0.000% max=43 mean=0.01 state=same within under the budget and the state matching
 city-trial 2734 share=0.000% max=3 mean=0.03 state=same within under the budget and the state matching
 city-trial 2744 share=1.944% max=11 mean=0.31 state=same unclear every player starts in the same place on both sides; thin lines along the buildings' window texture, by 11 levels at most, not the buildings' outlines, and the cause isn't known
-city-trial 3300 share=24.476% max=255 mean=11.08 state=differs bug pass 568 of the city, Kirby on the same street on both sides and the match unsure; player2.speed first differs at frame 3005, pass 273 (41B34B42 against 41B31EA5), with player2.x, y and z, where it differed at pass 70 before gcn-recomp modelled Gekko's frsqrte and fres estimates
+city-trial 3300 share=0.420% max=15 mean=0.38 state=near unclear pass 568 of the city, Kirby on the same street and the clock on 4:54:10 on both sides; thin lines along the road's paving texture, by 15 levels at most, not edges, and the cause isn't known. Every compared value matches through pass 1033, the last Dolphin's run reaches. It differed at pass 273 before gcn-recomp modelled Gekko's non-IEEE mode
