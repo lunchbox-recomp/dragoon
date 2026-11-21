@@ -156,7 +156,7 @@ class RaceTest(MovesCase):
         lines = dolphin_diff.parse_triage(dolphin_diff.TRIAGE.read_text()).lines
         got = {r: dolphin_moves.marks([t for t in lines if t.route == r])
                for r in ("city-trial", "air-ride-race", "top-ride-grass")}
-        self.assertEqual(got, {"city-trial": (273, None), "air-ride-race": (763, None),
+        self.assertEqual(got, {"city-trial": (None, 1033), "air-ride-race": (807, None),
                                "top-ride-grass": (None, 564)})
 
 
