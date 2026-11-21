@@ -22,18 +22,24 @@ def write(path: Path, text: str) -> None:
     path.write_text(text)
 
 
-def dolphin_ram(words: dict, menu: int = 2, fields: int = 22) -> str:
+def dolphin_ram(words: dict, menu: int = 2, fields: int = 22, again: tuple = None) -> str:
     """A Dolphin run at the menu for MENU fields, then in Top Ride's race. The race's first
     field still shows the menu's count, 50, then 0, then pass k on the race's field k + 2. Each
     of WORDS, a watch to a function of the pass, holds that function's value at every field of
-    the pass (of pass 0 before the race)."""
-    lines = ["frame " + " ".join(TIMELINE + list(words))]
+    the pass (of pass 0 before the race). AGAIN, (P, {watch: value}), shows pass P on a second
+    field after its first, those words changed there. vi.renew_count is the field's number."""
+    rows = []
     for n in range(1, fields + 1):
         k = n - menu
         scene, count = (MENU, 50) if k < 1 else (RACE, 50 if k == 1 else k - 2)
         at = count if scene == RACE and k > 1 else 0
-        values = [scene, n, 0, 0x8070E3C0, count, *(f(at) for f in words.values())]
-        lines.append(f"{n} " + " ".join(f"{v:08X}" for v in values))
+        values = {w: f(at) for w, f in words.items()}
+        rows.append((scene, count, values))
+        if again and scene == RACE and k > 1 and count == again[0]:
+            rows.append((scene, count, {**values, **again[1]}))
+    lines = ["frame " + " ".join(TIMELINE + list(words))]
+    for n, (scene, count, values) in enumerate(rows, 1):
+        lines.append(f"{n} " + " ".join(f"{v:08X}" for v in [scene, n, 0, 0x8070E3C0, count, *values.values()]))
     return "\n".join(lines) + "\n"
 
 
@@ -47,9 +53,9 @@ def dragoon_words(words: dict, passes: range, scene: int = RACE) -> str:
 
 
 def folder(test: unittest.TestCase, dolphin: dict, dragoon: dict, passes: range = range(1, 19),
-           scene: int = RACE) -> Path:
+           scene: int = RACE, again: tuple = None) -> Path:
     out = temp_dir(test)
-    write(out / "dolphin" / "ram.txt", dolphin_ram(dolphin))
+    write(out / "dolphin" / "ram.txt", dolphin_ram(dolphin, again=again))
     write(out / "dragoon" / race_words.WORDS, dragoon_words(dragoon, passes, scene))
     return out
 
@@ -85,6 +91,11 @@ class WatchListTest(unittest.TestCase):
         with self.assertRaisesRegex(Bad, "over the 2048 macOS lets through"):
             race_words.watch_list([f"8055B338+2C+300:{fits + 1}"])
 
+    def test_a_datagram_of_exactly_2048_bytes_goes_through(self):
+        # The timeline's 5 lines and the NUL are 91 bytes, 99 plain words 18 each, 7 chain words 25.
+        watched = race_words.watch_list(["80530000:99", "8055B338+2C+300:7"])
+        self.assertEqual(race_words.datagram(watched), race_words.DATAGRAM)
+
     def test_the_datagram_counts_each_line_and_the_nul(self):
         self.assertEqual(race_words.datagram(["80536280"]), 8 + 1 + 8 + 1 + 1)
 
@@ -107,6 +118,22 @@ class ReadWordsTest(unittest.TestCase):
         self.assertEqual(race_words.read_words(link, ["8055B338+2C+300", "8055B338+2C"]), [0, 0])
         link.put(0x8100002C, struct.pack(">I", 0x00001234))
         self.assertEqual(race_words.read_words(link, ["8055B338+2C+300"]), [0x1234])
+
+    def test_a_pointer_into_the_uncached_mirror_leads_into_ram(self):
+        link = FakeLink()
+        link.put(0x8055B338, struct.pack(">I", 0xC1000000))
+        link.put(0x8100002C, struct.pack(">I", 0x81200000))
+        link.put(0x81200300, struct.pack(">I", 7))
+        self.assertEqual(race_words.read_words(link, ["8055B338+2C+300", "8055B338+2C"]), [7, 0x81200000])
+
+    def test_a_run_of_words_longer_than_one_read_takes_two(self):
+        link = FakeLink()
+        count = race_words.kar_ram.READ_MAX // 4 + 1
+        watched = race_words.expand(f"81200000:{count}")
+        link.put(0x81200000 + 4 * (count - 1), struct.pack(">I", 9))
+        self.assertEqual(race_words.read_words(link, watched)[-1], 9)
+        self.assertEqual(link.reads, [(0x81200000, race_words.kar_ram.READ_MAX),
+                                      (0x81200000 + race_words.kar_ram.READ_MAX, 4)])
 
 
 class CompareTest(unittest.TestCase):
@@ -133,8 +160,44 @@ class CompareTest(unittest.TestCase):
         d = diff(folder(self, {SPEED: lambda p: p}, {SPEED: lambda p: 999}, scene=MENU))
         self.assertEqual((d.through, d.lines()), (None, ["Top Ride's race: no pass compared"]))
 
+    def test_dragoon_past_the_last_pass_dolphin_shows_is_left_out(self):
+        d = diff(folder(self, {SPEED: lambda p: p}, {SPEED: lambda p: p if p <= 18 else 999},
+                        passes=range(1, 25)))
+        self.assertEqual((d.through, d.frames, d.differing()), (18, (101, 118), []))
+
+    def test_dolphin_s_value_shown_is_the_pass_s_first_field(self):
+        d = diff(folder(self, {SPEED: lambda p: p}, {SPEED: lambda p: 500 if p == 9 else p},
+                        again=(9, {SPEED: 77})))
+        self.assertEqual([(w.at, w.ours, w.theirs) for w in d.differing()], [(9, 500, 9)])
+
+    def test_a_run_that_lost_a_field_is_refused(self):
+        out = folder(self, {SPEED: lambda p: p}, {SPEED: lambda p: p})
+        ram = out / "dolphin" / "ram.txt"
+        lines = ram.read_text().splitlines()
+        ram.write_text("\n".join(lines[:10] + lines[11:]) + "\n")
+        with self.assertRaisesRegex(Bad, "vi.renew_count goes from 9 to 11 at line 11, so a field was lost"):
+            diff(out)
+        with self.assertRaisesRegex(Bad, "a field was lost"):
+            race_words.show(ram, out / "dragoon" / race_words.WORDS, SPEED, range(1, 2))
+
+    def test_renew_count_staying_or_going_back_to_0_loses_nothing(self):
+        rows = [(n, {race_words.RENEW: v}) for n, v in enumerate([5, 5, 6, 0, 0, 1, 2], 1)]
+        self.assertIsNone(race_words.lost_field(rows))
+        self.assertIsNotNone(race_words.lost_field(rows + [(8, {race_words.RENEW: 1})]))
+
+    def test_a_run_with_no_field_is_refused(self):
+        out = folder(self, {SPEED: lambda p: p}, {SPEED: lambda p: p})
+        ram = out / "dolphin" / "ram.txt"
+        ram.write_text(ram.read_text().splitlines()[0] + "\n")
+        with self.assertRaisesRegex(Bad, "no field"):
+            race_words.show(ram, out / "dragoon" / race_words.WORDS, SPEED, range(1, 2))
+
     def test_a_pointer_isn_t_shown_as_a_float(self):
         self.assertEqual(race_words.values_text(0x80536280, 0x80536284), "Dragoon 80536280, Dolphin 80536284")
+
+    def test_infinity_and_nan_aren_t_shown_as_floats(self):
+        self.assertEqual(race_words.values_text(0x7F800000, 0x7FC00000), "Dragoon 7F800000, Dolphin 7FC00000")
+        self.assertEqual(race_words.values_text(0xFF800000, 0x3F800000), "Dragoon FF800000, Dolphin 3F800000")
 
     def test_ulps_count_across_zero(self):
         self.assertEqual(race_words.ulps(0x00000001, 0x80000001), 2)
@@ -150,6 +213,13 @@ class CompareTest(unittest.TestCase):
         got = race_words.show(out / "dolphin" / "ram.txt", out / "dragoon" / race_words.WORDS, SPEED,
                               range(8, 10))
         self.assertEqual(got[1:], ["8: 00000008 | 00000008", "9: 0000000E | 00000009  *"])
+
+    def test_show_takes_dolphin_s_value_a_pass_either_side_as_near(self):
+        out = folder(self, {SPEED: lambda p: p}, {SPEED: lambda p: p + (p == 9) - (p == 12)})
+        got = race_words.show(out / "dolphin" / "ram.txt", out / "dragoon" / race_words.WORDS, SPEED,
+                              range(9, 13))
+        self.assertEqual(got[1:], ["9: 0000000A | 00000009", "10: 0000000A | 0000000A",
+                                   "11: 0000000B | 0000000B", "12: 0000000B | 0000000C"])
 
 
 class CommandTest(unittest.TestCase):
