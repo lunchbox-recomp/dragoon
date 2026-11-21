@@ -6,8 +6,9 @@
 # the settings. 3100 UP, 3200 UP, 3300 UP: Start Game. 3400 A: into it. 3700 A: skip the
 # mode's movie. 4000 A: player 1 joins. 4300 START: the city. The clock runs out at frame
 # 15600 and the machine stats wait for A. 16200 A: past them. 16500 A: past the card that
-# names the stadium. Drag Race 3 runs from frame 16700, and its results wait for START from
-# frame 20400.
+# names the stadium. Drag Race 3 runs from frame 16700, and its results wait for START. Their
+# scene, a stadium's results, starts by frame 20300. Before gcn-recomp modelled Gekko's
+# non-IEEE mode the race ran longer and the scene started after 20400.
 120:A:5,300:A:5,900:A:5,
 1000:START:5,
 1300:DOWN:5,1400:DOWN:5,1500:A:5,
