@@ -255,6 +255,13 @@ class CompareTest(unittest.TestCase):
                          RAND: lambda p: DRAWS[15] if p == 1 else DRAWS[10 * p]}))
         self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, 1), (RAND, 1)])
 
+    def test_a_lone_pass_before_one_dragoon_skips_still_counts(self):
+        d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
+                        {SPEED: lambda p: 500 if p == 9 else p,
+                         RAND: lambda p: DRAWS[95] if p == 9 else DRAWS[10 * p]},
+                        passes=[*range(1, 10), *range(11, 19)]))
+        self.assertEqual([(w.watch, w.at) for w in d.differing()], [(SPEED, 9), (RAND, 9)])
+
     def test_a_seed_a_draw_off_for_good_counts_from_its_first_pass(self):
         d = diff(folder(self, {SPEED: lambda p: p, RAND: lambda p: DRAWS[10 * p]},
                         {SPEED: lambda p: 500 if p == 9 else p,
